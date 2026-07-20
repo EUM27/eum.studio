@@ -1,0 +1,44 @@
+{
+  "name": "eum-studio",
+  "productName": "이음 스튜디오",
+  "version": "0.0.0",
+  "private": true,
+  "description": "이음 스튜디오 데스크톱 기반 POC",
+  "main": "dist-electron/desktop/main.js",
+  "scripts": {
+    "build": "npm run typecheck && npm run build:electron && npm run build:renderer",
+    "build:electron": "tsc -p tsconfig.electron.json && vite build --config vite.preload.config.ts",
+    "build:renderer": "vite build",
+    "typecheck": "tsc -p tsconfig.renderer.json --noEmit && tsc -p tsconfig.electron.json --noEmit && tsc -p tsconfig.preload.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "lint": "eslint .",
+    "test:run": "vitest run",
+    "test:e2e": "npm run build && playwright test",
+    "check": "npm run lint && npm run typecheck && npm run test:run && npm run build",
+    "environment:report": "npm run build:electron && node dist-electron/platform/environment/capture-environment.js",
+    "start": "npm run build && electron ."
+  },
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "dependencies": {
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.61.1",
+    "@types/node": "26.1.1",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.3",
+    "electron": "43.1.1",
+    "eslint": "10.7.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.7.0",
+    "playwright": "1.61.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.64.0",
+    "vite": "8.1.5",
+    "vitest": "4.1.10"
+  }
+}

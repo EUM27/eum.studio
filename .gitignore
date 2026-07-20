@@ -1,0 +1,34 @@
+# Dependencies and generated output
+node_modules/
+dist/
+dist-electron/
+dist-renderer/
+out/
+coverage/
+test-results/
+playwright-report/
+artifacts/
+
+# Local runtime data
+var/
+user-data/
+.local/
+
+# Secrets and environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+
+# Editor and operating system
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
