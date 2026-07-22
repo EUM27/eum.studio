@@ -46,7 +46,6 @@ describe("manuscript transaction extraction", () => {
             from: cursor,
             to: cursor,
             empty: true,
-            selectedText: "",
           },
         ],
       },
@@ -59,7 +58,7 @@ describe("manuscript transaction extraction", () => {
     expect(Object.isFrozen(extracted.selection.ranges[0])).toBe(true);
   });
 
-  it("preserves a backward selection without expanding its exact text range", () => {
+  it("preserves a backward selection without materializing its text", () => {
     const firstLine = randomUUID();
     const secondLine = randomUUID();
     const originalText = `${firstLine}\n${secondLine}`;
@@ -87,9 +86,12 @@ describe("manuscript transaction extraction", () => {
           from,
           to,
           empty: false,
-          selectedText: originalText.slice(from, to),
         },
       ],
     });
+    expect(extracted.selection.ranges[0]).not.toHaveProperty(
+      "selectedText",
+    );
+    expect(state.sliceDoc(from, to)).toBe(originalText.slice(from, to));
   });
 });

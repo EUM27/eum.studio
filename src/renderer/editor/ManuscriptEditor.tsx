@@ -1,5 +1,6 @@
+import { history, historyKeymap } from "@codemirror/commands";
 import { EditorState } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import { EditorView, keymap } from "@codemirror/view";
 import { useEffect, useEffectEvent, useRef } from "react";
 
 import type { ManuscriptInputProfile } from "../../application/editor/manuscript-input-profile";
@@ -34,6 +35,8 @@ export function ManuscriptEditor({
     const state = EditorState.create({
       doc: initialText,
       extensions: [
+        history(),
+        keymap.of(historyKeymap),
         EditorView.lineWrapping,
         createManuscriptInputRules(inputProfile),
         EditorView.contentAttributes.of({

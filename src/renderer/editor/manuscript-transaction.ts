@@ -12,7 +12,6 @@ export type ManuscriptSelectionRange = {
   readonly from: number;
   readonly to: number;
   readonly empty: boolean;
-  readonly selectedText: string;
 };
 
 export type ManuscriptSelection = {
@@ -47,7 +46,6 @@ export function extractManuscriptTransaction(
       from: range.from,
       to: range.to,
       empty: range.empty,
-      selectedText: transaction.state.sliceDoc(range.from, range.to),
     }),
   );
 

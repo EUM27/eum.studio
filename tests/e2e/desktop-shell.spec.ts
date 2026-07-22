@@ -91,6 +91,104 @@ test("renders a writable CodeMirror manuscript surface", async () => {
   }
 });
 
+test("undoes and redoes manuscript edits with the matching cursor", async () => {
+  const electronApp = await electron.launch({
+    args: ["."],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+    },
+  });
+
+  try {
+    const window = await electronApp.firstWindow();
+    const manuscript = window.getByRole("textbox", { name: "원고" });
+    const prefix = randomUUID();
+    const suffix = randomUUID();
+    const insertedText = randomUUID();
+    const cursorProbe = randomUUID();
+
+    await manuscript.pressSequentially(`${prefix}${suffix}`);
+    for (let index = 0; index < suffix.length; index += 1) {
+      await manuscript.press("ArrowLeft");
+    }
+    await manuscript.pressSequentially(insertedText);
+    await expect(manuscript).toHaveText(
+      `${prefix}${insertedText}${suffix}`,
+    );
+
+    await manuscript.press("Control+Z");
+    await expect(manuscript).toHaveText(`${prefix}${suffix}`);
+
+    await manuscript.press("Control+Y");
+    await expect(manuscript).toHaveText(
+      `${prefix}${insertedText}${suffix}`,
+    );
+
+    await manuscript.pressSequentially(cursorProbe);
+    await expect(manuscript).toHaveText(
+      `${prefix}${insertedText}${cursorProbe}${suffix}`,
+    );
+  } finally {
+    await electronApp.close();
+  }
+});
+
+test("undoes and redoes a registered input rule as one edit", async () => {
+  const inputProfile = parseManuscriptInputProfile(
+    JSON.parse(
+      readFileSync(
+        path.join(
+          process.cwd(),
+          "tests",
+          "fixtures",
+          "editor",
+          "poc-1-manuscript-input-profile.manifest.json",
+        ),
+        "utf8",
+      ),
+    ),
+  );
+  const pair = inputProfile.autoClosePairs[0];
+  if (pair === undefined) {
+    throw new Error("Input profile must provide an auto-close pair");
+  }
+  const electronApp = await electron.launch({
+    args: ["."],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      EUM_STUDIO_MANUSCRIPT_INPUT_PROFILE: JSON.stringify(inputProfile),
+      EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+    },
+  });
+
+  try {
+    const window = await electronApp.firstWindow();
+    const manuscript = window.getByRole("textbox", { name: "원고" });
+    const prefix = randomUUID();
+
+    await manuscript.pressSequentially(prefix);
+    await manuscript.press("ArrowLeft");
+    await manuscript.press("ArrowRight");
+    await manuscript.pressSequentially(pair.open);
+    await expect(manuscript).toHaveText(
+      `${prefix}${pair.open}${pair.close}`,
+    );
+
+    await manuscript.press("Control+Z");
+    await expect(manuscript).toHaveText(prefix);
+
+    await manuscript.press("Control+Y");
+    await expect(manuscript).toHaveText(
+      `${prefix}${pair.open}${pair.close}`,
+    );
+  } finally {
+    await electronApp.close();
+  }
+});
+
 test("keeps keyboard and mouse selections within the exact character range", async () => {
   const electronApp = await electron.launch({
     args: ["."],
