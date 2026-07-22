@@ -6,6 +6,29 @@ import { expect, test } from "@playwright/test";
 import { _electron as electron } from "playwright";
 
 import { parseManuscriptInputProfile } from "../../src/application/editor/manuscript-input-profile";
+import { parseLongformFixtureManifest } from "../fixtures/longform/longform-fixture";
+
+function readJsonFixture(...segments: string[]): unknown {
+  return JSON.parse(
+    readFileSync(path.join(process.cwd(), ...segments), "utf8"),
+  );
+}
+
+function readHangulCompositionText(): string {
+  const manifest = parseLongformFixtureManifest(
+    readJsonFixture(
+      "tests",
+      "fixtures",
+      "longform",
+      "poc-1-longform.manifest.json",
+    ),
+  );
+  const match = manifest.content.units.join(" ").match(/\p{Script=Hangul}+/u);
+  if (match === null) {
+    throw new Error("Longform fixture must provide Hangul composition text");
+  }
+  return match[0];
+}
 
 test("launches a sandboxed shell with only the typed studio bridge", async () => {
   const electronApp = await electron.launch({
@@ -184,6 +207,84 @@ test("undoes and redoes a registered input rule as one edit", async () => {
     await expect(manuscript).toHaveText(
       `${prefix}${pair.open}${pair.close}`,
     );
+  } finally {
+    await electronApp.close();
+  }
+});
+
+test("keeps Hangul IME composition intact through commit, undo, and redo", async () => {
+  const compositionText = readHangulCompositionText();
+  const baseInputProfile = parseManuscriptInputProfile(
+    readJsonFixture(
+      "tests",
+      "fixtures",
+      "editor",
+      "poc-1-manuscript-input-profile.manifest.json",
+    ),
+  );
+  const compositionCloser = randomUUID();
+  const inputProfile = parseManuscriptInputProfile({
+    ...baseInputProfile,
+    autoClosePairs: [
+      ...baseInputProfile.autoClosePairs,
+      { open: compositionText, close: compositionCloser },
+    ],
+  });
+  const electronApp = await electron.launch({
+    args: ["."],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      EUM_STUDIO_MANUSCRIPT_INPUT_PROFILE: JSON.stringify(inputProfile),
+      EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+    },
+  });
+
+  try {
+    const window = await electronApp.firstWindow();
+    const manuscript = window.getByRole("textbox", { name: "원고" });
+    const session = await window.context().newCDPSession(window);
+    const firstCandidate = Array.from(compositionText)[0];
+    if (firstCandidate === undefined) {
+      throw new Error("Hangul composition text must not be empty");
+    }
+
+    await manuscript.focus();
+    await session.send("Input.imeSetComposition", {
+      text: firstCandidate,
+      selectionStart: firstCandidate.length,
+      selectionEnd: firstCandidate.length,
+      replacementStart: 0,
+      replacementEnd: 0,
+    });
+    await expect(manuscript).toHaveText(firstCandidate);
+
+    await session.send("Input.imeSetComposition", {
+      text: compositionText,
+      selectionStart: compositionText.length,
+      selectionEnd: compositionText.length,
+      replacementStart: 0,
+      replacementEnd: 0,
+    });
+    await expect(manuscript).toHaveText(compositionText);
+
+    await session.send("Input.insertText", { text: compositionText });
+    await expect(manuscript).toHaveText(compositionText);
+    await expect(manuscript).not.toContainText(compositionCloser);
+    await expect(window.getByTestId("manuscript-length")).toHaveText(
+      String(compositionText.length),
+    );
+
+    await manuscript.press("Control+Z");
+    await expect(manuscript).toHaveText("");
+
+    await manuscript.press("Control+Y");
+    await expect(manuscript).toHaveText(compositionText);
+
+    const cursorProbe = randomUUID();
+    await manuscript.pressSequentially(cursorProbe);
+    await expect(manuscript).toHaveText(`${compositionText}${cursorProbe}`);
+    await session.detach();
   } finally {
     await electronApp.close();
   }

@@ -18,8 +18,10 @@
 - selection transaction의 선택 원문 hot path 제거
 - 등록형 괄호·따옴표 자동 닫힘·닫는 기호 건너뛰기·가운뎃 말줄임표
 - 본문·커서와 등록형 입력 규칙의 undo·redo
+- atomic ResumeCheckpoint envelope capture
+- 한글 IME 조합·확정·undo·redo
 
-다음 검증 단위: ResumeCheckpoint 저장과 `Work.resumeCheckpointId` 갱신의 단일 transaction
+다음 검증 단위: 문서 전환 전 문서별 `EditorState` 보관·복원 정책
 
 ## 완료
 
@@ -46,8 +48,8 @@
 - [x] selection transaction의 좌표 전용 payload
 - [x] 괄호·따옴표 자동 닫힘과 기존 닫는 기호 건너뛰기
 - [x] CodeMirror history 기반 undo·redo
-- [ ] ResumeCheckpoint 저장과 `Work.resumeCheckpointId` 갱신 transaction
-- [ ] 한글 IME
+- [x] ResumeCheckpoint 저장과 `Work.resumeCheckpointId` 갱신 transaction
+- [x] 한글 IME
 - [ ] 문서 전환 전 문서별 EditorState 보관·복원 정책
 - [ ] CodeMirror 오프셋과 사용자 표시 문자 통계 분리
 - [ ] 정확한 복귀 전 Anchor 소유권·revision 검증과 복원·손상 계약
@@ -66,11 +68,15 @@
 - append는 기대 현재 revision을 검사하고 stale·중복 revision을 기존 이력 변경 없이 거부한다.
 - 생성한 DocumentRevision은 동결하며 부모 revision 본문을 별도 불변 이력으로 유지한다.
 - 등록 문서의 빈 revision 상태와 등록되지 않은 문서를 구분한다.
-- 등록 작품에 checkpoint가 없으면 작품 ID를 보존한 명시적 `missing` 상태를 반환하고, 등록되지 않은 작품과 구분한다.
+- checkpoint 삽입, `Work.resumeCheckpointId` 변경, Work revision 1회 증가를 전용 application transaction으로 묶는다.
+- application은 읽기 전용 WritingCatalog를 mutate하지 않고 새 Work 값을 구성하며, platform adapter가 Work·checkpoint 사본을 한 번의 copy-on-write state 게시로 원자적으로 바꾼다.
+- 등록 작품에 Work 포인터가 없으면 작품 ID를 보존한 명시적 `missing` 상태를 반환하고, 등록되지 않은 작품과 구분한다.
 - ResumeCheckpoint는 해당 작품 소유 문서의 현재 durable revision에만 저장할 수 있다.
-- 작품별 checkpoint를 독립 조회하며 다른 작품의 마지막 위치를 전역 fallback으로 사용하지 않는다.
-- 교차 작품 문서·stale revision·stale checkpoint 쓰기는 현재 checkpoint를 바꾸지 않고 거부한다.
-- 저장한 checkpoint와 중첩 메타·맥락 참조를 동결하고 낙관적 현재 checkpoint ID로 교체를 보호한다.
+- 작품별 checkpoint 조회는 `Work.resumeCheckpointId`만 원본으로 사용하며 다른 작품이나 다른 checkpoint로 fallback하지 않는다.
+- dangling·교차 작품 Work 포인터는 명시적 무결성 오류로 거부한다.
+- 교차 작품 문서, stale Work revision·포인터·document revision, 중복 checkpoint ID는 Work와 checkpoint 상태를 모두 바꾸지 않고 거부한다.
+- 같은 Work 상태에서 시작한 동시 capture 두 건 중 정확히 하나만 성공하고 실패한 checkpoint는 저장되지 않는다.
+- 이전 checkpoint와 중첩 메타·맥락 참조는 동결된 불변 이력으로 남고 Work 포인터만 새 checkpoint로 이동한다.
 - 공식 현재 문서와 registry를 확인해 `@codemirror/state`와 `@codemirror/view`를 직접 dependency로 정확히 고정했다.
 - React가 EditorView의 생성·정리 생명주기만 소유하고 renderer 밖 저장소나 Electron API를 편집 표면에 연결하지 않는다.
 - CodeMirror transaction에서 변경된 span·삽입문과 결과 selection 좌표를 원고·선택 원문 사본 없이 불변 payload로 추출한다.
@@ -90,18 +96,22 @@
 - 공식 registry의 `@codemirror/commands`를 직접 dependency로 정확히 고정하고 CodeMirror history와 플랫폼 기본 keymap만 사용한다.
 - 일반 중간 삽입을 undo·redo한 뒤 본문과 커서가 함께 복원된다.
 - 자동 닫힘 pair는 opener와 closer를 한 편집 단위로 undo·redo해 고아 closer를 남기지 않는다.
+- 한글 조합 문자열은 장편 fixture manifest에서 읽고 실제 Electron의 Chromium IME composition 경로로 후보·완성 문자열을 갱신한 뒤 확정한다.
+- 조합 문자열과 같은 opener가 runtime profile에 등록돼 있어도 조합 중 자동 닫힘은 실행되지 않으며 확정 본문이 분해·중복되지 않는다.
+- 확정된 한글 입력은 한 번의 undo·redo로 본문이 정확히 사라졌다 복원되고, redo 뒤 후속 입력이 복원된 커서 뒤에 이어진다.
 
 검증:
 
 - `npx vitest run tests/unit/longform-fixture.test.ts` — 5개 통과
 - `npx vitest run src/domain/writing-catalog.test.ts src/platform/revisions/in-memory-revision-store.test.ts` — 16개 통과
-- `npx vitest run src/platform/checkpoints/in-memory-resume-checkpoint-store.test.ts` — 6개 통과
+- `npx vitest run src/platform/checkpoints/in-memory-resume-checkpoint-capture.test.ts` — 원자성·충돌·동시성·포인터 무결성 7개 통과
 - `npx vitest run src/renderer/editor/manuscript-transaction.test.ts` — 좌표 전용 selection payload 2개 통과
 - `npx vitest run src/application/editor/manuscript-input-profile.test.ts src/renderer/editor/manuscript-input-rules.test.ts` — 10개 통과
 - `npx vitest run src/application/contracts/studio-bridge.test.ts` — 5개 통과
-- `npm run test:run` — 12개 파일·단위 55개 통과
-- `npm run check` — lint·typecheck·단위 55개·production build 통과
-- `npm run test:e2e` — sandbox bridge·실제 CodeMirror 입력·undo·redo·정확한 선택·등록형 입력 규칙 6개 통과
+- `npm run test:run` — 12개 파일·단위 56개 통과
+- `npm run check` — lint·typecheck·단위 56개·production build 통과
+- `npm run test:e2e` — sandbox bridge·실제 CodeMirror 입력·undo·redo·한글 IME·정확한 선택·등록형 입력 규칙 7개 통과
+- `npm run test:e2e -- --grep "Hangul IME"` — 실제 Electron 조합·확정·undo·redo 1개 통과
 - `npm run test:e2e -- --grep "undoes and redoes"` — 일반 입력·등록형 입력 규칙 2개 통과
 - `npm run test:e2e -- --grep "keeps keyboard and mouse selections"` — 좌표 전용 payload 적용 후 실제 선택 1개 통과
 - `npm run test:e2e -- --grep "keeps keyboard and mouse selections" --repeat-each=5` — 5개 통과
