@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  MANUSCRIPT_INPUT_PROFILE_CHANNEL,
   RUNTIME_INFO_CHANNEL,
   createStudioBridge,
   isRuntimeInfo,
@@ -29,6 +30,39 @@ describe("studio bridge contract", () => {
 
     await expect(bridge.system.getRuntimeInfo()).rejects.toThrow(
       "Invalid runtime information",
+    );
+  });
+
+  it("wraps the allowlisted manuscript input profile query", async () => {
+    const inputProfile = {
+      schemaVersion: 1,
+      autoClosePairs: [
+        {
+          open: randomUUID(),
+          close: randomUUID(),
+        },
+      ],
+      textReplacements: [
+        {
+          trigger: randomUUID(),
+          replacement: randomUUID(),
+        },
+      ],
+    } as const;
+    const invoke = vi.fn().mockResolvedValue(inputProfile);
+    const bridge = createStudioBridge(invoke);
+
+    await expect(bridge.editor.getManuscriptInputProfile()).resolves.toEqual(
+      inputProfile,
+    );
+    expect(invoke).toHaveBeenCalledWith(MANUSCRIPT_INPUT_PROFILE_CHANNEL);
+  });
+
+  it("rejects a malformed manuscript input profile response", async () => {
+    const bridge = createStudioBridge(async () => ({ schemaVersion: 1 }));
+
+    await expect(bridge.editor.getManuscriptInputProfile()).rejects.toThrow(
+      "Invalid manuscript input profile",
     );
   });
 

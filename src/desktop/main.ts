@@ -3,9 +3,11 @@ import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
+  MANUSCRIPT_INPUT_PROFILE_CHANNEL,
   RUNTIME_INFO_CHANNEL,
   type RuntimeInfo,
 } from "../application/contracts/studio-bridge";
+import { parseManuscriptInputProfile } from "../application/editor/manuscript-input-profile";
 import {
   createSecureWebPreferences,
   isAllowedRendererNavigation,
@@ -22,6 +24,19 @@ function registerApplicationHandlers(): void {
       platform: process.platform,
       architecture: process.arch,
     };
+  });
+  ipcMain.handle(MANUSCRIPT_INPUT_PROFILE_CHANNEL, () => {
+    const serializedProfile =
+      process.env.EUM_STUDIO_MANUSCRIPT_INPUT_PROFILE;
+    const value =
+      serializedProfile === undefined
+        ? {
+            schemaVersion: 1,
+            autoClosePairs: [],
+            textReplacements: [],
+          }
+        : JSON.parse(serializedProfile);
+    return parseManuscriptInputProfile(value);
   });
 }
 

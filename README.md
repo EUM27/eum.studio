@@ -4,9 +4,9 @@
 
 ## 현재 상태
 
-`Gate 0 — 새 프로젝트·측정 계약` 완료
+`POC-1 — 장편 편집기` 진행 중
 
-Electron main·sandbox preload·React renderer의 최소 진단 셸과 공통 검증 기반을 만들었다. 이 저장소는 현행 `D:\eum.editor`의 연장선이나 복사본이 아니며, 승인된 제품 헌법과 POC 계획에서 새로 구축한다.
+Gate 0의 Electron main·sandbox preload·React renderer 셸과 공통 검증 기반을 완료했다. POC-1에서는 manifest 기반 장편 fixture와 함께 Work·Document 소유 관계, application revision·ResumeCheckpoint port, 불변 in-memory adapter, 실제 CodeMirror 원고 편집 표면을 구현했다. 작품별 checkpoint는 다른 작품으로 fallback하지 않으며, checkpoint가 없는 등록 작품은 명시적 빈 상태로 구분한다. CodeMirror transaction은 변경 span과 selection을 renderer의 불변 payload로 추출하며 저장소를 직접 소유하지 않는다. 마우스와 키보드로 선택한 일부 문자는 행·문단으로 확장하지 않고 방향·경계·선택 원문을 그대로 보존한다. 자동 닫힘 pair와 입력 치환은 schema로 검증한 runtime profile이 소유하며 제품 코드에 고정 목록을 두지 않는다. 등록된 괄호·따옴표는 자동으로 닫히고 이미 있는 닫는 기호 입력은 중복 삽입 없이 커서만 이동하며, 등록 규칙에 따라 마침표 세 개를 가운뎃 말줄임표 `⋯` 하나로 바꾼다. 이 저장소는 현행 `D:\eum.editor`의 연장선이나 복사본이 아니며, 승인된 제품 헌법과 POC 계획에서 새로 구축한다.
 
 ## 경계
 
@@ -36,7 +36,14 @@ npm run test:e2e
 npm run environment:report -- --output <사용자가 선택한 출력 경로>
 ```
 
-`npm run start`는 production bundle을 만든 뒤 데스크톱 진단 셸을 실행한다.
+`npm run start`는 production bundle을 만든 뒤 실제 CodeMirror POC 원고 편집 표면을 실행한다.
+
+POC input profile을 적용해 실행할 때는 사용자가 선택한 JSON profile 원문을 runtime 입력으로 전달한다.
+
+```powershell
+$env:EUM_STUDIO_MANUSCRIPT_INPUT_PROFILE = Get-Content -Raw <사용자가 선택한 profile 경로>
+npm run start
+```
 
 ## 아직 하지 않는 것
 
@@ -47,4 +54,4 @@ npm run environment:report -- --output <사용자가 선택한 출력 경로>
 - OAuth client 설정 내장
 - 실제 사용자 데이터 쓰기
 
-다음 단계는 POC-1 장편 편집기다. 저장소·별빛·음악·조수·투고 기능을 먼저 얹지 않고, 정확한 선택·한글 IME·괄호와 따옴표·문서 전환·작품별 복귀·장편 성능을 검증한다.
+다음 검증 단위는 한글 IME 조합 입력과 undo·redo다. 저장소·별빛·음악·조수·투고 기능을 먼저 얹지 않고, 문서 전환·작품별 복귀·장편 성능을 순서대로 검증한다.

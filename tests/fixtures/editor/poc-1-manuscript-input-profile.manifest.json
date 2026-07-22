@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "autoClosePairs": [
+    { "open": "[", "close": "]" },
+    { "open": "\"", "close": "\"" },
+    { "open": "'", "close": "'" },
+    { "open": "QX", "close": "ZY" }
+  ],
+  "textReplacements": [
+    { "trigger": "...", "replacement": "⋯" }
+  ]
+}

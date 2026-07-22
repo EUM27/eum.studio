@@ -1,4 +1,11 @@
+import {
+  parseManuscriptInputProfile,
+  type ManuscriptInputProfile,
+} from "../editor/manuscript-input-profile";
+
 export const RUNTIME_INFO_CHANNEL = "studio:system:get-runtime-info";
+export const MANUSCRIPT_INPUT_PROFILE_CHANNEL =
+  "studio:editor:get-manuscript-input-profile";
 
 export type RuntimeInfo = {
   appName: string;
@@ -11,10 +18,15 @@ export type StudioBridge = {
   system: {
     getRuntimeInfo: () => Promise<RuntimeInfo>;
   };
+  editor: {
+    getManuscriptInputProfile: () => Promise<ManuscriptInputProfile>;
+  };
 };
 
 export type BridgeInvoke = (
-  channel: typeof RUNTIME_INFO_CHANNEL,
+  channel:
+    | typeof RUNTIME_INFO_CHANNEL
+    | typeof MANUSCRIPT_INPUT_PROFILE_CHANNEL,
 ) => Promise<unknown>;
 
 export function isRuntimeInfo(value: unknown): value is RuntimeInfo {
@@ -40,6 +52,16 @@ export function createStudioBridge(invoke: BridgeInvoke): StudioBridge {
           throw new Error("Invalid runtime information");
         }
         return value;
+      },
+    },
+    editor: {
+      getManuscriptInputProfile: async () => {
+        const value = await invoke(MANUSCRIPT_INPUT_PROFILE_CHANNEL);
+        try {
+          return parseManuscriptInputProfile(value);
+        } catch {
+          throw new Error("Invalid manuscript input profile");
+        }
       },
     },
   };

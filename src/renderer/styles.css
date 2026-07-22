@@ -1,16 +1,19 @@
 :root {
-  color: #1d1d1f;
-  background: #f5f5f3;
+  color: #25231f;
+  background: #efede8;
   font-family:
     "Pretendard Variable", "Noto Sans KR", system-ui, -apple-system, sans-serif;
+  font-synthesis: none;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
+  min-height: 100%;
 }
 
 button,
@@ -20,32 +23,142 @@ select {
   font: inherit;
 }
 
-.gate-shell {
+.studio-shell {
   min-height: 100vh;
   display: grid;
-  place-items: center;
-  padding: 2rem;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 1rem;
+  padding: 1rem;
 }
 
-.gate-card {
-  width: min(100%, 32rem);
-  padding: 2rem;
-  border: 1px solid #d8d8d4;
-  border-radius: 1rem;
-  background: #ffffff;
+.studio-header {
+  width: min(100%, 76rem);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.25rem 0.5rem;
 }
 
-.gate-label {
-  margin: 0 0 0.5rem;
-  color: #656561;
-  font-size: 0.875rem;
+.studio-kicker,
+.manuscript-context {
+  margin: 0 0 0.25rem;
+  color: #777267;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-.gate-card h1 {
+.studio-header h1,
+.manuscript-header h2 {
   margin: 0;
-  font-size: 2rem;
 }
 
-.gate-card p:last-child {
-  margin-bottom: 0;
+.studio-header h1 {
+  font-size: 1.25rem;
+}
+
+.runtime-status {
+  margin: 0;
+  color: #615d54;
+  font-size: 0.8rem;
+}
+
+.writing-workspace {
+  width: min(100%, 76rem);
+  min-height: 0;
+  margin: 0 auto;
+  display: grid;
+  grid-template-rows: auto minmax(28rem, 1fr);
+  overflow: hidden;
+  border: 1px solid #d5d0c5;
+  border-radius: 0.875rem;
+  background: #fbfaf7;
+  box-shadow: 0 1rem 3rem rgb(73 66 53 / 8%);
+}
+
+.manuscript-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.875rem 1.25rem;
+  border-bottom: 1px solid #e3dfd6;
+}
+
+.manuscript-header h2 {
+  font-size: 1rem;
+}
+
+.manuscript-count {
+  display: flex;
+  gap: 0.2rem;
+  margin: 0;
+  color: #6e695f;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.selection-count {
+  display: inline-flex;
+  gap: 0.2rem;
+}
+
+.manuscript-editor {
+  min-height: 0;
+}
+
+.manuscript-editor .cm-editor {
+  height: 100%;
+  background: #fffefa;
+}
+
+.manuscript-editor .cm-scroller {
+  overflow: auto;
+  font-family: "Noto Serif KR", "Batang", "Times New Roman", serif;
+  font-size: 1.05rem;
+  line-height: 1.9;
+}
+
+.manuscript-editor .cm-content {
+  width: min(100%, 48rem);
+  min-height: 100%;
+  margin: 0 auto;
+  padding: 3rem clamp(1.5rem, 5vw, 4rem) 8rem;
+  caret-color: #25231f;
+}
+
+.manuscript-editor .cm-line {
+  padding: 0;
+}
+
+.manuscript-editor .cm-focused {
+  outline: none;
+  box-shadow: inset 0 0 0 2px #78856b;
+}
+
+.manuscript-editor .cm-selectionBackground,
+.manuscript-editor .cm-content ::selection {
+  background: #d9e1cf;
+}
+
+@media (max-width: 42rem) {
+  .studio-shell {
+    padding: 0.75rem;
+  }
+
+  .studio-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .writing-workspace {
+    grid-template-rows: auto minmax(24rem, 1fr);
+  }
+
+  .manuscript-editor .cm-content {
+    padding-inline: 1.25rem;
+  }
 }
