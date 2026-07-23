@@ -1,13 +1,18 @@
 import { app, BrowserWindow, ipcMain } from "electron";
+import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
+  MANUSCRIPT_DOCUMENT_PROFILE_CHANNEL,
   MANUSCRIPT_INPUT_PROFILE_CHANNEL,
   RUNTIME_INFO_CHANNEL,
   type RuntimeInfo,
 } from "../application/contracts/studio-bridge";
+import { parseManuscriptDocumentProfile } from "../application/editor/manuscript-document-profile";
 import { parseManuscriptInputProfile } from "../application/editor/manuscript-input-profile";
+import { readRuntimeProfileValue } from "./runtime-profile-source";
 import {
   createSecureWebPreferences,
   isAllowedRendererNavigation,
@@ -17,6 +22,22 @@ import {
 let mainWindow: BrowserWindow | null = null;
 
 function registerApplicationHandlers(): void {
+  const ephemeralWorkId = randomUUID();
+  const ephemeralDocumentId = randomUUID();
+  const ephemeralDocumentProfile = parseManuscriptDocumentProfile({
+    schemaVersion: 1,
+    initialDocumentId: ephemeralDocumentId,
+    documents: [
+      {
+        workId: ephemeralWorkId,
+        documentId: ephemeralDocumentId,
+        documentRevisionId: null,
+        label: randomUUID(),
+        initialText: "",
+      },
+    ],
+  });
+
   ipcMain.handle(RUNTIME_INFO_CHANNEL, (): RuntimeInfo => {
     return {
       appName: app.getName(),
@@ -37,6 +58,18 @@ function registerApplicationHandlers(): void {
           }
         : JSON.parse(serializedProfile);
     return parseManuscriptInputProfile(value);
+  });
+  ipcMain.handle(MANUSCRIPT_DOCUMENT_PROFILE_CHANNEL, () => {
+    const value = readRuntimeProfileValue({
+      inlineJson:
+        process.env.EUM_STUDIO_MANUSCRIPT_DOCUMENT_PROFILE,
+      filePath:
+        process.env.EUM_STUDIO_MANUSCRIPT_DOCUMENT_PROFILE_PATH,
+      readTextFile: (filePath) => readFileSync(filePath, "utf8"),
+    });
+    return value === null
+      ? ephemeralDocumentProfile
+      : parseManuscriptDocumentProfile(value);
   });
 }
 

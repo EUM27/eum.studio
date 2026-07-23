@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "longformFixturePath": "tests/fixtures/longform/poc-1-longform.manifest.json",
+  "artifactDirectory": "artifacts/poc-1-performance",
+  "correctness": {
+    "minimumDocumentSwitchCount": 101,
+    "maximumOwnershipViolationCount": 0,
+    "maximumSearchMismatchCount": 0,
+    "maximumInputMismatchCount": 0
+  },
+  "searchQueries": [
+    "선택 범위",
+    "English prose",
+    "반복되는 문장"
+  ],
+  "inputSamples": ["가", "A", "7", "⋯"],
+  "scenarios": [
+    {
+      "id": "poc-1.document-switch",
+      "kind": "document-switch",
+      "sampleCount": 120,
+      "warmupCount": 5,
+      "maximumP95Ms": 500
+    },
+    {
+      "id": "poc-1.work-search",
+      "kind": "work-search",
+      "sampleCount": 24,
+      "warmupCount": 3,
+      "maximumP95Ms": 1000
+    },
+    {
+      "id": "poc-1.input",
+      "kind": "input",
+      "sampleCount": 64,
+      "warmupCount": 4,
+      "maximumP95Ms": 16.7
+    }
+  ]
+}

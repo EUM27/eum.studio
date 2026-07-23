@@ -100,6 +100,12 @@ export class InMemoryRevisionStore implements RevisionStore {
       : (this.#revisions.get(revisionId) ?? null);
   }
 
+  async getRevision(
+    revisionId: EntityId<"DocumentRevision">,
+  ): Promise<DocumentRevision | null> {
+    return this.#revisions.get(revisionId) ?? null;
+  }
+
   async materialize(
     revisionId: EntityId<"DocumentRevision">,
   ): Promise<string> {

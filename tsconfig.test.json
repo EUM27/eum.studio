@@ -13,6 +13,7 @@
     "src/**/*.tsx",
     "tests/**/*.ts",
     "vitest.config.ts",
+    "vitest.performance.config.ts",
     "playwright.config.ts"
   ]
 }

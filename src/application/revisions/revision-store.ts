@@ -31,6 +31,9 @@ export type RevisionStore = {
   getCurrentRevision(
     documentId: EntityId<"Document">,
   ): Promise<DocumentRevision | null>;
+  getRevision(
+    revisionId: EntityId<"DocumentRevision">,
+  ): Promise<DocumentRevision | null>;
   materialize(
     revisionId: EntityId<"DocumentRevision">,
   ): Promise<string>;

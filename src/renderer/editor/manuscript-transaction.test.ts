@@ -28,8 +28,9 @@ describe("manuscript transaction extraction", () => {
     const extracted = extractManuscriptTransaction(transaction);
 
     expect(extracted).toEqual({
-      beforeLength: originalText.length,
-      afterLength: originalText.length - (to - from) + insertedText.length,
+      beforeOffsetLength: originalText.length,
+      afterOffsetLength:
+        originalText.length - (to - from) + insertedText.length,
       changes: [
         {
           from,
@@ -56,6 +57,8 @@ describe("manuscript transaction extraction", () => {
     expect(Object.isFrozen(extracted.selection)).toBe(true);
     expect(Object.isFrozen(extracted.selection.ranges)).toBe(true);
     expect(Object.isFrozen(extracted.selection.ranges[0])).toBe(true);
+    expect(extracted).not.toHaveProperty("beforeLength");
+    expect(extracted).not.toHaveProperty("afterLength");
   });
 
   it("preserves a backward selection without materializing its text", () => {

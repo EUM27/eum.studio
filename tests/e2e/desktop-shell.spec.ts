@@ -30,6 +30,34 @@ function readHangulCompositionText(): string {
   return match[0];
 }
 
+function createDocumentSwitchProfile(
+  firstInitialText = Array.from(
+    { length: randomInt(96, 128) },
+    () => randomUUID(),
+  ).join("\n"),
+) {
+  const workId = randomUUID();
+  const firstDocument = {
+    workId,
+    documentId: randomUUID(),
+    documentRevisionId: randomUUID(),
+    label: randomUUID(),
+    initialText: firstInitialText,
+  };
+  const secondDocument = {
+    workId,
+    documentId: randomUUID(),
+    documentRevisionId: randomUUID(),
+    label: randomUUID(),
+    initialText: randomUUID(),
+  };
+  return {
+    schemaVersion: 1,
+    initialDocumentId: firstDocument.documentId,
+    documents: [firstDocument, secondDocument],
+  } as const;
+}
+
 test("launches a sandboxed shell with only the typed studio bridge", async () => {
   const electronApp = await electron.launch({
     args: ["."],
@@ -106,9 +134,51 @@ test("renders a writable CodeMirror manuscript surface", async () => {
       });
     expect(hasVisibleFocusIndicator).toBe(true);
     await expect(manuscript).toContainText(insertedText);
-    await expect(window.getByTestId("manuscript-length")).toHaveText(
+    await expect(
+      window.getByTestId("manuscript-character-count"),
+    ).toHaveText(
       String(insertedText.length),
     );
+  } finally {
+    await electronApp.close();
+  }
+});
+
+test("shows user character statistics instead of UTF-16 editor offsets", async () => {
+  const combinedCharacter = `${randomUUID()[0]}${String.fromCodePoint(0x0301)}`;
+  const joinedEmoji = String.fromCodePoint(0x1f469, 0x200d, 0x1f4bb);
+  const initialText = `${randomUUID()}${combinedCharacter}${joinedEmoji} \n${randomUUID()}`;
+  const documentProfile = createDocumentSwitchProfile(initialText);
+  const segments = Array.from(
+    new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(
+      initialText,
+    ),
+    ({ segment }) => segment,
+  );
+  const withoutWhitespace = segments.filter(
+    (segment) => !/^\p{White_Space}/u.test(segment),
+  );
+  const electronApp = await electron.launch({
+    args: ["."],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      EUM_STUDIO_MANUSCRIPT_DOCUMENT_PROFILE:
+        JSON.stringify(documentProfile),
+      EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+    },
+  });
+
+  try {
+    const window = await electronApp.firstWindow();
+
+    expect(initialText.length).toBeGreaterThan(segments.length);
+    await expect(
+      window.getByTestId("manuscript-character-count"),
+    ).toHaveText(String(segments.length));
+    await expect(
+      window.getByTestId("manuscript-character-count-without-whitespace"),
+    ).toHaveText(String(withoutWhitespace.length));
   } finally {
     await electronApp.close();
   }
@@ -271,7 +341,9 @@ test("keeps Hangul IME composition intact through commit, undo, and redo", async
     await session.send("Input.insertText", { text: compositionText });
     await expect(manuscript).toHaveText(compositionText);
     await expect(manuscript).not.toContainText(compositionCloser);
-    await expect(window.getByTestId("manuscript-length")).toHaveText(
+    await expect(
+      window.getByTestId("manuscript-character-count"),
+    ).toHaveText(
       String(compositionText.length),
     );
 
@@ -284,6 +356,192 @@ test("keeps Hangul IME composition intact through commit, undo, and redo", async
     const cursorProbe = randomUUID();
     await manuscript.pressSequentially(cursorProbe);
     await expect(manuscript).toHaveText(`${compositionText}${cursorProbe}`);
+    await session.detach();
+  } finally {
+    await electronApp.close();
+  }
+});
+
+test("keeps each document state and scroll independent across switches", async () => {
+  const documentProfile = createDocumentSwitchProfile();
+  const [firstDocument, secondDocument] = documentProfile.documents;
+  const electronApp = await electron.launch({
+    args: ["."],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      EUM_STUDIO_MANUSCRIPT_DOCUMENT_PROFILE:
+        JSON.stringify(documentProfile),
+      EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+    },
+  });
+
+  try {
+    const window = await electronApp.firstWindow();
+    const manuscript = window.getByRole("textbox", { name: "원고" });
+    const documentSwitch = window.getByRole("combobox", {
+      name: "문서 전환",
+    });
+    const scroller = window.locator(".cm-scroller");
+    const manuscriptCharacterCount = window.getByTestId(
+      "manuscript-character-count",
+    );
+    const firstEdit = randomUUID();
+    const secondEdit = randomUUID();
+
+    await expect(documentSwitch).toHaveValue(firstDocument.documentId);
+    await expect(manuscriptCharacterCount).toHaveText(
+      String(firstDocument.initialText.length),
+    );
+    await manuscript.press("Control+End");
+    await manuscript.pressSequentially(firstEdit);
+    await expect(manuscriptCharacterCount).toHaveText(
+      String(firstDocument.initialText.length + firstEdit.length),
+    );
+    for (let index = 0; index < firstEdit.length; index += 1) {
+      await manuscript.press("Shift+ArrowLeft");
+    }
+    const firstScrollTop = await scroller.evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+      element.dispatchEvent(new Event("scroll"));
+      return element.scrollTop;
+    });
+    expect(firstScrollTop).toBeGreaterThan(0);
+
+    await documentSwitch.selectOption(secondDocument.documentId);
+    await expect(manuscript).toHaveText(secondDocument.initialText);
+    await manuscript.press("Control+End");
+    await manuscript.pressSequentially(secondEdit);
+    await expect(manuscript).toHaveText(
+      `${secondDocument.initialText}${secondEdit}`,
+    );
+
+    await documentSwitch.selectOption(firstDocument.documentId);
+    await expect(manuscriptCharacterCount).toHaveText(
+      String(firstDocument.initialText.length + firstEdit.length),
+    );
+    await expect
+      .poll(() =>
+        manuscript.evaluate(
+          () => globalThis.getSelection()?.toString() ?? "",
+        ),
+      )
+      .toBe(firstEdit);
+    await expect
+      .poll(() => scroller.evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(0);
+
+    await manuscript.press("Control+Z");
+    await expect(manuscriptCharacterCount).toHaveText(
+      String(firstDocument.initialText.length),
+    );
+    await manuscript.press("Control+Y");
+    await expect(manuscriptCharacterCount).toHaveText(
+      String(firstDocument.initialText.length + firstEdit.length),
+    );
+
+    await documentSwitch.selectOption(secondDocument.documentId);
+    await expect(manuscript).toHaveText(
+      `${secondDocument.initialText}${secondEdit}`,
+    );
+    await manuscript.press("Control+Z");
+    await expect(manuscript).toHaveText(secondDocument.initialText);
+  } finally {
+    await electronApp.close();
+  }
+});
+
+test("defers a document switch until Hangul composition commits", async () => {
+  const compositionText = readHangulCompositionText();
+  const documentProfile = createDocumentSwitchProfile("");
+  const [firstDocument, secondDocument] = documentProfile.documents;
+  const electronApp = await electron.launch({
+    args: ["."],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      EUM_STUDIO_MANUSCRIPT_DOCUMENT_PROFILE:
+        JSON.stringify(documentProfile),
+      EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+    },
+  });
+
+  try {
+    const window = await electronApp.firstWindow();
+    const manuscript = window.getByRole("textbox", { name: "원고" });
+    const documentSwitch = window.getByRole("combobox", {
+      name: "문서 전환",
+    });
+    const session = await window.context().newCDPSession(window);
+
+    await manuscript.focus();
+    await session.send("Input.imeSetComposition", {
+      text: compositionText,
+      selectionStart: compositionText.length,
+      selectionEnd: compositionText.length,
+      replacementStart: 0,
+      replacementEnd: 0,
+    });
+    await expect(manuscript).toHaveText(compositionText);
+
+    await documentSwitch.selectOption(secondDocument.documentId);
+    await expect(documentSwitch).toHaveValue(secondDocument.documentId);
+    await expect(manuscript).toHaveText(compositionText);
+
+    await session.send("Input.insertText", { text: compositionText });
+    await expect(manuscript).toHaveText(secondDocument.initialText);
+
+    await documentSwitch.selectOption(firstDocument.documentId);
+    await expect(manuscript).toHaveText(compositionText);
+    await manuscript.press("Control+Z");
+    await expect(manuscript).toHaveText("");
+    await session.detach();
+  } finally {
+    await electronApp.close();
+  }
+});
+
+test("cancels a queued switch when composition returns to its document", async () => {
+  const compositionText = readHangulCompositionText();
+  const documentProfile = createDocumentSwitchProfile("");
+  const [firstDocument, secondDocument] = documentProfile.documents;
+  const electronApp = await electron.launch({
+    args: ["."],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      EUM_STUDIO_MANUSCRIPT_DOCUMENT_PROFILE:
+        JSON.stringify(documentProfile),
+      EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+    },
+  });
+
+  try {
+    const window = await electronApp.firstWindow();
+    const manuscript = window.getByRole("textbox", { name: "원고" });
+    const documentSwitch = window.getByRole("combobox", {
+      name: "문서 전환",
+    });
+    const session = await window.context().newCDPSession(window);
+    const cursorProbe = randomUUID();
+
+    await manuscript.focus();
+    await session.send("Input.imeSetComposition", {
+      text: compositionText,
+      selectionStart: compositionText.length,
+      selectionEnd: compositionText.length,
+      replacementStart: 0,
+      replacementEnd: 0,
+    });
+    await documentSwitch.selectOption(secondDocument.documentId);
+    await documentSwitch.selectOption(firstDocument.documentId);
+
+    await session.send("Input.insertText", { text: compositionText });
+    await manuscript.pressSequentially(cursorProbe);
+    await expect(manuscript).toHaveText(`${compositionText}${cursorProbe}`);
+
+    await documentSwitch.selectOption(secondDocument.documentId);
+    await expect(manuscript).toHaveText(secondDocument.initialText);
     await session.detach();
   } finally {
     await electronApp.close();
@@ -317,9 +575,9 @@ test("keeps keyboard and mouse selections within the exact character range", asy
         manuscript.evaluate(() => globalThis.getSelection()?.toString() ?? ""),
       )
       .toBe(keyboardTarget);
-    await expect(window.getByTestId("manuscript-selection-length")).toHaveText(
-      String(keyboardTarget.length),
-    );
+    await expect(
+      window.getByTestId("manuscript-selection-active"),
+    ).toBeVisible();
 
     const mouseLine = randomUUID();
     await manuscript.press("Control+A");
@@ -363,9 +621,9 @@ test("keeps keyboard and mouse selections within the exact character range", asy
         manuscript.evaluate(() => globalThis.getSelection()?.toString() ?? ""),
       )
       .toBe(expectedMouseSelection);
-    await expect(window.getByTestId("manuscript-selection-length")).toHaveText(
-      String(expectedMouseSelection.length),
-    );
+    await expect(
+      window.getByTestId("manuscript-selection-active"),
+    ).toBeVisible();
   } finally {
     await electronApp.close();
   }
@@ -430,6 +688,257 @@ test("applies registered pairs, skips existing closers, and types a midline elli
     await manuscript.pressSequentially(ellipsisPrefix);
     await manuscript.pressSequentially("...");
     await expect(manuscript).toHaveText(`${ellipsisPrefix}⋯`);
+  } finally {
+    await electronApp.close();
+  }
+});
+
+test("closes and restores both workspace rails independently without hiding writing status", async () => {
+  const documentProfile = createDocumentSwitchProfile();
+  const [firstDocument, secondDocument] = documentProfile.documents;
+  const electronApp = await electron.launch({
+    args: ["."],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      EUM_STUDIO_MANUSCRIPT_DOCUMENT_PROFILE:
+        JSON.stringify(documentProfile),
+      EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+    },
+  });
+
+  try {
+    const window = await electronApp.firstWindow();
+    const manuscript = window.getByRole("textbox", { name: "원고" });
+    const documentRail = window.getByRole("complementary", {
+      name: "문서 레일",
+    });
+    const reviewRail = window.getByRole("complementary", {
+      name: "검토 레일",
+    });
+
+    await expect(documentRail).toBeVisible();
+    await expect(reviewRail).toBeVisible();
+    await window
+      .getByRole("button", { name: "문서 레일 닫기" })
+      .click();
+    await expect(documentRail).toBeHidden();
+    await expect(reviewRail).toBeVisible();
+    await expect(manuscript).toBeVisible();
+    await expect(window.getByTestId("current-work")).toHaveText(
+      firstDocument.workId,
+    );
+    await expect(window.getByTestId("current-document")).toHaveText(
+      firstDocument.label,
+    );
+    await expect(window.getByTestId("save-state")).toBeVisible();
+    await expect(window.getByTestId("focus-summary")).toBeVisible();
+
+    await window
+      .getByRole("button", { name: "검토 레일 닫기" })
+      .focus();
+    await window.keyboard.press("Enter");
+    await expect(reviewRail).toBeHidden();
+    await expect(manuscript).toBeVisible();
+
+    await window
+      .getByRole("button", { name: "문서 레일 열기" })
+      .focus();
+    await window.keyboard.press("Enter");
+    await expect(documentRail).toBeVisible();
+    await window
+      .getByRole("combobox", { name: "문서 전환" })
+      .selectOption(secondDocument.documentId);
+    await expect(window.getByTestId("current-document")).toHaveText(
+      secondDocument.label,
+    );
+    await expect(manuscript).toHaveText(secondDocument.initialText);
+
+    await window
+      .getByRole("button", { name: "검토 레일 열기" })
+      .click();
+    await expect(reviewRail).toBeVisible();
+  } finally {
+    await electronApp.close();
+  }
+});
+
+test("uses one narrow rail overlay and preserves manual closed state when widened", async () => {
+  const documentProfile = createDocumentSwitchProfile();
+  const electronApp = await electron.launch({
+    args: ["."],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      EUM_STUDIO_MANUSCRIPT_DOCUMENT_PROFILE:
+        JSON.stringify(documentProfile),
+      EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+    },
+  });
+
+  try {
+    const window = await electronApp.firstWindow();
+    await window.setViewportSize({
+      width: randomInt(480, 620),
+      height: randomInt(680, 820),
+    });
+    const documentRail = window.getByRole("complementary", {
+      name: "문서 레일",
+    });
+    const reviewRail = window.getByRole("complementary", {
+      name: "검토 레일",
+    });
+
+    await expect(documentRail).toBeHidden();
+    await expect(reviewRail).toBeHidden();
+    await window
+      .getByRole("button", { name: "문서 레일 열기" })
+      .click();
+    await expect(documentRail).toBeVisible();
+    await expect(reviewRail).toBeHidden();
+
+    await window
+      .getByRole("button", { name: "검토 레일 열기" })
+      .click();
+    await expect(documentRail).toBeHidden();
+    await expect(reviewRail).toBeVisible();
+    await window
+      .getByRole("button", { name: "검토 레일 닫기" })
+      .click();
+
+    await window.setViewportSize({
+      width: randomInt(900, 1120),
+      height: randomInt(680, 820),
+    });
+    await expect(documentRail).toBeVisible();
+    await expect(reviewRail).toBeHidden();
+    await expect(
+      window.getByRole("button", { name: "검토 레일 열기" }),
+    ).toBeVisible();
+  } finally {
+    await electronApp.close();
+  }
+});
+
+test("searches labels and manuscripts only inside the active Work", async () => {
+  const firstWorkId = randomUUID();
+  const secondWorkId = randomUUID();
+  const query = randomUUID().slice(0, 8);
+  const firstInitialDocument = {
+    workId: firstWorkId,
+    documentId: randomUUID(),
+    documentRevisionId: randomUUID(),
+    label: randomUUID(),
+    initialText: randomUUID(),
+  };
+  const firstMatchingDocument = {
+    workId: firstWorkId,
+    documentId: randomUUID(),
+    documentRevisionId: randomUUID(),
+    label: randomUUID(),
+    initialText: `${randomUUID()}${query}${randomUUID()}`,
+  };
+  const foreignMatchingDocument = {
+    workId: secondWorkId,
+    documentId: randomUUID(),
+    documentRevisionId: randomUUID(),
+    label: `${query}${randomUUID()}`,
+    initialText: `${query}${query}`,
+  };
+  const documentProfile = {
+    schemaVersion: 1,
+    initialDocumentId: firstInitialDocument.documentId,
+    documents: [
+      firstInitialDocument,
+      firstMatchingDocument,
+      foreignMatchingDocument,
+    ],
+  };
+  const electronApp = await electron.launch({
+    args: ["."],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      EUM_STUDIO_MANUSCRIPT_DOCUMENT_PROFILE:
+        JSON.stringify(documentProfile),
+      EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+    },
+  });
+
+  try {
+    const window = await electronApp.firstWindow();
+    const searchInput = window.getByRole("searchbox", {
+      name: "원고 검색",
+    });
+    const documentSwitch = window.getByRole("combobox", {
+      name: "문서 전환",
+    });
+
+    await searchInput.fill(query);
+    await window.getByRole("button", { name: "검색" }).click();
+    await expect(window.getByTestId("search-result-summary")).toHaveText(
+      "1개 문서 · 1개 일치",
+    );
+    await expect(
+      window.getByRole("button", {
+        name: firstMatchingDocument.label,
+      }),
+    ).toBeVisible();
+    await expect(
+      window.getByRole("button", {
+        name: foreignMatchingDocument.label,
+      }),
+    ).toHaveCount(0);
+
+    await window
+      .getByRole("button", {
+        name: firstMatchingDocument.label,
+      })
+      .click();
+    await expect(documentSwitch).toHaveValue(
+      firstMatchingDocument.documentId,
+    );
+
+    await documentSwitch.selectOption(
+      foreignMatchingDocument.documentId,
+    );
+    await expect(searchInput).toHaveValue("");
+    await expect(
+      window.getByTestId("search-result-summary"),
+    ).toHaveCount(0);
+    await searchInput.fill(query);
+    await window.getByRole("button", { name: "검색" }).click();
+    await expect(window.getByTestId("search-result-summary")).toHaveText(
+      "1개 문서 · 3개 일치",
+    );
+    await expect(
+      window.getByRole("button", {
+        name: foreignMatchingDocument.label,
+      }),
+    ).toBeVisible();
+    await expect(
+      window.getByRole("button", {
+        name: firstMatchingDocument.label,
+      }),
+    ).toHaveCount(0);
+
+    const manuscript = window.getByRole("textbox", { name: "원고" });
+    const editedQuery = randomUUID();
+    await manuscript.press("Control+End");
+    await manuscript.pressSequentially(editedQuery);
+    await expect(
+      window.getByTestId("search-result-summary"),
+    ).toHaveCount(0);
+    await searchInput.fill(editedQuery);
+    await window.getByRole("button", { name: "검색" }).click();
+    await expect(window.getByTestId("search-result-summary")).toHaveText(
+      "1개 문서 · 1개 일치",
+    );
+    await expect(
+      window.getByRole("button", {
+        name: foreignMatchingDocument.label,
+      }),
+    ).toBeVisible();
   } finally {
     await electronApp.close();
   }

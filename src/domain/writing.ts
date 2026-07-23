@@ -54,6 +54,52 @@ export type DocumentRevision = {
   readonly durableAt: Instant;
 };
 
+export type AnchorStatus =
+  | "resolved"
+  | "needsReview"
+  | "broken"
+  | "retired";
+
+export type AnchorResolutionMethod =
+  | "created"
+  | "exact-offset"
+  | "context-match"
+  | "unique-quote";
+
+export type AnchorMatchedEvidence =
+  | "origin-revision"
+  | "quote"
+  | "prefix-context"
+  | "suffix-context";
+
+export type AnchorResolutionEvidence = {
+  readonly targetRevisionId: EntityId<"DocumentRevision">;
+  readonly method: AnchorResolutionMethod;
+  readonly matchedEvidence: readonly AnchorMatchedEvidence[];
+  readonly candidateOffsets: readonly number[];
+  readonly policyVersion: string;
+  readonly assessedAt: Instant;
+  readonly commandRef?: string;
+  readonly actorRef?: string;
+};
+
+export type Anchor = {
+  readonly meta: RecordMeta<"Anchor">;
+  readonly documentId: EntityId<"Document">;
+  readonly originRevisionId: EntityId<"DocumentRevision">;
+  readonly resolvedRevisionId: EntityId<"DocumentRevision">;
+  readonly startOffset: number;
+  readonly endOffset: number;
+  readonly exactQuote: string;
+  readonly prefixContext: string;
+  readonly suffixContext: string;
+  readonly quoteHash: string;
+  readonly contextHash: string;
+  readonly lineageRef?: EntityId<"AnchorLineage">;
+  readonly status: AnchorStatus;
+  readonly resolutionEvidence: AnchorResolutionEvidence;
+};
+
 export type ContextReference = {
   readonly entityType: string;
   readonly entityId: string;

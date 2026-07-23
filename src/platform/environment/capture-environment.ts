@@ -35,12 +35,18 @@ const packages = [...dependencyNames].map((name) => {
   }
   return { name, version: installed };
 });
+const processors = os.cpus();
 const manifest = createEnvironmentManifest({
   capturedAt: new Date().toISOString(),
   platform: process.platform,
   architecture: process.arch,
   osRelease: os.release(),
   nodeVersion: process.version,
+  cpuModel: [...new Set(processors.map((cpu) => cpu.model))].join(
+    " | ",
+  ),
+  logicalProcessorCount: processors.length,
+  totalMemoryBytes: os.totalmem(),
   packages,
 });
 const outputFlagIndex = process.argv.indexOf("--output");

@@ -58,6 +58,36 @@ describe("studio bridge contract", () => {
     expect(invoke).toHaveBeenCalledWith(MANUSCRIPT_INPUT_PROFILE_CHANNEL);
   });
 
+  it("wraps the allowlisted manuscript document profile query", async () => {
+    const document = {
+      workId: randomUUID(),
+      documentId: randomUUID(),
+      documentRevisionId: randomUUID(),
+      label: randomUUID(),
+      initialText: randomUUID(),
+    };
+    const documentProfile = {
+      schemaVersion: 1,
+      initialDocumentId: document.documentId,
+      documents: [document],
+    };
+    const invoke = vi.fn().mockResolvedValue(documentProfile);
+    const bridge = createStudioBridge(invoke);
+    const readDocumentProfile = Reflect.get(
+      bridge.editor,
+      "getManuscriptDocumentProfile",
+    );
+
+    expect(readDocumentProfile).toBeTypeOf("function");
+    if (typeof readDocumentProfile !== "function") {
+      return;
+    }
+    await expect(readDocumentProfile()).resolves.toEqual(documentProfile);
+    expect(invoke).toHaveBeenCalledWith(
+      "studio:editor:get-manuscript-document-profile",
+    );
+  });
+
   it("rejects a malformed manuscript input profile response", async () => {
     const bridge = createStudioBridge(async () => ({ schemaVersion: 1 }));
 

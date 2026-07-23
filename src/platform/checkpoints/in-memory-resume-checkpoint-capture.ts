@@ -6,6 +6,7 @@ import type {
 import { ResumeCheckpointConflictError } from "../../application/checkpoints/capture-resume-checkpoint";
 import type { RevisionStore } from "../../application/revisions/revision-store";
 import type {
+  Anchor,
   EntityId,
   ResumeCheckpoint,
   Work,
@@ -17,6 +18,7 @@ type ResumeCheckpointCaptureState = {
     EntityId<"ResumeCheckpoint">,
     ResumeCheckpoint
   >;
+  readonly anchors: ReadonlyMap<EntityId<"Anchor">, Anchor>;
 };
 
 function freezeWorkSnapshot(work: Work): Work {
@@ -49,6 +51,22 @@ function freezeCheckpointSnapshot(
   });
 }
 
+function freezeAnchorSnapshot(anchor: Anchor): Anchor {
+  return Object.freeze({
+    ...anchor,
+    meta: Object.freeze({ ...anchor.meta }),
+    resolutionEvidence: Object.freeze({
+      ...anchor.resolutionEvidence,
+      matchedEvidence: Object.freeze([
+        ...anchor.resolutionEvidence.matchedEvidence,
+      ]),
+      candidateOffsets: Object.freeze([
+        ...anchor.resolutionEvidence.candidateOffsets,
+      ]),
+    }),
+  });
+}
+
 function currentCheckpointId(
   work: Work,
 ): EntityId<"ResumeCheckpoint"> | null {
@@ -64,6 +82,7 @@ export class InMemoryResumeCheckpointCaptureTransaction
   constructor(input: {
     readonly works: readonly Work[];
     readonly checkpoints?: readonly ResumeCheckpoint[];
+    readonly anchors?: readonly Anchor[];
     readonly revisionStore: RevisionStore;
   }) {
     this.#revisionStore = input.revisionStore;
@@ -88,7 +107,15 @@ export class InMemoryResumeCheckpointCaptureTransaction
       const snapshot = freezeCheckpointSnapshot(checkpoint);
       checkpoints.set(snapshot.meta.id, snapshot);
     }
-    this.#state = { works, checkpoints };
+    const anchors = new Map<EntityId<"Anchor">, Anchor>();
+    for (const anchor of input.anchors ?? []) {
+      if (anchors.has(anchor.meta.id)) {
+        throw new Error(`Duplicate anchor identity: ${anchor.meta.id}`);
+      }
+      const snapshot = freezeAnchorSnapshot(anchor);
+      anchors.set(snapshot.meta.id, snapshot);
+    }
+    this.#state = { works, checkpoints, anchors };
   }
 
   async getWork(workId: EntityId<"Work">): Promise<Work | null> {
@@ -99,6 +126,12 @@ export class InMemoryResumeCheckpointCaptureTransaction
     checkpointId: EntityId<"ResumeCheckpoint">,
   ): Promise<ResumeCheckpoint | null> {
     return this.#state.checkpoints.get(checkpointId) ?? null;
+  }
+
+  async getAnchorById(
+    anchorId: EntityId<"Anchor">,
+  ): Promise<Anchor | null> {
+    return this.#state.anchors.get(anchorId) ?? null;
   }
 
   async commit(
@@ -158,7 +191,11 @@ export class InMemoryResumeCheckpointCaptureTransaction
     const checkpoints = new Map(this.#state.checkpoints);
     works.set(work.meta.id, work);
     checkpoints.set(checkpoint.meta.id, checkpoint);
-    this.#state = { works, checkpoints };
+    this.#state = {
+      works,
+      checkpoints,
+      anchors: this.#state.anchors,
+    };
 
     return Object.freeze({ checkpoint, work });
   }

@@ -4,9 +4,13 @@
 
 ## 현재 상태
 
-`POC-1 — 장편 편집기` 진행 중
+`POC-1 — 장편 편집기` 완료
 
-Gate 0의 Electron main·sandbox preload·React renderer 셸과 공통 검증 기반을 완료했다. POC-1에서는 manifest 기반 장편 fixture와 함께 Work·Document 소유 관계, application revision, atomic ResumeCheckpoint envelope capture, 불변 in-memory adapter, 실제 CodeMirror 원고 편집 표면을 구현했다. checkpoint 삽입과 `Work.resumeCheckpointId`·Work revision 갱신은 전용 application transaction에서 함께 성공하거나 함께 실패하며, 작품별 현재 checkpoint 조회는 Work 포인터만 원본으로 사용한다. 포인터가 없으면 명시적 빈 상태이고, dangling·교차 작품 포인터는 다른 checkpoint로 대체하지 않고 무결성 오류로 구분한다. 정확한 작품 복귀를 주장하기 전에는 Anchor 소유권·복원 계약을 추가로 검증한다. CodeMirror transaction은 변경 span과 selection 좌표를 renderer의 불변 payload로 추출하며 저장소나 선택 원문 사본을 직접 소유하지 않는다. 마우스와 키보드로 선택한 일부 문자는 행·문단으로 확장하지 않고 방향과 경계를 그대로 보존한다. 선택 원문은 구조 명령 실행 시점에 현재 revision과 함께 다시 검증하는 경계에서만 구체화한다. 자동 닫힘 pair와 입력 치환은 schema로 검증한 runtime profile이 소유하며 제품 코드에 고정 목록을 두지 않는다. 등록된 괄호·따옴표는 자동으로 닫히고 이미 있는 닫는 기호 입력은 중복 삽입 없이 커서만 이동하며, 등록 규칙에 따라 마침표 세 개를 가운뎃 말줄임표 `⋯` 하나로 바꾼다. 실제 Electron의 한글 IME composition 경로는 조합 중 등록형 입력 규칙을 우회하고, 확정된 한글 본문과 커서를 한 단위로 undo·redo한다. 이 저장소는 현행 `D:\eum.editor`의 연장선이나 복사본이 아니며, 승인된 제품 헌법과 POC 계획에서 새로 구축한다.
+Gate 0의 Electron main·sandbox preload·React renderer 셸 위에 manifest 기반 장편 fixture, Work·Document 소유 경계, 불변 revision, atomic ResumeCheckpoint capture, Anchor 생성·복원·손상 계약과 실제 CodeMirror 원고 편집 표면을 구현했다. checkpoint와 Work 포인터는 한 transaction에서 함께 바뀌며, 작품 밖 데이터나 다른 checkpoint로 fallback하지 않는다. Anchor는 사용자가 지정한 정확한 범위를 현재 문서·revision과 함께 검증한다. 정확한 근거가 하나뿐일 때만 복원하고, 모호하면 `needsReview`, 사라졌으면 `broken`으로 남겨 임의 위치로 이동하지 않는다.
+
+편집 표면은 문서별 `EditorState`·selection·스크롤·undo 이력을 독립적으로 보관한다. 한글 IME 조합, runtime profile 기반 괄호·따옴표·가운뎃 말줄임표 `⋯`, 정확한 선택 좌표, grapheme 기반 공백 포함·제외 통계를 실제 Electron에서 검증했다. 상시 transaction은 선택 원문을 복사하지 않으며, 문자 통계 구독 알림은 원고 snapshot 갱신 뒤 microtask로 분리해 입력 임계 경로에서 보조 React 렌더를 제거했다.
+
+원고 중심 화면에는 Work별로 독립적인 좌우 레일, 활성 Work 안에서만 동작하는 최신 원고 검색, 항상 보이는 작품·문서·저장·집중 기록 상태가 있다. 검색은 상시 입력 경로에서 원고를 복사하지 않고 사용자가 실행한 순간에만 문서별 현재 상태를 읽는다. 2작품·작품별 500문서·1,000,000자 fixture의 production Electron 측정에서 문서 전환 p95 30.489ms, 작품 검색 p95 3.700ms, 입력 p95 15.400ms를 기록했고 120회 전환의 소유권 위반·검색 불일치·입력 불일치는 모두 0건이었다. 영속 저장과 강제 종료 복구는 아직 연결하지 않았으며 다음 Gate에서 검증한다. 이 저장소는 현행 `D:\eum.editor`의 연장선이나 복사본이 아니며, 승인된 제품 헌법과 POC 계획에서 새로 구축한다.
 
 ## 경계
 
@@ -33,6 +37,7 @@ npm run typecheck
 npm run test:run
 npm run build
 npm run test:e2e
+npm run performance:poc-1
 npm run environment:report -- --output <사용자가 선택한 출력 경로>
 ```
 
@@ -45,6 +50,22 @@ $env:EUM_STUDIO_MANUSCRIPT_INPUT_PROFILE = Get-Content -Raw <사용자가 선택
 npm run start
 ```
 
+여러 문서 전환 사용감을 확인할 때도 Work·Document·base revision·표시명·초기 본문을 담은 사용자 선택 JSON profile을 runtime 입력으로 전달한다. 작은 profile은 원문을 직접 전달할 수 있다.
+
+```powershell
+$env:EUM_STUDIO_MANUSCRIPT_DOCUMENT_PROFILE = Get-Content -Raw <사용자가 선택한 profile 경로>
+npm run start
+```
+
+큰 장편 profile은 Windows 환경 변수 길이 제한을 피하도록 main process가 사용자 선택 파일을 직접 읽게 한다.
+
+```powershell
+$env:EUM_STUDIO_MANUSCRIPT_DOCUMENT_PROFILE_PATH = <사용자가 선택한 profile 경로>
+npm run start
+```
+
+두 document profile 입력은 서로 대체하지 않으며 동시에 설정하면 실행을 거부한다.
+
 ## 아직 하지 않는 것
 
 - 현행 앱 코드 복사
@@ -54,4 +75,4 @@ npm run start
 - OAuth client 설정 내장
 - 실제 사용자 데이터 쓰기
 
-다음 검증 단위는 문서 전환 전에 잠글 문서별 `EditorState` 보관·복원 정책이다. 그 뒤 문자 통계 규칙, 정확한 Anchor 복원, 문서 전환·장편 성능을 순서대로 검증한다. 저장소·별빛·음악·조수·투고 기능을 먼저 얹지 않는다.
+다음 Gate는 `POC-2 — 영속화·강제 종료`다. 저장소·별빛·음악·조수·투고 기능을 먼저 얹지 않는다.

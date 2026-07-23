@@ -1,5 +1,6 @@
 import type { RevisionStore } from "../revisions/revision-store";
 import type {
+  Anchor,
   EntityId,
   ResumeCheckpoint,
   Work,
@@ -26,6 +27,9 @@ export type ResumeCheckpointCaptureReader = {
   getCheckpointById(
     checkpointId: EntityId<"ResumeCheckpoint">,
   ): Promise<ResumeCheckpoint | null>;
+  getAnchorById(
+    anchorId: EntityId<"Anchor">,
+  ): Promise<Anchor | null>;
 };
 
 export type ResumeCheckpointCaptureTransaction =

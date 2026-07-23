@@ -20,8 +20,8 @@ export type ManuscriptSelection = {
 };
 
 export type ManuscriptTransaction = {
-  readonly beforeLength: number;
-  readonly afterLength: number;
+  readonly beforeOffsetLength: number;
+  readonly afterOffsetLength: number;
   readonly changes: readonly ManuscriptTextChange[];
   readonly selection: ManuscriptSelection;
 };
@@ -50,8 +50,8 @@ export function extractManuscriptTransaction(
   );
 
   return Object.freeze({
-    beforeLength: transaction.startState.doc.length,
-    afterLength: transaction.state.doc.length,
+    beforeOffsetLength: transaction.startState.doc.length,
+    afterOffsetLength: transaction.state.doc.length,
     changes: Object.freeze(changes),
     selection: Object.freeze({
       mainIndex: transaction.state.selection.mainIndex,
