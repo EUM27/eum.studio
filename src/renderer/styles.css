@@ -82,6 +82,10 @@ select {
   box-shadow: 0 1rem 3rem rgb(73 66 53 / 8%);
 }
 
+.writing-workspace-recovery {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
 .manuscript-header {
   display: flex;
   align-items: center;
@@ -101,6 +105,83 @@ select {
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 0.75rem;
+}
+
+.startup-recovery {
+  display: grid;
+  gap: 0.75rem;
+  overflow: auto;
+  padding: 0.875rem 1.25rem;
+  border-bottom: 1px solid #e3dfd6;
+  background: #f5f2eb;
+}
+
+.startup-recovery header,
+.startup-recovery h3,
+.startup-recovery p {
+  margin: 0;
+}
+
+.startup-recovery h3 {
+  font-size: 0.9rem;
+}
+
+.startup-recovery-documents {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.startup-recovery-documents label {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.startup-recovery-documents label > span {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  color: #6e695f;
+  font-size: 0.75rem;
+}
+
+.startup-recovery textarea {
+  width: 100%;
+  border: 1px solid #c9c3b7;
+  border-radius: 0.45rem;
+  padding: 0.5rem;
+  color: #3c3933;
+  background: #fffefa;
+  resize: vertical;
+}
+
+.startup-recovery-issues {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding-left: 1.25rem;
+  color: #6e695f;
+  font-size: 0.75rem;
+}
+
+.startup-recovery-issues li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.startup-recovery > button {
+  justify-self: start;
+  border: 1px solid #78856b;
+  border-radius: 0.45rem;
+  padding: 0.4rem 0.65rem;
+  color: #3c3933;
+  background: #fffefa;
+  cursor: pointer;
+}
+
+.startup-recovery > button:disabled {
+  cursor: default;
+  opacity: 0.55;
 }
 
 .document-switch-label select {

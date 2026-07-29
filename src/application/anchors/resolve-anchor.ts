@@ -1,4 +1,4 @@
-import type { RevisionStore } from "../revisions/revision-store";
+import type { RevisionReader } from "../revisions/revision-store";
 import type { DescribeAnchorEvidence } from "./create-anchor";
 import type {
   Anchor,
@@ -118,13 +118,13 @@ function freezeCandidates(
 
 export class ResolveAnchor {
   readonly #catalog: WritingCatalog;
-  readonly #revisionStore: RevisionStore;
+  readonly #revisionStore: RevisionReader;
   readonly #reader: AnchorReader;
   readonly #describeEvidence: DescribeAnchorEvidence;
 
   constructor(input: {
     readonly catalog: WritingCatalog;
-    readonly revisionStore: RevisionStore;
+    readonly revisionStore: RevisionReader;
     readonly reader: AnchorReader;
     readonly describeEvidence: DescribeAnchorEvidence;
   }) {

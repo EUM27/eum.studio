@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "independentRunCount": 3,
+  "warmupSampleCountPerRun": 2,
+  "measuredSampleCountPerRun": 12,
+  "maximumDurableAckP95Ms": 500,
+  "batching": {
+    "schemaVersion": 1,
+    "maxTransactionsPerBatch": 1,
+    "maxDelayMs": 0
+  }
+}

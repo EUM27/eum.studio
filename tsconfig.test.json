@@ -14,6 +14,8 @@
     "tests/**/*.ts",
     "vitest.config.ts",
     "vitest.performance.config.ts",
+    "vitest.crash.config.ts",
+    "vitest.installed-package.config.ts",
     "playwright.config.ts"
   ]
 }

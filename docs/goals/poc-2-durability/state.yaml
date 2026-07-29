@@ -1,0 +1,2136 @@
+version: 2
+
+goal:
+  title: "POC-2 — 영속화·강제 종료"
+  slug: "poc-2-durability"
+  kind: existing_plan
+  tranche: "승인된 POC-2 전체를 successive safe verified slices로 완료한다."
+  status: done
+  oracle:
+    signal: "실제 process kill 뒤 마지막 durable sequence와 복구 checksum이 일치하고, ack 전 변경·duplicate·gap·손상 tail·교차 작품/문서·저장 실패가 승인된 POC-2 통과 조건대로 분류된다."
+    cadence: "각 crash·성능·installed-package artifact 생성 뒤와 최종 전체 audit에서 확인한다."
+    final_proof: "전체 check·production-bundle Electron E2E·9개 actual-process kill matrix·3개 독립 성능 실행·installed-package 강제 종료/복구 실행의 최신 pass receipt와 artifact-embedded exact source provenance가 모두 일치해야 한다."
+  intake:
+    original_request: "POC 2 전체 골잡고 시작"
+    interpreted_outcome: "durable ack 이후 강제 종료해도 정확한 작품·문서 원고를 손실 없이 복구하는 POC-2 전체를 구현·검증한다."
+    input_shape: existing_plan
+    audience: "이음 스튜디오 사용자"
+    authority: approved
+    proof_type: test
+    completion_proof: "POC-2 통과 조건을 최신 정적·단위·통합·production-bundle·installed-package·kill harness·성능/메모리 증거로 모두 충족한다."
+    likely_misfire: "journal append만 구현하고 durable flush·ack·replay·손상 tail·crash matrix 검증 없이 완료로 판정한다."
+    blind_spots_considered:
+      - "IME 확정·미확정 저장 경계"
+      - "ack 유실·중복"
+      - "replay 도중 재종료"
+      - "checkpoint·compaction 중 종료"
+      - "production-bundle과 installed-package 증거 구분"
+    existing_plan_facts:
+      - "append-only journal은 POC-2 범위다."
+      - "SQLite와 FTS 결정은 POC-3로 미룬다."
+      - "저장 문자열과 ChangeBatch v1 계약은 현재 미커밋 작업 트리에 구현돼 있다."
+      - "saved 표시는 durable flush 이후에만 허용한다."
+      - "duplicate replay는 멱등이며 sequence gap과 손상 tail은 격리한다."
+
+rules:
+  pm_owns_state: true
+  one_active_task: true
+  max_write_workers: 1
+  no_implementation_without_worker_or_pm_task: true
+  no_completion_without_judge_or_pm_audit: true
+  planning_is_not_completion: true
+  queued_required_worker_blocks_completion: true
+  continuous_until_full_outcome: true
+  missing_input_or_credentials_do_not_stop_goal: true
+  preserve_and_validate_existing_plan: true
+  intake_misfire_must_be_audited: true
+
+agents:
+  scout: installed
+  worker: installed
+  judge: bundled_not_installed
+
+visual_board:
+  selected: none
+  local:
+    status: not_requested
+    url: null
+    command: "npx goalbuddy board docs/goals/poc-2-durability"
+  github_projects:
+    status: not_requested
+    url: null
+    command: "npx goalbuddy extend github-projects"
+    missing: []
+
+active_task: null
+
+tasks:
+  - id: T001
+    type: pm
+    assignee: PM
+    status: done
+    reasoning_hint: high
+    objective: "현재 저장소 지침·승인 설계 checksum·Git 상태·미커밋 ChangeBatch 계약을 검증하고 POC-2 실행 단위를 확정한다."
+    inputs:
+      - "AGENTS.md"
+      - "README.md"
+      - "plan.md"
+      - "docs/design-baseline.md"
+      - "현재 단계의 승인 설계 원문"
+      - "현재 Git diff"
+    constraints:
+      - "구현 파일을 수정하지 않는다."
+      - "D:\\eum.editor를 읽거나 쓰지 않는다."
+      - "저장소 문서와 Git 상태를 source of truth로 사용한다."
+    expected_output:
+      - "checksum 판정"
+      - "dirty worktree fingerprint"
+      - "현재 완료/미완료 경계"
+      - "다음 exact task와 allowed_files·verify·stop_if"
+    receipt:
+      result: done
+      summary: "승인 원문 checksum, Git 동기화, 기존 ChangeBatch 계약과 검증 상태를 확인해 POC-2 다음 단위를 append-only journal framing 판단으로 확정했다."
+      evidence:
+        - "승인 원문 11개 SHA-256이 docs/design-baseline.md와 모두 일치"
+        - "main HEAD 6b8414d, upstream ahead/behind 0/0, staged·conflict 없음"
+        - "기존 미커밋 제품 변경 7개를 보존 대상으로 식별"
+        - "제품 변경 dirty fingerprint F1ED07AE199349500EDFDABE71E7AAC06B4052E94D24CC166C3EAC6A47BA60ED"
+      commands:
+        - cmd: "npm run test:run -- src/application/persistence/change-batch.test.ts src/application/persistence/validate-change-batch-target.test.ts"
+          status: pass
+          result: "2 files, 14 tests"
+        - cmd: "npm run check"
+          status: pass
+          result: "lint, typecheck, 25 files and 102 tests, production build"
+        - cmd: "git diff --check"
+          status: pass
+      next_allowed_task: T002
+
+  - id: T002
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "승인 요구에 맞는 append-only record framing·length·checksum·flush 계약을 결정하고 첫 Worker 범위를 잠근다."
+    inputs:
+      - "T001 receipt"
+      - "docs/poc-2-durable-change-batch.md"
+      - "승인 storage ADR와 POC 실행 계획"
+    constraints:
+      - "구현하지 않는다."
+      - "승인 문서가 정하지 않은 제품 behavior를 새 요구사항으로 만들지 않는다."
+      - "SQLite를 선택하지 않는다."
+    expected_output:
+      - "framing·checksum·flush decision 또는 operator approval 필요 항목"
+      - "exact Worker objective"
+      - "allowed_files"
+      - "verify"
+      - "stop_if"
+    receipt:
+      result: done
+      decision: "checksum 알고리즘을 고정하지 않고 adapter로 주입하며, self-describing canonical header·payload·checksum binary frame과 FileHandle.sync 이후 durable 반환 계약을 사용한다."
+      evidence:
+        - "승인 ADR 5.1은 journal append 후 durable acknowledgement만 saved로 표시하도록 요구한다."
+        - "승인 ADR 5.2는 작품·문서·base revision·sequence·changes·createdAt·전후 검증값·client command ID를 journal record에 요구한다."
+        - "Node.js 24 공식 문서는 FileHandle.sync가 open descriptor의 모든 data를 storage device로 flush하도록 요청하며 OS·device별 구현임을 명시한다."
+        - "Node.js 24 공식 문서는 같은 FileHandle의 write를 await 없이 중첩하는 것이 unsafe하다고 명시한다."
+      framing:
+        prefix: "4-byte unsigned big-endian canonical header byte length"
+        header: "[journal-entry, schemaVersion, checksumAdapterId, payloadByteLength, checksumByteLength]을 JSON.stringify 후 UTF-8 encoding"
+        payload: "serializeCanonicalChangeBatch가 만든 bytes"
+        checksum_input: "canonical header bytes 뒤에 payload bytes를 연결한 값"
+        checksum: "주입 adapter가 반환한 정확한 checksumByteLength bytes"
+      flush_contract:
+        - "한 frame의 모든 bytes를 순차 write하고 partial write가 있으면 남은 bytes를 이어 쓴다."
+        - "FileHandle.sync 성공 전에는 durable 결과나 SaveReceipt를 반환하지 않는다."
+        - "write 또는 sync 실패는 성공으로 바꾸거나 retry하지 않는다."
+        - "close는 finally에서 실행하며 sync 실패를 숨기지 않는다."
+      recovery_contract:
+        - "scanner는 첫 invalid·checksum mismatch·truncated frame에서 멈춘다."
+        - "그 이전 verified prefix만 반환하고 tail offset·reason·원시 tail bytes를 보존한다."
+        - "손상 뒤 bytes를 resync해 적용하지 않는다."
+      operator_approval_needed: false
+      next_allowed_task: T003
+
+  - id: T003
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: medium
+    objective: "Judge가 승인한 범위에서 append-only journal framing·checksum·flush와 정상 prefix·손상 tail 복구를 TDD로 구현한다."
+    allowed_files:
+      - "src/platform/journal/journal-checksum.ts"
+      - "src/platform/journal/journal-frame.ts"
+      - "src/platform/journal/journal-frame.test.ts"
+      - "src/platform/journal/append-only-journal.ts"
+      - "src/platform/journal/append-only-journal.integration.test.ts"
+      - "docs/poc-2-journal.md"
+      - "README.md"
+      - "plan.md"
+      - "docs/goals/poc-2-durability/state.yaml"
+    verify:
+      - "npm run test:run -- src/platform/journal/journal-frame.test.ts src/platform/journal/append-only-journal.integration.test.ts"
+      - "npm run typecheck"
+      - "git diff --check"
+    stop_if:
+      - "framing·checksum·flush 의미가 승인 범위에서 결정되지 않는다."
+      - "allowed_files 밖 변경이 필요하다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      changed_files:
+        - "src/platform/journal/journal-checksum.ts"
+        - "src/platform/journal/journal-frame.ts"
+        - "src/platform/journal/journal-frame.test.ts"
+        - "src/platform/journal/append-only-journal.ts"
+        - "src/platform/journal/append-only-journal.integration.test.ts"
+        - "docs/poc-2-journal.md"
+        - "README.md"
+        - "plan.md"
+      requirements:
+        - "append-only journal record framing"
+        - "payload length and checksum"
+        - "append then durable flush ordering"
+        - "torn/truncated/corrupted tail에서 이전 정상 prefix 복구"
+      red:
+        - "journal-frame module missing RED 확인"
+        - "append-only-journal module missing RED 확인"
+        - "첫 integration filter는 기존 Vitest include 밖이어서 제품 동작 없이 test 위치만 src 관례로 이동 후 올바른 RED 재확인"
+      commands:
+        - cmd: "npm run test:run -- src/platform/journal/journal-frame.test.ts src/platform/journal/append-only-journal.integration.test.ts"
+          status: pass
+          result: "2 files, 4 tests"
+        - cmd: "npm run typecheck"
+          status: pass
+        - cmd: "npm run check"
+          status: pass
+          result: "lint, typecheck, 27 files and 106 tests, production build"
+        - cmd: "git diff --check"
+          status: pass
+      summary: "주입 checksum adapter를 사용하는 self-describing canonical frame, 실제 file append+sync, verified prefix와 손상 tail 분리를 구현했다. main·renderer와 실사용 저장에는 연결하지 않았다."
+      next_allowed_task: T004
+
+  - id: T004
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: medium
+    objective: "journal replay·duplicate idempotency·sequence gap 격리와 정확한 작품·문서 본문 복구를 TDD로 구현한다."
+    allowed_files:
+      - "src/application/persistence/change-batch.ts"
+      - "src/application/persistence/change-batch.test.ts"
+      - "src/application/persistence/validate-change-batch-target.ts"
+      - "src/application/persistence/validate-change-batch-target.test.ts"
+      - "src/application/persistence/apply-change-batch.ts"
+      - "src/application/persistence/apply-change-batch.test.ts"
+      - "src/application/persistence/replay-journal.ts"
+      - "src/application/persistence/replay-journal.test.ts"
+      - "docs/poc-2-durable-change-batch.md"
+      - "docs/poc-2-journal.md"
+      - "README.md"
+      - "plan.md"
+      - "docs/goals/poc-2-durability/state.yaml"
+    verify:
+      - "npm run test:run -- src/application/persistence/apply-change-batch.test.ts src/application/persistence/replay-journal.test.ts"
+      - "npm run typecheck"
+      - "git diff --check"
+    stop_if:
+      - "다른 작품·문서 fallback이 필요하다."
+      - "allowed_files 밖 변경이 필요하다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      changed_files:
+        - "src/application/persistence/change-batch.ts"
+        - "src/application/persistence/change-batch.test.ts"
+        - "src/application/persistence/validate-change-batch-target.ts"
+        - "src/application/persistence/validate-change-batch-target.test.ts"
+        - "src/application/persistence/apply-change-batch.ts"
+        - "src/application/persistence/apply-change-batch.test.ts"
+        - "src/application/persistence/replay-journal.ts"
+        - "src/application/persistence/replay-journal.test.ts"
+        - "docs/poc-2-durable-change-batch.md"
+        - "docs/poc-2-journal.md"
+        - "README.md"
+        - "plan.md"
+      requirements:
+        - "canonical ChangeBatch payload만 replay 입력으로 허용"
+        - "base UTF-16 좌표의 ordered changes를 현재 journal head에 원자 적용"
+        - "동일 batch identity·bytes의 idempotent duplicate를 정확히 한 번 적용"
+        - "sequence gap·stale·overflow와 작품·문서·base revision 경계에서 replay 중단"
+        - "중단 전 verified replay 결과만 보존"
+      red:
+        - "apply-change-batch module missing RED 확인"
+        - "canonical payload parser missing RED 확인"
+        - "두 번째 연속 batch를 durable base 길이와 잘못 비교하는 validator RED 확인"
+        - "replay-journal module missing RED 확인"
+        - "MAX_SAFE_INTEGER 다음 sequence overflow RED 확인"
+      commands:
+        - cmd: "npm run test:run -- src/application/persistence/change-batch.test.ts src/application/persistence/validate-change-batch-target.test.ts src/application/persistence/apply-change-batch.test.ts src/application/persistence/replay-journal.test.ts"
+          status: pass
+          result: "4 files, 22 tests"
+        - cmd: "npm run typecheck"
+          status: pass
+        - cmd: "npm run check"
+          status: pass
+          result: "lint, typecheck, 29 files and 114 tests, production build"
+        - cmd: "git diff --check"
+          status: pass
+      summary: "canonical journal payload를 strict decode하고 호출자가 제공한 작품·문서별 journal head와 sequence에 결정적으로 원자 적용한다. exact duplicate는 한 번만 적용하며 gap·stale·overflow·identity·소유권·길이 충돌에서는 이전 결과를 유지한 채 멈춘다."
+      next_allowed_task: T005
+
+  - id: T005
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "기존 editor transaction·typed bridge·desktop lifecycle을 읽어 durable acknowledgement 저장 명령의 정확한 승인 경계와 첫 Worker 범위를 결정한다."
+    inputs:
+      - "T004 receipt"
+      - "src/application/contracts/**"
+      - "src/application/persistence/**"
+      - "src/desktop/**"
+      - "src/preload/**"
+      - "src/renderer/**"
+      - "src/platform/journal/**"
+      - "tests/e2e/**"
+      - "승인 storage ADR와 POC 실행 계획"
+    constraints:
+      - "구현하지 않는다."
+      - "checksum 알고리즘·journal 경로·batch schedule·retry·fallback을 임의로 고정하지 않는다."
+      - "renderer에 파일 접근을 노출하지 않는다."
+      - "FileHandle.sync 성공 전에 saved 결과를 허용하지 않는다."
+    expected_output:
+      - "기존 runtime wiring map"
+      - "typed command·SaveReceipt·저장 상태 계약"
+      - "operator approval 필요 항목"
+      - "첫 exact Worker objective·allowed_files·verify·stop_if"
+    receipt:
+      result: done
+      decision: "첫 Worker는 renderer·IPC·경로·checksum·batch schedule을 건드리지 않고 application의 직렬 durable save command와 SaveReceipt 계약만 구현한다."
+      runtime_map:
+        - "CodeMirror update listener가 좌표 전용 ManuscriptTransaction을 ManuscriptEditor.onTransaction으로 전달한다."
+        - "App은 현재 transaction을 통계·검색 무효화에만 사용하며 저장 bridge를 호출하지 않는다."
+        - "StudioBridge는 세 query channel만 allowlist하며 preload도 같은 세 channel만 invoke한다."
+        - "desktop main은 runtime 문서 profile을 제공하지만 journal·revision catalog·save handler는 아직 없다."
+        - "appendJournalPayloadDurably는 caller path·checksum adapter를 받아 frame 전체 write와 FileHandle.sync 성공 뒤 byte range를 반환한다."
+      command_contract:
+        - "입력은 strict ChangeBatch v1이며 기존 target validator와 현재 journal head의 work·document·base revision·next sequence·본문 길이를 append 전에 검증한다."
+        - "여러 save 호출은 application command 안에서 순차 실행해 frame과 sequence가 interleave되지 않게 한다."
+        - "same batch identity·canonical bytes는 같은 session에서 기존 SaveReceipt를 반환하고 다시 append하지 않는다."
+        - "identity conflict·gap·stale·overflow·본문 apply 충돌은 append하지 않는다."
+        - "append 또는 sync 실패 시 journal head·accepted identity·SaveReceipt 상태를 전진시키지 않는다."
+        - "SaveReceipt는 work·document·base revision·batch identity·sequence와 durable frame byte range를 식별하며 append port가 성공한 뒤에만 생성한다."
+      deferred:
+        - "journal path와 checksum adapter는 다음 desktop/platform wiring에서 runtime input으로 주입한다."
+        - "batch 크기·지연은 성능 시험 전에는 제품값으로 고정하지 않는다."
+        - "typed IPC와 renderer 네 상태 연결은 application command 다음 Worker에서 진행한다."
+      operator_approval_needed: false
+      next_allowed_task: T010
+
+  - id: T010
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: medium
+    objective: "현재 journal head를 원자 검증하고 append+sync 성공 뒤에만 SaveReceipt를 반환하는 직렬 application save command를 TDD로 구현한다."
+    allowed_files:
+      - "src/application/persistence/save-change-batch.ts"
+      - "src/application/persistence/save-change-batch.test.ts"
+      - "docs/poc-2-journal.md"
+      - "README.md"
+      - "plan.md"
+      - "docs/goals/poc-2-durability/state.yaml"
+    verify:
+      - "npm run test:run -- src/application/persistence/save-change-batch.test.ts"
+      - "npm run typecheck"
+      - "git diff --check"
+    stop_if:
+      - "journal path·checksum 알고리즘·batch schedule을 고정해야 한다."
+      - "renderer·preload·desktop 변경이 필요하다."
+      - "allowed_files 밖 변경이 필요하다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      changed_files:
+        - "src/application/persistence/save-change-batch.ts"
+        - "src/application/persistence/save-change-batch.test.ts"
+        - "docs/poc-2-journal.md"
+        - "README.md"
+        - "plan.md"
+      requirements:
+        - "현재 journal head·sequence·작품·문서·base revision을 append 전에 검증"
+        - "여러 save 호출과 frame append 순서를 직렬화"
+        - "durable append+sync 성공 뒤에만 정확한 SaveReceipt 생성"
+        - "same-session exact duplicate idempotency"
+        - "append 실패 시 head·identity·receipt 상태 불변"
+      red:
+        - "save-change-batch module missing RED 확인"
+      commands:
+        - cmd: "npm run test:run -- src/application/persistence/save-change-batch.test.ts"
+          status: pass
+          result: "1 file, 10 tests"
+        - cmd: "npm run typecheck"
+          status: pass
+        - cmd: "npm run check"
+          status: pass
+          result: "lint, typecheck, 30 files and 124 tests, production build"
+        - cmd: "git diff --check"
+          status: pass
+      summary: "application save command가 concurrent 호출을 순차 처리하고 각 batch를 현재 journal head에 원자 검증한다. exact duplicate는 기존 receipt를 재사용하며 append+sync port 실패 전후 어느 경우에도 성공 전에 state를 전진시키지 않는다."
+      next_allowed_task: T013
+
+  - id: T013
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "journal path·checksum adapter·초기 sequence를 hard-code하지 않고 desktop POC runtime에 주입해 typed save handler를 만드는 정확한 profile·wiring 범위를 결정한다."
+    inputs:
+      - "T010 receipt"
+      - "src/application/contracts/studio-bridge.ts"
+      - "src/application/editor/manuscript-document-profile.ts"
+      - "src/application/persistence/save-change-batch.ts"
+      - "src/desktop/main.ts"
+      - "src/desktop/runtime-profile-source.ts"
+      - "src/preload/index.ts"
+      - "src/platform/journal/**"
+      - "승인 storage ADR와 POC 실행 계획"
+    constraints:
+      - "구현하지 않는다."
+      - "실사용 원고 저장은 활성화하지 않는다."
+      - "journal 경로·checksum algorithm·초기 sequence default를 제품 코드에 두지 않는다."
+      - "renderer에 파일·Node API를 노출하지 않는다."
+      - "SQLite를 도입하지 않는다."
+    expected_output:
+      - "runtime journal profile schema와 no-profile 동작"
+      - "generic checksum adapter 계약"
+      - "desktop handler lifecycle과 current-head initialization"
+      - "T011 exact allowed_files·verify·stop_if 조정"
+      - "operator approval 필요 항목"
+    receipt:
+      result: done
+      decision: "desktop POC journal은 별도 runtime profile이 있을 때만 구성하고, path·Node crypto algorithm·문서별 초기 next sequence를 모두 profile에서 받아 application save command에 주입한다."
+      runtime_profile:
+        schema: "schemaVersion, journalPath, checksumAlgorithm, documentSequences[{documentId,nextSequence}]"
+        source: "inline JSON 또는 caller-selected JSON file 중 정확히 하나"
+        ownership: "workId·baseRevisionId·initial text는 승인된 manuscript document profile에서만 가져오고 sequence profile의 documentId와 exact join한다."
+        missing_profile: "save channel은 명시적인 persistence-unavailable failure를 반환하며 파일을 만들거나 fallback하지 않는다."
+        validation:
+          - "모든 document sequence는 safe non-negative integer이며 중복 documentId를 허용하지 않는다."
+          - "document profile의 각 persistent target은 non-null revision ID와 정확히 하나의 sequence를 가져야 한다."
+          - "등록되지 않은 sequence document는 거부하고 다른 문서로 fallback하지 않는다."
+      checksum_adapter:
+        decision: "runtime checksumAlgorithm 문자열로 Node.js createHash를 생성하고 adapter id도 같은 문자열로 보존한다."
+        evidence:
+          - "Node.js 24 공식 문서는 getHashes()가 현재 runtime에서 지원되는 hash algorithm 목록을 반환한다고 명시한다."
+          - "Node.js 24 공식 문서는 createHash algorithm 지원이 platform OpenSSL에 의존한다고 명시한다."
+          - "encoding 없는 hash.digest()는 Buffer를 반환하며 Uint8Array payload를 update 입력으로 사용할 수 있다."
+        fallback: "unsupported algorithm은 startup profile 오류이며 다른 algorithm으로 대체하지 않는다."
+      lifecycle:
+        - "main handler 등록 시 document profile·journal profile을 한 번 읽고 SaveChangeBatch instance 하나를 생성한다."
+        - "append port는 runtime journalPath·checksum adapter로 appendJournalPayloadDurably를 호출한다."
+        - "save command가 없는 경우에도 좁은 save channel 외 generic IPC를 열지 않는다."
+        - "renderer UI에는 path·algorithm·Node API를 노출하지 않는다."
+      bridge:
+        - "StudioBridge editor에 saveChangeBatch(ChangeBatch): Promise<SaveReceipt> 한 command만 추가한다."
+        - "preload allowlist에 정확한 save channel 하나만 추가한다."
+        - "bridge는 outbound ChangeBatch와 inbound SaveReceipt를 strict parse한다."
+        - "main rejection은 성공 receipt로 변환하지 않는다."
+      e2e:
+        - "OS temp journal과 runtime-selected supported hash algorithm·caller sequence를 사용해 실제 Electron bridge→main→append+sync→receipt를 검증한다."
+        - "renderer App의 automatic save·네 상태 UI는 T012까지 연결하지 않는다."
+      operator_approval_needed: false
+      next_allowed_task: T011
+
+  - id: T011
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: medium
+    objective: "application save command를 좁은 StudioBridge typed command와 preload allowlist·desktop handler에 연결하고 실패를 성공 receipt로 변환하지 않는다."
+    allowed_files:
+      - "src/application/contracts/studio-bridge.ts"
+      - "src/application/contracts/studio-bridge.test.ts"
+      - "src/application/persistence/save-change-batch.ts"
+      - "src/application/persistence/save-change-batch.test.ts"
+      - "src/desktop/main.ts"
+      - "src/desktop/manuscript-journal-runtime-profile.ts"
+      - "src/desktop/manuscript-journal-runtime-profile.test.ts"
+      - "src/desktop/manuscript-persistence-runtime.ts"
+      - "src/desktop/manuscript-persistence-runtime.test.ts"
+      - "src/preload/index.ts"
+      - "src/platform/journal/node-crypto-journal-checksum.ts"
+      - "src/platform/journal/node-crypto-journal-checksum.test.ts"
+      - "tests/e2e/desktop-shell.spec.ts"
+      - "docs/poc-2-journal.md"
+      - "README.md"
+      - "plan.md"
+      - "docs/goals/poc-2-durability/state.yaml"
+    verify:
+      - "집중 bridge·runtime profile·checksum adapter·desktop persistence 테스트"
+      - "npm run typecheck"
+      - "npm run test:e2e -- --grep durable"
+      - "git diff --check"
+    stop_if:
+      - "journal path·checksum algorithm·초기 sequence default가 필요하다."
+      - "renderer 파일 접근이 필요하다."
+      - "durable flush 전 receipt가 필요하다."
+      - "allowed_files 밖 변경이 필요하다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      changed_files:
+        - "src/application/contracts/studio-bridge.ts"
+        - "src/application/contracts/studio-bridge.test.ts"
+        - "src/application/persistence/save-change-batch.ts"
+        - "src/application/persistence/save-change-batch.test.ts"
+        - "src/desktop/main.ts"
+        - "src/desktop/manuscript-journal-runtime-profile.ts"
+        - "src/desktop/manuscript-journal-runtime-profile.test.ts"
+        - "src/desktop/manuscript-persistence-runtime.ts"
+        - "src/desktop/manuscript-persistence-runtime.test.ts"
+        - "src/preload/index.ts"
+        - "src/platform/journal/node-crypto-journal-checksum.ts"
+        - "src/platform/journal/node-crypto-journal-checksum.test.ts"
+        - "tests/e2e/desktop-shell.spec.ts"
+        - "docs/poc-2-journal.md"
+        - "README.md"
+        - "plan.md"
+      requirements:
+        - "journal path·checksum algorithm·문서별 초기 sequence를 runtime input으로 주입"
+        - "document profile과 sequence profile exact ownership join"
+        - "좁은 typed ChangeBatch→SaveReceipt preload command"
+        - "main rejection과 unsupported algorithm을 성공·fallback으로 변환하지 않음"
+        - "실제 Electron renderer→preload→main→append+sync→receipt 폐회로"
+      red:
+        - "bridge saveChangeBatch와 parseSaveReceipt missing RED 확인"
+        - "Node crypto checksum adapter module missing RED 확인"
+        - "journal runtime profile parser module missing RED 확인"
+        - "desktop persistence runtime module missing RED 확인"
+        - "persistence-unavailable handler missing RED 확인"
+      commands:
+        - cmd: "npm run test:run -- src/application/contracts/studio-bridge.test.ts src/application/persistence/save-change-batch.test.ts src/platform/journal/node-crypto-journal-checksum.test.ts src/desktop/manuscript-journal-runtime-profile.test.ts src/desktop/manuscript-persistence-runtime.test.ts"
+          status: pass
+          result: "5 files, 31 tests"
+        - cmd: "npm run check"
+          status: pass
+          result: "lint, typecheck, 33 files and 139 tests, production build"
+        - cmd: "npm run test:e2e -- --grep durable --repeat-each=5"
+          status: pass
+          result: "5 passed"
+        - cmd: "npm run test:e2e"
+          status: pass
+          result: "15 passed"
+        - cmd: "git diff --check"
+          status: pass
+      debugging:
+        repeated_signature: "error:0308010C digital envelope routines unsupported at createHash during cross-runtime E2E scan"
+        root_cause: "Electron BoringSSL과 test Node OpenSSL이 advertise·지원하는 hash alias 집합이 같지 않았다."
+        selected_fix: "fixture가 두 runtime에서 createHash를 실제 probe한 교집합만 선택한다. 제품 adapter의 exact algorithm·no fallback 계약은 유지한다."
+      summary: "caller runtime profile에서만 journal을 구성하고 path·algorithm·sequence default를 두지 않았다. strict bridge command를 실제 Electron에서 실행해 sync 이후 receipt의 frame 범위를 독립 scanner와 대조했다."
+      next_allowed_task: T014
+
+  - id: T014
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "여러 CodeMirror transaction을 기존 ChangeBatch base 좌표로 정확히 합성하고 IME·document switch·blur·ack 실패를 보존하는 renderer batching·저장 상태 계약을 결정한다."
+    inputs:
+      - "T011 receipt"
+      - "src/renderer/App.tsx"
+      - "src/renderer/editor/ManuscriptEditor.tsx"
+      - "src/renderer/editor/manuscript-transaction.ts"
+      - "src/application/persistence/change-batch.ts"
+      - "src/application/persistence/save-change-batch.ts"
+      - "src/application/contracts/studio-bridge.ts"
+      - "승인 storage ADR 5.1~5.3과 POC 실행 계획"
+    constraints:
+      - "구현하지 않는다."
+      - "batch 크기·지연 default를 제품 코드에 두지 않는다."
+      - "IME 미확정 문자열을 durable saved로 표시하지 않는다."
+      - "전체 원고를 매 transaction 복사하거나 IPC로 전송하지 않는다."
+      - "ack 실패를 자동 성공·자동 retry하지 않는다."
+      - "정확한 작품·문서·base revision·sequence ownership을 보존한다."
+    expected_output:
+      - "base-coordinate composition mechanism"
+      - "runtime batching policy projection"
+      - "flush trigger와 IME boundary"
+      - "editing·saving·saved·failed 상태 전이"
+      - "ack 유실 시 immutable in-flight batch 계약"
+      - "T012 exact Worker slices"
+      - "operator approval 필요 항목"
+    receipt:
+      result: done
+      decision: "transaction DTO에서 CodeMirror ChangeSet을 재구성해 compose하고, storage profile과 분리된 caller batching policy로 flush하며, immutable in-flight batch와 문서별 queue가 네 저장 상태를 소유한다."
+      composition:
+        mechanism: "각 ManuscriptTransaction changes를 ChangeSet.of(changes,beforeOffsetLength)로 재구성하고 이전 pending ChangeSet.compose(next)를 사용한다."
+        evidence:
+          - "CodeMirror 공식 reference는 compose가 docA→docB와 docB→docC를 docA→docC의 단일 ChangeSet으로 결합한다고 명시한다."
+          - "CodeMirror 공식 reference는 iterChanges의 fromA·toA가 원본 문서 좌표이고 ChangeSet이 정확한 시작 문서 길이를 소유한다고 명시한다."
+        output: "flush 시 composed iterChanges의 원본 base UTF-16 좌표와 최종 inserted text로 기존 ChangeBatch v1 하나를 만든다."
+        hot_path: "전체 원고 문자열을 materialize하지 않고 changes와 offset length만 보존한다."
+      batching_policy:
+        ownership: "journal path·checksum과 분리된 caller-selected runtime performance profile"
+        fields: "schemaVersion, maxTransactionsPerBatch, maxDelayMs"
+        defaults: "없음"
+        projection: "renderer에는 policy와 journal profile에서 파생한 documentId·nextSequence만 전달하고 path·algorithm은 전달하지 않는다."
+      flush:
+        - "transaction 수가 profile 한계에 도달하거나 profile delay가 만료되면 flush한다."
+        - "editor blur와 document switch는 해당 문서 pending batch를 즉시 flush한다."
+        - "composition active 동안 size·timer·blur·switch 요청은 저장을 시작하지 않고 composition end 뒤 수행한다."
+        - "graceful app close flush handshake는 renderer wiring 뒤 crash lifecycle task에서 검증한다."
+      states:
+        editing: "durable하지 않은 pending 또는 in-flight 이후 새 변경이 있음"
+        saving: "정확한 immutable ChangeBatch command가 pending receipt 상태이며 이후 새 변경이 없음"
+        saved: "마지막 command의 exact SaveReceipt가 승인됐고 pending 변경이 없음"
+        failed: "command가 reject되거나 receipt identity가 요청 batch와 다름"
+      failure_contract:
+        - "실패한 in-flight ChangeBatch identity·canonical content를 그대로 보존한다."
+        - "자동 retry하지 않고 명시적 다음 flush 요청만 같은 batch를 재호출한다."
+        - "in-flight 중 새 transaction은 별도 accumulator에 보존하고 receipt 이후 다음 sequence로만 materialize한다."
+        - "receipt는 work·document·base revision·batch identity·sequence가 요청과 정확히 같아야 state를 전진시킨다."
+      initial_state: "journal·batching profile이 모두 있고 document base revision이 durable하면 saved, profile이 없으면 기존 영속 저장 미연결 표시를 보존한다."
+      operator_approval_needed: false
+      next_allowed_task: T015
+
+  - id: T015
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: medium
+    objective: "연속 ManuscriptTransaction을 전체 원고 사본 없이 최초 base UTF-16 좌표의 단일 ordered change set으로 합성하는 accumulator를 TDD로 구현한다."
+    allowed_files:
+      - "src/renderer/persistence/manuscript-change-accumulator.ts"
+      - "src/renderer/persistence/manuscript-change-accumulator.test.ts"
+      - "docs/goals/poc-2-durability/state.yaml"
+    verify:
+      - "npm run test:run -- src/renderer/persistence/manuscript-change-accumulator.test.ts"
+      - "npm run typecheck"
+      - "git diff --check"
+    stop_if:
+      - "전체 원고 문자열 materialization이 필요하다."
+      - "기존 ChangeBatch base-coordinate 계약을 바꿔야 한다."
+      - "allowed_files 밖 변경이 필요하다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      changed_files:
+        - "src/renderer/persistence/manuscript-change-accumulator.ts"
+        - "src/renderer/persistence/manuscript-change-accumulator.test.ts"
+      requirements:
+        - "연속 transaction을 최초 base UTF-16 좌표의 ordered changes로 합성"
+        - "입력 hot path에서 전체 원고 materialization 금지"
+        - "transaction length 불연속에서 prior composition 불변"
+        - "flush snapshot 이후 다음 document head 길이에서 독립 시작"
+      red:
+        - "manuscript-change-accumulator module missing RED 확인"
+      commands:
+        - cmd: "npm run test:run -- src/renderer/persistence/manuscript-change-accumulator.test.ts"
+          status: pass
+          result: "1 file, 3 tests"
+        - cmd: "npm run typecheck"
+          status: pass
+        - cmd: "npm run check"
+          status: pass
+          result: "lint, typecheck, 34 files and 142 tests, production build"
+        - cmd: "git diff --check"
+          status: pass
+      summary: "ChangeSet.of로 각 좌표 transaction을 재구성하고 compose로 최초 base 좌표의 단일 change set을 만든다. snapshot 시 inserted fragments만 materialize하며 전체 문서 문자열은 읽지 않는다."
+      next_allowed_task: T016
+
+  - id: T016
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: high
+    objective: "caller batching policy·IME hold·immutable in-flight batch·exact receipt로 문서별 durable save queue와 네 상태를 TDD로 구현한다."
+    allowed_files:
+      - "src/renderer/persistence/manuscript-change-accumulator.ts"
+      - "src/renderer/persistence/manuscript-durable-save-queue.ts"
+      - "src/renderer/persistence/manuscript-durable-save-queue.test.ts"
+      - "src/application/persistence/change-batch.ts"
+      - "src/application/persistence/save-change-batch.ts"
+      - "docs/poc-2-journal.md"
+      - "docs/goals/poc-2-durability/state.yaml"
+    verify:
+      - "npm run test:run -- src/renderer/persistence/manuscript-durable-save-queue.test.ts"
+      - "npm run typecheck"
+      - "git diff --check"
+    stop_if:
+      - "policy default·자동 retry가 필요하다."
+      - "IME active content를 save command로 보내야 한다."
+      - "전체 원고 materialization이 필요하다."
+      - "allowed_files 밖 변경이 필요하다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      changed_files:
+        - "src/renderer/persistence/manuscript-durable-save-queue.ts"
+        - "src/renderer/persistence/manuscript-durable-save-queue.test.ts"
+        - "docs/poc-2-journal.md"
+      requirements:
+        - "caller transaction-count·delay batching policy"
+        - "IME active 중 모든 flush hold"
+        - "문서별 editing·saving·saved·failed state"
+        - "immutable failed in-flight batch와 no automatic retry"
+        - "in-flight 이후 새 편집을 다음 sequence로 분리"
+        - "exact receipt identity 이후에만 sequence 전진"
+        - "overflow에서 pending changes 보존"
+      red:
+        - "manuscript-durable-save-queue module missing RED 확인"
+        - "overflow 첫 실패 뒤 두 번째 flush가 잘못 saved로 resolve하며 pending을 잃는 RED 확인"
+      commands:
+        - cmd: "npm run test:run -- src/renderer/persistence/manuscript-durable-save-queue.test.ts"
+          status: pass
+          result: "1 file, 8 tests"
+        - cmd: "npm run typecheck"
+          status: pass
+        - cmd: "npm run lint"
+          status: pass
+        - cmd: "npm run check"
+          status: pass
+          result: "lint, typecheck, 35 files and 150 tests, production build"
+        - cmd: "git diff --check"
+          status: pass
+      summary: "문서별 queue가 caller policy로 composed batch를 flush하고 IME active 동안 hold한다. exact receipt만 sequence를 전진시키며 실패 batch는 자동 retry하지 않고 동일 identity로 보존한다."
+      next_allowed_task: T017
+
+  - id: T017
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: medium
+    objective: "storage profile과 분리된 runtime batching policy를 strict parse하고 path·algorithm 없이 document sequence projection만 좁은 bridge query로 renderer에 전달한다."
+    allowed_files:
+      - "src/application/contracts/studio-bridge.ts"
+      - "src/application/contracts/studio-bridge.test.ts"
+      - "src/application/persistence/manuscript-persistence-profile.ts"
+      - "src/application/persistence/manuscript-persistence-profile.test.ts"
+      - "src/desktop/main.ts"
+      - "src/desktop/manuscript-batching-runtime-profile.ts"
+      - "src/desktop/manuscript-batching-runtime-profile.test.ts"
+      - "src/preload/index.ts"
+      - "README.md"
+      - "docs/poc-2-journal.md"
+      - "plan.md"
+      - "docs/goals/poc-2-durability/state.yaml"
+    verify:
+      - "집중 profile·bridge query 테스트"
+      - "npm run typecheck"
+      - "git diff --check"
+    stop_if:
+      - "batch policy default가 필요하다."
+      - "renderer에 journal path·checksum algorithm을 전달해야 한다."
+      - "allowed_files 밖 변경이 필요하다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      changed_files:
+        - "src/application/persistence/manuscript-persistence-profile.ts"
+        - "src/application/persistence/manuscript-persistence-profile.test.ts"
+        - "src/application/contracts/studio-bridge.ts"
+        - "src/application/contracts/studio-bridge.test.ts"
+        - "src/desktop/main.ts"
+        - "src/preload/index.ts"
+        - "docs/poc-2-journal.md"
+        - "README.md"
+        - "plan.md"
+      requirements:
+        - "storage profile과 batching performance policy의 데이터 소유권 분리"
+        - "batch transaction 수·delay에 제품 default 없음"
+        - "renderer projection에서 journal path·checksum algorithm 제외"
+        - "document sequence exact projection 또는 explicit null"
+        - "좁은 typed persistence profile query"
+      red:
+        - "manuscript-persistence-profile module missing RED 확인"
+        - "StudioBridge persistence profile query missing RED 확인"
+      commands:
+        - cmd: "npm run test:run -- src/application/persistence/manuscript-persistence-profile.test.ts src/application/contracts/studio-bridge.test.ts"
+          status: pass
+          result: "2 files, 17 tests"
+        - cmd: "npm run typecheck"
+          status: pass
+        - cmd: "npm run lint"
+          status: pass
+        - cmd: "npm run check"
+          status: pass
+          result: "lint, typecheck, 36 files and 159 tests, production build"
+        - cmd: "git diff --check"
+          status: pass
+      summary: "별도 caller batching policy를 strict parse하고 journal profile과 함께 있을 때만 path·algorithm 없는 policy·document sequence projection을 좁은 bridge query로 반환한다."
+      next_allowed_task: T012
+
+  - id: T012
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: high
+    objective: "검증된 batching profile·save queue를 ManuscriptEditor/App에 연결해 blur·문서 전환·IME 경계와 편집 중·저장 중·저장됨·실패 UI를 실제 Electron에서 검증한다."
+    allowed_files:
+      - "src/renderer/App.tsx"
+      - "src/renderer/editor/ManuscriptEditor.tsx"
+      - "src/renderer/editor/manuscript-transaction.ts"
+      - "src/renderer/editor/manuscript-transaction.test.ts"
+      - "src/renderer/persistence/**"
+      - "src/renderer/styles.css"
+      - "tests/e2e/desktop-shell.spec.ts"
+      - "tests/fixtures/performance/poc-2-*.json"
+      - "docs/poc-2-journal.md"
+      - "README.md"
+      - "plan.md"
+      - "docs/goals/poc-2-durability/state.yaml"
+    verify:
+      - "집중 batch queue·저장 상태 테스트"
+      - "npm run typecheck"
+      - "npm run test:e2e"
+      - "git diff --check"
+    stop_if:
+      - "batch 크기·지연을 fixture/profile 입력 없이 제품값으로 고정해야 한다."
+      - "조합 중 미확정 문자열을 durable batch로 만들어야 한다."
+      - "durable receipt 전 저장됨 표시가 필요하다."
+      - "allowed_files 밖 변경이 필요하다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      changed_files:
+        - "src/renderer/App.tsx"
+        - "src/renderer/editor/ManuscriptEditor.tsx"
+        - "tests/e2e/desktop-shell.spec.ts"
+        - "docs/poc-2-journal.md"
+        - "README.md"
+        - "plan.md"
+      requirements:
+        - "runtime batching projection으로 문서별 durable save queue 구성"
+        - "blur·문서 전환에서 현재 문서 batch flush"
+        - "한글 IME 조합 중 durable save 보류"
+        - "exact durable receipt에만 저장됨 표시"
+        - "append·sync rejection을 실패 상태로 표시"
+      red:
+        - "renderer 저장 E2E가 기존 영속 저장 미연결 표시를 받아 RED 확인"
+        - "다중 행 cursor 위치를 지정하지 않은 E2E oracle 두 건은 제품 동작을 바꾸지 않고 명시적 단일 행 End 위치로 교정"
+      commands:
+        - cmd: "npm run typecheck"
+          status: pass
+        - cmd: "npm run test:e2e -- --grep \"saves editor batches on blur\""
+          status: pass
+          result: "1 test"
+        - cmd: "npm run test:e2e -- --grep \"failed save state\""
+          status: pass
+          result: "1 test"
+        - cmd: "npm run test:e2e -- --grep \"holds durable saves through Hangul\""
+          status: pass
+          result: "1 test"
+        - cmd: "npm run test:e2e -- --grep \"flushes the current document batch\""
+          status: pass
+          result: "1 test"
+        - cmd: "npm run check"
+          status: pass
+          result: "lint, typecheck, 36 files and 159 tests, production build"
+        - cmd: "npm run test:e2e"
+          status: pass
+          result: "19 tests"
+        - cmd: "git diff --check"
+          status: pass
+      summary: "runtime projection이 있을 때만 문서별 save queue를 구성해 CodeMirror transaction을 저장 command로 연결했다. blur·문서 전환·IME 확정 경계를 실제 Electron에서 검증했고, exact durable receipt 뒤에만 저장됨을 표시하며 append 실패는 실패로 남긴다."
+      next_allowed_task: T018
+
+  - id: T018
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "승인 설계와 현재 revision·checkpoint·journal 구현을 읽어 checkpoint 생성과 compaction의 crash-safe lifecycle·소유권·원자성 계약을 잠그고 다음 Worker 범위를 결정한다."
+    inputs:
+      - "T012 receipt"
+      - "승인 storage ADR와 POC 실행 계획"
+      - "src/application/checkpoints/**"
+      - "src/application/revisions/**"
+      - "src/application/persistence/**"
+      - "src/platform/checkpoints/**"
+      - "src/platform/revisions/**"
+      - "src/platform/journal/**"
+    constraints:
+      - "구현하지 않는다."
+      - "SQLite를 선택하지 않는다."
+      - "불변 revision·checkpoint를 mutate하지 않는다."
+      - "checkpoint 주기·compaction 임계값·파일 경로·retry·fallback을 고정하지 않는다."
+      - "작품 밖 데이터나 다른 문서로 fallback하지 않는다."
+    expected_output:
+      - "현재 lifecycle wiring map"
+      - "checkpoint·revision·journal source of truth와 commit point"
+      - "compaction 전·중·후 강제 종료 recovery contract"
+      - "operator approval 필요 항목"
+      - "다음 exact Worker objective·allowed_files·verify·stop_if"
+    receipt:
+      result: done
+      decision: "POC-2는 물리 compaction 방식을 선택하지 않고, 새 불변 revision 준비·내용 검증·새 durable base와 journal consumed boundary의 원자 게시·게시 후 reclamation 순서를 application port로 강제한다."
+      current_lifecycle_map:
+        - "실제 process-durable 저장은 append+sync journal뿐이다."
+        - "InMemoryRevisionStore는 불변 revision과 current pointer를 메모리에서만 소유한다."
+        - "InMemoryResumeCheckpointCaptureTransaction은 Work 포인터와 checkpoint를 copy-on-write로 원자 게시하지만 process-durable하지 않다."
+        - "startup scanner와 deterministic replay는 구현됐지만 durable revision/checkpoint publication과 journal reclamation에는 아직 연결되지 않았다."
+      lifecycle_contract:
+        - "publish 전 recovery source of truth는 기존 durable base revision과 전체 verified journal prefix다."
+        - "caller가 제공한 정책·identity·checksum adapter로 verified prefix를 replay해 새 불변 revision content를 prepare한다."
+        - "prepare된 content를 다시 materialize해 source/result checksum이 정확히 같은지 확인한다."
+        - "새 durable base pointer·다음 sequence·consumed journal byte boundary는 하나의 platform transaction으로 원자 게시한다."
+        - "publication은 scan한 journal end가 그대로일 때만 성공하며 모든 영향 문서를 한 번에 게시하고 이후 append가 새 base를 사용하게 한다."
+        - "publish 전에는 journal bytes를 truncate·replace·delete하지 않는다."
+        - "publish 후 recovery source of truth는 새 base와 consumed boundary 이후 suffix이며, reclamation 실패 시 기존 journal bytes를 그대로 남긴다."
+        - "ResumeCheckpoint capture는 현재 durable revision에 유효한 Anchor가 있을 때만 별도 원자 명령으로 게시하며 중단 시 기존 Work 포인터를 유지한다."
+      deferred:
+        - "revision blob·metadata pointer·journal generation의 물리 배치와 SQLite transaction 구현은 POC-3 결정이다."
+        - "checkpoint 주기·compaction threshold·경로·checksum algorithm은 caller policy/runtime input으로 남긴다."
+      operator_approval_needed: false
+      next_allowed_task: T019
+
+  - id: T019
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: high
+    objective: "새 불변 revision prepare·source/result checksum 검증·durable base와 consumed journal boundary 원자 publish·publish 후 reclamation을 강제하는 순수 application compaction protocol을 TDD로 구현한다."
+    allowed_files:
+      - "src/application/persistence/compact-journal-into-revision.ts"
+      - "src/application/persistence/compact-journal-into-revision.test.ts"
+      - "docs/poc-2-journal.md"
+      - "README.md"
+      - "plan.md"
+      - "docs/goals/poc-2-durability/state.yaml"
+    verify:
+      - "npm run test:run -- src/application/persistence/compact-journal-into-revision.test.ts"
+      - "npm run typecheck"
+      - "git diff --check"
+    stop_if:
+      - "journal을 publish 전에 삭제·교체해야 한다."
+      - "revision·checkpoint 불변 레코드를 mutate해야 한다."
+      - "물리 파일 layout·SQLite transaction·compaction threshold를 결정해야 한다."
+      - "allowed_files 밖 변경이 필요하다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      changed_files:
+        - "src/application/persistence/compact-journal-into-revision.ts"
+        - "src/application/persistence/compact-journal-into-revision.test.ts"
+        - "docs/poc-2-journal.md"
+        - "README.md"
+        - "plan.md"
+      requirements:
+        - "verified prefix의 모든 영향 문서를 새 불변 revision으로 prepare"
+        - "canonical manuscript UTF-16LE source/result checksum 일치 검증"
+        - "모든 영향 문서 durable base·sequence와 exact journal end를 한 publication으로 요청"
+        - "publish 전 reclamation 금지"
+        - "publish 후 reclamation 실패를 pending으로 구분하고 자동 retry 금지"
+      red:
+        - "compact-journal-into-revision module missing RED 확인"
+        - "첫 fixture의 textRepresentation 문자열 오류는 기존 canonical 객체 상수로 교정"
+      commands:
+        - cmd: "npm run test:run -- src/application/persistence/compact-journal-into-revision.test.ts"
+          status: pass
+          result: "1 file, 6 tests"
+        - cmd: "npm run typecheck"
+          status: pass
+        - cmd: "npm run lint"
+          status: pass
+        - cmd: "npm run check"
+          status: pass
+          result: "lint, typecheck, 37 files and 165 tests, production build"
+        - cmd: "git diff --check"
+          status: pass
+      summary: "전역 journal prefix의 영향 문서를 모두 prepare·materialize·checksum 검증한 뒤 exact journal end와 함께 한 publication으로 게시하도록 순수 application protocol을 구현했다. replay·plan·checksum·publish 실패는 reclamation하지 않고 publish 후 cleanup 실패는 pending으로 남긴다."
+      next_allowed_task: T020
+
+  - id: T020
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "T019 protocol을 실제 process kill로 검증할 임시 POC platform transaction의 durable state·fault points·복구 oracle을 결정하고, POC-3 물리 compaction 결정을 침범하지 않는 다음 Worker 범위를 잠근다."
+    inputs:
+      - "T019 receipt"
+      - "승인 storage ADR와 POC 실행 계획"
+      - "src/application/persistence/compact-journal-into-revision.ts"
+      - "src/platform/journal/**"
+      - "src/platform/revisions/**"
+      - "src/platform/checkpoints/**"
+      - "tests/e2e/**"
+    constraints:
+      - "구현하지 않는다."
+      - "실사용 경로나 레거시를 사용하지 않는다."
+      - "POC temp runtime 외 제품 storage layout·SQLite driver·compaction 방식·경로·threshold를 확정하지 않는다."
+      - "새 dependency를 선택하지 않는다."
+      - "publish 전 journal 원본을 변경하지 않는다."
+    expected_output:
+      - "temp-only durable state model과 provenance"
+      - "publication commit point와 fault injection points"
+      - "restart recovery oracle"
+      - "checkpoint atomicity proof 범위"
+      - "다음 exact Worker objective·allowed_files·verify·stop_if"
+    receipt:
+      result: done
+      decision: "caller가 OS temp 아래 exact paths를 모두 제공하는 POC-only generation adapter로 process-kill 증거를 만든다. 새 revision과 새 journal generation을 sync한 뒤 checksum frame publication을 temp write+sync+rename으로 게시하고, 게시 뒤에만 이전 journal을 reclaim한다."
+      durable_state_model:
+        - "기존 immutable base content와 source journal은 publication 전 recovery source다."
+        - "새 revision content path·새 journal generation path·publication temp/final path·reclamation source path를 caller가 모두 제공하며 default가 없다."
+        - "publication payload는 compaction identity·source/new journal provenance·consumed boundary·모든 영향 문서 base/new revision·next sequence·content ref·checksum을 canonical bytes로 보존한다."
+        - "publication final은 checksum-valid single frame일 때만 restart에서 commit으로 인정한다."
+      commit_point: "모든 content와 새 journal generation sync 뒤 publication temp frame을 sync하고 final path로 rename한 시점"
+      fault_contract:
+        - "revision·new journal·publication temp write 또는 sync 중 종료는 final publication이 없으므로 기존 base+journal로 복구한다."
+        - "publication rename 뒤 종료는 이전 journal이 남아 있어도 새 base와 새 journal generation으로 복구한다."
+        - "이전 journal reclaim 중 종료는 publication을 되돌리지 않고 남은 old bytes를 무시한다."
+        - "publication 직전 source journal size가 expected end와 다르면 conflict로 중단하고 final publication을 만들지 않는다."
+      restart_oracle:
+        - "valid publication이면 모든 revision content를 materialize하고 기록 checksum을 검증한 뒤 새 base·next sequence·new journal path를 선택한다."
+        - "publication final이 없거나 invalid이면 기존 base와 verified source journal prefix를 replay한다."
+        - "마지막 durable sequence와 복구 manuscript checksum을 기대값과 비교한다."
+      checkpoint_scope: "같은 immutable publication primitive로 Work pointer와 ResumeCheckpoint를 한 payload에 게시해 temp write 중 종료는 이전 pointer, rename 뒤 종료는 새 pointer와 checkpoint pair를 선택하도록 별도 후속 task에서 증명한다."
+      limitations:
+        - "OS process kill만 증명하며 power-loss·directory-entry durability는 주장하지 않는다."
+        - "이 generation layout은 POC-only evidence adapter이며 POC-3의 제품 storage·SQLite·blob layout 결정을 선점하지 않는다."
+      operator_approval_needed: false
+      next_allowed_task: T006
+
+  - id: T006
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: high
+    objective: "caller exact paths만 사용하는 POC-only JournalCompactionPort와 restart resolver를 TDD로 구현해 prepare·sync·checksum publication·rename·publish 후 journal reclamation 순서를 실제 임시 파일에서 검증한다."
+    allowed_files:
+      - "src/platform/persistence/poc-journal-compaction-port.ts"
+      - "src/platform/persistence/poc-journal-compaction-port.test.ts"
+      - "docs/poc-2-journal.md"
+      - "README.md"
+      - "plan.md"
+      - "docs/goals/poc-2-durability/state.yaml"
+    verify:
+      - "npm run test:run -- src/platform/persistence/poc-journal-compaction-port.test.ts"
+      - "npm run typecheck"
+      - "git diff --check"
+    stop_if:
+      - "caller가 제공하지 않은 path·checksum·identity가 필요하다."
+      - "publication 전 source journal을 변경해야 한다."
+      - "POC temp adapter를 제품 storage default로 채택해야 한다."
+      - "allowed_files 밖 변경이 필요하다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      changed_files:
+        - "src/platform/persistence/poc-journal-compaction-port.ts"
+        - "src/platform/persistence/poc-journal-compaction-port.test.ts"
+        - "docs/poc-2-journal.md"
+        - "README.md"
+        - "plan.md"
+      requirements:
+        - "caller exact paths와 runtime checksum만 사용"
+        - "새 immutable revision content와 next journal generation을 publication 전에 sync"
+        - "checksum-valid publication temp를 sync하고 rename을 commit point로 사용"
+        - "publication 직전 source journal end conflict 재검증"
+        - "publication 후에만 source journal reclaim"
+        - "restart에서 publication·journal generation·revision content checksum 검증"
+      red:
+        - "poc-journal-compaction-port module missing RED 확인"
+        - "빈 caller path가 process directory로 resolve되는 validator RED 확인 후 일반 경로 검증 교정"
+      commands:
+        - cmd: "npm run test:run -- src/platform/persistence/poc-journal-compaction-port.test.ts"
+          status: pass
+          result: "1 file, 6 tests"
+        - cmd: "npm run typecheck"
+          status: pass
+        - cmd: "npm run lint"
+          status: pass
+        - cmd: "npm run check"
+          status: pass
+          result: "lint, typecheck, 38 files and 171 tests, production build"
+        - cmd: "git diff --check"
+          status: pass
+      summary: "caller가 제공한 임시 경로에서 revision·next journal sync 뒤 single checksum frame publication을 temp sync+rename으로 게시하는 POC-only port를 구현했다. restart resolver는 identity·journal·content checksum을 검증하며 publish 전 fault는 기존 source를, publish 후 reclaim fault는 새 publication과 pending을 보존한다."
+      next_allowed_task: T022
+
+  - id: T022
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "현재 CaptureResumeCheckpoint 계약과 T006 publication primitive를 대조해 Work pointer·checkpoint·Anchor의 process-durable 원자 publication과 restart proof 범위를 결정한다."
+    inputs:
+      - "T006 receipt"
+      - "src/application/checkpoints/**"
+      - "src/platform/checkpoints/**"
+      - "src/platform/persistence/poc-journal-compaction-port.ts"
+      - "승인 state transitions와 POC execution plan"
+    constraints:
+      - "구현하지 않는다."
+      - "checkpoint는 현재 durable revision에만 묶는다."
+      - "다른 Work·Document·checkpoint·Anchor로 fallback하지 않는다."
+      - "주기·경로·workspace mode·context를 default하지 않는다."
+      - "제품 SQLite·blob layout을 결정하지 않는다."
+    expected_output:
+      - "publication payload ownership"
+      - "commit point와 fault points"
+      - "restart valid·invalid·missing oracle"
+      - "다음 exact Worker objective·allowed_files·verify·stop_if"
+    receipt:
+      result: done
+      decision: "caller exact temp/final paths·typed publication codec·checksum adapter를 주입하고, next Work·new ResumeCheckpoint·transaction Anchor 사본을 single checksum frame publication으로 temp sync+rename한다."
+      payload_ownership:
+        - "publication identity와 codec identity"
+        - "기존 Work revision·resumeCheckpoint pointer 기대값"
+        - "next Work 전체 사본"
+        - "새 ResumeCheckpoint 전체 사본"
+        - "transaction이 소유한 Anchor 전체 사본"
+        - "현재 durable document revision identity"
+      commit_point: "checksum frame 전체를 publication temp에 exclusive write·sync한 뒤 caller final path로 rename한 시점"
+      fault_contract:
+        - "temp write·sync 또는 rename 전 종료·실패는 platform 메모리 state를 바꾸지 않고 restart에서 기존 Work pointer를 사용한다."
+        - "rename 뒤 종료는 in-process acknowledgement가 유실돼도 restart에서 새 Work pointer와 checkpoint pair를 함께 사용한다."
+        - "invalid frame·codec mismatch·Work/checkpoint identity·revision 관계 손상은 새 상태를 선택하지 않고 explicit invalid issue로 반환한다."
+      codec_contract: "Work customFields·contextRefs 등 전체 record 보존 방식을 제품 코드가 정하지 않도록 POC caller가 encode/decode와 codec id를 주입하고 fallback하지 않는다."
+      restart_oracle:
+        - "final publication missing이면 baseline state"
+        - "frame·codec·identity·pointer·current revision 관계가 모두 유효하면 baseline에 next Work와 checkpoint를 copy-on-write merge"
+        - "손상은 invalid reason과 baseline state를 함께 반환"
+      operator_approval_needed: false
+      next_allowed_task: T023
+
+  - id: T023
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: high
+    objective: "caller codec·checksum·exact paths만 사용하는 process-durable ResumeCheckpoint capture transaction과 restart resolver를 TDD로 구현해 Work pointer·checkpoint·Anchor single-publication 원자성을 실제 임시 파일에서 검증한다."
+    allowed_files:
+      - "src/platform/checkpoints/poc-resume-checkpoint-publication.ts"
+      - "src/platform/checkpoints/poc-resume-checkpoint-publication.test.ts"
+      - "docs/poc-2-journal.md"
+      - "README.md"
+      - "plan.md"
+      - "docs/goals/poc-2-durability/state.yaml"
+    verify:
+      - "npm run test:run -- src/platform/checkpoints/poc-resume-checkpoint-publication.test.ts"
+      - "npm run typecheck"
+      - "git diff --check"
+    stop_if:
+      - "codec·checksum·path·workspace mode·context default가 필요하다."
+      - "checkpoint를 current durable revision 밖에 묶어야 한다."
+      - "Work pointer와 checkpoint를 별도 commit해야 한다."
+      - "baseline InMemory capture의 승인 동작을 바꿔야 한다."
+      - "allowed_files 밖 변경이 필요하다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      changed_files:
+        - "src/platform/checkpoints/poc-resume-checkpoint-publication.ts"
+        - "src/platform/checkpoints/poc-resume-checkpoint-publication.test.ts"
+        - "docs/poc-2-journal.md"
+        - "README.md"
+        - "plan.md"
+      requirements:
+        - "caller exact temp/final paths·typed codec·checksum만 사용"
+        - "Work pointer·ResumeCheckpoint·transaction Anchor 전체 사본을 single publication으로 게시"
+        - "codec full-state round-trip을 publish 전에 검증"
+        - "rename 전 failure에서 in-process·restart baseline 유지"
+        - "rename 후 acknowledgement 유실에서 새 pointer·checkpoint pair 복구"
+        - "invalid frame·codec·identity·revision을 explicit issue와 baseline으로 분리"
+      red:
+        - "poc-resume-checkpoint-publication module missing RED 확인"
+        - "codec가 자체 encoded bytes를 decode하지 못해도 성공하던 RED 확인 후 pre-publish deep round-trip 검증 추가"
+      commands:
+        - cmd: "npm run test:run -- src/platform/checkpoints/poc-resume-checkpoint-publication.test.ts"
+          status: pass
+          result: "1 file, 7 tests"
+        - cmd: "npm run typecheck"
+          status: pass
+        - cmd: "npm run lint"
+          status: pass
+        - cmd: "npm run check"
+          status: pass
+          result: "lint, typecheck, 39 files and 178 tests, production build"
+        - cmd: "git diff --check"
+          status: pass
+      summary: "기존 checkpoint capture 불변식을 보존하면서 Work·checkpoint·Anchor 전체 사본을 caller codec으로 완전 round-trip하고 single checksum frame으로 temp sync+rename하는 POC transaction을 구현했다. restart resolver는 missing·invalid·published를 baseline과 명시적으로 구분한다."
+      next_allowed_task: T024
+
+  - id: T024
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "승인 강제 종료 행렬 7개 지점을 현재 renderer·main journal·compaction·checkpoint stage에 매핑하고 실제 process kill·restart·last durable sequence·checksum oracle을 실행할 harness 범위를 결정한다."
+    inputs:
+      - "T012·T006·T023 receipts"
+      - "승인 POC execution plan crash matrix"
+      - "src/renderer/persistence/**"
+      - "src/application/persistence/**"
+      - "src/platform/journal/**"
+      - "src/platform/persistence/**"
+      - "src/platform/checkpoints/**"
+      - "src/desktop/**"
+      - "tests/e2e/**"
+    constraints:
+      - "구현하지 않는다."
+      - "실사용·레거시 경로를 사용하지 않는다."
+      - "kill timeout·path·ID·text·checksum·fault scenario를 제품값으로 고정하지 않는다."
+      - "exception simulation을 actual process kill 증거로 대체하지 않는다."
+      - "ack 전 상태를 무조건 복구됨 또는 무조건 미저장으로 가정하지 않는다."
+    expected_output:
+      - "7개 approved crash point와 exact injection mapping"
+      - "scenario manifest ownership"
+      - "parent/child protocol과 kill proof"
+      - "restart oracle·artifact schema"
+      - "다음 exact Worker objective·allowed_files·verify·stop_if"
+    receipt:
+      result: done
+      decision: "승인 7개 crash point는 실제 Electron renderer·SaveChangeBatch·append-only journal·POC compaction·checkpoint publication stage에 매핑하며, child가 durable reached marker 뒤 pending하면 parent가 PID를 SIGKILL하고 restart scan·publication·checksum oracle로 판정한다."
+      crash_mapping:
+        - approved_point: "renderer가 batch를 보내기 전"
+          injection: "실제 Electron 편집기에서 queue가 편집 중이고 blur·timer flush 전일 때 main PID를 SIGKILL"
+          oracle: "journal frame 없음, baseline checksum, 미저장"
+        - approved_point: "main 검증 직후"
+          injection: "SaveChangeBatch target validator 성공 직후 POC gate"
+          oracle: "append 없음, baseline checksum, 미저장"
+        - approved_point: "journal append 전"
+          injection: "append port 호출 직전 POC gate"
+          oracle: "append 없음, baseline checksum, 미저장"
+        - approved_point: "append 후 flush 전"
+          injection: "frame 전체 write 직후 FileHandle.sync 호출 전 POC gate"
+          oracle: "ack 없음. restart scan 결과가 complete valid면 복구됨, frame 없음이면 미저장, torn·invalid면 마지막 verified prefix와 tail 격리"
+        - approved_point: "durable ack 직후"
+          injection: "실제 Electron UI 저장됨 확인 즉시 main PID SIGKILL"
+          oracle: "마지막 durable sequence와 journal replay checksum이 exact expected saved text"
+        - approved_point: "revision compaction 중"
+          injection: "T006 publication-temp-synced와 publication-renamed stage에서 compaction child PID SIGKILL"
+          oracle: "valid final publication 전이면 old base+source journal, 후이면 new base+new generation"
+        - approved_point: "checkpoint 저장 중"
+          injection: "T023 publication-temp-synced와 publication-renamed stage에서 checkpoint child PID SIGKILL"
+          oracle: "valid final publication 전이면 old Work pointer, 후이면 new pointer·checkpoint pair"
+      scenario_manifest_ownership:
+        - "parent가 run·scenario identity, 모든 temp paths, Work·Document·revision·batch identity, 원고·변경문, checksum algorithm, batching policy, target gate를 제공"
+        - "제품에는 kill timeout·fixture text·ID·path·algorithm default가 없음"
+      parent_child_protocol:
+        - "child/main은 target stage 도달 시 caller reached path에 scenario·stage marker를 durable write하고 영구 pending gate에서 멈춘다."
+        - "parent는 marker와 target PID를 확인한 뒤 SIGKILL하고 actual exit를 확인한다."
+        - "graceful close나 exception simulation을 kill 증거로 세지 않는다."
+      artifact_schema:
+        - "run provenance: commit·dirty·runtime·scenario manifest checksum"
+        - "scenario trace: approved point·injection stage·PID·gate marker·kill method·pre-kill UI state"
+        - "restart evidence: scan prefix·tail·publication status·last durable sequence·recovered checksum·outcome classification"
+        - "summary: 각 scenario pass와 손실·교차 소유권·false-saved count"
+      prerequisite: "SaveChangeBatch validation/append와 append-only journal write/sync 사이에 explicit-profile POC gate를 먼저 구현한다."
+      recovery_gap: "현재 desktop startup은 기존 journal을 scan·replay하거나 renderer에 복구 후보를 전달하지 않으므로 actual restart recovery wiring을 kill harness 전에 구현해야 한다."
+      operator_approval_needed: false
+      next_allowed_task: T025
+
+  - id: T025
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: high
+    objective: "SaveChangeBatch validation·append 호출과 journal write·sync 사이에 caller-injected POC stage hook을 TDD로 추가하고, explicit crash profile의 target stage에서 durable reached marker 뒤 pending하는 Electron main gate를 구현한다."
+    allowed_files:
+      - "src/application/persistence/save-change-batch.ts"
+      - "src/application/persistence/save-change-batch.test.ts"
+      - "src/platform/journal/append-only-journal.ts"
+      - "src/platform/journal/append-only-journal.integration.test.ts"
+      - "src/desktop/manuscript-persistence-runtime.ts"
+      - "src/desktop/manuscript-persistence-runtime.test.ts"
+      - "src/desktop/poc-2-crash-gate-profile.ts"
+      - "src/desktop/poc-2-crash-gate-profile.test.ts"
+      - "src/desktop/main.ts"
+      - "docs/poc-2-journal.md"
+      - "README.md"
+      - "plan.md"
+      - "docs/goals/poc-2-durability/state.yaml"
+    verify:
+      - "집중 save·journal·crash profile 테스트"
+      - "npm run typecheck"
+      - "npm run test:e2e"
+      - "git diff --check"
+    stop_if:
+      - "POC profile 없이 hook·gate가 활성화돼야 한다."
+      - "durable marker 전에 parent kill을 허용해야 한다."
+      - "sync 전 gate에서 durable ack 또는 저장됨을 반환해야 한다."
+      - "kill timeout·retry·fallback을 제품값으로 추가해야 한다."
+      - "allowed_files 밖 변경이 필요하다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      changed_files:
+        - "src/application/persistence/save-change-batch.ts"
+        - "src/application/persistence/save-change-batch.test.ts"
+        - "src/platform/journal/append-only-journal.ts"
+        - "src/platform/journal/append-only-journal.integration.test.ts"
+        - "src/desktop/manuscript-persistence-runtime.ts"
+        - "src/desktop/manuscript-persistence-runtime.test.ts"
+        - "src/desktop/poc-2-crash-gate-profile.ts"
+        - "src/desktop/poc-2-crash-gate-profile.test.ts"
+        - "src/desktop/main.ts"
+        - "docs/poc-2-journal.md"
+        - "README.md"
+        - "plan.md"
+      requirements:
+        - "application target validation 직후와 append 호출 직전 caller hook"
+        - "journal frame 전체 write 뒤 sync 직전 caller hook"
+        - "hook rejection에 append head·durable receipt·saved 상태 전진 금지"
+        - "explicit crash profile target stage에 durable reached marker 뒤 pending"
+        - "profile 없는 기본 save timing 보존"
+      red:
+        - "SaveChangeBatch stage callback 미호출·gate rejection 무시 RED 확인"
+        - "journal write/sync stage hook 미호출 RED 확인"
+        - "poc-2-crash-gate-profile module missing RED 확인"
+        - "hook 없는 optional await가 기존 microtask timing을 바꾸는 회귀를 확인하고 conditional await로 baseline 복원"
+      commands:
+        - cmd: "npm run test:run -- src/application/persistence/save-change-batch.test.ts src/platform/journal/append-only-journal.integration.test.ts src/desktop/poc-2-crash-gate-profile.test.ts src/desktop/manuscript-persistence-runtime.test.ts"
+          status: pass
+          result: "4 files, 23 tests"
+        - cmd: "npm run typecheck"
+          status: pass
+        - cmd: "npm run lint"
+          status: pass
+        - cmd: "npm run test:e2e"
+          status: pass
+          result: "19 tests"
+        - cmd: "npm run check"
+          status: pass
+          result: "lint, typecheck, 40 files and 185 tests, production build"
+        - cmd: "git diff --check"
+          status: pass
+      summary: "SaveChangeBatch validation·append와 journal write·sync 사이에 caller hook을 추가하고 explicit POC crash gate profile의 target에서 marker sync 뒤 pending하도록 main을 연결했다. profile·hook 없는 기본 경로에는 추가 await가 없고 전체 Electron 회귀가 통과했다."
+      next_allowed_task: T026
+
+  - id: T026
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "desktop startup의 journal scan·verified replay·손상 issue를 renderer 복구 후보로 projection하고 명시적 적용 시 새 불변 revision으로 확정하는 최소 승인 경계를 결정한다."
+    inputs:
+      - "T025 receipt"
+      - "승인 storage ADR 5.2"
+      - "승인 state transitions 3.4"
+      - "src/application/persistence/replay-journal.ts"
+      - "src/platform/journal/**"
+      - "src/platform/persistence/poc-journal-compaction-port.ts"
+      - "src/application/contracts/studio-bridge.ts"
+      - "src/desktop/main.ts"
+      - "src/renderer/App.tsx"
+    constraints:
+      - "구현하지 않는다."
+      - "복구 후보를 사용자 승인 전에 원본 revision에 적용하지 않는다."
+      - "손상 tail·issue를 숨기거나 truncate하지 않는다."
+      - "다른 Work·Document로 fallback하지 않는다."
+      - "revision path·identity·checksum·적용 여부를 default하지 않는다."
+      - "SQLite·제품 blob layout을 결정하지 않는다."
+    expected_output:
+      - "startup recovery source/result ownership"
+      - "candidate projection에 필요한 최소 필드"
+      - "apply command와 immutable revision commit point"
+      - "cursor ResumeCheckpoint 관계"
+      - "다음 exact Worker objective·allowed_files·verify·stop_if"
+    receipt:
+      result: done
+      decision: "startup은 유효한 이전 publication을 먼저 확정 source로 해석한 뒤 활성 journal generation의 checksum-valid·logically replayable prefix만 baseline revision 위에 재생해 recoveryPending 후보를 만든다. exact 후보 tuple의 명시적 적용만 새 불변 revision publication rename을 허용한다."
+      source_ownership:
+        - "유효한 final compaction publication이 있으면 게시된 revision content와 next journal generation이 마지막 확정 source다."
+        - "final publication이 없으면 caller document profile의 baseline revision과 source journal이 source다."
+        - "final publication이 invalid면 baseline이나 다른 revision으로 fallback하지 않고 read-only recovery issue로 분리한다."
+        - "활성 journal은 첫 frame 손상 또는 첫 logical replay issue 직전의 안전한 prefix까지만 후보에 적용한다."
+      candidate_projection:
+        fields:
+          - "source journal end byte offset"
+          - "checksum-verified prefix byte offset"
+          - "logically safe replay-through byte offset"
+          - "affected Work·Document·base revision·recovered text·next sequence"
+          - "applied·duplicate batch identity"
+          - "frame tail 또는 replay issue의 source·reason·offset/index"
+          - "apply profile exact-match 여부"
+        ownership: "renderer는 preview와 explicit approval만 소유하고 journal path·revision content path·checksum adapter·raw tail bytes는 main/platform이 소유한다."
+      apply_contract:
+        - "command는 schema version과 expected source end·safe replay boundary·affected document base/next-sequence tuple을 모두 보내며 main의 현재 candidate와 exact match해야 한다."
+        - "caller runtime apply profile이 compaction identity·expected journal end·새 revision identity/metadata·모든 physical paths·content checksum algorithm을 정확히 제공해야 한다."
+        - "새 revision content prepare·materialize·source/result checksum 검증 뒤 final publication rename이 immutable revision commit point다."
+        - "rename 전 실패는 baseline+source journal을 유지하고, rename 후 acknowledgement 유실은 restart resolver가 published revision+next generation을 선택한다."
+        - "tail·logical issue suffix가 있으면 source journal을 reclaim하지 않고 격리하며 자동 retry하지 않는다."
+      cursor_relation:
+        - "원고 recovery apply는 Work pointer·ResumeCheckpoint·Anchor를 묵시적으로 수정하거나 새 revision으로 retarget하지 않는다."
+        - "checkpoint publication은 별도 durable source로 복구하고, 새 current revision에 대해 기존 anchor resolver를 실행한다."
+        - "cursor는 resolved일 때만 이동하며 needsReview·broken은 issue로 남기고 추정 이동하지 않는다."
+      operator_approval_needed: false
+      next_allowed_task: T027
+
+  - id: T027
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: high
+    objective: "checksum-valid frame records와 baseline targets에서 첫 logical issue 직전의 안전한 replay prefix·affected documents·명시적 issue를 가진 startup recovery state를 전체 원고 복사 추가 없이 TDD로 생성한다."
+    allowed_files:
+      - "src/application/persistence/prepare-startup-recovery.ts"
+      - "src/application/persistence/prepare-startup-recovery.test.ts"
+      - "docs/poc-2-journal.md"
+      - "docs/goals/poc-2-durability/state.yaml"
+    verify:
+      - "npm run test:run -- src/application/persistence/prepare-startup-recovery.test.ts"
+      - "npm run typecheck"
+      - "git diff --check"
+    stop_if:
+      - "application이 Node·Electron·platform frame 타입을 import해야 한다."
+      - "손상·logical issue 뒤 record를 resync하거나 적용해야 한다."
+      - "후보가 없는 상태에서 revision identity·path·적용 여부를 default해야 한다."
+      - "allowed_files 밖 변경이 필요하다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      changed_files:
+        - "src/application/persistence/prepare-startup-recovery.ts"
+        - "src/application/persistence/prepare-startup-recovery.test.ts"
+        - "docs/poc-2-journal.md"
+      requirements:
+        - "빈 journal clean 분류"
+        - "checksum-valid records의 첫 logical issue 직전 safe replay boundary"
+        - "적용된 batch가 있는 정확한 영향 document 후보"
+        - "frame tail·logical replay issue 명시"
+        - "issue-only 상태에서 revision 추정 금지와 read-only 분리"
+        - "application의 Node·Electron·platform import 금지"
+      red:
+        - "prepare-startup-recovery module missing RED 확인"
+      commands:
+        - cmd: "npm run test:run -- src/application/persistence/prepare-startup-recovery.test.ts"
+          status: pass
+          result: "1 file, 7 tests"
+        - cmd: "npm run typecheck"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      summary: "caller가 checksum 검증한 frame payload·offset을 기존 pure replay에 전달해 첫 logical issue 직전의 safe payload와 실제 영향 document만 recovery-pending으로 만든다. tail-only·first-record issue는 revision을 추정하지 않고 read-only issue가 된다."
+      next_allowed_task: T028
+
+  - id: T028
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: medium
+    objective: "recovery apply의 compaction identity·expected source/safe boundary·content checksum algorithm·새 revision metadata·모든 physical path를 caller JSON에서 default 없이 strict parse하는 POC runtime profile을 TDD로 구현한다."
+    allowed_files:
+      - "src/desktop/poc-recovery-apply-runtime-profile.ts"
+      - "src/desktop/poc-recovery-apply-runtime-profile.test.ts"
+      - "docs/poc-2-journal.md"
+      - "docs/goals/poc-2-durability/state.yaml"
+    verify:
+      - "npm run test:run -- src/desktop/poc-recovery-apply-runtime-profile.test.ts"
+      - "npm run typecheck"
+      - "git diff --check"
+    stop_if:
+      - "revision identity·path·checksum algorithm·boundary·metadata에 default가 필요하다."
+      - "제품 storage layout 또는 SQLite 결정을 해야 한다."
+      - "allowed_files 밖 변경이 필요하다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      changed_files:
+        - "src/desktop/poc-recovery-apply-runtime-profile.ts"
+        - "src/desktop/poc-recovery-apply-runtime-profile.test.ts"
+        - "docs/poc-2-journal.md"
+      requirements:
+        - "compaction identity·source/safe boundary caller ownership"
+        - "content checksum algorithm caller ownership"
+        - "source·next journal과 publication temporary/final exact paths"
+        - "영향 revision identity·metadata·content path exact plans"
+        - "default·fallback·제품 storage layout 없음"
+      red:
+        - "poc-recovery-apply-runtime-profile module missing RED 확인"
+      commands:
+        - cmd: "npm run test:run -- src/desktop/poc-recovery-apply-runtime-profile.test.ts"
+          status: pass
+          result: "1 file, 25 tests"
+        - cmd: "npm run typecheck"
+          status: pass
+        - cmd: "npm run lint"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      summary: "recovery apply의 모든 identity·boundary·checksum·revision metadata·physical path를 strict caller profile로 parse하고 deep-freeze한다. 누락·unknown·unsafe·중복 입력에 default나 fallback을 만들지 않는다."
+      next_allowed_task: T029
+
+  - id: T029
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: medium
+    objective: "compaction restart resolver가 publication/revision content checksum adapter와 이후 active journal generation의 checksum resolver를 묵시적으로 동일시하지 않도록 별도 caller resolver를 TDD로 분리한다."
+    allowed_files:
+      - "src/platform/persistence/poc-journal-compaction-port.ts"
+      - "src/platform/persistence/poc-journal-compaction-port.test.ts"
+      - "docs/poc-2-journal.md"
+      - "docs/goals/poc-2-durability/state.yaml"
+    verify:
+      - "npm run test:run -- src/platform/persistence/poc-journal-compaction-port.test.ts"
+      - "npm run typecheck"
+      - "git diff --check"
+    stop_if:
+      - "두 checksum 선택 중 하나를 default하거나 fallback해야 한다."
+      - "기존 publication·content checksum 검증을 약화해야 한다."
+      - "allowed_files 밖 변경이 필요하다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      changed_files:
+        - "src/platform/persistence/poc-journal-compaction-port.ts"
+        - "src/platform/persistence/poc-journal-compaction-port.test.ts"
+        - "docs/poc-2-journal.md"
+      requirements:
+        - "publication·revision content checksum과 active journal checksum resolver 분리"
+        - "두 caller 선택 사이 default·fallback·강제 동일성 없음"
+        - "기존 publication·content checksum 검증 유지"
+      red:
+        - "publication과 다른 adapter로 정상 append된 active journal을 invalid로 오판하는 RED 확인"
+      commands:
+        - cmd: "npm run test:run -- src/platform/persistence/poc-journal-compaction-port.test.ts"
+          status: pass
+          result: "1 file, 7 tests"
+        - cmd: "npm run typecheck"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      summary: "compaction publication과 immutable revision content는 기존 exact adapter로 검증하되, 이후 active journal generation은 별도 caller checksum resolver로 scan해 알고리즘 선택을 묵시적으로 결합하지 않는다."
+      next_allowed_task: T030
+
+  - id: T030
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: high
+    objective: "baseline 또는 유효한 이전 compaction publication을 last confirmed source로 고른 뒤 exact active journal을 physical scan하고 pure application recovery state와 effective document/journal profile을 만드는 desktop startup resolver를 TDD로 구현한다."
+    allowed_files:
+      - "src/desktop/manuscript-startup-recovery.ts"
+      - "src/desktop/manuscript-startup-recovery.test.ts"
+      - "docs/poc-2-journal.md"
+      - "docs/goals/poc-2-durability/state.yaml"
+    verify:
+      - "npm run test:run -- src/desktop/manuscript-startup-recovery.test.ts"
+      - "npm run typecheck"
+      - "git diff --check"
+    stop_if:
+      - "invalid publication에서 baseline·다른 revision으로 fallback해야 한다."
+      - "journal path·checksum resolver·revision identity를 default해야 한다."
+      - "journal을 scan 중 truncate·교정·삭제해야 한다."
+      - "allowed_files 밖 변경이 필요하다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      changed_files:
+        - "src/desktop/manuscript-startup-recovery.ts"
+        - "src/desktop/manuscript-startup-recovery.test.ts"
+        - "docs/poc-2-journal.md"
+      requirements:
+        - "baseline 또는 valid publication의 last confirmed source 선택"
+        - "published revision content·next sequence·active generation exact 적용"
+        - "선택된 active journal만 read-only physical scan"
+        - "invalid publication no fallback read-only"
+        - "tail-only journal 원본 보존과 save profile 차단"
+      red:
+        - "manuscript-startup-recovery module missing RED 확인"
+      commands:
+        - cmd: "npm run test:run -- src/desktop/manuscript-startup-recovery.test.ts"
+          status: pass
+          result: "1 file, 5 tests"
+        - cmd: "npm run typecheck"
+          status: pass
+        - cmd: "npm run lint"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      summary: "final publication을 physical scan보다 먼저 해석해 baseline 또는 published immutable revision+active journal generation을 exact source로 선택한다. invalid final과 tail-only 상태는 fallback·mutation 없이 read-only issue로 반환한다."
+      next_allowed_task: T031
+
+  - id: T031
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: medium
+    objective: "startup recovery state에서 path·raw safe payload를 제외한 renderer preview projection과 source end·safe boundary·affected document tuple을 exact 승인하는 strict apply command 계약을 TDD로 구현한다."
+    allowed_files:
+      - "src/application/persistence/startup-recovery-contract.ts"
+      - "src/application/persistence/startup-recovery-contract.test.ts"
+      - "docs/poc-2-journal.md"
+      - "docs/goals/poc-2-durability/state.yaml"
+    verify:
+      - "npm run test:run -- src/application/persistence/startup-recovery-contract.test.ts"
+      - "npm run typecheck"
+      - "git diff --check"
+    stop_if:
+      - "renderer projection에 journal/revision path·checksum algorithm·raw payload/tail bytes가 필요하다."
+      - "command가 current candidate와 다른 boundary·document tuple을 승인해야 한다."
+      - "default apply·auto apply가 필요하다."
+      - "allowed_files 밖 변경이 필요하다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      changed_files:
+        - "src/application/persistence/startup-recovery-contract.ts"
+        - "src/application/persistence/startup-recovery-contract.test.ts"
+        - "docs/poc-2-journal.md"
+      requirements:
+        - "renderer preview logical projection"
+        - "raw payload·tail·path·checksum algorithm 비노출"
+        - "exact source end·safe boundary·affected document approval tuple"
+        - "current candidate와 다른 stale approval 전부 거부"
+        - "auto apply·default apply 없음"
+      red:
+        - "startup-recovery-contract module missing RED 확인"
+      commands:
+        - cmd: "npm run test:run -- src/application/persistence/startup-recovery-contract.test.ts"
+          status: pass
+          result: "1 file, 14 tests"
+        - cmd: "npm run typecheck"
+          status: pass
+        - cmd: "npm run lint"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      summary: "safe payload·raw tail·physical path·checksum algorithm을 제거한 recovery projection을 만들고, current candidate의 source/safe boundary와 affected document tuple을 전부 exact 승인하는 strict command 계약을 구현했다."
+      next_allowed_task: T032
+
+  - id: T032
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: high
+    objective: "exact startup recovery candidate command와 caller apply profile을 검증해 compaction publication을 실행하고, final publication 성공 뒤에만 새 immutable revision·next journal profile로 전환하는 explicit apply 서비스를 TDD로 구현한다."
+    allowed_files:
+      - "src/desktop/apply-manuscript-startup-recovery.ts"
+      - "src/desktop/apply-manuscript-startup-recovery.test.ts"
+      - "docs/poc-2-journal.md"
+      - "docs/goals/poc-2-durability/state.yaml"
+    verify:
+      - "npm run test:run -- src/desktop/apply-manuscript-startup-recovery.test.ts"
+      - "npm run typecheck"
+      - "git diff --check"
+    stop_if:
+      - "candidate·profile mismatch를 적용해야 한다."
+      - "publication rename 전에 effective profile을 전진시켜야 한다."
+      - "issue suffix를 truncate·delete해야 한다."
+      - "auto retry·auto apply·default path/identity/algorithm이 필요하다."
+      - "allowed_files 밖 변경이 필요하다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      changed_files:
+        - "src/desktop/apply-manuscript-startup-recovery.ts"
+        - "src/desktop/apply-manuscript-startup-recovery.test.ts"
+        - "docs/poc-2-journal.md"
+      requirements:
+        - "candidate command·caller profile exact match 뒤에만 apply"
+        - "final publication 전 effective profile 불변"
+        - "publication 뒤 published revision·next generation 재해석"
+        - "과거 baseline profile 불변"
+        - "issue suffix byte-for-byte source generation 보존"
+        - "no auto apply·retry·default"
+      red:
+        - "apply-manuscript-startup-recovery module missing RED 확인"
+      commands:
+        - cmd: "npm run test:run -- src/desktop/apply-manuscript-startup-recovery.test.ts"
+          status: pass
+          result: "1 file, 4 tests"
+        - cmd: "npm run typecheck"
+          status: pass
+        - cmd: "npm run lint"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      summary: "current candidate command와 exact caller apply profile이 일치할 때만 기존 process-durable compaction을 실행한다. publication 뒤 startup resolver로 새 immutable revision과 next generation을 확인하며 issue suffix는 이전 source에 그대로 격리한다."
+      next_allowed_task: T033
+
+  - id: T033
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: high
+    objective: "recovery projection과 apply acknowledgement를 renderer에서 strict parse하고 exact apply command만 보내는 두 narrow typed bridge channel과 preload allowlist를 TDD로 구현한다."
+    allowed_files:
+      - "src/application/persistence/startup-recovery-contract.ts"
+      - "src/application/persistence/startup-recovery-contract.test.ts"
+      - "src/application/contracts/studio-bridge.ts"
+      - "src/application/contracts/studio-bridge.test.ts"
+      - "src/preload/index.ts"
+      - "docs/poc-2-journal.md"
+      - "docs/goals/poc-2-durability/state.yaml"
+    verify:
+      - "집중 startup recovery contract·bridge 테스트"
+      - "npm run typecheck"
+      - "git diff --check"
+    stop_if:
+      - "범용 send/invoke 또는 file API를 renderer에 노출해야 한다."
+      - "main recovery 응답을 parse 없이 신뢰해야 한다."
+      - "apply command를 bridge가 보정·default해야 한다."
+      - "allowed_files 밖 변경이 필요하다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      changed_files:
+        - "src/application/persistence/startup-recovery-contract.ts"
+        - "src/application/persistence/startup-recovery-contract.test.ts"
+        - "src/application/contracts/studio-bridge.ts"
+        - "src/application/contracts/studio-bridge.test.ts"
+        - "src/preload/index.ts"
+        - "docs/poc-2-journal.md"
+      requirements:
+        - "recovery query·apply command 별도 narrow channels"
+        - "preload explicit allowlist와 no generic send/invoke"
+        - "renderer의 recovery projection strict parse"
+        - "renderer의 apply acknowledgement strict parse"
+        - "exact command 무보정 전달"
+      red:
+        - "recovery parser functions와 bridge methods 부재로 6 RED 확인, 기존 24 집중 테스트 통과"
+      commands:
+        - cmd: "npm run test:run -- startup recovery contract and studio bridge"
+          status: pass
+          result: "2 files, 30 tests"
+        - cmd: "npm run typecheck"
+          status: pass
+        - cmd: "npm run lint"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      summary: "preview projection·publication issue·apply acknowledgement를 strict parse하고 exact apply command만 전달하는 두 typed bridge channel을 preload allowlist에 추가했다. 범용 IPC와 파일 API는 노출하지 않는다."
+      next_allowed_task: T034
+
+  - id: T034
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: high
+    objective: "startup recovery pending/read-only 동안 save runtime을 차단하고, explicit apply publication 뒤에만 새 document·sequence·active journal로 runtime을 재구성하는 desktop coordinator와 Electron main handlers를 TDD로 연결한다."
+    allowed_files:
+      - "src/desktop/manuscript-runtime-coordinator.ts"
+      - "src/desktop/manuscript-runtime-coordinator.test.ts"
+      - "src/desktop/main.ts"
+      - "tests/e2e/desktop-shell.spec.ts"
+      - "README.md"
+      - "docs/poc-2-journal.md"
+      - "plan.md"
+      - "docs/goals/poc-2-durability/state.yaml"
+    verify:
+      - "npm run test:run -- src/desktop/manuscript-runtime-coordinator.test.ts"
+      - "npm run typecheck"
+      - "npm run lint"
+      - "git diff --check"
+    stop_if:
+      - "pending/read-only 상태에서 durable save command를 허용해야 한다."
+      - "publication 전에 runtime profile을 전진시켜야 한다."
+      - "recovery apply profile 없이 identity·path·checksum을 default해야 한다."
+      - "allowed_files 밖 변경이 필요하다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      changed_files:
+        - "src/desktop/manuscript-runtime-coordinator.ts"
+        - "src/desktop/manuscript-runtime-coordinator.test.ts"
+        - "src/desktop/main.ts"
+        - "tests/e2e/desktop-shell.spec.ts"
+        - "README.md"
+        - "docs/poc-2-journal.md"
+        - "plan.md"
+      requirements:
+        - "startup recovery pending·read-only 동안 persistence runtime과 save command 차단"
+        - "explicit recovery apply publication 성공 뒤에만 effective document·sequence·active journal 전환"
+        - "apply 뒤 published source를 다시 resolve해 persistence runtime 재구성"
+        - "recovery query·apply narrow main handlers"
+        - "recovery apply profile 부재 시 default·fallback 없음"
+      red:
+        - "manuscript-runtime-coordinator module missing RED 확인"
+        - "기존 append failure E2E가 startup scan 단계에서 먼저 실패하는 fixture conflict를 확인하고, 제품 동작 없이 startup 뒤 exact journal path를 directory로 만드는 oracle로 교정"
+      commands:
+        - cmd: "npm run test:run -- src/desktop/manuscript-runtime-coordinator.test.ts"
+          status: pass
+          result: "1 file, 4 tests"
+        - cmd: "npm run test:e2e -- --grep \"failed save state\""
+          status: pass
+          result: "1 test"
+        - cmd: "npm run test:e2e"
+          status: pass
+          result: "19 tests"
+        - cmd: "npm run check"
+          status: pass
+          result: "lint, typecheck, 46 files and 251 tests, production build"
+        - cmd: "git diff --check"
+          status: pass
+      summary: "startup resolver와 save runtime을 한 desktop coordinator로 묶어 pending·read-only에서는 persistence를 노출하지 않고, exact explicit apply publication 뒤 published immutable revision과 next generation을 다시 확인한 후에만 runtime을 재구성했다."
+      next_allowed_task: T035
+
+  - id: T035
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: high
+    objective: "renderer가 startup recovery projection을 조회해 pending·read-only 동안 baseline 원고를 읽기 전용으로 유지하고, exact 복구 미리보기의 명시적 적용 acknowledgement 뒤에만 새 revision 원고와 writable save runtime으로 전환되게 TDD로 연결한다."
+    allowed_files:
+      - "src/application/persistence/startup-recovery-contract.ts"
+      - "src/application/persistence/startup-recovery-contract.test.ts"
+      - "src/desktop/manuscript-startup-recovery.ts"
+      - "src/desktop/manuscript-startup-recovery.test.ts"
+      - "src/renderer/App.tsx"
+      - "src/renderer/editor/ManuscriptEditor.tsx"
+      - "src/renderer/editor/manuscript-document-state.ts"
+      - "src/renderer/editor/manuscript-document-state.test.ts"
+      - "src/renderer/styles.css"
+      - "tests/e2e/desktop-shell.spec.ts"
+      - "README.md"
+      - "docs/poc-2-journal.md"
+      - "plan.md"
+      - "docs/goals/poc-2-durability/state.yaml"
+    verify:
+      - "startup recovery·document state focused tests"
+      - "npm run typecheck"
+      - "npm run lint"
+      - "npm run test:e2e"
+      - "git diff --check"
+    stop_if:
+      - "preview 확인 전 auto apply가 필요하다."
+      - "apply acknowledgement 전에 baseline·revision·persistence runtime을 전진시켜야 한다."
+      - "pending·read-only에서 원고 write나 save를 허용해야 한다."
+      - "renderer에 path·checksum algorithm·raw payload·tail bytes를 노출해야 한다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      changed_files:
+        - "src/application/persistence/startup-recovery-contract.ts"
+        - "src/application/persistence/startup-recovery-contract.test.ts"
+        - "src/desktop/manuscript-startup-recovery.ts"
+        - "src/desktop/manuscript-startup-recovery.test.ts"
+        - "src/renderer/App.tsx"
+        - "src/renderer/editor/ManuscriptEditor.tsx"
+        - "src/renderer/editor/manuscript-document-state.ts"
+        - "src/renderer/editor/manuscript-document-state.test.ts"
+        - "src/renderer/styles.css"
+        - "tests/e2e/desktop-shell.spec.ts"
+        - "README.md"
+        - "docs/poc-2-journal.md"
+        - "plan.md"
+      requirements:
+        - "renderer startup recovery projection 조회"
+        - "pending·read-only에서 baseline manuscript non-editable 유지"
+        - "exact recovered text preview 뒤 explicit apply"
+        - "durable apply acknowledgement 뒤 main projections 재조회"
+        - "confirmed 새 revision에서만 해당 Document EditorState 교체"
+        - "적용 뒤 Electron 완전 재실행에서 published revision·writable runtime 복원"
+        - "active journal read 오류를 path 없는 read-only issue로 표시"
+      red:
+        - "journal read 오류가 Electron startup을 abort하는 RED 확인"
+        - "journal-read issue parser가 unknown source를 거부하는 RED 확인"
+        - "confirmed revision source 교체 method 부재 RED 확인"
+        - "복구 preview와 read-only issue가 renderer에 없는 production-bundle Electron RED 2건 확인"
+      commands:
+        - cmd: "npm run test:run -- three focused startup recovery and editor-state files"
+          status: pass
+          result: "3 files, 29 tests"
+        - cmd: "npm run test:e2e -- --grep \"startup recovery|active journal cannot be read\""
+          status: pass
+          result: "2 tests"
+        - cmd: "npm run test:e2e"
+          status: pass
+          result: "21 tests"
+        - cmd: "npm run check"
+          status: pass
+          result: "lint, typecheck, 46 files and 254 tests, production build"
+        - cmd: "git diff --check"
+          status: pass
+      summary: "pending candidate는 exact recovered text를 먼저 표시하고 baseline CodeMirror를 read-only·non-editable로 잠근다. 사용자의 explicit apply acknowledgement 뒤에만 main projections를 다시 읽어 confirmed 새 revision으로 교체하며, Electron 완전 재실행 뒤에도 같은 published content와 writable next generation을 복원한다."
+      next_allowed_task: T007
+
+  - id: T007
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: high
+    objective: "승인 crash matrix 전체를 주입·강제 종료하고 마지막 durable sequence·checksum·복구 본문을 비교하는 kill harness를 구현한다."
+    allowed_files:
+      - "src/**"
+      - "tests/crash/**"
+      - "tests/e2e/**"
+      - "scripts/**"
+      - "vitest.crash.config.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "artifacts/poc-2-crash/**"
+      - "docs/poc-2-*.md"
+      - "README.md"
+      - "plan.md"
+      - "docs/goals/poc-2-durability/state.yaml"
+    verify:
+      - "crash matrix harness"
+      - "npm run typecheck"
+      - "git diff --check"
+    stop_if:
+      - "실사용 원고 경로를 사용해야 한다."
+      - "새 dependency가 필요하지만 공식 지원 범위와 lockfile 고정을 검증할 수 없다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      changed_files:
+        - "src/desktop/poc-2-durability-crash-worker.ts"
+        - "src/desktop/poc-2-durability-crash-worker.test.ts"
+        - "src/application/persistence/compact-journal-into-revision.ts"
+        - "tests/crash/poc-2-crash-matrix.test.ts"
+        - "vitest.crash.config.ts"
+        - "package.json"
+        - "docs/poc-2-journal.md"
+        - "README.md"
+        - "plan.md"
+      requirements:
+        - "save·journal·compaction·checkpoint 전후 actual process kill"
+        - "마지막 durable sequence·checksum-valid journal·정확한 작품·문서 복구 본문 비교"
+        - "ack 이전 변경은 저장됐다고 주장하지 않고 durable ack 이후 변경은 재시작에서 복구"
+        - "artifact에 provenance·raw samples·판정은 기록하되 원고 원문은 기록하지 않음"
+      red:
+        - "crash worker module missing RED 1건"
+        - "worker profile strict parser RED 1건"
+        - "renderer startup crash UI RED 2건"
+        - "실제 Windows kill harness가 Playwright loader PID를 종료해 Electron main이 남는 timeout RED"
+        - "compaction worker가 storage path field를 command revision plan으로 전달해 marker 이전 실패하는 RED"
+        - "빈 manuscript text와 checkpoint revision content를 거부하는 불필요한 길이 제한 RED 2건"
+      commands:
+        - cmd: "npx vitest run src/desktop/poc-2-durability-crash-worker.test.ts --reporter verbose"
+          status: pass
+          result: "1 file, 4 tests"
+        - cmd: "npm run crash:poc-2"
+          status: pass
+          result: "production build and 9 actual process-kill scenarios"
+        - cmd: "npm run typecheck"
+          status: pass
+        - cmd: "npx eslint tests/crash/poc-2-crash-matrix.test.ts src/desktop/poc-2-durability-crash-worker.ts src/desktop/poc-2-durability-crash-worker.test.ts"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      artifact:
+        path: "artifacts/poc-2-crash/crash-matrix.json"
+        source_provenance: "artifact-embedded exact tracked and untracked source fingerprint"
+        matrix_manifest_checksum: "31143db2f3372302e22421350ef3f1c563dad2400188b844882877b5dd775bb3"
+        scenarios: "9/9"
+        leaked_workspace_electron_processes: 0
+        leaked_crash_workers: 0
+      summary: "parent가 모든 identity·path·text·algorithm·stage를 생성하고 actual Electron main 또는 Node worker PID를 강제 종료한다. 재시작 resolver와 Electron UI에서 ack 이전·이후 저장, sync 전 frame, compaction temp/rename, checkpoint temp/rename의 기존 또는 신규 원본을 정확히 비교했으며 9개 모두 통과했다."
+      next_allowed_task: T008
+
+  - id: T008
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: medium
+    objective: "POC-2 journal·replay가 연결된 production-bundle에서 latency·RSS·renderer heap·GC·raw samples를 여러 독립 실행으로 재측정해 JSON 증거를 남긴다."
+    allowed_files:
+      - "src/application/measurement/**"
+      - "src/platform/environment/**"
+      - "tests/performance/**"
+      - "tests/fixtures/performance/**"
+      - "scripts/**"
+      - "package.json"
+      - "package-lock.json"
+      - "artifacts/poc-2-performance/**"
+      - "README.md"
+      - "plan.md"
+      - "docs/goals/poc-2-durability/state.yaml"
+    verify:
+      - "POC-2 performance command"
+      - "measurement JSON schema·provenance 검사"
+      - "git diff --check"
+    stop_if:
+      - "fixture 수치를 제품 제한·기본값으로 사용해야 한다."
+      - "측정 provenance를 기록할 수 없다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      changed_files:
+        - "src/application/measurement/poc-2-performance-profile.ts"
+        - "src/application/measurement/poc-2-performance-profile.test.ts"
+        - "src/application/measurement/poc-2-performance-report.ts"
+        - "src/application/measurement/poc-2-performance-report.test.ts"
+        - "tests/fixtures/performance/poc-2-performance.manifest.json"
+        - "tests/performance/poc-2-performance.test.ts"
+        - "package.json"
+        - "README.md"
+        - "plan.md"
+      requirements:
+        - "production-bundle에서 평균·p95 durable ack latency와 raw samples"
+        - "journal 크기·compaction 결과"
+        - "main RSS·renderer heap·GC 전후 raw samples"
+        - "여러 독립 실행과 environment·commit·dirty·fixture provenance"
+      red:
+        - "POC-2 performance profile·report module missing RED 2건"
+        - "빈 memory·GC raw sample이 report를 통과하는 oracle RED"
+      commands:
+        - cmd: "npx vitest run src/application/measurement/poc-2-performance-profile.test.ts src/application/measurement/poc-2-performance-report.test.ts --reporter verbose"
+          status: pass
+          result: "2 files, 5 tests"
+        - cmd: "npm run performance:poc-2"
+          status: pass
+          result: "production build, 3 independent Electron runs, 36 measured durable ack samples"
+        - cmd: "npm run typecheck"
+          status: pass
+        - cmd: "focused ESLint"
+          status: pass
+      artifact:
+        path: "artifacts/poc-2-performance/measurement.json"
+        source_provenance: "artifact-embedded exact tracked and untracked source fingerprint"
+        verdict: pass
+        independent_runs: 3
+        durable_ack_samples: 36
+        durable_ack_budget_ms: 500
+        memory_raw_samples: 45
+        gc_raw_samples: 9
+        next_journal_bytes_per_run: 0
+        all_publications_published: true
+        all_source_journals_reclaimed: true
+        all_recovered_checksums_match: true
+      summary: "caller fixture가 실행 수·warmup·표본 수·batching policy·승인 500ms p95 예산을 소유한다. production bundle의 실제 input→durable Saved를 3개 독립 Electron 실행에서 측정하고 각 run을 명시적으로 새 immutable revision으로 compaction했으며, 36개 latency·45개 RSS/heap·9개 GC raw sample과 provenance를 path-free report로 기록했다."
+      next_allowed_task: T009
+
+  - id: T009
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: high
+    objective: "installed-package Electron에서 durable 저장·강제 종료·복구 폐회로를 실행해 production-bundle E2E와 별도 증거로 기록한다."
+    allowed_files:
+      - "tests/e2e/**"
+      - "tests/package/**"
+      - "tests/fixtures/package/**"
+      - "scripts/**"
+      - "vitest.installed-package.config.ts"
+      - "tsconfig.test.json"
+      - "package.json"
+      - "package-lock.json"
+      - "artifacts/poc-2-package/**"
+      - "README.md"
+      - "plan.md"
+      - "docs/goals/poc-2-durability/state.yaml"
+    verify:
+      - "installed-package Electron E2E"
+      - "npm run check"
+      - "git diff --check"
+    stop_if:
+      - "packaging rule 또는 dependency를 새로 정해야 하지만 승인 요구가 없다."
+      - "실사용 원고 경로를 사용해야 한다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      changed_files:
+        - "tests/package/poc-2-installed-package-profile.ts"
+        - "tests/package/poc-2-installed-package-profile.test.ts"
+        - "tests/package/poc-2-installed-package.test.ts"
+        - "tests/fixtures/package/poc-2-installed-package.manifest.json"
+        - "vitest.installed-package.config.ts"
+        - "tsconfig.test.json"
+        - "package.json"
+        - "README.md"
+        - "plan.md"
+      requirements:
+        - "production-bundle 실행과 분리된 installed-package Electron evidence"
+        - "installed package에서 durable 저장·actual main kill·복구 apply·actual main kill·published restart"
+        - "실사용 원고와 user-data 경로를 사용하지 않음"
+        - "최종 제품 packaging 설정을 POC 완료 전에 선택하지 않음"
+      red:
+        - "installed-package profile module missing RED"
+        - "caller target path와 batching field를 받지 않는 strict parser RED 2회"
+      commands:
+        - cmd: "EUM_STUDIO_POC_2_PACKAGE_TEST_TIMEOUT_MS=<caller input> npx vitest run --config vitest.installed-package.config.ts tests/package/poc-2-installed-package-profile.test.ts --reporter verbose"
+          status: pass
+          result: "1 file, 2 tests"
+        - cmd: "npm run test:package:poc-2"
+          status: pass
+          result: "production build, 2 files and 3 tests"
+        - cmd: "npm run typecheck"
+          status: pass
+        - cmd: "focused ESLint"
+          status: pass
+      artifact:
+        path: "artifacts/poc-2-package/installed-package.json"
+        source_provenance: "artifact-embedded exact tracked and untracked source fingerprint"
+        mode: "electron-prebuilt-resources-app-poc"
+        final_packaging_configuration_selected: false
+        durable_kill_exit_observed: true
+        publication_kill_exit_observed: true
+        journal_sequence_matches_last_durable_sequence: true
+        publication_status: published
+        source_journal_reclaimed: true
+        next_journal_bytes: 0
+        recovered_revision_checksum_matches: true
+        leaked_workspace_electron_processes: 0
+        leaked_temporary_package_executables: 0
+      summary: "공식 Electron manual prebuilt resources/app 구조를 caller fixture로 임시 조립하고 package executable 자체를 실행했다. temp user-data에서 durable Saved 뒤와 recovery publication 뒤 actual Electron main PID를 각각 종료했으며, 세 번째 package 실행이 published immutable revision을 writable source로 복원했다. 최종 installer·shipping packaging 설정이나 dependency는 선택하지 않았다."
+      next_allowed_task: T999
+
+  - id: T999
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "최신 receipts·전체 diff·검증 artifact를 원래 POC-2 통과 조건에 매핑해 전체 완료 여부를 audit한다."
+    inputs:
+      - "모든 done task receipt"
+      - "최신 전체 검증"
+      - "현재 dirty diff"
+      - "crash matrix 결과"
+      - "성능·메모리 JSON"
+      - "production-bundle과 installed-package E2E"
+    constraints:
+      - "구현하지 않는다."
+      - "필수 Worker가 queued 또는 active면 완료를 거부한다."
+      - "실사용 저장을 증거 없이 GO로 바꾸지 않는다."
+    expected_output:
+      - "complete 또는 not_complete"
+      - "full_outcome_complete: true 또는 false"
+      - "누락 증거"
+      - "미완료면 다음 exact task"
+    receipt:
+      result: done
+      decision: complete
+      full_outcome_complete: true
+      auditor: "PM fallback because bundled Judge is not installed and the independent read-only reviewer hit an external usage limit"
+      requirements:
+        - "actual startup composes confirmed revision with ResumeCheckpoint and restores exact directional selection"
+        - "graceful close flushes every document queue and does not falsely close on save or pending IME failure"
+        - "source provenance fingerprints tracked diff and untracked file contents"
+        - "installed-package assembly and active Electron resources are cleaned on failure"
+        - "every mutating IPC handler validates the exact BrowserWindow main-frame sender"
+        - "crash config is covered by tsconfig.test"
+        - "explicit flush cannot allow a later timer flush to overtake the in-flight batch"
+        - "artifacts contain checksums and classifications without raw manuscript text"
+        - "physical SQLite, immutable blob, backup layout and real-user storage remain POC-3 decisions"
+      commands:
+        - cmd: "npm run check"
+          status: pass
+          result: "lint, typecheck, 54 files and 279 tests, production build"
+        - cmd: "npm run test:e2e"
+          status: pass
+          result: "23 production-bundle Electron tests"
+        - cmd: "npm run crash:poc-2"
+          status: pass
+          result: "9 of 9 actual process-kill scenarios"
+        - cmd: "npm run performance:poc-2"
+          status: pass
+          result: "3 independent Electron runs and 36 durable acknowledgement samples within the approved budget"
+        - cmd: "npm run test:package:poc-2"
+          status: pass
+          result: "4 files and 7 installed-package tests"
+        - cmd: "approved design checksum audit"
+          status: pass
+          result: "11 of 11 approved design documents"
+      missing_evidence: []
+      next_exact_task: "Create the POC-3 GoalBuddy goal from the approved execution plan."
+
+checks:
+  dirty_fingerprint: "generated artifacts own the exact current tracked and untracked source fingerprint"
+  last_verification:
+    result: pass
+    task: T999
+    commands:
+      - "npm run check — lint, typecheck, 54 files and 279 tests, production build passed"
+      - "npm run test:e2e — 23 passed"
+      - "npm run crash:poc-2 — 9 passed"
+      - "npm run performance:poc-2 — 3 independent runs and 36 samples passed"
+      - "npm run test:package:poc-2 — 4 files and 7 tests passed"
+      - "approved design checksum audit — 11 of 11 matched"

@@ -2,31 +2,45 @@
 
 기준 계획: [신규 기반 POC 실행 계획](C:/Users/limoj/Documents/Codex/2026-07-15/new-chat-2/eum-implementation-foundation-2026-07-20/08-foundation-poc-execution-plan.md)
 
-마지막 갱신: 2026-07-23
+현재 저장 계약: [POC-2 저장 문자열과 ChangeBatch v1](docs/poc-2-durable-change-batch.md)
+
+현재 journal 계약: [POC-2 append-only journal framing](docs/poc-2-journal.md)
+
+마지막 갱신: 2026-07-27
 
 ## 현재 Gate
 
-`POC-1 — 장편 편집기` 완료
+`POC-2 — 영속화·강제 종료` 완료
 
-완료한 검증 단위:
+POC-2 완료 증거:
 
-- 장편 fixture manifest와 결정적 generator
-- Work·Document·in-memory revision adapter
-- ResumeCheckpoint envelope와 작품별 명시적 빈 상태
-- 실제 CodeMirror 원고 편집 표면과 transaction 추출
-- 정확한 마우스·키보드 선택 범위
-- selection transaction의 선택 원문 hot path 제거
-- 등록형 괄호·따옴표 자동 닫힘·닫는 기호 건너뛰기·가운뎃 말줄임표
-- 본문·커서와 등록형 입력 규칙의 undo·redo
-- atomic ResumeCheckpoint envelope capture
-- 한글 IME 조합·확정·undo·redo
-- 문서별 `EditorState`·선택·스크롤·undo 이력 보관과 복원
-- CodeMirror 오프셋과 grapheme 기반 사용자 문자 통계 분리
-- Anchor 소유권·revision 검증과 정확·모호·손상 복귀 계약
-- Work별 독립 상태를 보존하는 닫을 수 있는 양쪽 레일 shell
-- 활성 Work 원고 검색과 문서 전환·검색·입력 p50·p95 측정
+- UTF-16 code unit·LF·Unicode 무정규화 저장 문자열 표현
+- hash·Anchor 검증용 UTF-16LE code unit byte 입력
+- Work·Document·base revision·sequence·batch identity를 포함한 `ChangeBatch` schema
+- 필드 순서와 실행 환경에 독립적인 UTF-8 canonical serialization
+- 같은 batch identity의 idempotent duplicate·identity conflict 분류
+- 등록 작품·소유 문서·현재 durable revision·본문 길이 검증
+- 현재 journal head·sequence를 직렬 검증하고 append+sync 뒤에만 만드는 application `SaveReceipt`
+- runtime journal profile·Node crypto checksum adapter·좁은 typed Electron save command
+- storage 설정과 분리된 caller batching policy·renderer용 path-free sequence projection
+- 문서별 change 합성·IME hold·blur/문서 전환 flush와 `편집 중 / 저장 중 / 저장됨 / 실패`
+- startup의 baseline/published source 해석·physical scan·safe recovery candidate
+- exact candidate 승인 뒤 새 immutable revision publication·next journal 전환
+- pending/read-only 동안 durable save 차단과 publication 뒤 runtime 재구성
+- 복구 미리보기·baseline 읽기 전용·명시적 적용 acknowledgement 뒤 renderer source 전환
+- 적용 직후와 Electron 완전 재실행 뒤 published revision·writable save runtime 복원
+- confirmed revision과 ResumeCheckpoint Anchor를 결합한 방향 있는 cursor·selection 복원
+- 모든 문서 queue의 정상 종료 flush와 실패·미확정 IME 시 종료 보류
+- mutating IPC의 exact BrowserWindow webContents·main frame sender 검증
+- actual process kill save·compaction·checkpoint 9단계와 재실행 source·checksum 비교
+- 3개 독립 production-bundle 실행의 durable ack·journal compaction·RSS·renderer heap·GC raw sample 측정
+- 임시 installed-package executable의 durable 저장·2회 actual main kill·published revision·cursor 재실행과 실패 조립 정리
 
-다음 Gate: `POC-2 — 영속화·강제 종료`
+다음 Gate: `POC-3 — SQLite·불변 blob·백업`
+
+실사용 원고 저장: `NO-GO`
+
+POC-2 완료: `GO`
 
 ## 완료
 
@@ -60,6 +74,81 @@
 - [x] 정확한 복귀 전 Anchor 소유권·revision 검증과 복원·손상 계약
 - [x] 닫을 수 있는 양쪽 레일 shell
 - [x] 문서 전환·검색·입력 p50·p95 측정
+
+## POC-2 완료
+
+- [x] 저장 offset을 UTF-16 code unit로 유지
+- [x] 내부 저장 줄바꿈 LF와 CRLF/LF 변환 경계 명시
+- [x] Unicode normalization 미적용
+- [x] hash·Anchor 검증 입력 문자열과 byte encoding 명시
+- [x] `ChangeBatch` schema version·작품·문서·base revision·sequence·batch identity 정의
+- [x] 변경 범위 순서·중첩·결과 UTF-16 길이 불변식 검증
+- [x] canonical serialization
+- [x] 동일 identity duplicate·conflict 분류 계약
+- [x] 작품·문서 소유권과 현재 durable revision 검증
+- [x] append-only journal record framing·length·checksum
+- [x] torn write·truncated/corrupted tail의 논리적 격리 정보와 정상 prefix 복구
+- [x] 결정적 replay와 sequence gap 격리
+- [x] durable acknowledgement와 실패 UI 상태
+- [x] startup journal scan·복구 preview 계약·명시적 새 revision 적용
+- [x] checkpoint·compaction crash-safe 경계
+- [x] crash injection matrix와 kill harness
+- [x] POC-2 성능·메모리 재측정
+- [x] installed-package Electron E2E
+
+## POC-2 현재 증거
+
+- canonical text는 LF만 허용하며 Unicode normalization을 적용하지 않아 NFC와 NFD 입력이 서로 다른 bytes로 남는다.
+- hash·Anchor 검증 입력 계약은 문자열의 UTF-16 code unit을 little-endian bytes로 직렬화해 원고 offset 좌표와 동일한 표현을 사용한다.
+- 운영체제·파일 입력의 CRLF/CR 변환은 `ChangeBatch` 생성 전 platform adapter 경계의 책임이며 durable parser는 CR을 조용히 바꾸지 않고 거부한다.
+- `ChangeBatch` parser는 schema에 없는 필드를 버리지 않고 거부하며, 안전한 정수 범위를 벗어난 sequence·offset·길이를 거부한다.
+- 변경 목록은 base revision의 UTF-16 좌표에서 순서대로 겹치지 않아야 하고, 삽입·삭제를 적용한 결과 길이가 선언 길이와 정확히 일치해야 한다.
+- canonical serialization은 고정 순서 tuple을 UTF-8로 인코딩해 객체 key 순서가 달라도 같은 논리적 batch가 같은 bytes를 만든다.
+- 같은 `batchId`와 같은 canonical bytes는 `duplicate`, 같은 identity의 다른 bytes는 `conflict`, 다른 identity는 `distinct`로 분류한다.
+- application validator는 등록 작품이 소유한 문서만 허용하고 현재 durable revision identity가 일치하지 않으면 journal 진입 전에 거부한다.
+- 연속 batch의 `beforeTextLengthUtf16`은 durable base revision 길이가 아니라 replay의 현재 journal head 길이와 원자 적용 시점에 검증한다.
+- checksum adapter identity·payload length·checksum length를 포함한 canonical binary frame을 만들고 header+payload checksum을 검증한다.
+- 실제 임시 파일에 frame 전체를 append한 뒤 `FileHandle.sync()`가 성공한 경우에만 byte 범위를 반환한다.
+- checksum 손상과 뒤따르는 frame의 모든 truncated cut에서 이전 정상 prefix만 복구하고 tail offset·reason·원시 bytes를 보존한다.
+- scanner는 손상 뒤 bytes를 resync하거나 원본 journal을 truncate·교정하지 않는다.
+- canonical payload를 다시 같은 bytes로 직렬화할 수 있을 때만 `ChangeBatch`로 decode한다.
+- replay는 호출자가 제공한 expected sequence부터 ordered changes를 원자 적용하며 duplicate는 한 번만 적용하고 gap·stale·identity·소유권·길이 충돌에서 멈춘다.
+- application save command는 concurrent 호출을 직렬화해 각 batch를 현재 durable journal head에 검증하고 append+sync port가 성공한 뒤에만 정확한 target·sequence·frame byte 범위의 `SaveReceipt`를 반환한다.
+- 같은 session의 exact duplicate는 기존 receipt를 반환하고, identity·gap·stale·overflow·소유권·base revision·본문 apply 충돌은 append하지 않는다.
+- append·sync 실패는 journal head와 accepted identity를 전진시키거나 성공 receipt로 바꾸지 않는다.
+- runtime journal profile은 호출자 journal 경로·Node crypto checksum algorithm·문서별 초기 sequence만 소유하고 작품·base revision·본문은 document profile에서 exact join한다.
+- preload는 strict `ChangeBatch → SaveReceipt` command channel 하나만 추가로 노출하며 실제 Electron에서 main append+sync 뒤 receipt와 scan frame 범위가 일치한다.
+- journal profile이 없으면 save handler는 파일·fallback 없이 persistence-unavailable로 실패한다.
+- batching policy는 transaction 수·delay만 소유하며 renderer persistence query에는 path·checksum 없이 policy와 document sequence만 projection한다.
+- renderer는 CodeMirror transaction을 문서별 queue에 누적하고 caller transaction 수·delay 경계와 blur·문서 전환에서 composed batch를 flush한다.
+- 한글 IME 조합 중에는 timer·크기·명시적 flush가 durable command를 시작하지 않으며 조합 확정 뒤에만 저장한다.
+- `편집 중 / 저장 중 / 저장됨 / 실패`는 문서별 queue 상태에서만 파생하고 exact durable receipt 전에는 `저장됨`으로 표시하지 않는다.
+- append·sync 실패는 실제 Electron 화면에서 `실패`로 표시하며 성공으로 바꾸지 않는다.
+- 정상 종료는 preload의 early close request를 보존하고 모든 문서 queue가 exact durable receipt를 받은 뒤에만 완료하며, 저장 실패나 미확정 IME 원문이 있으면 종료를 보류한다.
+- save·recovery apply·close completion IPC는 생성된 BrowserWindow의 exact webContents와 main frame sender가 아니면 mutating handler에 진입하지 않는다.
+- application compaction protocol은 verified journal prefix의 모든 영향 문서를 준비·materialize하고 source/result UTF-16LE checksum이 일치한 뒤에만 새 durable base·다음 sequence·consumed byte boundary의 원자 게시를 요청한다.
+- global journal의 consumed boundary는 게시 시점의 exact end여야 하며, 모든 영향 문서 revision은 한 publication에 포함된다.
+- publish 전에는 journal reclamation을 시작하지 않고 publish 후 reclamation 실패는 자동 retry하지 않으며 `pending`으로 구분한다.
+- 물리 revision·journal 배치와 SQLite transaction 방식은 POC-3 결정으로 남겨 두며, POC-2 checkpoint·compaction 경계는 caller exact paths를 사용하는 process-durable generation으로만 검증한다.
+- caller exact paths만 사용하는 POC-only platform adapter는 새 revision content와 새 journal generation을 각각 sync한 뒤 checksum frame publication을 temp write·sync·rename으로 게시한다.
+- POC restart resolver는 publication frame·identity·active journal generation·revision materialization checksum을 모두 검증하고, publication 전 중단은 기존 base+journal을 유지한다.
+- publication 뒤 source journal reclamation 실패는 새 publication을 되돌리지 않고 `pending`으로 남긴다. 이 generation layout은 POC 증거용이며 제품 storage 결정이 아니다.
+- ResumeCheckpoint POC transaction은 caller codec이 Work 갱신·checkpoint·전체 Anchor payload를 완전하게 round-trip한 뒤 single checksum frame을 temp write·sync·rename한다.
+- checkpoint publication rename 전 failure는 in-process state와 restart baseline의 기존 Work pointer를 유지하고, rename 뒤 acknowledgement 유실은 새 Work pointer·checkpoint pair를 함께 복구한다.
+- checkpoint final 손상·codec·identity·현재 durable revision 충돌은 새 상태로 fallback하지 않고 explicit invalid reason과 baseline state로 분리한다.
+- application save command는 caller hook이 있을 때만 target validation 완료와 journal append 직전 stage를 await하며 hook rejection은 append·head·receipt를 전진시키지 않는다.
+- append-only journal은 frame 전체 write 뒤 `FileHandle.sync()` 직전에 caller stage hook을 제공하고 hook rejection에는 durable receipt를 반환하지 않는다.
+- explicit POC crash gate profile은 caller scenario·target stage·reached path만 소유하며 target 도달 marker를 exclusive write·sync한 뒤 timeout 없이 pending한다.
+- crash profile이 없으면 desktop runtime은 stage callback을 구성하지 않아 기존 save 경로에 추가 await를 넣지 않는다.
+- actual process kill harness는 renderer send 전, main target 검증 뒤, append 전, frame write 후 sync 전, durable ack 관찰 뒤와 compaction/checkpoint publication temp sync·rename 뒤를 각각 종료한다.
+- 최신 production build 실행은 승인된 9개 scenario를 모두 통과했고, `artifacts/poc-2-crash/crash-matrix.json`이 실행별 결과를 소유한다.
+- harness는 원고 원문 대신 source·recoverable·displayed checksum과 journal sequence, recovery classification, commit·porcelain status·tracked diff·untracked 경로/내용 집계·Node·Electron·platform provenance를 기록한다.
+- POC-2 production-bundle 측정은 입력 전에 설치한 save-state observer로 exact `저장됨` 주기를 측정했다. 3개 독립 실행·36개 durable ack raw sample이 승인된 500ms p95 예산을 통과했다.
+- 각 실행의 journal은 compaction 뒤 next generation 0 bytes, publication `published`, source journal reclaimed, 복구 checksum 일치로 판정됐다.
+- 같은 report는 main RSS·renderer heap 45개와 renderer GC 전후 9개 raw sample, exact source provenance와 모든 실행별 값을 기록한다.
+- installed-package POC는 caller profile의 Electron runtime·application manifest·main/preload·renderer production bundle source/target을 사용해 OS 임시 `resources/app` package를 조립하며 Chromium user-data도 같은 임시 경로에 둔다.
+- package executable에서 durable `저장됨`을 관찰한 뒤 actual main PID를 종료하고, 명시적 recovery apply publication 뒤 다시 main PID를 종료한 다음 세 번째 실행에서 published immutable revision·정확한 cursor·writable next journal을 복원했다.
+- 실패한 package 조립은 검증된 임시 parent를 제거하고, 실행 중 실패는 현재 active Electron tree를 강제 정리한다. 생성 artifact가 package tree·latency·checksum·exact source provenance를 직접 소유하며 최종 installer·shipping packaging 설정은 선택하지 않았다.
 
 ## POC-1 현재 증거
 
@@ -127,7 +216,7 @@
 - 문자 통계 snapshot은 원고 transaction 안에서 즉시 갱신하지만 구독 알림은 microtask로 합쳐 보조 React 렌더를 입력 임계 경로에서 분리한다.
 - 성능 profile과 품질 예산은 별도 fixture manifest가 소유하며 제품 제한이나 사용자 기본값으로 사용하지 않는다.
 - 큰 장편 document profile은 caller가 선택한 파일 경로를 Electron main에 전달하고 renderer에는 파일 접근 권한을 노출하지 않는다.
-- production Electron 성능 보고서는 실행 ID·commit·dirty 여부·환경·fixture/profile checksum·표본 수·p50·p95·max·정확성 판정·artifact 참조를 기록한다.
+- production-bundle Electron 성능 보고서는 실행 ID·commit·dirty 여부·환경·fixture/profile checksum·표본 수·p50·p95·max·정확성 판정·artifact 참조를 기록한다.
 - 2작품·작품별 500문서·1,000,000자 profile에서 문서 전환 120회와 작품별 고유 probe를 검증해 소유권 위반 0건을 확인했다.
 - 완료 측정 `f83e0fec-a97f-4e56-9333-fac1f89f6c2c`은 문서 전환 p50 23.519ms·p95 30.489ms, 작품 검색 p50 2.800ms·p95 3.700ms, 입력 p50 7.500ms·p95 15.400ms이며 모든 예산과 정확성 판정을 통과했다.
 
@@ -144,16 +233,29 @@
 - `npx vitest run src/application/anchors/create-anchor.test.ts src/application/checkpoints/resolve-resume-checkpoint-for-work.test.ts` — Anchor 생성·복원·손상·복귀 6개 통과
 - `npx vitest run src/renderer/workspace-rail-state.test.ts src/application/editor/search-manuscripts.test.ts` — 레일 상태·현재 원고 검색 5개 통과
 - `npx vitest run src/application/measurement/poc-1-performance-profile.test.ts src/application/measurement/poc-1-performance-report.test.ts` — 성능 profile·보고서 4개 통과
-- `npm run test:run` — 23개 파일·단위 88개 통과
-- `npm run check` — lint·typecheck·단위 88개·production build 통과
-- `npm run test:e2e` — sandbox bridge·실제 CodeMirror 입력·사용자 문자 통계·undo·redo·한글 IME·문서별 상태·정확한 선택·등록형 입력 규칙·양쪽 레일·작품 검색 14개 통과
-- `npm run performance:poc-1` — production Electron 장편 profile의 문서 전환·작품 검색·입력 p50·p95와 소유권 정확성 통과
+- `npm run test:run` — 46개 파일·단위·통합 254개 통과
+- `npm run check` — lint·typecheck·46개 파일·254개 검증·production build 통과
+- `npm run test:e2e` — production-bundle Electron 21개 통과
+- `npm run test:e2e` — sandbox bridge·durable typed save command·renderer blur 저장·append 실패 UI·IME 저장 보류·문서 전환 flush·기존 CodeMirror 회귀 19개 통과
+- `npm run performance:poc-1` — production-bundle Electron 장편 profile의 문서 전환·작품 검색·입력 p50·p95와 소유권 정확성 통과
+- `npm run test:run -- src/application/persistence/change-batch.test.ts src/application/persistence/validate-change-batch-target.test.ts` — 저장 문자열·canonical serialization·batch identity·소유권·현재 revision 계약 14개 통과
+- `npm run test:run -- src/platform/journal/journal-frame.test.ts src/platform/journal/append-only-journal.integration.test.ts` — frame round-trip·checksum 손상·모든 truncated cut·실제 durable file append 4개 통과
+- `npm run test:run -- src/application/persistence/change-batch.test.ts src/application/persistence/validate-change-batch-target.test.ts src/application/persistence/apply-change-batch.test.ts src/application/persistence/replay-journal.test.ts` — canonical decode·연속 replay·duplicate·gap·cross-work·길이·identity·sequence overflow 22개 통과
+- `npm run test:run -- src/application/persistence/save-change-batch.test.ts` — sync 이후 receipt·직렬 sequence·duplicate·충돌·실패 원자성 10개 통과
+- `npm run test:run -- src/application/contracts/studio-bridge.test.ts src/application/persistence/save-change-batch.test.ts src/platform/journal/node-crypto-journal-checksum.test.ts src/desktop/manuscript-journal-runtime-profile.test.ts src/desktop/manuscript-persistence-runtime.test.ts` — strict bridge·receipt·runtime profile·동적 checksum·desktop durable wiring 31개 통과
+- `npm run test:e2e -- --grep durable` — 실제 Electron typed save command·append+sync·receipt·frame scan 1개 통과
 - `artifacts/poc-1-performance/f83e0fec-a97f-4e56-9333-fac1f89f6c2c/measurement.json` — dirty source 완료 측정 JSON
 - `npm run test:e2e -- --grep "Hangul IME"` — 실제 Electron 조합·확정·undo·redo 1개 통과
 - `npm run test:e2e -- --grep "undoes and redoes"` — 일반 입력·등록형 입력 규칙 2개 통과
 - `npm run test:e2e -- --grep "keeps keyboard and mouse selections"` — 좌표 전용 payload 적용 후 실제 선택 1개 통과
 - `npm run test:e2e -- --grep "keeps keyboard and mouse selections" --repeat-each=5` — 5개 통과
 - `npm run test:e2e -- --grep "applies registered pairs" --repeat-each=5` — 5개 통과
+- `npm run test:e2e -- --grep durable --repeat-each=5` — Electron·test Node checksum runtime 교집합을 매회 probe해 5개 통과
+- `npm run test:run -- src/application/persistence/manuscript-persistence-profile.test.ts src/application/contracts/studio-bridge.test.ts` — strict batching policy·path-free projection·bridge query 17개 통과
+- `npm run test:run -- src/application/persistence/compact-journal-into-revision.test.ts` — 다중 문서 원자 게시·replay·plan·checksum·journal-end conflict·reclamation pending 6개 통과
+- `npm run test:run -- src/platform/persistence/poc-journal-compaction-port.test.ts` — caller path 검증·실제 sync publication·rename 전 중단·journal 증가 conflict·reclamation pending·revision 손상 감지 6개 통과
+- `npm run test:run -- src/platform/checkpoints/poc-resume-checkpoint-publication.test.ts` — Work·checkpoint·Anchor 원자 게시·rename 전 fault·rename 후 ack 유실·손상·codec failure·codec round-trip·caller path 7개 통과
+- `npm run test:run -- src/application/persistence/save-change-batch.test.ts src/platform/journal/append-only-journal.integration.test.ts src/desktop/poc-2-crash-gate-profile.test.ts src/desktop/manuscript-persistence-runtime.test.ts` — validation·append·write/sync stage ordering·gate rejection·durable marker·profile 없는 기본 경로 23개 통과
 
 ## 보류
 

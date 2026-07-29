@@ -9,7 +9,7 @@ import {
   GetResumeCheckpointForWork,
 } from "./get-resume-checkpoint-for-work";
 import type { ResumeCheckpointCaptureReader } from "./capture-resume-checkpoint";
-import type { RevisionStore } from "../revisions/revision-store";
+import type { RevisionReader } from "../revisions/revision-store";
 import type {
   Anchor,
   EntityId,
@@ -83,14 +83,14 @@ function assertCheckpointAnchor(
 
 export class ResolveResumeCheckpointForWork {
   readonly #catalog: WritingCatalog;
-  readonly #revisionStore: RevisionStore;
+  readonly #revisionStore: RevisionReader;
   readonly #reader: ResumeCheckpointReader;
   readonly #checkpointQuery: GetResumeCheckpointForWork;
   readonly #anchorResolver: ResolveAnchor;
 
   constructor(input: {
     readonly catalog: WritingCatalog;
-    readonly revisionStore: RevisionStore;
+    readonly revisionStore: RevisionReader;
     readonly reader: ResumeCheckpointReader;
     readonly describeEvidence: DescribeAnchorEvidence;
   }) {

@@ -1,11 +1,62 @@
-import { randomInt, randomUUID } from "node:crypto";
+import {
+  createHash,
+  randomInt,
+  randomUUID,
+} from "node:crypto";
 import { readFileSync } from "node:fs";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { expect, test } from "@playwright/test";
+import {
+  expect,
+  test,
+  type Locator,
+} from "@playwright/test";
 import { _electron as electron } from "playwright";
 
 import { parseManuscriptInputProfile } from "../../src/application/editor/manuscript-input-profile";
+import {
+  CreateAnchor,
+} from "../../src/application/anchors/create-anchor";
+import {
+  CaptureResumeCheckpoint,
+} from "../../src/application/checkpoints/capture-resume-checkpoint";
+import { applyChangeBatch } from "../../src/application/persistence/apply-change-batch";
+import {
+  DURABLE_TEXT_REPRESENTATION_V1,
+  encodeDurableText,
+  parseCanonicalChangeBatch,
+  parseChangeBatch,
+  serializeCanonicalChangeBatch,
+} from "../../src/application/persistence/change-batch";
+import { appendJournalPayloadDurably } from "../../src/platform/journal/append-only-journal";
+import { scanJournalFrames } from "../../src/platform/journal/journal-frame";
+import { createNodeCryptoJournalChecksumAdapter } from "../../src/platform/journal/node-crypto-journal-checksum";
+import {
+  createNodeCryptoAnchorEvidenceDescriptor,
+} from "../../src/platform/anchors/node-crypto-anchor-evidence";
+import {
+  createPocResumeCheckpointCaptureTransaction,
+} from "../../src/platform/checkpoints/poc-resume-checkpoint-publication";
+import {
+  createJsonPocResumeCheckpointPublicationCodec,
+} from "../../src/platform/checkpoints/poc-resume-checkpoint-json-codec";
+import {
+  InMemoryRevisionStore,
+} from "../../src/platform/revisions/in-memory-revision-store";
+import {
+  createWritingCatalog,
+  entityId,
+  type DocumentRevision,
+  type ResumeCheckpoint,
+  type Work,
+} from "../../src/domain/writing";
 import { parseLongformFixtureManifest } from "../fixtures/longform/longform-fixture";
 
 function readJsonFixture(...segments: string[]): unknown {
@@ -28,6 +79,66 @@ function readHangulCompositionText(): string {
     throw new Error("Longform fixture must provide Hangul composition text");
   }
   return match[0];
+}
+
+async function selectElectronRuntimeHashAlgorithm(): Promise<string> {
+  const discoveryApp = await electron.launch({
+    args: ["."],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+    },
+  });
+  try {
+    const electronAlgorithms = await discoveryApp.evaluate(() => {
+      const crypto = process.getBuiltinModule("node:crypto");
+      return crypto.getHashes().filter((algorithm) => {
+        try {
+          crypto.createHash(algorithm).digest();
+          return true;
+        } catch {
+          return false;
+        }
+      });
+    });
+    const compatibleAlgorithms = electronAlgorithms.filter(
+      (algorithm) => {
+        try {
+          createHash(algorithm).digest();
+          return true;
+        } catch {
+          return false;
+        }
+      },
+    );
+    if (compatibleAlgorithms.length === 0) {
+      throw new Error(
+        "Electron and test Node.js runtimes expose no common hash algorithm",
+      );
+    }
+    return compatibleAlgorithms[
+      randomInt(0, compatibleAlgorithms.length)
+    ] as string;
+  } finally {
+    await discoveryApp.close();
+  }
+}
+
+async function removeVerifiedTemporaryDirectory(
+  directory: string,
+): Promise<void> {
+  const temporaryRoot = path.resolve(tmpdir());
+  const resolvedDirectory = path.resolve(directory);
+  if (
+    resolvedDirectory === temporaryRoot ||
+    !resolvedDirectory.startsWith(temporaryRoot)
+  ) {
+    throw new Error(
+      "Refusing to remove a directory outside the OS temporary root",
+    );
+  }
+  await rm(resolvedDirectory, { recursive: true, force: true });
 }
 
 function createDocumentSwitchProfile(
@@ -56,6 +167,573 @@ function createDocumentSwitchProfile(
     initialDocumentId: firstDocument.documentId,
     documents: [firstDocument, secondDocument],
   } as const;
+}
+
+async function createStartupRecoveryFixture() {
+  const directory = await mkdtemp(
+    path.join(tmpdir(), randomUUID()),
+  );
+  const journalPath = path.join(
+    directory,
+    randomUUID(),
+  );
+  const checksumAlgorithm =
+    await selectElectronRuntimeHashAlgorithm();
+  const workId = randomUUID();
+  const documentId = randomUUID();
+  const baseRevisionId = randomUUID();
+  const initialText = randomUUID();
+  const insertedText = randomUUID();
+  const nextSequence = randomInt(0, 10_000);
+  const document = {
+    workId,
+    documentId,
+    documentRevisionId: baseRevisionId,
+    label: randomUUID(),
+    initialText,
+  };
+  const batch = parseChangeBatch({
+    schemaVersion: 1,
+    textRepresentation:
+      DURABLE_TEXT_REPRESENTATION_V1,
+    batchId: randomUUID(),
+    workId,
+    documentId,
+    baseRevisionId,
+    sequence: nextSequence,
+    createdAt: new Date().toISOString(),
+    beforeTextLengthUtf16: initialText.length,
+    afterTextLengthUtf16:
+      initialText.length + insertedText.length,
+    changes: [
+      {
+        fromUtf16: initialText.length,
+        toUtf16: initialText.length,
+        insertedText,
+      },
+    ],
+  });
+  const appendReceipt =
+    await appendJournalPayloadDurably({
+      journalPath,
+      payload:
+        serializeCanonicalChangeBatch(batch),
+      checksumAdapter:
+        createNodeCryptoJournalChecksumAdapter(
+          checksumAlgorithm,
+        ),
+    });
+  const timestamp = new Date().toISOString();
+  const contentPath = path.join(
+    directory,
+    randomUUID(),
+  );
+  const documentProfile = {
+    schemaVersion: 1,
+    initialDocumentId: documentId,
+    documents: [document],
+  } as const;
+  const journalProfile = {
+    schemaVersion: 1,
+    journalPath,
+    checksumAlgorithm,
+    documentSequences: [
+      {
+        documentId,
+        nextSequence,
+      },
+    ],
+  } as const;
+  const batchingProfile = {
+    schemaVersion: 1,
+    maxTransactionsPerBatch: randomInt(1, 32),
+    maxDelayMs: randomInt(0, 60_000),
+  } as const;
+  const applyProfile = {
+    schemaVersion: 1,
+    compactionId: randomUUID(),
+    expectedSourceJournalEndByteOffset:
+      appendReceipt.frameEndByteOffset,
+    expectedSafeReplayThroughByteOffset:
+      appendReceipt.frameEndByteOffset,
+    contentChecksumAlgorithm:
+      checksumAlgorithm,
+    sourceJournalPath: journalPath,
+    nextJournalPath: path.join(
+      directory,
+      randomUUID(),
+    ),
+    publicationTemporaryPath: path.join(
+      directory,
+      randomUUID(),
+    ),
+    publicationPath: path.join(
+      directory,
+      randomUUID(),
+    ),
+    revisions: [
+      {
+        workId,
+        documentId,
+        expectedBaseRevisionId:
+          baseRevisionId,
+        revisionId: randomUUID(),
+        cause: randomUUID(),
+        createdAt: timestamp,
+        durableAt: timestamp,
+        contentPath,
+      },
+    ],
+  } as const;
+  return {
+    directory,
+    document,
+    documentProfile,
+    journalProfile,
+    batchingProfile,
+    applyProfile,
+    contentPath,
+    recoveredText: initialText + insertedText,
+  };
+}
+
+async function createResumeRecoveryFixture() {
+  const directory = await mkdtemp(
+    path.join(tmpdir(), randomUUID()),
+  );
+  const recordedAt =
+    new Date().toISOString();
+  const work: Work = {
+    meta: {
+      id:
+        entityId<"Work">(
+          randomUUID(),
+        ),
+      schemaVersion: randomInt(1, 32),
+      revision: randomInt(0, 32),
+      createdAt: recordedAt,
+      updatedAt: recordedAt,
+    },
+    studioId:
+      entityId<"Studio">(randomUUID()),
+    title: randomUUID(),
+    orderKey: randomUUID(),
+    settingsId:
+      entityId<"WorkSettings">(
+        randomUUID(),
+      ),
+  };
+  const document = {
+    meta: {
+      id:
+        entityId<"Document">(
+          randomUUID(),
+        ),
+      schemaVersion: randomInt(1, 32),
+      revision: randomInt(0, 32),
+      createdAt: recordedAt,
+      updatedAt: recordedAt,
+    },
+    workId: work.meta.id,
+    title: randomUUID(),
+    orderKey: randomUUID(),
+    manuscriptId:
+      entityId<"Manuscript">(
+        randomUUID(),
+      ),
+  };
+  const catalog = createWritingCatalog({
+    works: [work],
+    documents: [document],
+  });
+  const contentChecksumAlgorithm =
+    await selectElectronRuntimeHashAlgorithm();
+  const publicationChecksumAlgorithm =
+    await selectElectronRuntimeHashAlgorithm();
+  const anchorEvidenceChecksumAlgorithm =
+    await selectElectronRuntimeHashAlgorithm();
+  const revisionStore =
+    new InMemoryRevisionStore({
+      catalog,
+      describeContent: (content) => ({
+        contentRef: randomUUID(),
+        contentHash:
+          createHash(
+            contentChecksumAlgorithm,
+          )
+            .update(
+              encodeDurableText(content),
+            )
+            .digest("hex"),
+        length: content.length,
+      }),
+    });
+  const prefix = randomUUID();
+  const selectedText =
+    randomUUID().slice(
+      0,
+      randomInt(4, 12),
+    );
+  const suffix = randomUUID();
+  const originContent =
+    `${prefix}${selectedText}${suffix}`;
+  const selectionStart = prefix.length;
+  const selectionEnd =
+    selectionStart + selectedText.length;
+  const originRevision =
+    await revisionStore.append({
+      revisionId:
+        entityId<"DocumentRevision">(
+          randomUUID(),
+        ),
+      workId: work.meta.id,
+      documentId: document.meta.id,
+      expectedCurrentRevisionId: null,
+      content: originContent,
+      cause: randomUUID(),
+      createdAt: recordedAt,
+      durableAt: recordedAt,
+    });
+  const createAnchor = new CreateAnchor({
+    catalog,
+    revisionStore,
+    describeEvidence:
+      createNodeCryptoAnchorEvidenceDescriptor(
+        anchorEvidenceChecksumAlgorithm,
+      ),
+  });
+  const policy = {
+    schemaVersion: 1 as const,
+    version: randomUUID(),
+    contextOffsetLength:
+      Math.max(prefix.length, suffix.length),
+  };
+  const cursorAnchor =
+    await createAnchor.execute({
+      meta: {
+        id:
+          entityId<"Anchor">(
+            randomUUID(),
+          ),
+        schemaVersion: randomInt(1, 32),
+        revision: randomInt(0, 32),
+        createdAt: recordedAt,
+        updatedAt: recordedAt,
+      },
+      workId: work.meta.id,
+      documentId: document.meta.id,
+      documentRevisionId:
+        originRevision.id,
+      startOffset: selectionStart,
+      endOffset: selectionStart,
+      policy,
+      commandRef: randomUUID(),
+      actorRef: randomUUID(),
+    });
+  const selectionAnchor =
+    await createAnchor.execute({
+      meta: {
+        id:
+          entityId<"Anchor">(
+            randomUUID(),
+          ),
+        schemaVersion: randomInt(1, 32),
+        revision: randomInt(0, 32),
+        createdAt: recordedAt,
+        updatedAt: recordedAt,
+      },
+      workId: work.meta.id,
+      documentId: document.meta.id,
+      documentRevisionId:
+        originRevision.id,
+      startOffset: selectionStart,
+      endOffset: selectionEnd,
+      policy,
+      commandRef: randomUUID(),
+      actorRef: randomUUID(),
+    });
+  const checkpoint: ResumeCheckpoint = {
+    meta: {
+      id:
+        entityId<"ResumeCheckpoint">(
+          randomUUID(),
+        ),
+      schemaVersion: randomInt(1, 32),
+      revision: randomInt(0, 32),
+      createdAt: recordedAt,
+      updatedAt: recordedAt,
+    },
+    workId: work.meta.id,
+    documentId: document.meta.id,
+    documentRevisionId:
+      originRevision.id,
+    cursorAnchorId:
+      cursorAnchor.meta.id,
+    selectionAnchorId:
+      selectionAnchor.meta.id,
+    workspaceMode: randomUUID(),
+    capturedAt: recordedAt,
+  };
+  const codecId = randomUUID();
+  const checkpointStoragePlan = {
+    publicationId:
+      entityId<"ResumeCheckpointPublication">(
+        randomUUID(),
+      ),
+    publicationTemporaryPath:
+      path.join(
+        directory,
+        randomUUID(),
+      ),
+    publicationPath: path.join(
+      directory,
+      randomUUID(),
+    ),
+  };
+  const checkpointTransaction =
+    createPocResumeCheckpointCaptureTransaction({
+      works: [work],
+      checkpoints: [],
+      anchors: [
+        cursorAnchor,
+        selectionAnchor,
+      ],
+      revisionStore,
+      storagePlan:
+        checkpointStoragePlan,
+      codec:
+        createJsonPocResumeCheckpointPublicationCodec(
+          codecId,
+        ),
+      checksumAdapter:
+        createNodeCryptoJournalChecksumAdapter(
+          publicationChecksumAlgorithm,
+        ),
+    });
+  await new CaptureResumeCheckpoint({
+    catalog,
+    revisionStore,
+    transaction:
+      checkpointTransaction,
+  }).execute({
+    checkpoint,
+    expectedWorkRevision:
+      work.meta.revision,
+    expectedResumeCheckpointId: null,
+    expectedCurrentDocumentRevisionId:
+      originRevision.id,
+  });
+
+  const leading = randomUUID();
+  const recoveredText =
+    `${leading}${originContent}`;
+  const journalPath = path.join(
+    directory,
+    randomUUID(),
+  );
+  const journalChecksumAlgorithm =
+    await selectElectronRuntimeHashAlgorithm();
+  const nextSequence = randomInt(
+    0,
+    10_000,
+  );
+  const batch = parseChangeBatch({
+    schemaVersion: 1,
+    textRepresentation:
+      DURABLE_TEXT_REPRESENTATION_V1,
+    batchId: randomUUID(),
+    workId: work.meta.id,
+    documentId: document.meta.id,
+    baseRevisionId:
+      originRevision.id,
+    sequence: nextSequence,
+    createdAt: recordedAt,
+    beforeTextLengthUtf16:
+      originContent.length,
+    afterTextLengthUtf16:
+      recoveredText.length,
+    changes: [
+      {
+        fromUtf16: 0,
+        toUtf16: 0,
+        insertedText: leading,
+      },
+    ],
+  });
+  const appendReceipt =
+    await appendJournalPayloadDurably({
+      journalPath,
+      payload:
+        serializeCanonicalChangeBatch(batch),
+      checksumAdapter:
+        createNodeCryptoJournalChecksumAdapter(
+          journalChecksumAlgorithm,
+        ),
+    });
+  const targetRevisionId =
+    entityId<"DocumentRevision">(
+      randomUUID(),
+    );
+  const targetContentPath =
+    path.join(
+      directory,
+      randomUUID(),
+    );
+  const targetRevisionCause =
+    randomUUID();
+  const targetRevision:
+    DocumentRevision = {
+    id: targetRevisionId,
+    documentId: document.meta.id,
+    parentRevisionId:
+      originRevision.id,
+    contentRef: targetContentPath,
+    contentHash:
+      createHash(
+        contentChecksumAlgorithm,
+      )
+        .update(
+          encodeDurableText(
+            recoveredText,
+          ),
+        )
+        .digest("hex"),
+    length: recoveredText.length,
+    cause: targetRevisionCause,
+    createdAt: recordedAt,
+    durableAt: recordedAt,
+  };
+  const documentProfile = {
+    schemaVersion: 1,
+    initialDocumentId:
+      document.meta.id,
+    documents: [
+      {
+        workId: work.meta.id,
+        documentId:
+          document.meta.id,
+        documentRevisionId:
+          originRevision.id,
+        label: document.title,
+        initialText: originContent,
+      },
+    ],
+  } as const;
+  const journalProfile = {
+    schemaVersion: 1,
+    journalPath,
+    checksumAlgorithm:
+      journalChecksumAlgorithm,
+    documentSequences: [
+      {
+        documentId:
+          document.meta.id,
+        nextSequence,
+      },
+    ],
+  } as const;
+  const batchingProfile = {
+    schemaVersion: 1,
+    maxTransactionsPerBatch:
+      randomInt(1, 32),
+    maxDelayMs:
+      randomInt(0, 60_000),
+  } as const;
+  const applyProfile = {
+    schemaVersion: 1,
+    compactionId: randomUUID(),
+    expectedSourceJournalEndByteOffset:
+      appendReceipt.frameEndByteOffset,
+    expectedSafeReplayThroughByteOffset:
+      appendReceipt.frameEndByteOffset,
+    contentChecksumAlgorithm,
+    sourceJournalPath: journalPath,
+    nextJournalPath: path.join(
+      directory,
+      randomUUID(),
+    ),
+    publicationTemporaryPath:
+      path.join(
+        directory,
+        randomUUID(),
+      ),
+    publicationPath: path.join(
+      directory,
+      randomUUID(),
+    ),
+    revisions: [
+      {
+        workId: work.meta.id,
+        documentId:
+          document.meta.id,
+        expectedBaseRevisionId:
+          originRevision.id,
+        revisionId:
+          targetRevisionId,
+        cause: targetRevisionCause,
+        createdAt: recordedAt,
+        durableAt: recordedAt,
+        contentPath:
+          targetContentPath,
+      },
+    ],
+  } as const;
+  const resumeCheckpointProfile = {
+    schemaVersion: 1,
+    codecId,
+    publicationChecksumAlgorithm,
+    anchorEvidenceChecksumAlgorithm,
+    storagePlan:
+      checkpointStoragePlan,
+    works: [work],
+    documents: [document],
+    revisions: [
+      {
+        revision: originRevision,
+        content: originContent,
+      },
+      {
+        revision: targetRevision,
+        content: recoveredText,
+      },
+    ],
+    publicationRevisionHeads: [
+      {
+        documentId:
+          document.meta.id,
+        revisionId:
+          originRevision.id,
+      },
+    ],
+    baselineCheckpoints: [],
+    anchors: [
+      cursorAnchor,
+      selectionAnchor,
+    ],
+  } as const;
+  return {
+    directory,
+    documentProfile,
+    journalProfile,
+    batchingProfile,
+    applyProfile,
+    resumeCheckpointProfile,
+    originContent,
+    recoveredText,
+    selectedText,
+    originSelection: {
+      anchor: selectionEnd,
+      head: selectionStart,
+    },
+    recoveredSelection: {
+      anchor:
+        leading.length +
+        selectionEnd,
+      head:
+        leading.length +
+        selectionStart,
+    },
+  };
 }
 
 test("launches a sandboxed shell with only the typed studio bridge", async () => {
@@ -104,6 +782,1037 @@ test("launches a sandboxed shell with only the typed studio bridge", async () =>
     expect(consoleErrors).toEqual([]);
   } finally {
     await electronApp.close();
+  }
+});
+
+test("returns a durable receipt through the typed Electron save command", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), randomUUID()));
+  const journalPath = path.join(directory, randomUUID());
+  const checksumAlgorithm =
+    await selectElectronRuntimeHashAlgorithm();
+  const document = {
+    workId: randomUUID(),
+    documentId: randomUUID(),
+    documentRevisionId: randomUUID(),
+    label: randomUUID(),
+    initialText: randomUUID(),
+  };
+  const nextSequence = randomInt(0, 10_000);
+  const insertedText = randomUUID();
+  const documentProfile = {
+    schemaVersion: 1,
+    initialDocumentId: document.documentId,
+    documents: [document],
+  };
+  const journalProfile = {
+    schemaVersion: 1,
+    journalPath,
+    checksumAlgorithm,
+    documentSequences: [
+      {
+        documentId: document.documentId,
+        nextSequence,
+      },
+    ],
+  };
+  const batch = parseChangeBatch({
+    schemaVersion: 1,
+    textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+    batchId: randomUUID(),
+    workId: document.workId,
+    documentId: document.documentId,
+    baseRevisionId: document.documentRevisionId,
+    sequence: nextSequence,
+    createdAt: new Date().toISOString(),
+    beforeTextLengthUtf16: document.initialText.length,
+    afterTextLengthUtf16:
+      document.initialText.length + insertedText.length,
+    changes: [
+      {
+        fromUtf16: document.initialText.length,
+        toUtf16: document.initialText.length,
+        insertedText,
+      },
+    ],
+  });
+  const electronApp = await electron.launch({
+    args: ["."],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      EUM_STUDIO_MANUSCRIPT_DOCUMENT_PROFILE:
+        JSON.stringify(documentProfile),
+      EUM_STUDIO_MANUSCRIPT_JOURNAL_PROFILE:
+        JSON.stringify(journalProfile),
+      EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+    },
+  });
+
+  try {
+    const page = await electronApp.firstWindow();
+    const receipt = await page.evaluate(
+      (changeBatch) =>
+        window.eumStudio.editor.saveChangeBatch(changeBatch),
+      batch,
+    );
+    const adapter =
+      createNodeCryptoJournalChecksumAdapter(
+        checksumAlgorithm,
+      );
+    const scan = await scanJournalFrames(
+      await readFile(journalPath),
+      (adapterId) =>
+        adapterId === adapter.id ? adapter : null,
+    );
+
+    expect(scan.tail).toBeNull();
+    expect(scan.records).toHaveLength(1);
+    expect(
+      parseCanonicalChangeBatch(
+        scan.records[0]?.payload ?? new Uint8Array(),
+      ),
+    ).toEqual(batch);
+    expect(receipt).toMatchObject({
+      workId: batch.workId,
+      documentId: batch.documentId,
+      baseRevisionId: batch.baseRevisionId,
+      batchId: batch.batchId,
+      sequence: batch.sequence,
+      frameStartByteOffset:
+        scan.records[0]?.frameStartByteOffset,
+      frameEndByteOffset:
+        scan.records[0]?.frameEndByteOffset,
+    });
+  } finally {
+    await electronApp.close();
+    await removeVerifiedTemporaryDirectory(directory);
+  }
+});
+
+test("saves editor batches on blur and shows only durable receipt state as saved", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), randomUUID()));
+  const journalPath = path.join(directory, randomUUID());
+  const checksumAlgorithm =
+    await selectElectronRuntimeHashAlgorithm();
+  const document = {
+    workId: randomUUID(),
+    documentId: randomUUID(),
+    documentRevisionId: randomUUID(),
+    label: randomUUID(),
+    initialText: randomUUID(),
+  };
+  const nextSequence = randomInt(0, 10_000);
+  const insertedText = randomUUID();
+  const documentProfile = {
+    schemaVersion: 1,
+    initialDocumentId: document.documentId,
+    documents: [document],
+  };
+  const journalProfile = {
+    schemaVersion: 1,
+    journalPath,
+    checksumAlgorithm,
+    documentSequences: [
+      {
+        documentId: document.documentId,
+        nextSequence,
+      },
+    ],
+  };
+  const batchingProfile = {
+    schemaVersion: 1,
+    maxTransactionsPerBatch:
+      insertedText.length + randomInt(8, 64),
+    maxDelayMs: randomInt(30_000, 60_000),
+  };
+  const electronApp = await electron.launch({
+    args: ["."],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      EUM_STUDIO_MANUSCRIPT_DOCUMENT_PROFILE:
+        JSON.stringify(documentProfile),
+      EUM_STUDIO_MANUSCRIPT_JOURNAL_PROFILE:
+        JSON.stringify(journalProfile),
+      EUM_STUDIO_MANUSCRIPT_BATCHING_PROFILE:
+        JSON.stringify(batchingProfile),
+      EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+    },
+  });
+
+  try {
+    const page = await electronApp.firstWindow();
+    const manuscript = page.getByRole("textbox", {
+      name: "원고",
+    });
+    const saveState = page.getByTestId("save-state");
+
+    await expect(saveState).toHaveText("저장됨");
+    await manuscript.click();
+    await manuscript.press("End");
+    await manuscript.pressSequentially(insertedText);
+    await expect(saveState).toHaveText("편집 중");
+
+    await page
+      .getByRole("heading", { name: "이음 스튜디오" })
+      .click();
+    await expect(saveState).toHaveText("저장됨");
+
+    const adapter =
+      createNodeCryptoJournalChecksumAdapter(
+        checksumAlgorithm,
+      );
+    const scan = await scanJournalFrames(
+      await readFile(journalPath),
+      (adapterId) =>
+        adapterId === adapter.id ? adapter : null,
+    );
+    expect(scan.tail).toBeNull();
+    expect(scan.records).toHaveLength(1);
+    const batch = parseCanonicalChangeBatch(
+      scan.records[0]?.payload ?? new Uint8Array(),
+    );
+    expect(batch).toMatchObject({
+      workId: document.workId,
+      documentId: document.documentId,
+      baseRevisionId: document.documentRevisionId,
+      sequence: nextSequence,
+    });
+    expect(applyChangeBatch(document.initialText, batch)).toBe(
+      document.initialText + insertedText,
+    );
+  } finally {
+    await electronApp.close();
+    await removeVerifiedTemporaryDirectory(directory);
+  }
+});
+
+test("flushes pending editor changes before a graceful window close completes", async () => {
+  const directory = await mkdtemp(
+    path.join(tmpdir(), randomUUID()),
+  );
+  const journalPath = path.join(
+    directory,
+    randomUUID(),
+  );
+  const checksumAlgorithm =
+    await selectElectronRuntimeHashAlgorithm();
+  const document = {
+    workId: randomUUID(),
+    documentId: randomUUID(),
+    documentRevisionId: randomUUID(),
+    label: randomUUID(),
+    initialText: randomUUID(),
+  };
+  const nextSequence = randomInt(0, 10_000);
+  const insertedText = randomUUID();
+  const electronApp = await electron.launch({
+    args: ["."],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      EUM_STUDIO_MANUSCRIPT_DOCUMENT_PROFILE:
+        JSON.stringify({
+          schemaVersion: 1,
+          initialDocumentId:
+            document.documentId,
+          documents: [document],
+        }),
+      EUM_STUDIO_MANUSCRIPT_JOURNAL_PROFILE:
+        JSON.stringify({
+          schemaVersion: 1,
+          journalPath,
+          checksumAlgorithm,
+          documentSequences: [
+            {
+              documentId:
+                document.documentId,
+              nextSequence,
+            },
+          ],
+        }),
+      EUM_STUDIO_MANUSCRIPT_BATCHING_PROFILE:
+        JSON.stringify({
+          schemaVersion: 1,
+          maxTransactionsPerBatch:
+            insertedText.length +
+            randomInt(8, 64),
+          maxDelayMs:
+            randomInt(30_000, 60_000),
+        }),
+      EUM_STUDIO_WINDOW_VISIBILITY:
+        "hidden",
+    },
+  });
+  let closed = false;
+
+  try {
+    const page =
+      await electronApp.firstWindow();
+    const manuscript =
+      page.getByRole("textbox", {
+        name: "원고",
+        exact: true,
+      });
+    await manuscript.click();
+    await manuscript.press("End");
+    await manuscript.pressSequentially(
+      insertedText,
+    );
+    await expect(
+      page.getByTestId("save-state"),
+    ).toHaveText("편집 중");
+
+    const closeObserved =
+      electronApp.waitForEvent("close");
+    await electronApp.evaluate(
+      ({ BrowserWindow }) => {
+        BrowserWindow.getAllWindows()[0]?.close();
+      },
+    );
+    await closeObserved;
+    closed = true;
+
+    const bytes = await readFile(
+      journalPath,
+    ).catch(() => new Uint8Array());
+    const adapter =
+      createNodeCryptoJournalChecksumAdapter(
+        checksumAlgorithm,
+      );
+    const scan = await scanJournalFrames(
+      bytes,
+      (adapterId) =>
+        adapterId === adapter.id
+          ? adapter
+          : null,
+    );
+    expect(scan.tail).toBeNull();
+    expect(scan.records).toHaveLength(1);
+    const batch =
+      parseCanonicalChangeBatch(
+        scan.records[0]?.payload ??
+          new Uint8Array(),
+      );
+    expect(batch.sequence).toBe(
+      nextSequence,
+    );
+    expect(
+      applyChangeBatch(
+        document.initialText,
+        batch,
+      ),
+    ).toBe(
+      document.initialText + insertedText,
+    );
+  } finally {
+    if (!closed) {
+      await electronApp.close();
+    }
+    await removeVerifiedTemporaryDirectory(
+      directory,
+    );
+  }
+});
+
+test("shows a failed save state when the durable journal append fails", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), randomUUID()));
+  const journalPath = path.join(directory, randomUUID());
+  const checksumAlgorithm =
+    await selectElectronRuntimeHashAlgorithm();
+  const document = {
+    workId: randomUUID(),
+    documentId: randomUUID(),
+    documentRevisionId: randomUUID(),
+    label: randomUUID(),
+    initialText: randomUUID(),
+  };
+  const insertedText = randomUUID();
+  const documentProfile = {
+    schemaVersion: 1,
+    initialDocumentId: document.documentId,
+    documents: [document],
+  };
+  const journalProfile = {
+    schemaVersion: 1,
+    journalPath,
+    checksumAlgorithm,
+    documentSequences: [
+      {
+        documentId: document.documentId,
+        nextSequence: randomInt(0, 10_000),
+      },
+    ],
+  };
+  const batchingProfile = {
+    schemaVersion: 1,
+    maxTransactionsPerBatch:
+      insertedText.length + randomInt(8, 64),
+    maxDelayMs: randomInt(30_000, 60_000),
+  };
+  const electronApp = await electron.launch({
+    args: ["."],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      EUM_STUDIO_MANUSCRIPT_DOCUMENT_PROFILE:
+        JSON.stringify(documentProfile),
+      EUM_STUDIO_MANUSCRIPT_JOURNAL_PROFILE:
+        JSON.stringify(journalProfile),
+      EUM_STUDIO_MANUSCRIPT_BATCHING_PROFILE:
+        JSON.stringify(batchingProfile),
+      EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+    },
+  });
+
+  try {
+    const page = await electronApp.firstWindow();
+    const manuscript = page.getByRole("textbox", {
+      name: "원고",
+    });
+    const saveState = page.getByTestId("save-state");
+
+    await expect(saveState).toHaveText("저장됨");
+    await mkdir(journalPath);
+    await manuscript.click();
+    await manuscript.press("End");
+    await manuscript.pressSequentially(insertedText);
+    await expect(saveState).toHaveText("편집 중");
+
+    await page
+      .getByRole("heading", { name: "이음 스튜디오" })
+      .click();
+    await expect(saveState).toHaveText("실패");
+    await expect(saveState).not.toHaveText("저장됨");
+  } finally {
+    const closed = electronApp.waitForEvent("close");
+    await electronApp.evaluate(({ app }) => {
+      app.exit();
+    });
+    await closed;
+    await removeVerifiedTemporaryDirectory(directory);
+  }
+});
+
+test("keeps the baseline read-only until the user previews and explicitly applies startup recovery", async () => {
+  const fixture =
+    await createStartupRecoveryFixture();
+  const runtimeEnvironment = {
+    ...process.env,
+    EUM_STUDIO_MANUSCRIPT_DOCUMENT_PROFILE:
+      JSON.stringify(
+        fixture.documentProfile,
+      ),
+    EUM_STUDIO_MANUSCRIPT_JOURNAL_PROFILE:
+      JSON.stringify(
+        fixture.journalProfile,
+      ),
+    EUM_STUDIO_MANUSCRIPT_BATCHING_PROFILE:
+      JSON.stringify(
+        fixture.batchingProfile,
+      ),
+    EUM_STUDIO_POC_RECOVERY_APPLY_PROFILE:
+      JSON.stringify(fixture.applyProfile),
+    EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+  };
+  let electronApp = await electron.launch({
+    args: ["."],
+    cwd: process.cwd(),
+    env: runtimeEnvironment,
+  });
+
+  try {
+    const page = await electronApp.firstWindow();
+    const manuscript = page.getByRole(
+      "textbox",
+      { name: "원고", exact: true },
+    );
+    const saveState =
+      page.getByTestId("save-state");
+
+    await expect(
+      page.getByRole("heading", {
+        name: "복구 미리보기",
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("recovery-preview"),
+    ).toHaveValue(fixture.recoveredText);
+    await expect(manuscript).toHaveText(
+      fixture.document.initialText,
+    );
+    await expect(manuscript).toHaveAttribute(
+      "aria-readonly",
+      "true",
+    );
+    await expect(manuscript).toHaveAttribute(
+      "contenteditable",
+      "false",
+    );
+    await expect(saveState).toHaveText(
+      "복구 적용 대기",
+    );
+
+    await page
+      .getByRole("button", {
+        name: "복구 적용",
+      })
+      .click();
+
+    await expect(
+      page.getByRole("heading", {
+        name: "복구 미리보기",
+      }),
+    ).toHaveCount(0);
+    await expect(manuscript).toHaveText(
+      fixture.recoveredText,
+    );
+    await expect(manuscript).toHaveAttribute(
+      "contenteditable",
+      "true",
+    );
+    await expect(manuscript).not.toHaveAttribute(
+      "aria-readonly",
+      "true",
+    );
+    await expect(saveState).toHaveText("저장됨");
+    expect(
+      new TextDecoder(
+        DURABLE_TEXT_REPRESENTATION_V1
+          .hashAndAnchorInputEncoding,
+      ).decode(
+        await readFile(fixture.contentPath),
+      ),
+    ).toBe(fixture.recoveredText);
+
+    await electronApp.close();
+    electronApp = await electron.launch({
+      args: ["."],
+      cwd: process.cwd(),
+      env: runtimeEnvironment,
+    });
+    const restartedPage =
+      await electronApp.firstWindow();
+    const restartedManuscript =
+      restartedPage.getByRole("textbox", {
+        name: "원고",
+        exact: true,
+      });
+    await expect(
+      restartedPage.getByRole("heading", {
+        name: "복구 미리보기",
+      }),
+    ).toHaveCount(0);
+    await expect(restartedManuscript).toHaveText(
+      fixture.recoveredText,
+    );
+    await expect(
+      restartedManuscript,
+    ).toHaveAttribute(
+      "contenteditable",
+      "true",
+    );
+    await expect(
+      restartedPage.getByTestId(
+        "save-state",
+      ),
+    ).toHaveText("저장됨");
+  } finally {
+    await electronApp.close();
+    await removeVerifiedTemporaryDirectory(
+      fixture.directory,
+    );
+  }
+});
+
+test("replays a published manuscript and restores its exact cursor selection after a full restart", async () => {
+  const fixture =
+    await createResumeRecoveryFixture();
+  const runtimeEnvironment = {
+    ...process.env,
+    EUM_STUDIO_MANUSCRIPT_DOCUMENT_PROFILE:
+      JSON.stringify(
+        fixture.documentProfile,
+      ),
+    EUM_STUDIO_MANUSCRIPT_JOURNAL_PROFILE:
+      JSON.stringify(
+        fixture.journalProfile,
+      ),
+    EUM_STUDIO_MANUSCRIPT_BATCHING_PROFILE:
+      JSON.stringify(
+        fixture.batchingProfile,
+      ),
+    EUM_STUDIO_POC_RECOVERY_APPLY_PROFILE:
+      JSON.stringify(
+        fixture.applyProfile,
+      ),
+    EUM_STUDIO_POC_RESUME_CHECKPOINT_PROFILE:
+      JSON.stringify(
+        fixture.resumeCheckpointProfile,
+      ),
+    EUM_STUDIO_WINDOW_VISIBILITY:
+      "hidden",
+  };
+  let electronApp = await electron.launch({
+    args: ["."],
+    cwd: process.cwd(),
+    env: runtimeEnvironment,
+  });
+
+  const readDirectionalSelection = async (
+    manuscript: Locator,
+  ) => {
+    return manuscript.evaluate((editor) => {
+      const host = editor.closest(
+        ".manuscript-editor",
+      );
+      if (
+        !(host instanceof HTMLElement)
+      ) {
+        return null;
+      }
+      const anchor = Number.parseInt(
+        host.dataset.selectionAnchor ??
+          "",
+        10,
+      );
+      const head = Number.parseInt(
+        host.dataset.selectionHead ?? "",
+        10,
+      );
+      if (
+        !Number.isSafeInteger(anchor) ||
+        !Number.isSafeInteger(head)
+      ) {
+        return null;
+      }
+      const text = editor.textContent ?? "";
+      return {
+        anchor,
+        head,
+        text: text.slice(
+          Math.min(anchor, head),
+          Math.max(anchor, head),
+        ),
+      };
+    });
+  };
+
+  try {
+    const page =
+      await electronApp.firstWindow();
+    const manuscript =
+      page.getByRole("textbox", {
+        name: "원고",
+        exact: true,
+      });
+    await expect(manuscript).toHaveText(
+      fixture.originContent,
+    );
+    await expect
+      .poll(() =>
+        readDirectionalSelection(
+          manuscript,
+        ),
+      )
+      .toEqual({
+        ...fixture.originSelection,
+        text: fixture.selectedText,
+      });
+
+    await page
+      .getByRole("button", {
+        name: "복구 적용",
+      })
+      .click();
+    await expect(manuscript).toHaveText(
+      fixture.recoveredText,
+    );
+    await expect(
+      page.evaluate(() =>
+        window.eumStudio.editor.getManuscriptResumeCheckpoint(),
+      ),
+    ).resolves.toMatchObject({
+      status: "resolved",
+      selection:
+        fixture.recoveredSelection,
+    });
+    await expect
+      .poll(() =>
+        readDirectionalSelection(
+          manuscript,
+        ),
+      )
+      .toEqual({
+        ...fixture.recoveredSelection,
+        text: fixture.selectedText,
+      });
+
+    await electronApp.close();
+    electronApp = await electron.launch({
+      args: ["."],
+      cwd: process.cwd(),
+      env: runtimeEnvironment,
+    });
+    const restartedPage =
+      await electronApp.firstWindow();
+    const restartedManuscript =
+      restartedPage.getByRole(
+        "textbox",
+        {
+          name: "원고",
+          exact: true,
+        },
+      );
+    await expect(
+      restartedManuscript,
+    ).toHaveText(
+      fixture.recoveredText,
+    );
+    await expect
+      .poll(() =>
+        readDirectionalSelection(
+          restartedManuscript,
+        ),
+      )
+      .toEqual({
+        ...fixture.recoveredSelection,
+        text: fixture.selectedText,
+      });
+  } finally {
+    await electronApp
+      .close()
+      .catch(() => undefined);
+    await removeVerifiedTemporaryDirectory(
+      fixture.directory,
+    );
+  }
+});
+
+test("shows a read-only recovery issue without an apply action when the active journal cannot be read", async () => {
+  const directory = await mkdtemp(
+    path.join(tmpdir(), randomUUID()),
+  );
+  const journalPath = path.join(
+    directory,
+    randomUUID(),
+  );
+  await mkdir(journalPath);
+  const checksumAlgorithm =
+    await selectElectronRuntimeHashAlgorithm();
+  const document = {
+    workId: randomUUID(),
+    documentId: randomUUID(),
+    documentRevisionId: randomUUID(),
+    label: randomUUID(),
+    initialText: randomUUID(),
+  };
+  const electronApp = await electron.launch({
+    args: ["."],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      EUM_STUDIO_MANUSCRIPT_DOCUMENT_PROFILE:
+        JSON.stringify({
+          schemaVersion: 1,
+          initialDocumentId:
+            document.documentId,
+          documents: [document],
+        }),
+      EUM_STUDIO_MANUSCRIPT_JOURNAL_PROFILE:
+        JSON.stringify({
+          schemaVersion: 1,
+          journalPath,
+          checksumAlgorithm,
+          documentSequences: [
+            {
+              documentId:
+                document.documentId,
+              nextSequence: randomInt(
+                0,
+                10_000,
+              ),
+            },
+          ],
+        }),
+      EUM_STUDIO_MANUSCRIPT_BATCHING_PROFILE:
+        JSON.stringify({
+          schemaVersion: 1,
+          maxTransactionsPerBatch:
+            randomInt(1, 32),
+          maxDelayMs: randomInt(
+            0,
+            60_000,
+          ),
+        }),
+      EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+    },
+  });
+
+  try {
+    const page = await electronApp.firstWindow();
+    const manuscript = page.getByRole(
+      "textbox",
+      { name: "원고", exact: true },
+    );
+
+    await expect(
+      page.getByRole("heading", {
+        name: "복구 확인 필요",
+      }),
+    ).toBeVisible();
+    await expect(manuscript).toHaveText(
+      document.initialText,
+    );
+    await expect(manuscript).toHaveAttribute(
+      "aria-readonly",
+      "true",
+    );
+    await expect(
+      page.getByTestId("save-state"),
+    ).toHaveText("복구 확인 필요");
+    await expect(
+      page.getByRole("button", {
+        name: "복구 적용",
+      }),
+    ).toHaveCount(0);
+  } finally {
+    await electronApp.close();
+    await removeVerifiedTemporaryDirectory(
+      directory,
+    );
+  }
+});
+
+test("holds durable saves through Hangul composition and appends only after commit", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), randomUUID()));
+  const journalPath = path.join(directory, randomUUID());
+  const checksumAlgorithm =
+    await selectElectronRuntimeHashAlgorithm();
+  const compositionText = readHangulCompositionText();
+  const document = {
+    workId: randomUUID(),
+    documentId: randomUUID(),
+    documentRevisionId: randomUUID(),
+    label: randomUUID(),
+    initialText: "",
+  };
+  const nextSequence = randomInt(0, 10_000);
+  const batchingDelayMs = randomInt(60, 120);
+  const documentProfile = {
+    schemaVersion: 1,
+    initialDocumentId: document.documentId,
+    documents: [document],
+  };
+  const journalProfile = {
+    schemaVersion: 1,
+    journalPath,
+    checksumAlgorithm,
+    documentSequences: [
+      {
+        documentId: document.documentId,
+        nextSequence,
+      },
+    ],
+  };
+  const batchingProfile = {
+    schemaVersion: 1,
+    maxTransactionsPerBatch: randomInt(1, 8),
+    maxDelayMs: batchingDelayMs,
+  };
+  const electronApp = await electron.launch({
+    args: ["."],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      EUM_STUDIO_MANUSCRIPT_DOCUMENT_PROFILE:
+        JSON.stringify(documentProfile),
+      EUM_STUDIO_MANUSCRIPT_JOURNAL_PROFILE:
+        JSON.stringify(journalProfile),
+      EUM_STUDIO_MANUSCRIPT_BATCHING_PROFILE:
+        JSON.stringify(batchingProfile),
+      EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+    },
+  });
+
+  try {
+    const page = await electronApp.firstWindow();
+    const manuscript = page.getByRole("textbox", {
+      name: "원고",
+    });
+    const saveState = page.getByTestId("save-state");
+    const session = await page.context().newCDPSession(page);
+
+    await expect(saveState).toHaveText("저장됨");
+    await manuscript.focus();
+    await session.send("Input.imeSetComposition", {
+      text: compositionText,
+      selectionStart: compositionText.length,
+      selectionEnd: compositionText.length,
+      replacementStart: 0,
+      replacementEnd: 0,
+    });
+    await expect(manuscript).toHaveText(compositionText);
+    await expect(saveState).toHaveText("편집 중");
+    await page.waitForTimeout(batchingDelayMs * 2);
+    await expect(saveState).toHaveText("편집 중");
+    const journalBeforeCommit = await readFile(journalPath).then(
+      () => "present",
+      (error: NodeJS.ErrnoException) => error.code,
+    );
+    expect(journalBeforeCommit).toBe("ENOENT");
+
+    await session.send("Input.insertText", {
+      text: compositionText,
+    });
+    await expect(manuscript).toHaveText(compositionText);
+    await expect(saveState).toHaveText("저장됨");
+
+    const adapter =
+      createNodeCryptoJournalChecksumAdapter(
+        checksumAlgorithm,
+      );
+    const scan = await scanJournalFrames(
+      await readFile(journalPath),
+      (adapterId) =>
+        adapterId === adapter.id ? adapter : null,
+    );
+    expect(scan.tail).toBeNull();
+    expect(scan.records).toHaveLength(1);
+    const batch = parseCanonicalChangeBatch(
+      scan.records[0]?.payload ?? new Uint8Array(),
+    );
+    expect(batch).toMatchObject({
+      workId: document.workId,
+      documentId: document.documentId,
+      baseRevisionId: document.documentRevisionId,
+      sequence: nextSequence,
+    });
+    expect(applyChangeBatch(document.initialText, batch)).toBe(
+      compositionText,
+    );
+    await session.detach();
+  } finally {
+    await electronApp.close();
+    await removeVerifiedTemporaryDirectory(directory);
+  }
+});
+
+test("flushes the current document batch before a document switch", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), randomUUID()));
+  const journalPath = path.join(directory, randomUUID());
+  const checksumAlgorithm =
+    await selectElectronRuntimeHashAlgorithm();
+  const documentProfile =
+    createDocumentSwitchProfile(randomUUID());
+  const [firstDocument, secondDocument] =
+    documentProfile.documents;
+  const firstNextSequence = randomInt(0, 10_000);
+  const secondNextSequence = randomInt(0, 10_000);
+  const edit = randomUUID();
+  const journalProfile = {
+    schemaVersion: 1,
+    journalPath,
+    checksumAlgorithm,
+    documentSequences: [
+      {
+        documentId: firstDocument.documentId,
+        nextSequence: firstNextSequence,
+      },
+      {
+        documentId: secondDocument.documentId,
+        nextSequence: secondNextSequence,
+      },
+    ],
+  };
+  const batchingProfile = {
+    schemaVersion: 1,
+    maxTransactionsPerBatch:
+      edit.length + randomInt(8, 64),
+    maxDelayMs: randomInt(30_000, 60_000),
+  };
+  const electronApp = await electron.launch({
+    args: ["."],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      EUM_STUDIO_MANUSCRIPT_DOCUMENT_PROFILE:
+        JSON.stringify(documentProfile),
+      EUM_STUDIO_MANUSCRIPT_JOURNAL_PROFILE:
+        JSON.stringify(journalProfile),
+      EUM_STUDIO_MANUSCRIPT_BATCHING_PROFILE:
+        JSON.stringify(batchingProfile),
+      EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+    },
+  });
+
+  try {
+    const page = await electronApp.firstWindow();
+    const manuscript = page.getByRole("textbox", {
+      name: "원고",
+    });
+    const documentSwitch = page.getByRole("combobox", {
+      name: "문서 전환",
+    });
+    const saveState = page.getByTestId("save-state");
+
+    await expect(saveState).toHaveText("저장됨");
+    await manuscript.click();
+    await manuscript.press("End");
+    await manuscript.pressSequentially(edit);
+    await expect(saveState).toHaveText("편집 중");
+
+    await documentSwitch.selectOption(secondDocument.documentId);
+    await expect(documentSwitch).toHaveValue(
+      secondDocument.documentId,
+    );
+    await expect(manuscript).toHaveText(
+      secondDocument.initialText,
+    );
+    await expect(saveState).toHaveText("저장됨");
+
+    const adapter =
+      createNodeCryptoJournalChecksumAdapter(
+        checksumAlgorithm,
+      );
+    await expect
+      .poll(async () => {
+        try {
+          const scan = await scanJournalFrames(
+            await readFile(journalPath),
+            (adapterId) =>
+              adapterId === adapter.id ? adapter : null,
+          );
+          return scan.records.length;
+        } catch {
+          return 0;
+        }
+      })
+      .toBe(1);
+    const scan = await scanJournalFrames(
+      await readFile(journalPath),
+      (adapterId) =>
+        adapterId === adapter.id ? adapter : null,
+    );
+    expect(scan.tail).toBeNull();
+    const batch = parseCanonicalChangeBatch(
+      scan.records[0]?.payload ?? new Uint8Array(),
+    );
+    expect(batch).toMatchObject({
+      workId: firstDocument.workId,
+      documentId: firstDocument.documentId,
+      baseRevisionId: firstDocument.documentRevisionId,
+      sequence: firstNextSequence,
+    });
+    expect(applyChangeBatch(firstDocument.initialText, batch)).toBe(
+      firstDocument.initialText + edit,
+    );
+
+    await documentSwitch.selectOption(firstDocument.documentId);
+    await expect(saveState).toHaveText("저장됨");
+  } finally {
+    await electronApp.close();
+    await removeVerifiedTemporaryDirectory(directory);
   }
 });
 

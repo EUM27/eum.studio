@@ -1,5 +1,9 @@
 import { history, historyKeymap } from "@codemirror/commands";
-import { EditorState } from "@codemirror/state";
+import {
+  Compartment,
+  EditorSelection,
+  EditorState,
+} from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import {
   forwardRef,
@@ -11,6 +15,9 @@ import {
 
 import type { ManuscriptDocumentSource } from "../../application/editor/manuscript-document-profile";
 import type { ManuscriptInputProfile } from "../../application/editor/manuscript-input-profile";
+import type {
+  ManuscriptResumeCheckpointProjection,
+} from "../../application/checkpoints/manuscript-resume-checkpoint-projection";
 import { ManuscriptDocumentStateRegistry } from "./manuscript-document-state";
 import { createManuscriptInputRules } from "./manuscript-input-rules";
 import {
@@ -33,14 +40,28 @@ export type ManuscriptEditorProps = {
   readonly accessibleName: string;
   readonly activeDocument: ManuscriptDocumentSource;
   readonly inputProfile: ManuscriptInputProfile;
+  readonly readOnly: boolean;
+  readonly resumeLocation:
+    | Extract<
+        ManuscriptResumeCheckpointProjection,
+        { readonly status: "resolved" }
+      >
+    | null;
   readonly onDocumentActivated: (
     document: ManuscriptDocumentSource,
     summary: ManuscriptDocumentStateSummary,
+  ) => void;
+  readonly onBlur: (
+    document: ManuscriptDocumentSource,
+  ) => void;
+  readonly onCompositionEnd: (
+    document: ManuscriptDocumentSource,
   ) => void;
   readonly onTransaction: (
     document: ManuscriptDocumentSource,
     transaction: ManuscriptTransaction,
     statistics: ManuscriptTextStatistics,
+    composing: boolean,
   ) => void;
 };
 
@@ -77,8 +98,12 @@ export const ManuscriptEditor = forwardRef<
     accessibleName,
     activeDocument,
     inputProfile,
+    onBlur,
+    onCompositionEnd,
     onDocumentActivated,
     onTransaction,
+    readOnly,
+    resumeLocation,
   },
   ref,
 ) {
@@ -88,8 +113,26 @@ export const ManuscriptEditor = forwardRef<
   const activeDocumentRef = useRef<ManuscriptDocumentSource | null>(null);
   const pendingDocumentRef = useRef<ManuscriptDocumentSource | null>(null);
   const stateRegistryRef = useRef(new ManuscriptDocumentStateRegistry());
+  const readOnlyCompartmentRef = useRef(
+    new Compartment(),
+  );
+  const notifyBlur = useEffectEvent(onBlur);
+  const notifyCompositionEnd = useEffectEvent(onCompositionEnd);
   const notifyDocumentActivated = useEffectEvent(onDocumentActivated);
   const notifyTransaction = useEffectEvent(onTransaction);
+  const publishSelectionEvidence = useEffectEvent(
+    (state: EditorState) => {
+      const host = hostRef.current;
+      if (host === null) {
+        return;
+      }
+      const main = state.selection.main;
+      host.dataset.selectionAnchor =
+        String(main.anchor);
+      host.dataset.selectionHead =
+        String(main.head);
+    },
+  );
   useImperativeHandle(
     ref,
     () => ({
@@ -113,12 +156,34 @@ export const ManuscriptEditor = forwardRef<
     (document: ManuscriptDocumentSource) =>
       EditorState.create({
         doc: document.initialText,
+        ...(
+          resumeLocation !== null &&
+          resumeLocation.workId ===
+            document.workId &&
+          resumeLocation.documentId ===
+            document.documentId &&
+          resumeLocation.targetRevisionId ===
+            document.documentRevisionId
+            ? {
+                selection: EditorSelection.single(
+                resumeLocation.selection
+                  .anchor,
+                resumeLocation.selection
+                  .head,
+                ),
+              }
+            : {}
+        ),
         extensions: [
           manuscriptTextStatisticsExtension,
           history(),
           keymap.of(historyKeymap),
           EditorView.lineWrapping,
           createManuscriptInputRules(inputProfile),
+          readOnlyCompartmentRef.current.of([
+            EditorState.readOnly.of(readOnly),
+            EditorView.editable.of(!readOnly),
+          ]),
           EditorView.contentAttributes.of({
             "aria-label": accessibleName,
             "aria-multiline": "true",
@@ -133,9 +198,13 @@ export const ManuscriptEditor = forwardRef<
                   document,
                   extractManuscriptTransaction(transaction),
                   readManuscriptTextStatistics(transaction.state),
+                  update.view.composing,
                 );
               }
             }
+            publishSelectionEvidence(
+              update.state,
+            );
           }),
         ],
       }),
@@ -149,7 +218,34 @@ export const ManuscriptEditor = forwardRef<
       }
       if (currentDocument.documentId === document.documentId) {
         pendingDocumentRef.current = null;
-        stateRegistryRef.current.restore(document, createDocumentState);
+        const nextSnapshot =
+          stateRegistryRef.current.restoreConfirmedSource(
+            document,
+            createDocumentState,
+          );
+        const sourceChanged =
+          currentDocument.workId !==
+            document.workId ||
+          currentDocument.documentRevisionId !==
+            document.documentRevisionId;
+        activeDocumentRef.current = document;
+        if (sourceChanged) {
+          view.setState(nextSnapshot.state);
+          view.dispatch({
+            effects:
+              readOnlyCompartmentRef.current.reconfigure([
+                EditorState.readOnly.of(readOnly),
+                EditorView.editable.of(!readOnly),
+              ]),
+          });
+          notifyDocumentActivated(
+            document,
+            summarizeState(view.state),
+          );
+          publishSelectionEvidence(
+            view.state,
+          );
+        }
         return;
       }
       if (view.composing) {
@@ -161,16 +257,25 @@ export const ManuscriptEditor = forwardRef<
         state: view.state,
         scrollSnapshot: view.scrollSnapshot(),
       });
-      const nextSnapshot = stateRegistryRef.current.restore(
-        document,
-        createDocumentState,
-      );
+      const nextSnapshot =
+        stateRegistryRef.current.restoreConfirmedSource(
+          document,
+          createDocumentState,
+        );
       activeDocumentRef.current = document;
       view.setState(nextSnapshot.state);
+      view.dispatch({
+        effects:
+          readOnlyCompartmentRef.current.reconfigure([
+            EditorState.readOnly.of(readOnly),
+            EditorView.editable.of(!readOnly),
+          ]),
+      });
       if (nextSnapshot.scrollSnapshot !== null) {
         view.dispatch({ effects: nextSnapshot.scrollSnapshot });
       }
       notifyDocumentActivated(document, summarizeState(view.state));
+      publishSelectionEvidence(view.state);
     },
   );
 
@@ -193,14 +298,28 @@ export const ManuscriptEditor = forwardRef<
     viewRef.current = view;
     activeDocumentRef.current = initialDocument;
     notifyDocumentActivated(initialDocument, summarizeState(view.state));
+    publishSelectionEvidence(view.state);
 
     const handleCompositionEnd = () => {
+      const compositionDocument = activeDocumentRef.current;
       const pendingDocument = pendingDocumentRef.current;
-      if (pendingDocument !== null) {
-        pendingDocumentRef.current = null;
-        queueMicrotask(() => activateDocument(pendingDocument));
+      queueMicrotask(() => {
+        if (compositionDocument !== null) {
+          notifyCompositionEnd(compositionDocument);
+        }
+        if (pendingDocument !== null) {
+          pendingDocumentRef.current = null;
+          activateDocument(pendingDocument);
+        }
+      });
+    };
+    const handleBlur = () => {
+      const document = activeDocumentRef.current;
+      if (document !== null) {
+        notifyBlur(document);
       }
     };
+    view.contentDOM.addEventListener("blur", handleBlur);
     view.contentDOM.addEventListener("compositionend", handleCompositionEnd);
 
     return () => {
@@ -211,6 +330,7 @@ export const ManuscriptEditor = forwardRef<
           scrollSnapshot: view.scrollSnapshot(),
         });
       }
+      view.contentDOM.removeEventListener("blur", handleBlur);
       view.contentDOM.removeEventListener(
         "compositionend",
         handleCompositionEnd,
@@ -224,6 +344,54 @@ export const ManuscriptEditor = forwardRef<
   useEffect(() => {
     activateDocument(activeDocument);
   }, [activeDocument]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    const currentDocument =
+      activeDocumentRef.current;
+    if (
+      view === null ||
+      currentDocument === null ||
+      resumeLocation === null ||
+      currentDocument.workId !==
+        resumeLocation.workId ||
+      currentDocument.documentId !==
+        resumeLocation.documentId ||
+      currentDocument.documentRevisionId !==
+        resumeLocation.targetRevisionId
+    ) {
+      return;
+    }
+    const current = view.state.selection.main;
+    if (
+      current.anchor !==
+        resumeLocation.selection.anchor ||
+      current.head !==
+        resumeLocation.selection.head
+    ) {
+      view.dispatch({
+        selection: EditorSelection.single(
+          resumeLocation.selection.anchor,
+          resumeLocation.selection.head,
+        ),
+      });
+    }
+    publishSelectionEvidence(view.state);
+  }, [resumeLocation]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (view === null) {
+      return;
+    }
+    view.dispatch({
+      effects:
+        readOnlyCompartmentRef.current.reconfigure([
+          EditorState.readOnly.of(readOnly),
+          EditorView.editable.of(!readOnly),
+        ]),
+    });
+  }, [readOnly]);
 
   return <div className="manuscript-editor" ref={hostRef} />;
 });

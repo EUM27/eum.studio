@@ -9,10 +9,19 @@ import {
 
 import type { RuntimeInfo } from "../application/contracts/studio-bridge";
 import type {
+  ManuscriptResumeCheckpointProjection,
+} from "../application/checkpoints/manuscript-resume-checkpoint-projection";
+import type {
   ManuscriptDocumentProfile,
   ManuscriptDocumentSource,
 } from "../application/editor/manuscript-document-profile";
 import type { ManuscriptInputProfile } from "../application/editor/manuscript-input-profile";
+import type { ManuscriptPersistenceProfile } from "../application/persistence/manuscript-persistence-profile";
+import {
+  createApplyStartupRecoveryCommand,
+  type StartupRecoveryProjection,
+} from "../application/persistence/startup-recovery-contract";
+import { entityId } from "../domain/writing";
 import {
   searchManuscriptsForWork,
   type ManuscriptSearchResult,
@@ -25,6 +34,10 @@ import {
 import type { ManuscriptTransaction } from "./editor/manuscript-transaction";
 import type { ManuscriptTextStatistics } from "./editor/manuscript-text-statistics";
 import { ManuscriptTelemetryStore } from "./editor/manuscript-telemetry-store";
+import {
+  ManuscriptDurableSaveQueue,
+  type ManuscriptSaveState,
+} from "./persistence/manuscript-durable-save-queue";
 import {
   createWorkspaceRailState,
   projectWorkspaceRails,
@@ -41,6 +54,10 @@ type RuntimeState =
       info: RuntimeInfo;
       inputProfile: ManuscriptInputProfile;
       documentProfile: ManuscriptDocumentProfile;
+      persistenceProfile: ManuscriptPersistenceProfile | null;
+      startupRecovery: StartupRecoveryProjection;
+      resumeCheckpoint:
+        ManuscriptResumeCheckpointProjection;
       activeDocumentId: ManuscriptDocumentProfile["initialDocumentId"];
     }
   | { status: "error" };
@@ -49,6 +66,53 @@ type ManuscriptSearchState = {
   readonly sequence: number;
   readonly result: ManuscriptSearchResult;
 };
+
+type RuntimeProjection = {
+  readonly info: RuntimeInfo;
+  readonly inputProfile: ManuscriptInputProfile;
+  readonly documentProfile: ManuscriptDocumentProfile;
+  readonly persistenceProfile:
+    ManuscriptPersistenceProfile | null;
+  readonly startupRecovery:
+    StartupRecoveryProjection;
+  readonly resumeCheckpoint:
+    ManuscriptResumeCheckpointProjection;
+};
+
+async function queryRuntimeProjection(): Promise<RuntimeProjection> {
+  const [
+    info,
+    inputProfile,
+    documentProfile,
+    persistenceProfile,
+    startupRecovery,
+    resumeCheckpoint,
+  ] = await Promise.all([
+    window.eumStudio.system.getRuntimeInfo(),
+    window.eumStudio.editor.getManuscriptInputProfile(),
+    window.eumStudio.editor.getManuscriptDocumentProfile(),
+    window.eumStudio.editor.getManuscriptPersistenceProfile(),
+    window.eumStudio.editor.getManuscriptStartupRecovery(),
+    window.eumStudio.editor.getManuscriptResumeCheckpoint(),
+  ]);
+  return Object.freeze({
+    info,
+    inputProfile,
+    documentProfile,
+    persistenceProfile,
+    startupRecovery,
+    resumeCheckpoint,
+  });
+}
+
+const SAVE_STATE_LABELS: Readonly<
+  Record<ManuscriptSaveState, string>
+> = Object.freeze({
+  editing: "편집 중",
+  saving: "저장 중",
+  saved: "저장됨",
+  failed: "실패",
+});
 
 function ManuscriptCount(input: {
   readonly telemetryStore: ManuscriptTelemetryStore;
@@ -109,10 +173,13 @@ function ManuscriptReviewSummary(input: {
 
 export function App() {
   const documentRailId = useId();
+  const recoveryHeadingId = useId();
   const reviewRailId = useId();
   const workspaceBodyRef = useRef<HTMLDivElement>(null);
   const manuscriptEditorRef =
     useRef<ManuscriptEditorHandle>(null);
+  const durableSaveQueueRef =
+    useRef<ManuscriptDurableSaveQueue | null>(null);
   const [telemetryStore] = useState(
     () => new ManuscriptTelemetryStore(),
   );
@@ -132,12 +199,18 @@ export function App() {
     useState("");
   const [manuscriptSearch, setManuscriptSearch] =
     useState<ManuscriptSearchState | null>(null);
+  const [saveStates, setSaveStates] = useState<
+    Readonly<Record<string, ManuscriptSaveState>>
+  >({});
+  const [recoveryApplyState, setRecoveryApplyState] =
+    useState<"idle" | "applying" | "failed">("idle");
 
   const handleManuscriptTransaction = useCallback(
     (
       _document: ManuscriptDocumentSource,
       transaction: ManuscriptTransaction,
       statistics: ManuscriptTextStatistics,
+      composing: boolean,
     ) => {
       telemetryStore.publish(
         statistics,
@@ -150,8 +223,35 @@ export function App() {
         manuscriptSearchRef.current = null;
         setManuscriptSearch(null);
       }
+      if (transaction.changes.length > 0) {
+        const pending = durableSaveQueueRef.current?.record(
+          _document.documentId,
+          transaction,
+          { composing },
+        );
+        void pending?.catch(() => undefined);
+      }
     },
     [telemetryStore],
+  );
+  const handleCompositionEnd = useCallback(
+    (document: ManuscriptDocumentSource) => {
+      const pending =
+        durableSaveQueueRef.current?.compositionEnd(
+          document.documentId,
+        );
+      void pending?.catch(() => undefined);
+    },
+    [],
+  );
+  const handleEditorBlur = useCallback(
+    (document: ManuscriptDocumentSource) => {
+      const pending = durableSaveQueueRef.current?.flush(
+        document.documentId,
+      );
+      void pending?.catch(() => undefined);
+    },
+    [],
   );
   const handleDocumentActivated = useCallback(
     (
@@ -166,23 +266,209 @@ export function App() {
     [telemetryStore],
   );
 
+  const installRuntimeProjection = useCallback(
+    (
+      projection: RuntimeProjection,
+      preferredDocumentId:
+        ManuscriptDocumentProfile["initialDocumentId"] | null,
+    ) => {
+      const {
+        info,
+        inputProfile,
+        documentProfile,
+        persistenceProfile,
+        startupRecovery,
+        resumeCheckpoint,
+      } = projection;
+      if (
+        startupRecovery.status !== "clean" &&
+        persistenceProfile !== null
+      ) {
+        throw new Error(
+          "Recovery-blocked runtime exposed a persistence projection",
+        );
+      }
+      const resumeDocument =
+        resumeCheckpoint.status ===
+          "resolved" ||
+        resumeCheckpoint.status ===
+          "needsReview" ||
+        resumeCheckpoint.status ===
+          "broken"
+          ? documentProfile.documents.find(
+              (document) =>
+                document.documentId ===
+                  resumeCheckpoint.documentId &&
+                document.workId ===
+                  resumeCheckpoint.workId &&
+                document.documentRevisionId ===
+                  resumeCheckpoint.targetRevisionId,
+            )
+          : undefined;
+      if (
+        (resumeCheckpoint.status ===
+          "resolved" ||
+          resumeCheckpoint.status ===
+            "needsReview" ||
+          resumeCheckpoint.status ===
+            "broken") &&
+        resumeDocument === undefined
+      ) {
+        throw new Error(
+          "Resume checkpoint does not match the confirmed document source",
+        );
+      }
+      if (
+        resumeCheckpoint.status ===
+          "resolved" &&
+        resumeDocument !== undefined &&
+        (resumeCheckpoint.selection.anchor >
+          resumeDocument.initialText.length ||
+          resumeCheckpoint.selection.head >
+            resumeDocument.initialText.length)
+      ) {
+        throw new Error(
+          "Resume checkpoint selection is outside the confirmed document source",
+        );
+      }
+      if (persistenceProfile === null) {
+        durableSaveQueueRef.current = null;
+        setSaveStates({});
+      } else {
+        const sequencesByDocument = new Map(
+          persistenceProfile.documentSequences.map(
+            (sequence) => [
+              sequence.documentId,
+              sequence.nextSequence,
+            ],
+          ),
+        );
+        if (
+          sequencesByDocument.size !==
+          documentProfile.documents.length
+        ) {
+          throw new Error(
+            "Persistence projection does not match the document profile",
+          );
+        }
+        const queueDocuments =
+          documentProfile.documents.map((document) => {
+            if (document.documentRevisionId === null) {
+              throw new Error(
+                `Persistence document has no durable base revision: ${document.documentId}`,
+              );
+            }
+            const nextSequence =
+              sequencesByDocument.get(
+                document.documentId,
+              );
+            if (nextSequence === undefined) {
+              throw new Error(
+                `Persistence projection has no sequence for document: ${document.documentId}`,
+              );
+            }
+            return {
+              workId: document.workId,
+              documentId: document.documentId,
+              baseRevisionId:
+                document.documentRevisionId,
+              nextSequence,
+            };
+          });
+        durableSaveQueueRef.current =
+          new ManuscriptDurableSaveQueue({
+            documents: queueDocuments,
+            policy: {
+              maxTransactionsPerBatch:
+                persistenceProfile.batching
+                  .maxTransactionsPerBatch,
+              maxDelayMs:
+                persistenceProfile.batching
+                  .maxDelayMs,
+            },
+            saveChangeBatch: (batch) =>
+              window.eumStudio.editor.saveChangeBatch(
+                batch,
+              ),
+            createBatchId: () =>
+              entityId<"ChangeBatch">(
+                crypto.randomUUID(),
+              ),
+            now: () => new Date().toISOString(),
+            scheduler: {
+              schedule: (delayMs, callback) =>
+                window.setTimeout(
+                  callback,
+                  delayMs,
+                ),
+              cancel: (handle) => {
+                if (typeof handle === "number") {
+                  window.clearTimeout(handle);
+                }
+              },
+            },
+            onStateChange: (
+              documentId,
+              state,
+            ) => {
+              setSaveStates((current) =>
+                Object.freeze({
+                  ...current,
+                  [documentId]: state,
+                }),
+              );
+            },
+          });
+        setSaveStates(
+          Object.freeze(
+            Object.fromEntries(
+              queueDocuments.map((document) => [
+                document.documentId,
+                "saved" as const,
+              ]),
+            ),
+          ),
+        );
+      }
+      const activeDocumentId =
+        preferredDocumentId !== null &&
+        documentProfile.documents.some(
+          (document) =>
+            document.documentId ===
+            preferredDocumentId,
+        )
+          ? preferredDocumentId
+          : resumeDocument?.documentId ??
+            documentProfile.initialDocumentId;
+      setRuntime({
+        status: "ready",
+        info,
+        inputProfile,
+        documentProfile,
+        persistenceProfile,
+        startupRecovery,
+        resumeCheckpoint,
+        activeDocumentId,
+      });
+    },
+    [],
+  );
+
   useEffect(() => {
     let disposed = false;
 
-    Promise.all([
-      window.eumStudio.system.getRuntimeInfo(),
-      window.eumStudio.editor.getManuscriptInputProfile(),
-      window.eumStudio.editor.getManuscriptDocumentProfile(),
-    ]).then(
-      ([info, inputProfile, documentProfile]) => {
+    void queryRuntimeProjection().then(
+      (projection) => {
         if (!disposed) {
-          setRuntime({
-            status: "ready",
-            info,
-            inputProfile,
-            documentProfile,
-            activeDocumentId: documentProfile.initialDocumentId,
-          });
+          try {
+            installRuntimeProjection(
+              projection,
+              null,
+            );
+          } catch {
+            durableSaveQueueRef.current = null;
+            setRuntime({ status: "error" });
+          }
         }
       },
       () => {
@@ -194,8 +480,58 @@ export function App() {
 
     return () => {
       disposed = true;
+      durableSaveQueueRef.current = null;
     };
-  }, []);
+  }, [installRuntimeProjection]);
+
+  useEffect(
+    () =>
+      window.eumStudio.editor.onManuscriptCloseRequest(
+        (request) => {
+          const queue =
+            durableSaveQueueRef.current;
+          const documents =
+            runtime.status === "ready"
+              ? runtime.documentProfile
+                  .documents
+              : [];
+          const flush =
+            queue === null
+              ? Promise.resolve()
+              : Promise.all(
+                  documents.map(
+                    (document) =>
+                      queue.flushForClose(
+                        document.documentId,
+                      ),
+                  ),
+                ).then(() => undefined);
+          void flush
+            .then(
+              () =>
+                window.eumStudio.editor.completeManuscriptCloseRequest(
+                  {
+                    schemaVersion: 1,
+                    requestId:
+                      request.requestId,
+                    status: "saved",
+                  },
+                ),
+              () =>
+                window.eumStudio.editor.completeManuscriptCloseRequest(
+                  {
+                    schemaVersion: 1,
+                    requestId:
+                      request.requestId,
+                    status: "failed",
+                  },
+                ),
+            )
+            .catch(() => undefined);
+        },
+      ),
+    [runtime],
+  );
 
   const activeDocument =
     runtime.status === "ready"
@@ -207,6 +543,49 @@ export function App() {
     activeDocument === undefined
       ? null
       : projectWorkspaceRails(railState, activeDocument.workId);
+  const activeSaveState =
+    runtime.status === "ready" &&
+    runtime.persistenceProfile !== null &&
+    activeDocument !== undefined
+      ? (saveStates[activeDocument.documentId] ?? null)
+      : null;
+  const handleApplyStartupRecovery =
+    useCallback(async () => {
+      if (
+        runtime.status !== "ready" ||
+        runtime.startupRecovery.status !==
+          "recovery-pending" ||
+        !runtime.startupRecovery.applyAvailable ||
+        recoveryApplyState === "applying"
+      ) {
+        return;
+      }
+      const activeDocumentId =
+        runtime.activeDocumentId;
+      setRecoveryApplyState("applying");
+      try {
+        const command =
+          createApplyStartupRecoveryCommand(
+            runtime.startupRecovery.candidate,
+          );
+        await window.eumStudio.editor.applyManuscriptStartupRecovery(
+          command,
+        );
+        const projection =
+          await queryRuntimeProjection();
+        installRuntimeProjection(
+          projection,
+          activeDocumentId,
+        );
+        setRecoveryApplyState("idle");
+      } catch {
+        setRecoveryApplyState("failed");
+      }
+    }, [
+      installRuntimeProjection,
+      recoveryApplyState,
+      runtime,
+    ]);
   const toggleRail = useCallback(
     (rail: WorkspaceRail) => {
       if (activeDocument === undefined) {
@@ -233,6 +612,12 @@ export function App() {
         (document) =>
           document.documentId === runtime.activeDocumentId,
       );
+      if (currentDocument !== undefined) {
+        const pending = durableSaveQueueRef.current?.flush(
+          currentDocument.documentId,
+        );
+        void pending?.catch(() => undefined);
+      }
       if (currentDocument?.workId !== selectedDocument.workId) {
         setManuscriptSearchQuery("");
         manuscriptSearchRef.current = null;
@@ -313,7 +698,13 @@ export function App() {
       </header>
       <section
         aria-labelledby="manuscript-heading"
-        className="writing-workspace"
+        className={
+          runtime.status === "ready" &&
+          runtime.startupRecovery.status !==
+            "clean"
+            ? "writing-workspace writing-workspace-recovery"
+            : "writing-workspace"
+        }
       >
         <header className="manuscript-header">
           <div>
@@ -324,6 +715,101 @@ export function App() {
             <ManuscriptCount telemetryStore={telemetryStore} />
           </div>
         </header>
+        {runtime.status === "ready" &&
+          runtime.startupRecovery.status !==
+            "clean" && (
+            <section
+              aria-labelledby={recoveryHeadingId}
+              className="startup-recovery"
+              data-recovery-status={
+                runtime.startupRecovery.status
+              }
+            >
+              <header>
+                <h3 id={recoveryHeadingId}>
+                  {runtime.startupRecovery.status ===
+                  "recovery-pending"
+                    ? "복구 미리보기"
+                    : "복구 확인 필요"}
+                </h3>
+              </header>
+              {runtime.startupRecovery.status ===
+                "recovery-pending" && (
+                <div className="startup-recovery-documents">
+                  {runtime.startupRecovery.candidate.affectedDocuments.map(
+                    (document) => {
+                      const source =
+                        runtime.documentProfile.documents.find(
+                          (candidate) =>
+                            candidate.documentId ===
+                            document.documentId,
+                        );
+                      return (
+                        <label
+                          key={document.documentId}
+                        >
+                          <span>
+                            {source?.label}
+                            <code>
+                              {document.documentId}
+                            </code>
+                          </span>
+                          <textarea
+                            data-testid="recovery-preview"
+                            readOnly
+                            value={
+                              document.recoveredText
+                            }
+                          />
+                        </label>
+                      );
+                    },
+                  )}
+                </div>
+              )}
+              {runtime.startupRecovery.issues.length >
+                0 && (
+                <ul className="startup-recovery-issues">
+                  {runtime.startupRecovery.issues.map(
+                    (issue, index) => (
+                      <li
+                        key={`${issue.source}:${index}`}
+                      >
+                        <code>{issue.source}</code>
+                        <span>{issue.reason}</span>
+                      </li>
+                    ),
+                  )}
+                </ul>
+              )}
+              {runtime.startupRecovery.status ===
+                "recovery-pending" &&
+                runtime.startupRecovery
+                  .applyAvailable && (
+                  <button
+                    disabled={
+                      recoveryApplyState ===
+                      "applying"
+                    }
+                    onClick={() => {
+                      void handleApplyStartupRecovery();
+                    }}
+                    type="button"
+                  >
+                    {recoveryApplyState ===
+                    "applying"
+                      ? "복구 적용 중"
+                      : "복구 적용"}
+                  </button>
+                )}
+              {recoveryApplyState ===
+                "failed" && (
+                <p role="alert">
+                  복구 적용 실패
+                </p>
+              )}
+            </section>
+          )}
         <div className="workspace-body" ref={workspaceBodyRef}>
           {runtime.status === "ready" &&
             activeDocument !== undefined &&
@@ -452,12 +938,25 @@ export function App() {
             data-active-document-id={activeDocument?.documentId}
           >
             {runtime.status === "ready" && activeDocument !== undefined && (
-              <ManuscriptEditor
+                <ManuscriptEditor
                 accessibleName="원고"
                 activeDocument={activeDocument}
                 inputProfile={runtime.inputProfile}
+                onBlur={handleEditorBlur}
+                onCompositionEnd={handleCompositionEnd}
                 onDocumentActivated={handleDocumentActivated}
                 onTransaction={handleManuscriptTransaction}
+                  readOnly={
+                  runtime.startupRecovery.status !==
+                  "clean"
+                  }
+                  resumeLocation={
+                    runtime.resumeCheckpoint
+                      .status ===
+                    "resolved"
+                      ? runtime.resumeCheckpoint
+                      : null
+                  }
                 ref={manuscriptEditorRef}
               />
             )}
@@ -521,7 +1020,25 @@ export function App() {
               </span>
             </>
           )}
-          <span data-testid="save-state">영속 저장 미연결</span>
+          <span
+            aria-live="polite"
+            data-save-state={activeSaveState ?? undefined}
+            data-testid="save-state"
+          >
+            {runtime.status === "ready" &&
+            runtime.startupRecovery.status ===
+              "recovery-pending"
+              ? "복구 적용 대기"
+              : runtime.status === "ready" &&
+                  runtime.startupRecovery.status ===
+                    "read-only-error"
+                ? "복구 확인 필요"
+                : activeSaveState === null
+                  ? "영속 저장 미연결"
+                  : SAVE_STATE_LABELS[
+                      activeSaveState
+                    ]}
+          </span>
           <span data-testid="focus-summary">집중 기록 미연결</span>
           <span>
             {runtime.status === "loading" && "런타임 확인 중"}

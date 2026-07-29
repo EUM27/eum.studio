@@ -132,4 +132,58 @@ describe("manuscript document state registry", () => {
       ),
     ).toThrow(/ownership/);
   });
+
+  it("replaces a stored EditorState only through an explicit confirmed revision source", () => {
+    const document = createDocument();
+    const registry = new ManuscriptDocumentStateRegistry();
+    const editedState = createState(document).update({
+      changes: {
+        from: document.initialText.length,
+        insert: randomUUID(),
+      },
+    }).state;
+    registry.save(document, {
+      state: editedState,
+      scrollSnapshot: null,
+    });
+    const confirmedDocument = createDocument({
+      workId: document.workId,
+      documentId: document.documentId,
+    });
+
+    expect(() =>
+      registry.restore(
+        confirmedDocument,
+        createState,
+      ),
+    ).toThrow(/revision/);
+
+    const replacement =
+      registry.restoreConfirmedSource(
+        confirmedDocument,
+        createState,
+      );
+
+    expect(replacement.state).not.toBe(
+      editedState,
+    );
+    expect(
+      replacement.state.doc.toString(),
+    ).toBe(confirmedDocument.initialText);
+    expect(undoDepth(replacement.state)).toBe(0);
+    expect(
+      registry.restore(
+        confirmedDocument,
+        createState,
+      ).state,
+    ).toBe(replacement.state);
+    expect(() =>
+      registry.restoreConfirmedSource(
+        createDocument({
+          documentId: document.documentId,
+        }),
+        createState,
+      ),
+    ).toThrow(/ownership/);
+  });
 });

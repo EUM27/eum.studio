@@ -27,6 +27,17 @@ function assertSameSource(
   }
 }
 
+function assertSameWork(
+  stored: StoredDocumentState,
+  document: ManuscriptDocumentSource,
+): void {
+  if (stored.workId !== document.workId) {
+    throw new Error(
+      `Document ownership conflict for ${document.documentId}`,
+    );
+  }
+}
+
 function freezeSnapshot(
   snapshot: ManuscriptDocumentViewSnapshot,
 ): ManuscriptDocumentViewSnapshot {
@@ -83,6 +94,31 @@ export class ManuscriptDocumentStateRegistry {
       state: createState(document),
       scrollSnapshot: null,
     });
+    this.save(document, snapshot);
+    return snapshot;
+  }
+
+  restoreConfirmedSource(
+    document: ManuscriptDocumentSource,
+    createState: (document: ManuscriptDocumentSource) => EditorState,
+  ): ManuscriptDocumentViewSnapshot {
+    const stored = this.#states.get(document.documentId);
+    if (stored === undefined) {
+      return this.restore(document, createState);
+    }
+    assertSameWork(stored, document);
+    if (
+      stored.documentRevisionId ===
+      document.documentRevisionId
+    ) {
+      return freezeSnapshot(stored);
+    }
+
+    const snapshot = freezeSnapshot({
+      state: createState(document),
+      scrollSnapshot: null,
+    });
+    this.#states.delete(document.documentId);
     this.save(document, snapshot);
     return snapshot;
   }

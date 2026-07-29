@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "electronRuntimeDirectoryPath": "node_modules/electron/dist",
+  "applicationManifestPath": "package.json",
+  "applicationManifestTargetRelativePath": "package.json",
+  "mainBundleDirectoryPath": "dist-electron",
+  "mainBundleTargetRelativePath": "dist-electron",
+  "rendererBundleDirectoryPath": "dist-renderer",
+  "rendererBundleTargetRelativePath": "dist-renderer",
+  "applicationResourcesRelativePath": "resources/app",
+  "electronExecutableRelativePath": "electron.exe",
+  "batching": {
+    "schemaVersion": 1,
+    "maxTransactionsPerBatch": 1,
+    "maxDelayMs": 0
+  }
+}

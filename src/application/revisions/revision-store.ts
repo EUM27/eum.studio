@@ -26,8 +26,7 @@ export type AppendRevisionInput = {
   readonly durableAt: Instant;
 };
 
-export type RevisionStore = {
-  append(input: AppendRevisionInput): Promise<DocumentRevision>;
+export type RevisionReader = {
   getCurrentRevision(
     documentId: EntityId<"Document">,
   ): Promise<DocumentRevision | null>;
@@ -37,4 +36,8 @@ export type RevisionStore = {
   materialize(
     revisionId: EntityId<"DocumentRevision">,
   ): Promise<string>;
+};
+
+export type RevisionStore = RevisionReader & {
+  append(input: AppendRevisionInput): Promise<DocumentRevision>;
 };
