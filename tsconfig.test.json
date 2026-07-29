@@ -16,6 +16,10 @@
     "vitest.performance.config.ts",
     "vitest.crash.config.ts",
     "vitest.installed-package.config.ts",
+    "vitest.poc-3-driver.config.ts",
+    "vitest.poc-3-installed-package.config.ts",
+    "vitest.poc-3-performance.config.ts",
+    "vitest.poc-3-process.config.ts",
     "playwright.config.ts"
   ]
 }

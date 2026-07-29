@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "package": {
+    "schemaVersion": 1,
+    "electronRuntimeDirectoryPath": "node_modules/electron/dist",
+    "applicationManifestPath": "package.json",
+    "applicationManifestTargetRelativePath": "package.json",
+    "mainBundleDirectoryPath": "dist-electron",
+    "mainBundleTargetRelativePath": "dist-electron",
+    "rendererBundleDirectoryPath": "dist-renderer",
+    "rendererBundleTargetRelativePath": "dist-renderer",
+    "applicationResourcesRelativePath": "resources/app",
+    "electronExecutableRelativePath": "electron.exe",
+    "batching": {
+      "schemaVersion": 1,
+      "maxTransactionsPerBatch": 1,
+      "maxDelayMs": 0
+    }
+  },
+  "compiledLedgerTargetRelativePath": "platform/storage/node-sqlite-ledger.js",
+  "compiledProbeTargetRelativePath": "desktop/poc-3-installed-package-probe.js",
+  "compiledRevisionRaceProbeTargetRelativePath": "desktop/poc-3-revision-race-worker.js",
+  "probeFixture": {
+    "targetSchemaVersion": 1,
+    "requestedSettings": {
+      "journalMode": {
+        "applySql": "PRAGMA journal_mode = WAL",
+        "verifySql": "PRAGMA journal_mode",
+        "expectedRows": [
+          {
+            "journal_mode": "wal"
+          }
+        ]
+      },
+      "synchronous": {
+        "applySql": "PRAGMA synchronous = FULL",
+        "verifySql": "PRAGMA synchronous",
+        "expectedRows": [
+          {
+            "synchronous": 2
+          }
+        ]
+      },
+      "foreignKeys": {
+        "applySql": "PRAGMA foreign_keys = ON",
+        "verifySql": "PRAGMA foreign_keys",
+        "expectedRows": [
+          {
+            "foreign_keys": 1
+          }
+        ]
+      }
+    },
+    "encodedBlobByteLength": 97,
+    "publishedShardWidths": [
+      2,
+      2
+    ],
+    "layoutSegmentDepth": 2,
+    "backupSqlite": {
+      "sourceDatabaseName": "main",
+      "targetDatabaseName": "main",
+      "pagesPerStep": 16,
+      "standaloneSnapshotJournalMode": "DELETE"
+    },
+    "anchor": {
+      "status": "resolved",
+      "resolutionMethod": "created",
+      "matchedEvidence": [
+        "origin-revision"
+      ]
+    },
+    "restorePreflightAuthorized": true
+  }
+}

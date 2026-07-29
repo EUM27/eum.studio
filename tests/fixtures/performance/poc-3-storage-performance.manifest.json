@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "fixtureUse": {
+    "measurementInputOnly": true,
+    "productLimit": false,
+    "userDefault": false
+  },
+  "measurement": {
+    "iterationCount": 2,
+    "revisionAppendCountPerIteration": 3,
+    "contentLengthCodeUnits": 4096
+  },
+  "layout": {
+    "pathSegmentCount": 2,
+    "shardWidths": [
+      2,
+      3
+    ]
+  },
+  "checksum": {
+    "algorithm": "sha256"
+  },
+  "sqlite": {
+    "requestedSettings": {
+      "journalMode": {
+        "applySql": "PRAGMA journal_mode = WAL",
+        "verifySql": "PRAGMA journal_mode",
+        "expectedRows": [
+          {
+            "journal_mode": "wal"
+          }
+        ]
+      },
+      "synchronous": {
+        "applySql": "PRAGMA synchronous = FULL",
+        "verifySql": "PRAGMA synchronous",
+        "expectedRows": [
+          {
+            "synchronous": 2
+          }
+        ]
+      },
+      "foreignKeys": {
+        "applySql": "PRAGMA foreign_keys = ON",
+        "verifySql": "PRAGMA foreign_keys",
+        "expectedRows": [
+          {
+            "foreign_keys": 1
+          }
+        ]
+      }
+    },
+    "targetSchemaVersion": 1,
+    "backupPagesPerStep": 8,
+    "standaloneSnapshotJournalMode": "DELETE"
+  },
+  "checkpoint": {
+    "anchorStatus": "resolved",
+    "resolutionMethod": "created",
+    "matchedEvidence": [
+      "origin-revision"
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "layout": {
+    "publishedDirectorySegmentCount": 2,
+    "temporaryDirectorySegmentCount": 2,
+    "shardWidths": [
+      2,
+      3
+    ]
+  },
+  "counts": {
+    "concurrentWriteCount": 2,
+    "partialWriteDivisor": 2
+  },
+  "materials": {
+    "checksumAlgorithms": [
+      "sha256"
+    ],
+    "byteText": [
+      "한",
+      "A",
+      "0"
+    ]
+  },
+  "faultStages": [
+    "partial-write",
+    "sync",
+    "publish"
+  ]
+}

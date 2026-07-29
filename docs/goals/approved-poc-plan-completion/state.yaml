@@ -1,0 +1,845 @@
+version: 2
+
+goal:
+  title: "승인 POC 실행 계획 전체 완료"
+  slug: "approved-poc-plan-completion"
+  kind: existing_plan
+  tranche: "POC-3, POC-M, POC-4를 순서대로 successive safe verified slices로 완료하고 각 Gate를 커밋·푸시한다."
+  status: active
+  oracle:
+    signal: "각 Gate의 승인 통과 조건과 최신 실행 artifact가 일치하고 최종 audit가 전체 POC 완료를 판정한다."
+    cadence: "각 Worker receipt, Gate audit, 커밋·푸시와 최종 전체 audit에서 확인한다."
+    final_proof: "POC-3 저장·blob·backup, POC-M 봉인 source 이주·멱등성·복원, POC-4 OAuth·secret 경계의 최신 정적·단위·통합·desktop·installed-package·실패 주입 증거와 Gate별 push receipt"
+  intake:
+    original_request: "POC-2만 말고 전부 끝까지"
+    interpreted_outcome: "승인 POC 계획의 남은 모든 Gate를 구현·검증하고 각 단계별 커밋·푸시한 뒤 전체 완료를 증명한다."
+    input_shape: existing_plan
+    audience: "이음 스튜디오 사용자"
+    authority: approved
+    proof_type: artifact
+    completion_proof: "POC-3·POC-M·POC-4 통과 조건을 최신 증거로 충족하고 최종 audit가 full_outcome_complete true를 기록한다."
+    likely_misfire: "한 POC adapter를 제품 결정으로 과대 해석하거나 한 Gate만 완료하고 전체 목표를 종료한다."
+    blind_spots_considered:
+      - "Electron ABI와 native addon packaging"
+      - "backup·restore 중 종료와 blob 변조"
+      - "레거시 snapshot 봉인과 source checksum"
+      - "미매핑·고아 데이터 raw preservation"
+      - "이주 멱등성·취소·target 복원"
+      - "OAuth state·PKCE·callback ownership"
+      - "renderer·로그·localStorage secret 비노출"
+      - "실제 제공자 자격 증명 부재"
+    existing_plan_facts:
+      - "POC-3은 driver bake-off 뒤 SQLite·불변 blob·backup을 검증한다."
+      - "POC-M은 POC-2와 POC-3 통과 뒤 봉인한 레거시 source snapshot에서 rehearsal한다."
+      - "POC-4는 fake provider 시나리오와 비밀 저장·callback 경계를 검증한다."
+      - "connector UI와 음악 SDK POC는 첫 출시 핵심 폐회로를 차단하지 않는다."
+      - "각 Gate 완료 뒤 커밋하고 origin/main에 푸시한다."
+
+rules:
+  pm_owns_state: true
+  one_active_task: true
+  max_write_workers: 1
+  no_implementation_without_worker_or_pm_task: true
+  no_completion_without_judge_or_pm_audit: true
+  planning_is_not_completion: true
+  queued_required_worker_blocks_completion: true
+  continuous_until_full_outcome: true
+  missing_input_or_credentials_do_not_stop_goal: true
+  preserve_and_validate_existing_plan: true
+  intake_misfire_must_be_audited: true
+
+agents:
+  scout: installed
+  worker: installed
+  judge: bundled_not_installed
+
+visual_board:
+  selected: none
+  local:
+    status: not_requested
+    url: null
+    command: "npx goalbuddy board docs/goals/approved-poc-plan-completion"
+  github_projects:
+    status: not_requested
+    url: null
+    command: "npx goalbuddy extend github-projects"
+    missing: []
+
+active_task: T006
+
+tasks:
+  - id: T001
+    type: pm
+    assignee: PM
+    status: done
+    reasoning_hint: high
+    objective: "승인 원문 checksum·clean Git 기준·POC-3 요구와 현재 아키텍처를 검증해 첫 driver bake-off Worker 범위를 확정한다."
+    inputs:
+      - "AGENTS.md"
+      - "README.md"
+      - "plan.md"
+      - "docs/design-baseline.md"
+      - "승인 POC 실행 계획의 POC-3 절"
+      - "현재 Git 상태"
+    constraints:
+      - "읽기 전용 조사와 goal 제어 파일 갱신만 허용한다."
+      - "driver나 dependency를 아직 확정하지 않는다."
+      - "D:\\eum.editor를 읽거나 쓰지 않는다."
+    expected_output:
+      - "checksum·Git 판정"
+      - "POC-3 통과 조건 매핑"
+      - "bake-off 후보와 공식 지원 조사 task"
+      - "첫 exact Worker allowed_files·verify·stop_if"
+    receipt:
+      result: done
+      outcome: pass
+      checksum_and_git:
+        design_manifest: "11/11 SHA-256 match on 2026-07-30"
+        head: "02851a9666aa8b409a9fe6c429fe27eaf2be5a4d"
+        upstream: "origin/main at the same commit"
+        worktree: "GoalBuddy control directory only; no POC-3 product write"
+      architecture:
+        - "현재 domain·application·platform·desktop 경계는 유지되며 POC-3 storage 구현은 없다."
+        - "renderer·preload에 DB driver나 파일 경로를 노출하지 않는 platform storage 경계가 필요하다."
+        - "POC-2 journal·revision·checkpoint observable behavior는 독립적으로 보존한다."
+      acceptance_mapping:
+        - "동일 fixture에서 FK·transaction·WAL·backup·migration·package load를 후보별 검증한다."
+        - "최소 정규 원장과 immutable content-addressed blob의 reference 순서를 검증한다."
+        - "consistent SQLite snapshot·blob manifest·empty-location restore와 checksum을 검증한다."
+        - "disk·permission·lock·kill·missing/corrupt/orphan blob·two-instance failure를 명시적으로 주입한다."
+      candidate_research_task:
+        candidates:
+          - "Electron 내장 node:sqlite"
+          - "better-sqlite3"
+        official_evidence:
+          - "Electron 43.1.1 실제 main Node 24.18.0은 node:sqlite DatabaseSync·backup과 SQLite 3.53.1을 제공한다."
+          - "Node 24 공식 문서에서 node:sqlite는 stability 1.2 release candidate이며 backup은 sqlite3 backup API를 감싼다."
+          - "better-sqlite3 공식 문서는 transaction·WAL·backup을 지원하며 npm 13.0.2는 Node >=22와 win32-x64 prebuild를 배포한다."
+          - "Electron 공식 문서는 ABI 종속 native addon은 Electron용 rebuild가 필요하다고 명시한다."
+        prohibition: "T003 측정 전 driver 선택·제품 기본값·dependency 추가 금지"
+      next_scope:
+        task: T002
+        allowed_files:
+          - "docs/goals/approved-poc-plan-completion/state.yaml"
+        verify:
+          - "후보별 동일 fixture·SQL·PRAGMA·package 조건"
+          - "정확성·package load·provenance·raw timing JSON 계약"
+        stop_if:
+          - "공식 지원 또는 현재 Electron 실제 load 조건을 증명할 수 없다."
+          - "후보별 검증 계약이 달라져 비교 가능성을 잃는다."
+
+  - id: T002
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "공식 지원·Electron ABI·패키징·성능 증거를 바탕으로 POC-3 driver bake-off 계약과 후보를 승인한다."
+    inputs:
+      - "T001 receipt"
+      - "공식 현재 지원 문서"
+      - "승인 POC-3 bake-off 표"
+    constraints:
+      - "구현하지 않는다."
+      - "증거 전에 제품 driver를 선택하지 않는다."
+      - "후보별 동일 fixture·동일 쿼리·동일 package 조건을 요구한다."
+    expected_output:
+      - "bake-off 후보"
+      - "측정·정확성 계약"
+      - "dependency 승인 범위"
+      - "첫 Worker task"
+    receipt:
+      result: done
+      audit_mode: "dedicated Judge unavailable; GoalBuddy PM fallback"
+      verdict: pass
+      decision: approved
+      candidates:
+        - id: "node-sqlite"
+          implementation: "Electron 43.1.1 built-in node:sqlite"
+          dependency: "none"
+          risk: "Node 24 stability 1.2 release candidate"
+        - id: "better-sqlite3"
+          implementation: "better-sqlite3 13.0.2 win32-x64 prebuild"
+          dependency: "exact devDependency only for repeatable POC comparison"
+          risk: "native addon actual Electron ABI/load must be proven"
+      identical_contract:
+        - "manifest-owned fixture, schema, records, repetitions and requested PRAGMA values"
+        - "same temporary database location policy and same SQL statements"
+        - "open·schema·write transaction·rollback·read·FK rejection·WAL·backup timings"
+        - "same backup integrity query and actual Electron runtime package load"
+        - "candidate result is invalid if any correctness assertion fails"
+      evidence_contract:
+        - "raw samples plus min·median·p95·max; no invented product budget"
+        - "Node·Electron·SQLite·driver version, platform, architecture and exact source provenance"
+        - "fixture manifest checksum and generated database/backup checksum without manuscript plaintext"
+      dependency_approval:
+        allowed: "better-sqlite3 13.0.2 exact devDependency and lockfile entry"
+        forbidden:
+          - "product default driver selection before measurements"
+          - "electron-rebuild or another native build dependency without renewed evidence"
+          - "renderer·preload database exposure"
+      next_worker:
+        task: T003
+        red_first:
+          - "candidate contract parser rejects incomplete manifests"
+          - "both adapters must pass identical correctness harness"
+          - "actual Electron package probe must load each candidate"
+        stop_if:
+          - "better-sqlite3 prebuild fails in actual Electron 43.1.1"
+          - "candidate requires different fixture, SQL or PRAGMA semantics"
+          - "measurement would choose a product default before evidence"
+
+  - id: T003
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: high
+    objective: "승인된 후보를 동일 fixture에서 비교하는 POC-3 SQLite driver bake-off를 TDD로 구현·측정한다."
+    allowed_files:
+      - "src/application/storage/**"
+      - "src/platform/storage/**"
+      - "src/desktop/**"
+      - "tests/storage/**"
+      - "tests/fixtures/storage/**"
+      - "tests/package/**"
+      - "tests/performance/**"
+      - "scripts/**"
+      - "package.json"
+      - "package-lock.json"
+      - "vitest*.config.ts"
+      - "tsconfig*.json"
+      - "artifacts/poc-3-bake-off/**"
+      - "docs/poc-3-*.md"
+      - "README.md"
+      - "plan.md"
+      - "docs/goals/approved-poc-plan-completion/state.yaml"
+    verify:
+      - "focused failing tests then bake-off tests"
+      - "npm run check"
+      - "installed-package candidate load"
+      - "measurement JSON schema and provenance"
+      - "git diff --check"
+    stop_if:
+      - "새 dependency의 공식 현재 지원 범위나 lockfile 고정을 검증할 수 없다."
+      - "후보에 서로 다른 fixture·쿼리·package 조건이 필요하다."
+      - "제품 driver를 측정 전에 기본값으로 정해야 한다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      changed_files:
+        - "src/application/storage/poc-3-driver-bake-off-contract.ts"
+        - "src/application/storage/poc-3-driver-bake-off-report.ts"
+        - "src/platform/storage/poc-3-driver-bake-off.ts"
+        - "tests/fixtures/storage/poc-3-driver-bake-off.manifest.json"
+        - "tests/storage/poc-3-driver-bake-off-contract.test.ts"
+        - "tests/package/poc-3-driver-package-load.test.ts"
+        - "tests/package/poc-3-driver-package-probe.ts"
+        - "tests/performance/poc-3-driver-bake-off.test.ts"
+        - "vitest.poc-3-driver.config.ts"
+        - "package.json"
+        - "package-lock.json"
+        - "tsconfig.test.json"
+      commands:
+        - command: "npm run typecheck"
+          status: pass
+        - command: "npx vitest run --config vitest.poc-3-driver.config.ts tests/storage/poc-3-driver-bake-off-contract.test.ts"
+          status: pass
+        - command: "actual Electron package probe"
+          status: pass
+        - command: "actual Electron measurement"
+          status: pass
+        - command: "npm run check"
+          status: pass
+        - command: "git diff --check"
+          status: pass
+      summary: "동일 caller fixture에서 두 SQLite 후보의 정확성·backup·actual Electron load를 비교했고 PM audit가 node:sqlite를 POC-3 adapter로 선택했다."
+      worker_attempts:
+        - result: stopped
+          reason: "두 번째 npm run check에서 TypeScript 3건이 확인돼 stop_if 적용"
+        - result: pass
+          scope: "타입·stale assertion 최소 수정과 전체 증거 refresh"
+      red:
+        - "manifest parser export 부재"
+        - "두 adapter 동일 correctness contract 부재"
+        - "actual Electron package probe helper 부재"
+      green:
+        - "focused storage 5/5"
+        - "actual Electron resources/app 1/1"
+        - "measurement 1/1 with 8 raw samples"
+        - "npm run check: 54 files, 279 tests and production build"
+        - "git diff --check"
+      artifacts:
+        package: "artifacts/poc-3-bake-off/d2e4110f-7f6d-4dda-b849-56904fe6c6b2/package-load.json"
+        measurement: "artifacts/poc-3-bake-off/2b900355-389a-4b72-8acf-6b3e1b0d2ebb/measurement.json"
+        source_fingerprint: "6a34be02f3da22780fb90a9683483fd75a03429e0ac4dd056a7f31cc3690efdd"
+      correctness:
+        identical_contract: true
+        node_sqlite: pass
+        better_sqlite3: pass
+        electron_main_load: pass
+        package_cleanup: pass
+      decision:
+        selected_driver: "node:sqlite"
+        rationale:
+          - "actual Electron correctness and backup contract passed"
+          - "no external native shipping dependency or ABI rebuild"
+          - "observed open p95 0.719 ms versus 41.585 ms under the identical fixture"
+        risk: "Node 24 stability 1.2 release candidate; rerun identical contract on runtime updates"
+        product_budget_applied: false
+      hardcoding_audit:
+        result: pass
+        detail: "sample work·document·revision values are runtime-generated once and shared by both candidates"
+      next_scope:
+        task: T004
+        selected_adapter_only: "node:sqlite behind application StorageService"
+        preserve: "POC-2 journal·revision·checkpoint observable behavior"
+
+  - id: T004
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: high
+    objective: "승인된 POC-3 driver로 최소 SQLite 원장·불변 revision blob·transactional checkpoint·integrity 검증을 TDD 구현한다."
+    allowed_files:
+      - "src/domain/**"
+      - "src/application/storage/**"
+      - "src/application/revisions/revision-store.ts"
+      - "src/application/checkpoints/capture-resume-checkpoint-with-anchors.ts"
+      - "src/platform/storage/**"
+      - "src/desktop/**"
+      - "src/preload/**"
+      - "tests/storage/**"
+      - "tests/fixtures/storage/**"
+      - "package.json"
+      - "package-lock.json"
+      - "vitest*.config.ts"
+      - "tsconfig*.json"
+      - "docs/poc-3-*.md"
+      - "README.md"
+      - "plan.md"
+      - "docs/goals/approved-poc-plan-completion/state.yaml"
+    verify:
+      - "schema·ownership·immutability·transaction integration tests"
+      - "corruption and missing blob failure tests"
+      - "npm run check"
+      - "git diff --check"
+    stop_if:
+      - "실사용 경로나 레거시 데이터를 써야 한다."
+      - "POC-2 observable behavior를 바꿔야 한다."
+      - "승인 범위에 없는 schema·default·migration을 추가해야 한다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      outcome: pass
+      changed_files:
+        - "src/domain/poc-3-storage-ledger.ts"
+        - "src/application/storage/storage-service.ts"
+        - "src/application/storage/blob-store.ts"
+        - "src/application/storage/storage-integrity.ts"
+        - "src/application/storage/storage-migration.ts"
+        - "src/application/revisions/revision-store.ts"
+        - "src/application/checkpoints/capture-resume-checkpoint-with-anchors.ts"
+        - "src/platform/storage/node-sqlite-ledger-profile.ts"
+        - "src/platform/storage/node-sqlite-ledger.ts"
+        - "src/platform/storage/node-immutable-blob-store-profile.ts"
+        - "src/platform/storage/node-immutable-blob-store.ts"
+        - "src/platform/storage/node-sqlite-integrity.ts"
+        - "src/platform/storage/node-sqlite-migration.ts"
+        - "tests/fixtures/storage/poc-3-ledger.manifest.json"
+        - "tests/fixtures/storage/poc-3-blob-store.manifest.json"
+        - "tests/fixtures/storage/poc-3-revision-store.manifest.json"
+        - "tests/fixtures/storage/poc-3-resume-checkpoint.manifest.json"
+        - "tests/fixtures/storage/poc-3-storage-integrity.manifest.json"
+        - "tests/fixtures/storage/poc-3-storage-migration.manifest.json"
+        - "tests/storage/poc-3-ledger-schema.test.ts"
+        - "tests/storage/poc-3-blob-store-profile.test.ts"
+        - "tests/storage/poc-3-blob-store-publication.test.ts"
+        - "tests/storage/poc-3-blob-store-inventory.test.ts"
+        - "tests/storage/poc-3-blob-store-faults.test.ts"
+        - "tests/storage/poc-3-blob-store-cleanup.test.ts"
+        - "tests/storage/poc-3-blob-store-conflict-race.test.ts"
+        - "tests/storage/poc-3-revision-store.test.ts"
+        - "tests/storage/poc-3-resume-checkpoint.test.ts"
+        - "tests/storage/poc-3-storage-integrity.test.ts"
+        - "tests/storage/poc-3-storage-migration.test.ts"
+      commands:
+        - command: "npx vitest run --config vitest.poc-3-driver.config.ts tests/storage"
+          status: pass
+        - command: "npm run typecheck"
+          status: pass
+        - command: "owned ESLint"
+          status: pass
+        - command: "npm run check"
+          status: pass
+        - command: "git diff --check"
+          status: pass
+      red:
+        - "원장 schema·StorageService transaction 부재"
+        - "immutable blob profile·publication·inventory·failure·cleanup 부재"
+        - "SQLite RevisionStore와 blob-first DB reference commit 부재"
+        - "Anchor 포함 ResumeCheckpoint 원자 transaction 부재"
+        - "read-only integrity report와 orphan-manifest 판정 부재"
+        - "migration runner·verified no-op·lock conflict mapping 부재"
+      green:
+        - "normalized ledger·composite foreign key·immutable revision/snapshot/blob manifest"
+        - "no-replace checksum blob publication, exact read, report-only inventory and explicit cleanup"
+        - "revision append rollback leaves verified unreachable blob without changing manuscript pointers"
+        - "Anchor·checkpoint·Work pointer single transaction with exact ownership and range"
+        - "integrity 12/12, migration 9/9 and storage suite 66/66"
+        - "npm run check: 54 files, 279 tests and production build"
+      architecture:
+        - "application ports contain no Electron·React·raw SQLite dependency and platform owns database/file paths."
+        - "renderer·preload·desktop and POC-2 observable behavior are unchanged."
+        - "Work.resumeCheckpointId remains the canonical checkpoint pointer; no currentByWork source was added."
+      hardcoding_audit:
+        result: pass
+        detail: "caller profiles and runtime-generated values own identities, paths, codecs, checksums, migration definitions and sample materials; unsupported-field probe no longer fixes a driver value"
+      summary: "POC-3 최소 원장, 불변 blob, SQLite RevisionStore, 원자 복귀 저장, read-only integrity와 transactional migration contract를 TDD로 구현했다."
+      next_scope:
+        task: T005
+        objective: "consistent backup·empty restore·failure injection·installed-package evidence"
+
+  - id: T005
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: high
+    objective: "POC-3 backup·restore·failure injection·installed-package 폐회로와 성능/크기 JSON 증거를 완성한다."
+    allowed_files:
+      - "src/application/storage/**"
+      - "src/platform/storage/**"
+      - "src/desktop/**"
+      - "src/preload/**"
+      - "tests/storage/**"
+      - "tests/backup/**"
+      - "tests/package/**"
+      - "tests/performance/**"
+      - "tests/fixtures/**"
+      - "scripts/**"
+      - "package.json"
+      - "package-lock.json"
+      - "vitest*.config.ts"
+      - "tsconfig*.json"
+      - "artifacts/poc-3-*/**"
+      - "docs/poc-3-*.md"
+      - "README.md"
+      - "plan.md"
+      - "docs/goals/approved-poc-plan-completion/state.yaml"
+    verify:
+      - "backup during write, restore, checksum, missing/corrupt blob tests"
+      - "actual process termination and restart"
+      - "installed-package Electron"
+      - "performance and size artifact"
+      - "npm run check"
+      - "git diff --check"
+    stop_if:
+      - "backup을 원본 위에 in-place 복원해야 한다."
+      - "실사용 사용자 경로나 레거시 원본을 써야 한다."
+      - "자동 retry·fallback·timeout을 제품에 추가해야 한다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt:
+      result: done
+      outcome: pass
+      changed_files:
+        - "src/application/storage/storage-backup.ts"
+        - "src/platform/storage/node-sqlite-backup.ts"
+        - "src/desktop/poc-3-*-crash-*.ts"
+        - "src/desktop/poc-3-revision-race-worker.ts"
+        - "src/desktop/poc-3-installed-package-probe.ts"
+        - "tests/backup/poc-3-*.test.ts"
+        - "tests/storage/poc-3-*-process-failure.test.ts"
+        - "tests/package/poc-3-installed-package*.ts"
+        - "tests/performance/poc-3-storage-performance.test.ts"
+        - "tests/fixtures/backup/**"
+        - "tests/fixtures/package/poc-3-installed-package.manifest.json"
+        - "tests/fixtures/performance/poc-3-storage-performance.manifest.json"
+        - "vitest.poc-3-process.config.ts"
+        - "vitest.poc-3-installed-package.config.ts"
+        - "vitest.poc-3-performance.config.ts"
+        - "package.json"
+        - "tsconfig.test.json"
+      commands:
+        - command: "backup core and storage focused suites"
+          status: pass
+        - command: "npx vitest run --config vitest.poc-3-process.config.ts"
+          status: pass
+        - command: "npm run test:package:poc-3"
+          status: pass
+        - command: "npm run performance:poc-3"
+          status: pass
+        - command: "npm run typecheck and owned ESLint"
+          status: pass
+        - command: "git diff --check and artifact forbidden scan"
+          status: pass
+      red:
+        - "consistent snapshot backup and verified empty-target restore API absent"
+        - "canonically re-signed unknown nested manifest was accepted before exact-shape validation"
+        - "read-only WAL snapshot inspection created unmanifested wal/shm sidecars"
+        - "revision, migration and backup process termination harnesses absent"
+        - "two-process writer exclusion and installed-package closed loop absent"
+        - "performance and storage-size JSON evidence absent"
+      green:
+        - "backup pins seeded database revision and excludes later writes, physical orphan and temporary blobs"
+        - "standalone archive journal mode prevents unmanifested SQLite sidecars before publication and during restore inspection"
+        - "damage, missing blob, preflight rejection, hook cleanup and no-overwrite probes reject without source or target mutation"
+        - "actual revision, migration and backup termination plus two-process race pass 4/4"
+        - "installed Windows Electron main runs revision, checkpoint, backup and empty restore without a development server"
+        - "two caller iterations emit raw timing, descriptive percentile and storage-size evidence without product thresholds"
+      architecture:
+        - "application backup data remains opaque; platform owns SQLite, blob, file and archive paths."
+        - "installed-package proof loads compiled adapters in the normal Electron main process without adding a test branch to product main."
+        - "renderer and preload receive no database path, raw SQL, manuscript content or secret."
+      hardcoding_audit:
+        result: pass
+        detail: "caller profiles own paths, identities, codecs, checksums, clocks, layouts, deadlines, test iterations and measurement sizes; measurement fixtures create no product default or limit"
+      summary: "POC-3 consistent backup, verified empty restore, actual process failure matrix, installed-package closed loop and descriptive performance/size evidence passed."
+      next_scope:
+        task: T006
+        objective: "audit POC-3 pass conditions, decisions, latest full regression and Gate publication"
+
+  - id: T006
+    type: pm
+    assignee: PM
+    status: active
+    reasoning_hint: high
+    objective: "POC-3 전체 통과 조건을 audit하고 완료 시 POC-3 변경을 커밋·origin/main 푸시한다."
+    inputs:
+      - "T003-T005 receipts"
+      - "최신 전체 diff와 artifact"
+      - "승인 POC-3 통과 조건"
+    constraints:
+      - "누락 증거가 있으면 완료·커밋·푸시를 거부한다."
+      - "artifact와 임시 사용자 데이터는 커밋하지 않는다."
+    expected_output:
+      - "Gate complete 또는 not_complete"
+      - "커밋 hash와 push 결과"
+      - "다음 POC-M task"
+    receipt: null
+
+  - id: T010
+    type: scout
+    assignee: Scout
+    status: queued
+    reasoning_hint: high
+    objective: "읽기 전용 레거시 source exporter·snapshot 봉인·inventory·미매핑 raw 보존 요구를 실제 관측값으로 매핑한다."
+    inputs:
+      - "승인 POC-M 절"
+      - "승인 migration map"
+      - "D:\\eum.editor read-only source"
+    constraints:
+      - "레거시에 절대 쓰지 않는다."
+      - "source snapshot을 봉인하기 전 mapper를 실행하지 않는다."
+      - "레거시 타입명·샘플을 새 canonical default로 채택하지 않는다."
+    expected_output:
+      - "source 종류와 exporter 경계"
+      - "snapshot·inventory checksum 계약"
+      - "observed unmapped/orphan fields"
+      - "첫 migration Worker task"
+    receipt: null
+
+  - id: T011
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: high
+    objective: "POC-M source exporter·봉인 snapshot·inventory parser를 TDD로 구현하고 source checksum 증거를 남긴다."
+    allowed_files:
+      - "src/application/migration/**"
+      - "src/platform/migration/**"
+      - "tests/migration/**"
+      - "tests/fixtures/migration/**"
+      - "scripts/migration/**"
+      - "artifacts/poc-m/**"
+      - "docs/poc-m-*.md"
+      - "README.md"
+      - "plan.md"
+      - "package.json"
+      - "package-lock.json"
+      - "vitest*.config.ts"
+      - "tsconfig*.json"
+      - "docs/goals/approved-poc-plan-completion/state.yaml"
+    verify:
+      - "exporter read-only proof"
+      - "snapshot and inventory checksum tests"
+      - "unknown field raw preservation tests"
+      - "npm run check"
+      - "git diff --check"
+    stop_if:
+      - "D:\\eum.editor 또는 원본 DB·브라우저 저장소에 써야 한다."
+      - "source snapshot checksum을 만들 수 없다."
+      - "관측하지 않은 field·ID·name을 추정해야 한다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt: null
+
+  - id: T012
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: high
+    objective: "봉인 snapshot만 읽는 dry-run mapper·target staging import·실제 관측값 대조를 TDD 구현한다."
+    allowed_files:
+      - "src/application/migration/**"
+      - "src/platform/migration/**"
+      - "tests/migration/**"
+      - "tests/fixtures/migration/**"
+      - "scripts/migration/**"
+      - "artifacts/poc-m/**"
+      - "docs/poc-m-*.md"
+      - "README.md"
+      - "plan.md"
+      - "package.json"
+      - "vitest*.config.ts"
+      - "tsconfig*.json"
+      - "docs/goals/approved-poc-plan-completion/state.yaml"
+    verify:
+      - "dry-run source-target counts and checksums"
+      - "ownership and unknown/orphan preservation"
+      - "no legacy writes"
+      - "npm run check"
+      - "git diff --check"
+    stop_if:
+      - "관측하지 않은 값을 canonical 데이터로 자동 확정해야 한다."
+      - "다른 작품 데이터 fallback이 필요하다."
+      - "renderer나 제품 runtime이 레거시를 직접 읽어야 한다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt: null
+
+  - id: T013
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: high
+    objective: "POC-M 멱등 재실행·중간 취소·target 복원·backup 생성과 installed-package rehearsal을 검증한다."
+    allowed_files:
+      - "src/application/migration/**"
+      - "src/platform/migration/**"
+      - "tests/migration/**"
+      - "tests/backup/**"
+      - "tests/package/**"
+      - "tests/fixtures/migration/**"
+      - "scripts/migration/**"
+      - "artifacts/poc-m/**"
+      - "docs/poc-m-*.md"
+      - "README.md"
+      - "plan.md"
+      - "package.json"
+      - "vitest*.config.ts"
+      - "tsconfig*.json"
+      - "docs/goals/approved-poc-plan-completion/state.yaml"
+    verify:
+      - "second-run no duplicate"
+      - "cancel restores prior target"
+      - "post-import POC-3 backup and restore"
+      - "installed-package rehearsal"
+      - "legacy source checksum unchanged"
+      - "npm run check"
+    stop_if:
+      - "source snapshot 외 레거시 원본을 수정해야 한다."
+      - "고아·미매핑 데이터를 삭제해야 한다."
+      - "실사용 target을 덮어써야 한다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt: null
+
+  - id: T014
+    type: pm
+    assignee: PM
+    status: queued
+    reasoning_hint: high
+    objective: "POC-M 전체 통과 조건을 audit하고 완료 시 이주 rehearsal 변경을 커밋·origin/main 푸시한다."
+    inputs:
+      - "T010-T013 receipts"
+      - "source·target checksum artifact"
+      - "승인 POC-M 통과 조건"
+    constraints:
+      - "레거시 source checksum 변경 시 완료를 거부한다."
+      - "artifact·snapshot·실제 사용자 데이터는 커밋하지 않는다."
+    expected_output:
+      - "Gate complete 또는 not_complete"
+      - "커밋 hash와 push 결과"
+      - "다음 POC-4 task"
+    receipt: null
+
+  - id: T020
+    type: judge
+    assignee: Judge
+    status: queued
+    reasoning_hint: high
+    objective: "승인 POC-4 범위·fake provider 계약·secret adapter·callback ownership과 실제 provider smoke의 자격 증명 경계를 확정한다."
+    inputs:
+      - "승인 POC-4 절"
+      - "desktop runtime architecture"
+      - "공식 현재 OAuth·Electron 보안 문서"
+    constraints:
+      - "특정 provider를 기본·대표로 선택하지 않는다."
+      - "client ID·endpoint·callback host·port·Redirect URI를 고정하지 않는다."
+      - "자격 증명이 없으면 실제 smoke만 차단하고 로컬 검증을 계속한다."
+    expected_output:
+      - "fake provider manifest contract"
+      - "state·PKCE·callback·secret receipt contract"
+      - "Worker allowed_files·verify·stop_if"
+    receipt: null
+
+  - id: T021
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: high
+    objective: "POC-4 provider-neutral OAuth state·PKCE·callback ownership·secret storage 경계를 TDD 구현한다."
+    allowed_files:
+      - "src/domain/**"
+      - "src/application/connectors/**"
+      - "src/platform/secrets/**"
+      - "src/platform/oauth/**"
+      - "src/desktop/**"
+      - "src/preload/**"
+      - "tests/oauth/**"
+      - "tests/secrets/**"
+      - "tests/fixtures/oauth/**"
+      - "package.json"
+      - "package-lock.json"
+      - "vitest*.config.ts"
+      - "tsconfig*.json"
+      - "docs/poc-4-*.md"
+      - "README.md"
+      - "plan.md"
+      - "docs/goals/approved-poc-plan-completion/state.yaml"
+    verify:
+      - "state·PKCE·callback ownership failure-first tests"
+      - "secret renderer/log/localStorage non-exposure"
+      - "npm run check"
+      - "git diff --check"
+    stop_if:
+      - "provider·endpoint·client identity·callback address를 hard-code해야 한다."
+      - "renderer에 token·API key·OAuth secret을 노출해야 한다."
+      - "범용 IPC send나 navigation 완화가 필요하다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt: null
+
+  - id: T022
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: high
+    objective: "POC-4 fake provider 성공·거부·state 불일치·callback 중복·refresh·revocation 실패 시나리오와 receipt를 구현한다."
+    allowed_files:
+      - "src/application/connectors/**"
+      - "src/platform/secrets/**"
+      - "src/platform/oauth/**"
+      - "src/desktop/**"
+      - "src/preload/**"
+      - "tests/oauth/**"
+      - "tests/secrets/**"
+      - "tests/e2e/**"
+      - "tests/fixtures/oauth/**"
+      - "package.json"
+      - "vitest*.config.ts"
+      - "tsconfig*.json"
+      - "docs/poc-4-*.md"
+      - "README.md"
+      - "plan.md"
+      - "docs/goals/approved-poc-plan-completion/state.yaml"
+    verify:
+      - "fake provider integration scenarios"
+      - "narrow typed bridge and trusted sender"
+      - "production-bundle Electron"
+      - "npm run check"
+      - "git diff --check"
+    stop_if:
+      - "connector UI를 첫 출시 폐회로에 추가해야 한다."
+      - "원고를 provider에 자동 전송해야 한다."
+      - "secret을 artifact·로그에 기록해야 한다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt: null
+
+  - id: T023
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: high
+    objective: "POC-4 installed-package·restart·OS secret adapter·실제 provider smoke 가능 범위와 보안 artifact를 검증한다."
+    allowed_files:
+      - "src/application/connectors/**"
+      - "src/platform/secrets/**"
+      - "src/platform/oauth/**"
+      - "src/desktop/**"
+      - "src/preload/**"
+      - "tests/oauth/**"
+      - "tests/secrets/**"
+      - "tests/package/**"
+      - "tests/e2e/**"
+      - "tests/fixtures/oauth/**"
+      - "scripts/**"
+      - "artifacts/poc-4/**"
+      - "package.json"
+      - "package-lock.json"
+      - "vitest*.config.ts"
+      - "tsconfig*.json"
+      - "docs/poc-4-*.md"
+      - "README.md"
+      - "plan.md"
+      - "docs/goals/approved-poc-plan-completion/state.yaml"
+    verify:
+      - "installed-package restart and secret persistence"
+      - "callback listener lifecycle and failure cleanup"
+      - "artifact secret leak scan"
+      - "actual provider smoke only when caller supplies valid manifest and credentials"
+      - "npm run check"
+      - "git diff --check"
+    stop_if:
+      - "실제 provider 자격 증명을 source·config·artifact에 저장해야 한다."
+      - "OS secret adapter를 검증할 수 없다."
+      - "제품 callback default나 timeout·retry를 추가해야 한다."
+      - "같은 검증 실패가 두 번 반복된다."
+    receipt: null
+
+  - id: T024
+    type: pm
+    assignee: PM
+    status: queued
+    reasoning_hint: high
+    objective: "POC-4 전체 통과 조건을 audit하고 완료 시 OAuth·secret 변경을 커밋·origin/main 푸시한다."
+    inputs:
+      - "T020-T023 receipts"
+      - "최신 보안·package artifact"
+      - "승인 POC-4 통과 조건"
+    constraints:
+      - "secret 노출이나 필수 fake-provider 증거 누락 시 완료를 거부한다."
+      - "artifact·credential·user-data를 커밋하지 않는다."
+    expected_output:
+      - "Gate complete 또는 not_complete"
+      - "커밋 hash와 push 결과"
+      - "최종 전체 POC audit"
+    receipt: null
+
+  - id: T999
+    type: judge
+    assignee: Judge
+    status: queued
+    reasoning_hint: high
+    objective: "POC-2·POC-3·POC-M·POC-4 receipts·push·artifact를 승인 실행 계획 전체 완료 조건에 매핑해 최종 audit한다."
+    inputs:
+      - "모든 Gate receipt"
+      - "최신 전체 검증"
+      - "현재 clean Git·upstream 상태"
+      - "승인 실행 계획의 완료 판정"
+    constraints:
+      - "구현하지 않는다."
+      - "필수 Worker가 queued·active면 완료를 거부한다."
+      - "connector UI·음악 SDK POC 같은 비차단 후속을 필수 Gate로 재해석하지 않는다."
+    expected_output:
+      - "complete 또는 not_complete"
+      - "full_outcome_complete true 또는 false"
+      - "누락 증거"
+      - "미완료면 다음 exact task"
+    receipt: null
+
+checks:
+  dirty_fingerprint: "clean POC-2 commit 02851a9666aa8b409a9fe6c429fe27eaf2be5a4d"
+  last_verification:
+    result: pass
+    task: "POC-2 final audit"
+    commands:
+      - "npm run check — lint, typecheck, 54 files and 279 tests, production build"
+      - "npm run test:e2e — 23 passed"
+      - "npm run crash:poc-2 — 9 passed on clean POC-2 commit"
+      - "npm run performance:poc-2 — pass on clean POC-2 commit"
+      - "npm run test:package:poc-2 — 4 files and 7 tests on clean POC-2 commit"

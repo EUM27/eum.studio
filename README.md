@@ -4,7 +4,7 @@
 
 ## 현재 상태
 
-`POC-2 — 영속화·강제 종료` 완료 — 다음 Gate `POC-3 — SQLite·불변 blob·백업`
+`POC-3 — SQLite·불변 blob·백업` 완료 — 다음 Gate `POC-M — 현행 데이터 이주 rehearsal`
 
 POC-1의 장편 편집기 검증을 마치고 POC-2 저장 계약과 증거를 구현했다. 저장 offset은 UTF-16 code unit, 내부 줄바꿈은 LF, Unicode normalization은 적용하지 않으며, hash·Anchor 검증 입력 계약은 이 문자열의 UTF-16LE code unit bytes로 고정했다. 운영체제·파일 입력의 CRLF/CR 변환은 `ChangeBatch` 생성 전 platform adapter 경계의 책임이며, durable parser는 CR을 조용히 바꾸지 않고 거부한다. `ChangeBatch`는 작품·문서·base revision·순서·불투명 batch identity·schema version·정확한 변경 범위를 소유하고, 고정 필드 순서의 UTF-8 canonical bytes를 만든다. 같은 `batchId`와 같은 canonical bytes만 idempotent duplicate이며, 같은 identity의 다른 bytes는 충돌이다. application 소유권 경계는 등록 작품이 소유한 문서의 현재 durable revision identity를 확인하고, 변화하는 본문 길이는 journal replay의 현재 head에 원자 적용할 때 검증한다.
 
@@ -24,6 +24,10 @@ startup은 확정된 원고 revision과 checkpoint publication을 결합한 뒤�
 
 정상 창 닫기는 preload가 일찍 받은 close request도 보관한 뒤 renderer의 모든 문서 queue를 flush하고, exact durable receipt를 모두 받은 경우에만 main에 종료 완료를 알린다. 저장 실패나 미확정 IME 원문이 있으면 `저장됨`으로 바꾸지 않고 창을 유지한다. save·recovery apply·close completion의 mutating IPC는 생성한 BrowserWindow의 정확한 webContents와 main frame sender만 허용한다.
 
+POC-3은 `node:sqlite` 기반 정규 원장과 content-addressed 불변 blob 경계를 구현했다. revision 본문 blob을 먼저 publish·readback한 뒤 reference와 manuscript pointer를 한 SQLite transaction에서 commit하며, Anchor·ResumeCheckpoint·`Work.resumeCheckpointId`도 같은 작품·문서·현재 revision 검증 아래 한 transaction으로 저장한다. migration은 definition·논리적 전후 checksum과 receipt를 같은 `BEGIN IMMEDIATE` transaction에 묶고 실패나 commit 전 종료 시 이전 DB를 그대로 다시 연다.
+
+backup은 기준 DB snapshot을 먼저 고정하고 그 snapshot이 참조하는 blob만 canonical manifest에 포함한다. standalone SQLite snapshot, DB·blob checksum, manifest checksum sidecar를 same-parent temporary directory에 완성한 뒤 기존 경로를 덮어쓰지 않고 게시한다. restore는 bundle 전체와 도달성을 대상 생성 전에 검증하고 caller 용량·권한 preflight 뒤 새 빈 sibling staging에만 복원한다. 실제 revision·migration·backup 종료와 두 process writer 경합 4개, 개발 서버 없는 Windows Electron 설치본의 revision→checkpoint→backup→빈 위치 restore 폐회로 및 서로 다른 두 browser main의 동일 저장소 쓰기 배제가 통과했다. raw 성능·크기 JSON은 설명용 측정이며 제품 제한이나 기본값이 아니다.
+
 완료된 POC-1 편집 표면은 문서별 `EditorState`·selection·스크롤·undo 이력을 독립적으로 보관한다. 한글 IME 조합, runtime profile 기반 괄호·따옴표·가운뎃 말줄임표 `⋯`, 정확한 선택 좌표, grapheme 기반 공백 포함·제외 통계를 production-bundle Electron E2E에서 검증했다. 상시 transaction은 선택 원문을 복사하지 않으며, 문자 통계 구독 알림은 원고 snapshot 갱신 뒤 microtask로 분리해 입력 임계 경로에서 보조 React 렌더를 제거했다.
 
 원고 중심 화면에는 Work별로 독립적인 좌우 레일, 활성 Work 안에서만 동작하는 최신 원고 검색, 항상 보이는 작품·문서·저장·집중 기록 상태가 있다. 검색은 상시 입력 경로에서 원고를 복사하지 않고 사용자가 실행한 순간에만 문서별 현재 상태를 읽는다. 2작품·작품별 500문서·1,000,000자 fixture의 production-bundle Electron 측정에서 문서 전환 p95 30.489ms, 작품 검색 p95 3.700ms, 입력 p95 15.400ms를 기록했고 120회 전환의 소유권 위반·검색 불일치·입력 불일치는 모두 0건이었다. 설치 패키지 POC도 별도 임시 package에서 완료했다. 이 저장소는 현행 `D:\eum.editor`의 연장선이나 복사본이 아니며, 승인된 제품 헌법과 POC 계획에서 새로 구축한다.
@@ -42,6 +46,8 @@ startup은 확정된 원고 revision과 checkpoint publication을 결합한 뒤�
 - [Gate 0 런타임 결정과 검증](docs/gate-0-runtime.md)
 - [POC-2 저장 문자열과 ChangeBatch v1](docs/poc-2-durable-change-batch.md)
 - [POC-2 append-only journal framing](docs/poc-2-journal.md)
+- [POC-3 SQLite driver bake-off](docs/poc-3-driver-bake-off.md)
+- [POC-3 SQLite·blob·backup 결정](docs/poc-3-storage-decisions.md)
 - [현재 실행 상태](plan.md)
 
 원본 설계 문서는 `C:\Users\limoj\Documents\Codex\2026-07-15\new-chat-2`에 있다. 이 저장소는 manifest의 checksum으로 승인된 기준을 식별한다.
@@ -59,6 +65,9 @@ npm run performance:poc-1
 npm run crash:poc-2
 npm run performance:poc-2
 npm run test:package:poc-2
+npm run test:process:poc-3
+npm run test:package:poc-3
+npm run performance:poc-3
 npm run environment:report -- --output <사용자가 선택한 출력 경로>
 ```
 
@@ -152,13 +161,33 @@ npm run start
 
 작은 profile은 `EUM_STUDIO_POC_RECOVERY_APPLY_PROFILE`에 원문을 직접 전달할 수 있다. 두 입력은 동시에 사용하지 않는다. 이 profile에도 identity·path·algorithm·boundary default가 없으며 실제 사용자 저장 layout 설정이 아니다.
 
+POC-3 process 행렬은 제품 timeout이 아닌 caller future deadline을 받는다.
+
+```powershell
+$env:EUM_STUDIO_POC_3_PROCESS_TEST_DEADLINE_EPOCH_MS = <caller가 선택한 미래 epoch millisecond>
+npm run test:process:poc-3
+```
+
+설치본과 성능 검증도 caller profile·artifact path·test timeout 없이는 실행하지 않는다. 체크인된 fixture 수치는 측정 입력이며 제품 제한이나 사용자 기본값이 아니다.
+
+```powershell
+$env:EUM_STUDIO_POC_3_INSTALLED_PACKAGE_PROFILE_PATH = <caller가 선택한 package profile 경로>
+$env:EUM_STUDIO_POC_3_INSTALLED_PACKAGE_ARTIFACT_PATH = <caller가 선택한 artifact 경로>
+$env:EUM_STUDIO_POC_3_INSTALLED_PACKAGE_TEST_TIMEOUT_MS = <caller가 선택한 test timeout>
+npm run test:package:poc-3
+
+$env:EUM_STUDIO_POC_3_PERFORMANCE_PROFILE_PATH = <caller가 선택한 측정 profile 경로>
+$env:EUM_STUDIO_POC_3_PERFORMANCE_ARTIFACT_PATH = <caller가 선택한 artifact 경로>
+$env:EUM_STUDIO_POC_3_PERFORMANCE_TEST_TIMEOUT_MS = <caller가 선택한 test timeout>
+npm run performance:poc-3
+```
+
 ## 아직 하지 않는 것
 
 - 현행 앱 코드 복사
 - UI 전체 구현
 - 제공자·모델·분류·경로의 고정
-- SQLite 드라이버 선결정
 - OAuth client 설정 내장
 - 실제 사용자 데이터 쓰기
 
-`POC-2 — 영속화·강제 종료`의 전체 통과 조건은 완료됐다. 다음 Gate는 `POC-3 — SQLite·불변 blob·백업`이며, driver bake-off와 실제 backup·restore 폐회로가 끝나기 전에는 실제 사용자 데이터를 쓰지 않는다. 별빛·음악·조수·투고 기능을 먼저 얹지 않는다.
+`POC-3 — SQLite·불변 blob·백업`의 전체 통과 조건은 완료됐다. 다음 Gate는 `POC-M — 현행 데이터 이주 rehearsal`이며, 읽기 전용 source snapshot·100% receipt coverage·원고 checksum·미매핑 raw 보존·멱등 재실행을 증명하기 전에는 실제 사용자 데이터 위치에 import를 확정하지 않는다. 별빛·음악·조수·투고 기능을 먼저 얹지 않는다.

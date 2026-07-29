@@ -1,0 +1,8 @@
+{
+  "counts": {
+    "concurrentConnectionCount": 2,
+    "contentPartCount": 3,
+    "publishedShardCount": 2,
+    "publishedShardWidth": 2
+  }
+}

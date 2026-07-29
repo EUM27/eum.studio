@@ -1,0 +1,26 @@
+{
+  "counts": {
+    "concurrentConnectionCount": 2,
+    "selectionWidth": 3,
+    "contextWidth": 4
+  },
+  "materials": {
+    "manuscriptTextParts": [
+      "한",
+      "A",
+      "0"
+    ],
+    "anchorStatuses": [
+      "resolved"
+    ],
+    "resolutionMethods": [
+      "created"
+    ],
+    "matchedEvidence": [
+      "origin-revision",
+      "quote",
+      "prefix-context",
+      "suffix-context"
+    ]
+  }
+}

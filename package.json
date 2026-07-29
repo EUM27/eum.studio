@@ -18,7 +18,10 @@
     "environment:report": "npm run build:electron && node dist-electron/platform/environment/capture-environment.js",
     "performance:poc-1": "npm run build && vitest run --config vitest.performance.config.ts tests/performance/poc-1-performance.test.ts",
     "performance:poc-2": "npm run build && vitest run --config vitest.performance.config.ts tests/performance/poc-2-performance.test.ts",
+    "performance:poc-3": "vitest run --config vitest.poc-3-performance.config.ts tests/performance/poc-3-storage-performance.test.ts",
+    "test:process:poc-3": "npm run build:electron && vitest run --config vitest.poc-3-process.config.ts",
     "test:package:poc-2": "npm run build && vitest run --config vitest.installed-package.config.ts",
+    "test:package:poc-3": "npm run build && vitest run --config vitest.poc-3-installed-package.config.ts",
     "start": "npm run build && electron ."
   },
   "engines": {
@@ -38,6 +41,7 @@
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.3",
+    "better-sqlite3": "13.0.2",
     "electron": "43.1.1",
     "eslint": "10.7.0",
     "eslint-plugin-react-hooks": "7.1.1",

@@ -6,41 +6,34 @@
 
 현재 journal 계약: [POC-2 append-only journal framing](docs/poc-2-journal.md)
 
-마지막 갱신: 2026-07-27
+현재 storage 결정: [POC-3 SQLite·blob·backup 결정](docs/poc-3-storage-decisions.md)
+
+마지막 갱신: 2026-07-30
 
 ## 현재 Gate
 
-`POC-2 — 영속화·강제 종료` 완료
+`POC-3 — SQLite·불변 blob·백업` 완료
 
-POC-2 완료 증거:
+POC-3 완료 증거:
 
-- UTF-16 code unit·LF·Unicode 무정규화 저장 문자열 표현
-- hash·Anchor 검증용 UTF-16LE code unit byte 입력
-- Work·Document·base revision·sequence·batch identity를 포함한 `ChangeBatch` schema
-- 필드 순서와 실행 환경에 독립적인 UTF-8 canonical serialization
-- 같은 batch identity의 idempotent duplicate·identity conflict 분류
-- 등록 작품·소유 문서·현재 durable revision·본문 길이 검증
-- 현재 journal head·sequence를 직렬 검증하고 append+sync 뒤에만 만드는 application `SaveReceipt`
-- runtime journal profile·Node crypto checksum adapter·좁은 typed Electron save command
-- storage 설정과 분리된 caller batching policy·renderer용 path-free sequence projection
-- 문서별 change 합성·IME hold·blur/문서 전환 flush와 `편집 중 / 저장 중 / 저장됨 / 실패`
-- startup의 baseline/published source 해석·physical scan·safe recovery candidate
-- exact candidate 승인 뒤 새 immutable revision publication·next journal 전환
-- pending/read-only 동안 durable save 차단과 publication 뒤 runtime 재구성
-- 복구 미리보기·baseline 읽기 전용·명시적 적용 acknowledgement 뒤 renderer source 전환
-- 적용 직후와 Electron 완전 재실행 뒤 published revision·writable save runtime 복원
-- confirmed revision과 ResumeCheckpoint Anchor를 결합한 방향 있는 cursor·selection 복원
-- 모든 문서 queue의 정상 종료 flush와 실패·미확정 IME 시 종료 보류
-- mutating IPC의 exact BrowserWindow webContents·main frame sender 검증
-- actual process kill save·compaction·checkpoint 9단계와 재실행 source·checksum 비교
-- 3개 독립 production-bundle 실행의 durable ack·journal compaction·RSS·renderer heap·GC raw sample 측정
-- 임시 installed-package executable의 durable 저장·2회 actual main kill·published revision·cursor 재실행과 실패 조립 정리
+- 동일 `StorageService` contract의 `node:sqlite`·`better-sqlite3` bake-off와 설치본 load
+- `node:sqlite` 기반 정규 원장·composite 작품 소유 foreign key·불변 revision/snapshot/blob manifest
+- content-addressed blob write·sync·no-replace publish·readback 뒤 DB reference transaction
+- Anchor·ResumeCheckpoint·`Work.resumeCheckpointId`의 원자 저장
+- reachability·checksum integrity report와 재검증된 selected orphan cleanup
+- definition·논리적 전후 checksum·receipt·identity·`user_version`의 단일 migration transaction
+- 기준 DB snapshot과 참조 blob만 포함하는 canonical backup manifest
+- bundle 전체 사전검증·caller preflight·새 빈 위치 restore·count/checksum 대조
+- revision·migration·backup commit/publish 전 actual process kill과 안전 재개방
+- 두 actual process와 packaged Electron 두 browser main의 같은 기준 revision 쓰기 배제와 정확히 한 commit
+- 개발 서버 없는 Windows Electron 설치본 main의 revision→checkpoint→backup→restore 폐회로
+- raw timing·p50·p95와 DB·blob·bundle·restore 크기 JSON 측정
 
-다음 Gate: `POC-3 — SQLite·불변 blob·백업`
+다음 Gate: `POC-M — 현행 데이터 이주 rehearsal`
 
 실사용 원고 저장: `NO-GO`
 
-POC-2 완료: `GO`
+POC-3 완료: `GO`
 
 ## 완료
 
@@ -96,6 +89,24 @@ POC-2 완료: `GO`
 - [x] POC-2 성능·메모리 재측정
 - [x] installed-package Electron E2E
 
+## POC-3 완료
+
+- [x] 두 SQLite driver의 동일 contract·Electron package load bake-off
+- [x] 최소 정규 원장과 작품·문서 소유 foreign key
+- [x] 불변 content-addressed blob publish·inventory·selected cleanup
+- [x] blob-first 불변 DocumentRevision·manuscript pointer transaction
+- [x] Anchor·ResumeCheckpoint·Work pointer transaction
+- [x] read-only integrity·reachability report
+- [x] checksum·receipt·rollback을 포함한 migration runner
+- [x] concurrent source write 중 기준 DB snapshot·참조 blob manifest 고정
+- [x] standalone SQLite DB·canonical manifest·checksum sidecar backup bundle
+- [x] restore 사전검증·caller preflight·새 빈 target 원자 게시
+- [x] 손상·누락·용량·권한·기존 target·hook failure injection
+- [x] revision·migration·backup actual process termination과 재개방
+- [x] 두 actual process writer 경합과 정확히 한 commit
+- [x] installed-package Windows Electron main 저장 폐회로
+- [x] raw 성능·저장 크기 JSON
+
 ## POC-2 현재 증거
 
 - canonical text는 LF만 허용하며 Unicode normalization을 적용하지 않아 NFC와 NFD 입력이 서로 다른 bytes로 남는다.
@@ -149,6 +160,26 @@ POC-2 완료: `GO`
 - installed-package POC는 caller profile의 Electron runtime·application manifest·main/preload·renderer production bundle source/target을 사용해 OS 임시 `resources/app` package를 조립하며 Chromium user-data도 같은 임시 경로에 둔다.
 - package executable에서 durable `저장됨`을 관찰한 뒤 actual main PID를 종료하고, 명시적 recovery apply publication 뒤 다시 main PID를 종료한 다음 세 번째 실행에서 published immutable revision·정확한 cursor·writable next journal을 복원했다.
 - 실패한 package 조립은 검증된 임시 parent를 제거하고, 실행 중 실패는 현재 active Electron tree를 강제 정리한다. 생성 artifact가 package tree·latency·checksum·exact source provenance를 직접 소유하며 최종 installer·shipping packaging 설정은 선택하지 않았다.
+
+## POC-3 현재 증거
+
+- `node:sqlite`와 `better-sqlite3`가 동일 runtime fixture의 PRAGMA·commit·rollback·foreign key·backup·Electron main load contract를 통과했다.
+- POC-3 adapter는 별도 native addon shipping·ABI rebuild가 필요 없는 `node:sqlite`로 결정했고 runtime 변경 시 contract를 다시 연다.
+- 정규 원장은 Work·Document 소유권을 composite foreign key로 강제하고 불변 revision·snapshot·blob manifest의 update·delete를 거부한다.
+- RevisionStore는 content blob publish와 exact readback을 완료한 뒤에만 manifest·revision·manuscript current/durable pointer를 한 `BEGIN IMMEDIATE` transaction에 쓴다.
+- DB conflict·rollback은 기존 pointer와 원장을 바꾸지 않으며 새 physical blob은 verified unreachable orphan으로 명시된다.
+- Anchor·ResumeCheckpoint·Work pointer는 현재 durable revision·정확한 range·이전 Work revision/pointer를 재검증한 한 transaction에서만 바뀐다.
+- integrity report는 pinned read-only DB snapshot과 caller fingerprint를 사용해 foreign key·DB·manifest·revision reference·physical blob·temporary·orphan을 분리하고 저장소를 수정하지 않는다.
+- migration runner는 caller catalog definition checksum, logical pre/post checksum, receipt, identity와 `user_version`을 한 transaction에 묶는다.
+- migration SQL·verification·hook 실패와 commit 전 actual process 종료 뒤 이전 version DB가 그대로 다시 열린다.
+- backup은 DB snapshot을 먼저 고정하고 이후 source revision, physical orphan과 temporary blob을 제외한다.
+- archive DB를 caller standalone journal mode로 정규화하고 unmanifested WAL·SHM·rollback journal이 있으면 publish를 거부한다.
+- restore는 sidecar·manifest exact shape·DB integrity/FK/identity/schema·revision reachability·모든 참조 blob checksum을 target 생성 전에 검증한다.
+- caller 용량·권한 preflight 뒤 새 빈 sibling staging에 blob을 먼저 쓰고 DB를 쓴 뒤 재검증하며 기존 bundle·target을 덮어쓰지 않는다.
+- actual child process 종료 3종과 두 process writer 경합은 DB·source 불변, 안전 재개방, 정확히 한 commit을 확인했다.
+- installed Windows Electron normal main은 local file renderer와 컴파일된 POC-3 adapter로 revision→checkpoint→backup→empty restore→integrity→materialize를 개발 서버 없이 완료했고, 서로 다른 두 browser main의 holder만 commit되며 contender는 `SQLITE_BUSY`로 명시 실패했다.
+- performance artifact는 caller iteration의 raw timing·설명용 p50/p95와 DB·blob·bundle·restore byte 크기만 기록하고 시간·크기 threshold를 두지 않는다.
+- 2026-07-30 최신 Gate 감사에서 승인 설계 checksum 11/11, `npm run check` 54 files·279 tests, production-bundle Electron E2E 23/23, POC-3 storage·driver contract 16 files·93 tests, actual process 행렬 3 files·4 tests, installed-package 3 files·5 tests, 성능·크기 측정 1/1이 통과했다. 생성 JSON은 비밀값·절대 경로를 포함하지 않고 Git ignore 상태다.
 
 ## POC-1 현재 증거
 
@@ -259,7 +290,6 @@ POC-2 완료: `GO`
 
 ## 보류
 
-- SQLite driver — POC-3 결과로 결정
 - FTS 사용 — 패키징 런타임 시험 후 결정
 - 공용 별빛 canonical 소유권 — SharedLoreEntry 결정 필요
 - 음악 SDK — 첫 출시 비차단 POC
@@ -272,11 +302,14 @@ POC-2 완료: `GO`
 - 측정과 검증 없이 dependency·driver를 확정해야 하는 경우
 - 승인 설계 checksum이 달라졌는데 검토하지 않은 경우
 
-## Gate 0 검증 명령
+## 검증 명령
 
 - `npm run lint`
 - `npm run typecheck`
 - `npm run test:run`
 - `npm run build`
 - `npm run test:e2e`
+- `npm run test:process:poc-3`
+- `npm run test:package:poc-3`
+- `npm run performance:poc-3`
 - `npm run environment:report -- --output <출력 경로>`

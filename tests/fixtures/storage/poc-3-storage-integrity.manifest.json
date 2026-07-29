@@ -1,0 +1,10 @@
+{
+  "counts": {
+    "publishedDirectorySegmentCount": 1,
+    "temporaryDirectorySegmentCount": 1,
+    "publishedShardCount": 2,
+    "publishedShardWidth": 2,
+    "contentPartCount": 3,
+    "temporaryByteCount": 17
+  }
+}

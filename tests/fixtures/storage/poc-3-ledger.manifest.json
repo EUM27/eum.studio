@@ -1,0 +1,57 @@
+{
+  "requestedSettings": {
+    "journalMode": {
+      "applySql": "PRAGMA journal_mode = WAL",
+      "verifySql": "PRAGMA journal_mode",
+      "expectedRows": [
+        {
+          "journal_mode": "wal"
+        }
+      ]
+    },
+    "synchronous": {
+      "applySql": "PRAGMA synchronous = FULL",
+      "verifySql": "PRAGMA synchronous",
+      "expectedRows": [
+        {
+          "synchronous": 2
+        }
+      ]
+    },
+    "foreignKeys": {
+      "applySql": "PRAGMA foreign_keys = ON",
+      "verifySql": "PRAGMA foreign_keys",
+      "expectedRows": [
+        {
+          "foreign_keys": 1
+        }
+      ]
+    }
+  },
+  "targetSchemaVersion": 1,
+  "requiredTables": [
+    "activity_interval_event_blocks",
+    "activity_intervals",
+    "activity_policies",
+    "anchors",
+    "blob_manifests",
+    "document_folders",
+    "document_revisions",
+    "documents",
+    "event_blocks",
+    "focus_cycles",
+    "focus_policies",
+    "manuscripts",
+    "migration_receipts",
+    "range_group_anchors",
+    "range_groups",
+    "resume_checkpoints",
+    "storage_ledger_identity",
+    "studios",
+    "work_settings",
+    "work_snapshot_document_revisions",
+    "work_snapshots",
+    "works",
+    "writing_sessions"
+  ]
+}

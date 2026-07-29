@@ -1,0 +1,162 @@
+{
+  "schemaVersion": 1,
+  "checksumAlgorithm": "sha256",
+  "candidates": [
+    {
+      "id": "node-sqlite",
+      "moduleSpecifier": "node:sqlite",
+      "versionSource": "electron-main-runtime",
+      "officialEvidenceRefs": [
+        "node-sqlite-stability",
+        "electron-native-modules"
+      ]
+    },
+    {
+      "id": "better-sqlite3",
+      "moduleSpecifier": "better-sqlite3",
+      "versionSource": "installed-package",
+      "expectedPackageVersion": "13.0.2",
+      "officialEvidenceRefs": [
+        "better-sqlite3-napi-transition",
+        "better-sqlite3-current-release",
+        "electron-native-modules"
+      ]
+    }
+  ],
+  "officialEvidence": [
+    {
+      "id": "node-sqlite-stability",
+      "url": "https://nodejs.org/docs/latest-v24.x/api/sqlite.html",
+      "claim": "Node 24 documents node:sqlite as stability 1.2 and exposes DatabaseSync plus backup."
+    },
+    {
+      "id": "better-sqlite3-napi-transition",
+      "url": "https://github.com/WiseLibs/better-sqlite3/releases/tag/v13.0.0",
+      "claim": "better-sqlite3 13.0.0 is the first N-API release and directly includes prebuilds intended to work across supported Node and Electron versions."
+    },
+    {
+      "id": "better-sqlite3-current-release",
+      "url": "https://github.com/WiseLibs/better-sqlite3/releases/tag/v13.0.2",
+      "claim": "better-sqlite3 13.0.2 is the 2026-07-29 release and embeds SQLite 3.53.4."
+    },
+    {
+      "id": "electron-native-modules",
+      "url": "https://www.electronjs.org/docs/latest/tutorial/using-native-node-modules",
+      "claim": "Electron requires actual runtime proof for ABI-dependent native modules."
+    }
+  ],
+  "databaseFiles": {
+    "primaryFileName": "candidate.sqlite3",
+    "backupFileName": "candidate-backup.sqlite3"
+  },
+  "artifactFiles": {
+    "packageLoadFileName": "package-load.json",
+    "measurementFileName": "measurement.json"
+  },
+  "provenanceFiles": {
+    "packageManifestPath": "package.json",
+    "packageLockPath": "package-lock.json"
+  },
+  "fixtureGeneration": {
+    "workCount": 2,
+    "documentsPerWork": 1,
+    "revisionsPerDocument": 1,
+    "revisionSequenceStart": 1,
+    "displayNameMaterials": [
+      "한",
+      "A",
+      "0"
+    ]
+  },
+  "pragmaSteps": [
+    {
+      "id": "foreign-keys",
+      "applySql": "PRAGMA foreign_keys = ON",
+      "verifySql": "PRAGMA foreign_keys",
+      "expectedRows": [
+        {
+          "foreign_keys": 1
+        }
+      ]
+    },
+    {
+      "id": "journal-mode",
+      "applySql": "PRAGMA journal_mode = WAL",
+      "verifySql": "PRAGMA journal_mode",
+      "expectedRows": [
+        {
+          "journal_mode": "wal"
+        }
+      ]
+    },
+    {
+      "id": "synchronous",
+      "applySql": "PRAGMA synchronous = FULL",
+      "verifySql": "PRAGMA synchronous",
+      "expectedRows": [
+        {
+          "synchronous": 2
+        }
+      ]
+    }
+  ],
+  "schemaStatements": [
+    "CREATE TABLE works (work_id TEXT PRIMARY KEY, display_name TEXT NOT NULL)",
+    "CREATE TABLE documents (work_id TEXT NOT NULL, document_id TEXT NOT NULL, display_name TEXT NOT NULL, PRIMARY KEY (work_id, document_id), FOREIGN KEY (work_id) REFERENCES works(work_id) ON DELETE RESTRICT)",
+    "CREATE TABLE revisions (work_id TEXT NOT NULL, document_id TEXT NOT NULL, revision_id TEXT NOT NULL, sequence INTEGER NOT NULL, content_checksum TEXT NOT NULL, PRIMARY KEY (work_id, document_id, revision_id), UNIQUE (work_id, document_id, sequence), FOREIGN KEY (work_id, document_id) REFERENCES documents(work_id, document_id) ON DELETE RESTRICT)"
+  ],
+  "writeTransaction": {
+    "beginSql": "BEGIN IMMEDIATE",
+    "insertWorkSql": "INSERT INTO works (work_id, display_name) VALUES (?, ?)",
+    "insertDocumentSql": "INSERT INTO documents (work_id, document_id, display_name) VALUES (?, ?, ?)",
+    "insertRevisionSql": "INSERT INTO revisions (work_id, document_id, revision_id, sequence, content_checksum) VALUES (?, ?, ?, ?, ?)",
+    "commitSql": "COMMIT"
+  },
+  "rollbackTransaction": {
+    "beginSql": "BEGIN IMMEDIATE",
+    "insertWorkSql": "INSERT INTO works (work_id, display_name) VALUES (?, ?)",
+    "rollbackSql": "ROLLBACK",
+    "verificationSql": "SELECT work_id FROM works WHERE work_id = ?"
+  },
+  "foreignKeyRejection": {
+    "beginSql": "BEGIN IMMEDIATE",
+    "insertDocumentSql": "INSERT INTO documents (work_id, document_id, display_name) VALUES (?, ?, ?)",
+    "rollbackSql": "ROLLBACK",
+    "verificationSql": "SELECT work_id, document_id FROM documents WHERE document_id = ?"
+  },
+  "ledgerVerificationSql": "SELECT w.work_id, d.document_id, r.revision_id, r.sequence, r.content_checksum FROM works AS w JOIN documents AS d ON d.work_id = w.work_id JOIN revisions AS r ON r.work_id = d.work_id AND r.document_id = d.document_id ORDER BY w.work_id, d.document_id, r.sequence",
+  "sqliteVersionQuery": {
+    "sql": "SELECT sqlite_version() AS sqlite_version",
+    "column": "sqlite_version"
+  },
+  "integrityVerification": {
+    "sql": "PRAGMA integrity_check",
+    "parameters": [],
+    "expectedRows": [
+      {
+        "integrity_check": "ok"
+      }
+    ]
+  },
+  "measurement": {
+    "independentRunCount": 2,
+    "repetitionsPerRun": 2,
+    "summaryPercentile": 95,
+    "timeoutMs": 120000
+  },
+  "packageProbe": {
+    "electronRuntimeDirectoryPath": "node_modules/electron/dist",
+    "applicationResourcesRelativePath": "resources/app",
+    "electronExecutableRelativePath": "electron.exe",
+    "applicationManifestRelativePath": "package.json",
+    "applicationMainRelativePath": "main.cjs",
+    "compiledApplicationRelativePath": "dist-electron/application/storage",
+    "compiledPlatformRelativePath": "dist-electron/platform/storage",
+    "compiledApplicationTargetRelativePath": "compiled/application/storage",
+    "compiledPlatformTargetRelativePath": "compiled/platform/storage",
+    "compiledContractEntryFileName": "poc-3-driver-bake-off-contract.js",
+    "compiledPlatformEntryFileName": "poc-3-driver-bake-off.js",
+    "betterSqlitePackagePath": "node_modules/better-sqlite3",
+    "betterSqlitePackageTargetRelativePath": "node_modules/better-sqlite3"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "emptyCounts": {
+    "workCount": 0,
+    "documentCount": 0,
+    "revisionCount": 0,
+    "resumeCheckpointCount": 0,
+    "writingSessionCount": 0
+  },
+  "seededCounts": {
+    "workCount": 1,
+    "documentCount": 1,
+    "revisionCount": 1,
+    "resumeCheckpointCount": 1,
+    "writingSessionCount": 1
+  },
+  "byteMaterialLengths": [
+    37,
+    61
+  ],
+  "standaloneSnapshotJournalMode": "DELETE"
+}
