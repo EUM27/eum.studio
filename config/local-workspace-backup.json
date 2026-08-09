@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "format": {
+    "identity": "eum-studio-local-workspace-backup",
+    "version": "1"
+  },
+  "checksum": {
+    "identity": "eum-studio-ledger-sha256-v1",
+    "algorithm": "sha256"
+  },
+  "sqlite": {
+    "sourceDatabaseName": "main",
+    "targetDatabaseName": "main",
+    "pagesPerStep": 64,
+    "standaloneSnapshotJournalMode": "DELETE"
+  },
+  "bundleLayout": {
+    "databaseEntrySegments": ["database", "workspace.sqlite3"],
+    "manifestEntrySegments": ["manifest.json"],
+    "manifestChecksumEntrySegments": ["manifest.checksum.json"],
+    "blobDirectorySegments": ["blobs"],
+    "blobShardWidths": [2, 2],
+    "blobFileNameSuffix": ".blob"
+  },
+  "restoreLayout": {
+    "databaseEntrySegments": ["workspace.sqlite3"],
+    "blobDirectorySegments": ["blobs", "published"],
+    "blobShardWidths": [2, 2],
+    "blobFileNameSuffix": ".blob"
+  },
+  "stateFileName": "backup-state-v1.json"
+}

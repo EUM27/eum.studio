@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "anchorPolicy": {
+    "schemaVersion": 1,
+    "version": "local-workspace-anchor-v1",
+    "contextOffsetLength": 64
+  },
+  "anchorEvidenceChecksumAlgorithm": "sha256",
+  "activityPolicy": {
+    "idleTimeout": 0,
+    "navigationGrace": 0,
+    "hiddenWindowPolicy": "disabled",
+    "activityClassRules": [],
+    "autoStartEnabled": false,
+    "autoResumeFromIdle": false,
+    "recoveryPolicy": "manual"
+  },
+  "focusPolicy": {
+    "phaseDefinitions": [],
+    "backgroundPolicy": "disabled",
+    "musicStartPolicy": "manual",
+    "completionPolicy": "manual",
+    "visibility": "hidden"
+  },
+  "railPreferences": {}
+}

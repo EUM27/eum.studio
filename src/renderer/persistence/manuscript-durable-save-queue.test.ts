@@ -540,6 +540,36 @@ describe("ManuscriptDurableSaveQueue", () => {
     expect(saveChangeBatch).not.toHaveBeenCalled();
   });
 
+  it("registers a newly created document and saves its first exact batch", async () => {
+    const existingDocument = createDocument();
+    const createdDocument = createDocument(0);
+    const saveChangeBatch = vi.fn(
+      async (batch: ChangeBatch) => receiptFor(batch),
+    );
+    const { queue } = createQueue({
+      documents: [existingDocument],
+      saveChangeBatch,
+    });
+    queue.registerDocument(createdDocument);
+    const edit = appendTransaction("");
+
+    expect(
+      queue.record(createdDocument.documentId, edit.transaction, {
+        composing: false,
+      }),
+    ).toBeNull();
+    await queue.flush(createdDocument.documentId);
+
+    expect(saveChangeBatch).toHaveBeenCalledTimes(1);
+    expect(saveChangeBatch.mock.calls[0]?.[0]).toMatchObject({
+      workId: createdDocument.workId,
+      documentId: createdDocument.documentId,
+      baseRevisionId: createdDocument.baseRevisionId,
+      sequence: 0,
+    });
+    expect(queue.getState(createdDocument.documentId)).toBe("saved");
+  });
+
   it("retains pending changes when the next sequence is not representable", async () => {
     const document = createDocument(Number.MAX_SAFE_INTEGER);
     const saveChangeBatch = vi.fn(

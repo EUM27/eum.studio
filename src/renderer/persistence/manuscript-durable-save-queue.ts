@@ -120,29 +120,33 @@ export class ManuscriptDurableSaveQueue {
     this.#onStateChange = input.onStateChange;
 
     for (const document of input.documents) {
-      if (
-        !Number.isSafeInteger(document.nextSequence) ||
-        document.nextSequence < 0
-      ) {
-        throw new Error(
-          `Invalid next sequence for durable queue document ${document.documentId}`,
-        );
-      }
-      if (this.#documents.has(document.documentId)) {
-        throw new Error(
-          `Duplicate durable queue document: ${document.documentId}`,
-        );
-      }
-      this.#documents.set(document.documentId, {
-        ...document,
-        accumulator: new ManuscriptChangeAccumulator(),
-        state: "saved",
-        composing: false,
-        flushRequested: false,
-        timer: null,
-        inFlight: null,
-      });
+      this.registerDocument(document);
     }
+  }
+
+  registerDocument(document: DurableQueueDocument): void {
+    if (
+      !Number.isSafeInteger(document.nextSequence) ||
+      document.nextSequence < 0
+    ) {
+      throw new Error(
+        `Invalid next sequence for durable queue document ${document.documentId}`,
+      );
+    }
+    if (this.#documents.has(document.documentId)) {
+      throw new Error(
+        `Duplicate durable queue document: ${document.documentId}`,
+      );
+    }
+    this.#documents.set(document.documentId, {
+      ...document,
+      accumulator: new ManuscriptChangeAccumulator(),
+      state: "saved",
+      composing: false,
+      flushRequested: false,
+      timer: null,
+      inFlight: null,
+    });
   }
 
   getState(

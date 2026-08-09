@@ -30,6 +30,88 @@ import {
   parseManuscriptResumeCheckpointProjection,
   type ManuscriptResumeCheckpointProjection,
 } from "../checkpoints/manuscript-resume-checkpoint-projection";
+import {
+  parseActivateWorkspaceLocationCommand,
+  parseCaptureWorkspaceResumeCommand,
+  parseCreateDocumentCommand,
+  parseCreateDocumentResult,
+  parseCreateFirstWorkCommand,
+  parseCreateFirstWorkResult,
+  parseCreateWorkCommand,
+  parseCreateWorkResult,
+  parseWorkspaceCatalogProjection,
+  type ActivateWorkspaceLocationCommand,
+  type CaptureWorkspaceResumeCommand,
+  type CreateDocumentCommand,
+  type CreateDocumentResult,
+  type CreateFirstWorkCommand,
+  type CreateFirstWorkResult,
+  type CreateWorkCommand,
+  type CreateWorkResult,
+  type WorkspaceCatalogProjection,
+} from "../workspace/workspace-contract";
+import {
+  parseCreateEventBlockCommand,
+  parseEventBlockListProjection,
+  parseEventBlockProjection,
+  parseListEventBlocksCommand,
+  type CreateEventBlockCommand,
+  type EventBlockListProjection,
+  type EventBlockProjection,
+  type ListEventBlocksCommand,
+} from "../structure/event-block-contract";
+import {
+  parseCreateSceneOverrideCommand,
+  parseListSceneOverridesCommand,
+  parseSceneOverrideListProjection,
+  parseSceneOverrideProjection,
+  type CreateSceneOverrideCommand,
+  type ListSceneOverridesCommand,
+  type SceneOverrideListProjection,
+  type SceneOverrideProjection,
+} from "../structure/scene-override-contract";
+import {
+  parseListWorkActivityCommand,
+  parseStartFocusCycleCommand,
+  parseStartWritingSessionCommand,
+  parseStopFocusCycleCommand,
+  parseStopWritingSessionCommand,
+  parseWorkActivityProjection,
+  type ListWorkActivityCommand,
+  type StartFocusCycleCommand,
+  type StartWritingSessionCommand,
+  type StopFocusCycleCommand,
+  type StopWritingSessionCommand,
+  type WorkActivityProjection,
+} from "../activity/work-activity-contract";
+import {
+  parseCreateWorkSnapshotCommand,
+  parseDocumentRevisionListProjection,
+  parseListDocumentRevisionsCommand,
+  parseListWorkSnapshotsCommand,
+  parseRestoreDocumentRevisionCommand,
+  parseRestoreDocumentRevisionResult,
+  parseWorkSnapshotListProjection,
+  parseWorkSnapshotProjection,
+  type CreateWorkSnapshotCommand,
+  type DocumentRevisionListProjection,
+  type ListDocumentRevisionsCommand,
+  type ListWorkSnapshotsCommand,
+  type RestoreDocumentRevisionCommand,
+  type RestoreDocumentRevisionResult,
+  type WorkSnapshotListProjection,
+  type WorkSnapshotProjection,
+} from "../revisions/work-version-contract";
+import {
+  parseLocalWorkspaceBackupActionResult,
+  parseLocalWorkspaceBackupStatusProjection,
+  type LocalWorkspaceBackupActionResult,
+  type LocalWorkspaceBackupStatusProjection,
+} from "../storage/local-workspace-backup-contract";
+import {
+  parseLegacyLoreImportRehearsalActionResult,
+  type LegacyLoreImportRehearsalActionResult,
+} from "../migration/legacy-lore-import-contract";
 
 export const RUNTIME_INFO_CHANNEL = "studio:system:get-runtime-info";
 export const MANUSCRIPT_INPUT_PROFILE_CHANNEL =
@@ -50,6 +132,52 @@ export const MANUSCRIPT_CLOSE_REQUEST_CHANNEL =
   "studio:editor:manuscript-close-request";
 export const MANUSCRIPT_COMPLETE_CLOSE_REQUEST_CHANNEL =
   "studio:editor:complete-manuscript-close-request";
+export const WORKSPACE_CATALOG_CHANNEL =
+  "studio:workspace:get-catalog";
+export const WORKSPACE_CREATE_FIRST_WORK_CHANNEL =
+  "studio:workspace:create-first-work";
+export const WORKSPACE_CREATE_WORK_CHANNEL =
+  "studio:workspace:create-work";
+export const WORKSPACE_CREATE_DOCUMENT_CHANNEL =
+  "studio:workspace:create-document";
+export const WORKSPACE_ACTIVATE_LOCATION_CHANNEL =
+  "studio:workspace:activate-location";
+export const WORKSPACE_CAPTURE_RESUME_CHANNEL =
+  "studio:workspace:capture-resume";
+export const STRUCTURE_CREATE_EVENT_BLOCK_CHANNEL =
+  "studio:structure:create-event-block";
+export const STRUCTURE_LIST_EVENT_BLOCKS_CHANNEL =
+  "studio:structure:list-event-blocks";
+export const STRUCTURE_CREATE_SCENE_OVERRIDE_CHANNEL =
+  "studio:structure:create-scene-override";
+export const STRUCTURE_LIST_SCENE_OVERRIDES_CHANNEL =
+  "studio:structure:list-scene-overrides";
+export const ACTIVITY_LIST_WORK_CHANNEL =
+  "studio:activity:list-work";
+export const ACTIVITY_START_SESSION_CHANNEL =
+  "studio:activity:start-session";
+export const ACTIVITY_STOP_SESSION_CHANNEL =
+  "studio:activity:stop-session";
+export const ACTIVITY_START_FOCUS_CHANNEL =
+  "studio:activity:start-focus";
+export const ACTIVITY_STOP_FOCUS_CHANNEL =
+  "studio:activity:stop-focus";
+export const VERSION_LIST_DOCUMENT_REVISIONS_CHANNEL =
+  "studio:version:list-document-revisions";
+export const VERSION_RESTORE_DOCUMENT_REVISION_CHANNEL =
+  "studio:version:restore-document-revision";
+export const VERSION_CREATE_WORK_SNAPSHOT_CHANNEL =
+  "studio:version:create-work-snapshot";
+export const VERSION_LIST_WORK_SNAPSHOTS_CHANNEL =
+  "studio:version:list-work-snapshots";
+export const BACKUP_GET_STATUS_CHANNEL =
+  "studio:backup:get-status";
+export const BACKUP_CREATE_CHANNEL =
+  "studio:backup:create";
+export const BACKUP_RESTORE_CHANNEL =
+  "studio:backup:restore";
+export const MIGRATION_RUN_LEGACY_REHEARSAL_CHANNEL =
+  "studio:migration:run-legacy-rehearsal";
 
 export type RuntimeInfo = {
   appName: string;
@@ -72,6 +200,77 @@ export type ManuscriptCloseResult = {
 export type StudioBridge = {
   system: {
     getRuntimeInfo: () => Promise<RuntimeInfo>;
+  };
+  workspace: {
+    getCatalog: () => Promise<WorkspaceCatalogProjection>;
+    activateLocation: (
+      command: ActivateWorkspaceLocationCommand,
+    ) => Promise<WorkspaceCatalogProjection>;
+    createWork: (
+      command: CreateWorkCommand,
+    ) => Promise<CreateWorkResult>;
+    createFirstWork: (
+      command: CreateFirstWorkCommand,
+    ) => Promise<CreateFirstWorkResult>;
+    createDocument: (
+      command: CreateDocumentCommand,
+    ) => Promise<CreateDocumentResult>;
+    captureResume: (
+      command: CaptureWorkspaceResumeCommand,
+    ) => Promise<ManuscriptResumeCheckpointProjection>;
+  };
+  structure: {
+    createEventBlock: (
+      command: CreateEventBlockCommand,
+    ) => Promise<EventBlockProjection>;
+    listEventBlocks: (
+      command: ListEventBlocksCommand,
+    ) => Promise<EventBlockListProjection>;
+    createSceneOverride: (
+      command: CreateSceneOverrideCommand,
+    ) => Promise<SceneOverrideProjection>;
+    listSceneOverrides: (
+      command: ListSceneOverridesCommand,
+    ) => Promise<SceneOverrideListProjection>;
+  };
+  activity: {
+    listWork: (
+      command: ListWorkActivityCommand,
+    ) => Promise<WorkActivityProjection>;
+    startSession: (
+      command: StartWritingSessionCommand,
+    ) => Promise<WorkActivityProjection>;
+    stopSession: (
+      command: StopWritingSessionCommand,
+    ) => Promise<WorkActivityProjection>;
+    startFocus: (
+      command: StartFocusCycleCommand,
+    ) => Promise<WorkActivityProjection>;
+    stopFocus: (
+      command: StopFocusCycleCommand,
+    ) => Promise<WorkActivityProjection>;
+  };
+  version: {
+    listDocumentRevisions: (
+      command: ListDocumentRevisionsCommand,
+    ) => Promise<DocumentRevisionListProjection>;
+    restoreDocumentRevision: (
+      command: RestoreDocumentRevisionCommand,
+    ) => Promise<RestoreDocumentRevisionResult>;
+    createWorkSnapshot: (
+      command: CreateWorkSnapshotCommand,
+    ) => Promise<WorkSnapshotProjection>;
+    listWorkSnapshots: (
+      command: ListWorkSnapshotsCommand,
+    ) => Promise<WorkSnapshotListProjection>;
+  };
+  backup: {
+    getStatus: () => Promise<LocalWorkspaceBackupStatusProjection>;
+    create: () => Promise<LocalWorkspaceBackupActionResult>;
+    restore: () => Promise<LocalWorkspaceBackupActionResult>;
+  };
+  migration: {
+    runLegacyLoreRehearsal: () => Promise<LegacyLoreImportRehearsalActionResult>;
   };
   editor: {
     getManuscriptInputProfile: () => Promise<ManuscriptInputProfile>;
@@ -104,11 +303,52 @@ export type BridgeInvoke = (
     | typeof MANUSCRIPT_STARTUP_RECOVERY_CHANNEL
     | typeof MANUSCRIPT_RESUME_CHECKPOINT_CHANNEL
     | typeof MANUSCRIPT_APPLY_STARTUP_RECOVERY_CHANNEL
-    | typeof MANUSCRIPT_COMPLETE_CLOSE_REQUEST_CHANNEL,
+    | typeof MANUSCRIPT_COMPLETE_CLOSE_REQUEST_CHANNEL
+    | typeof WORKSPACE_CATALOG_CHANNEL
+    | typeof WORKSPACE_CREATE_FIRST_WORK_CHANNEL
+    | typeof WORKSPACE_CREATE_WORK_CHANNEL
+    | typeof WORKSPACE_CREATE_DOCUMENT_CHANNEL
+    | typeof WORKSPACE_ACTIVATE_LOCATION_CHANNEL
+    | typeof WORKSPACE_CAPTURE_RESUME_CHANNEL
+    | typeof STRUCTURE_CREATE_EVENT_BLOCK_CHANNEL
+    | typeof STRUCTURE_LIST_EVENT_BLOCKS_CHANNEL
+    | typeof STRUCTURE_CREATE_SCENE_OVERRIDE_CHANNEL
+    | typeof STRUCTURE_LIST_SCENE_OVERRIDES_CHANNEL
+    | typeof ACTIVITY_LIST_WORK_CHANNEL
+    | typeof ACTIVITY_START_SESSION_CHANNEL
+    | typeof ACTIVITY_STOP_SESSION_CHANNEL
+    | typeof ACTIVITY_START_FOCUS_CHANNEL
+    | typeof ACTIVITY_STOP_FOCUS_CHANNEL
+    | typeof VERSION_LIST_DOCUMENT_REVISIONS_CHANNEL
+    | typeof VERSION_RESTORE_DOCUMENT_REVISION_CHANNEL
+    | typeof VERSION_CREATE_WORK_SNAPSHOT_CHANNEL
+    | typeof VERSION_LIST_WORK_SNAPSHOTS_CHANNEL
+    | typeof BACKUP_GET_STATUS_CHANNEL
+    | typeof BACKUP_CREATE_CHANNEL
+    | typeof BACKUP_RESTORE_CHANNEL
+    | typeof MIGRATION_RUN_LEGACY_REHEARSAL_CHANNEL,
   payload?:
     | ChangeBatch
     | ApplyStartupRecoveryCommand
-    | ManuscriptCloseResult,
+    | ManuscriptCloseResult
+    | CreateFirstWorkCommand
+    | CreateWorkCommand
+    | CreateDocumentCommand
+    | ActivateWorkspaceLocationCommand
+    | CaptureWorkspaceResumeCommand
+    | CreateEventBlockCommand
+    | ListEventBlocksCommand
+    | CreateSceneOverrideCommand
+    | ListSceneOverridesCommand
+    | ListWorkActivityCommand
+    | StartWritingSessionCommand
+    | StopWritingSessionCommand
+    | StartFocusCycleCommand
+    | StopFocusCycleCommand
+    | ListDocumentRevisionsCommand
+    | RestoreDocumentRevisionCommand
+    | CreateWorkSnapshotCommand
+    | ListWorkSnapshotsCommand,
 ) => Promise<unknown>;
 
 export type BridgeListen = (
@@ -253,6 +493,256 @@ export function createStudioBridge(
           throw new Error("Invalid runtime information");
         }
         return value;
+      },
+    },
+    workspace: {
+      getCatalog: async () => {
+        const value = await invoke(WORKSPACE_CATALOG_CHANNEL);
+        try {
+          return parseWorkspaceCatalogProjection(value);
+        } catch {
+          throw new Error("Invalid workspace catalog");
+        }
+      },
+      activateLocation: async (input) => {
+        const command = parseActivateWorkspaceLocationCommand(input);
+        const value = await invoke(
+          WORKSPACE_ACTIVATE_LOCATION_CHANNEL,
+          command,
+        );
+        try {
+          return parseWorkspaceCatalogProjection(value);
+        } catch {
+          throw new Error("Invalid workspace activation result");
+        }
+      },
+      createWork: async (input) => {
+        const command = parseCreateWorkCommand(input);
+        const value = await invoke(WORKSPACE_CREATE_WORK_CHANNEL, command);
+        try {
+          return parseCreateWorkResult(value);
+        } catch {
+          throw new Error("Invalid Work creation result");
+        }
+      },
+      createFirstWork: async (input) => {
+        const command = parseCreateFirstWorkCommand(input);
+        const value = await invoke(
+          WORKSPACE_CREATE_FIRST_WORK_CHANNEL,
+          command,
+        );
+        try {
+          return parseCreateFirstWorkResult(value);
+        } catch {
+          throw new Error("Invalid first Work creation result");
+        }
+      },
+      createDocument: async (input) => {
+        const command = parseCreateDocumentCommand(input);
+        const value = await invoke(
+          WORKSPACE_CREATE_DOCUMENT_CHANNEL,
+          command,
+        );
+        try {
+          return parseCreateDocumentResult(value);
+        } catch {
+          throw new Error("Invalid Document creation result");
+        }
+      },
+      captureResume: async (input) => {
+        const command = parseCaptureWorkspaceResumeCommand(input);
+        const value = await invoke(
+          WORKSPACE_CAPTURE_RESUME_CHANNEL,
+          command,
+        );
+        try {
+          return parseManuscriptResumeCheckpointProjection(value);
+        } catch {
+          throw new Error("Invalid workspace resume result");
+        }
+      },
+    },
+    structure: {
+      createEventBlock: async (input) => {
+        const command = parseCreateEventBlockCommand(input);
+        const value = await invoke(
+          STRUCTURE_CREATE_EVENT_BLOCK_CHANNEL,
+          command,
+        );
+        try {
+          return parseEventBlockProjection(value);
+        } catch {
+          throw new Error("Invalid EventBlock creation result");
+        }
+      },
+      listEventBlocks: async (input) => {
+        const command = parseListEventBlocksCommand(input);
+        const value = await invoke(
+          STRUCTURE_LIST_EVENT_BLOCKS_CHANNEL,
+          command,
+        );
+        try {
+          return parseEventBlockListProjection(value);
+        } catch {
+          throw new Error("Invalid EventBlock list");
+        }
+      },
+      createSceneOverride: async (input) => {
+        const command = parseCreateSceneOverrideCommand(input);
+        const value = await invoke(
+          STRUCTURE_CREATE_SCENE_OVERRIDE_CHANNEL,
+          command,
+        );
+        try {
+          return parseSceneOverrideProjection(value);
+        } catch {
+          throw new Error("Invalid SceneOverride creation result");
+        }
+      },
+      listSceneOverrides: async (input) => {
+        const command = parseListSceneOverridesCommand(input);
+        const value = await invoke(
+          STRUCTURE_LIST_SCENE_OVERRIDES_CHANNEL,
+          command,
+        );
+        try {
+          return parseSceneOverrideListProjection(value);
+        } catch {
+          throw new Error("Invalid SceneOverride list");
+        }
+      },
+    },
+    activity: {
+      listWork: async (input) => {
+        const command = parseListWorkActivityCommand(input);
+        const value = await invoke(ACTIVITY_LIST_WORK_CHANNEL, command);
+        try {
+          return parseWorkActivityProjection(value);
+        } catch {
+          throw new Error("Invalid Work activity projection");
+        }
+      },
+      startSession: async (input) => {
+        const command = parseStartWritingSessionCommand(input);
+        const value = await invoke(ACTIVITY_START_SESSION_CHANNEL, command);
+        try {
+          return parseWorkActivityProjection(value);
+        } catch {
+          throw new Error("Invalid WritingSession result");
+        }
+      },
+      stopSession: async (input) => {
+        const command = parseStopWritingSessionCommand(input);
+        const value = await invoke(ACTIVITY_STOP_SESSION_CHANNEL, command);
+        try {
+          return parseWorkActivityProjection(value);
+        } catch {
+          throw new Error("Invalid WritingSession result");
+        }
+      },
+      startFocus: async (input) => {
+        const command = parseStartFocusCycleCommand(input);
+        const value = await invoke(ACTIVITY_START_FOCUS_CHANNEL, command);
+        try {
+          return parseWorkActivityProjection(value);
+        } catch {
+          throw new Error("Invalid FocusCycle result");
+        }
+      },
+      stopFocus: async (input) => {
+        const command = parseStopFocusCycleCommand(input);
+        const value = await invoke(ACTIVITY_STOP_FOCUS_CHANNEL, command);
+        try {
+          return parseWorkActivityProjection(value);
+        } catch {
+          throw new Error("Invalid FocusCycle result");
+        }
+      },
+    },
+    version: {
+      listDocumentRevisions: async (input) => {
+        const command = parseListDocumentRevisionsCommand(input);
+        const value = await invoke(
+          VERSION_LIST_DOCUMENT_REVISIONS_CHANNEL,
+          command,
+        );
+        try {
+          return parseDocumentRevisionListProjection(value);
+        } catch {
+          throw new Error("Invalid Document revision list");
+        }
+      },
+      restoreDocumentRevision: async (input) => {
+        const command = parseRestoreDocumentRevisionCommand(input);
+        const value = await invoke(
+          VERSION_RESTORE_DOCUMENT_REVISION_CHANNEL,
+          command,
+        );
+        try {
+          return parseRestoreDocumentRevisionResult(value);
+        } catch {
+          throw new Error("Invalid Document revision restore result");
+        }
+      },
+      createWorkSnapshot: async (input) => {
+        const command = parseCreateWorkSnapshotCommand(input);
+        const value = await invoke(
+          VERSION_CREATE_WORK_SNAPSHOT_CHANNEL,
+          command,
+        );
+        try {
+          return parseWorkSnapshotProjection(value);
+        } catch {
+          throw new Error("Invalid WorkSnapshot creation result");
+        }
+      },
+      listWorkSnapshots: async (input) => {
+        const command = parseListWorkSnapshotsCommand(input);
+        const value = await invoke(
+          VERSION_LIST_WORK_SNAPSHOTS_CHANNEL,
+          command,
+        );
+        try {
+          return parseWorkSnapshotListProjection(value);
+        } catch {
+          throw new Error("Invalid WorkSnapshot list");
+        }
+      },
+    },
+    backup: {
+      getStatus: async () => {
+        const value = await invoke(BACKUP_GET_STATUS_CHANNEL);
+        try {
+          return parseLocalWorkspaceBackupStatusProjection(value);
+        } catch {
+          throw new Error("Invalid local workspace backup status");
+        }
+      },
+      create: async () => {
+        const value = await invoke(BACKUP_CREATE_CHANNEL);
+        try {
+          return parseLocalWorkspaceBackupActionResult(value);
+        } catch {
+          throw new Error("Invalid local workspace backup result");
+        }
+      },
+      restore: async () => {
+        const value = await invoke(BACKUP_RESTORE_CHANNEL);
+        try {
+          return parseLocalWorkspaceBackupActionResult(value);
+        } catch {
+          throw new Error("Invalid local workspace restore result");
+        }
+      },
+    },
+    migration: {
+      runLegacyLoreRehearsal: async () => {
+        const value = await invoke(MIGRATION_RUN_LEGACY_REHEARSAL_CHANNEL);
+        try {
+          return parseLegacyLoreImportRehearsalActionResult(value);
+        } catch {
+          throw new Error("Invalid legacy import rehearsal result");
+        }
       },
     },
     editor: {

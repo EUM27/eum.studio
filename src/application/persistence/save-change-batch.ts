@@ -27,13 +27,27 @@ export type DurableJournalAppendReceipt = {
   readonly frameByteLength: number;
 };
 
-export type SaveReceipt = DurableJournalAppendReceipt & {
+type SaveReceiptIdentity = {
   readonly workId: EntityId<"Work">;
   readonly documentId: EntityId<"Document">;
   readonly baseRevisionId: EntityId<"DocumentRevision">;
   readonly batchId: EntityId<"ChangeBatch">;
   readonly sequence: number;
 };
+
+export type JournalSaveReceipt =
+  SaveReceiptIdentity &
+  DurableJournalAppendReceipt;
+
+export type RevisionSaveReceipt =
+  SaveReceiptIdentity & {
+    readonly revisionId:
+      EntityId<"DocumentRevision">;
+  };
+
+export type SaveReceipt =
+  | JournalSaveReceipt
+  | RevisionSaveReceipt;
 
 function readReceiptRecord(value: unknown): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -70,21 +84,58 @@ function readReceiptInteger(
 
 export function parseSaveReceipt(value: unknown): SaveReceipt {
   const input = readReceiptRecord(value);
-  const fields = [
+  const identityFields = [
     "workId",
     "documentId",
     "baseRevisionId",
     "batchId",
     "sequence",
-    "frameStartByteOffset",
-    "frameEndByteOffset",
-    "frameByteLength",
   ] as const;
+  const isRevisionReceipt =
+    Object.hasOwn(input, "revisionId");
+  const fields = isRevisionReceipt
+    ? [...identityFields, "revisionId"]
+    : [
+        ...identityFields,
+        "frameStartByteOffset",
+        "frameEndByteOffset",
+        "frameByteLength",
+      ];
   const allowedFields = new Set<string>(fields);
   for (const field of Object.keys(input)) {
     if (!allowedFields.has(field)) {
       throw new Error(`Unsupported SaveReceipt field: ${field}`);
     }
+  }
+
+  const identity = {
+    workId: readReceiptIdentity<"Work">(
+      input.workId,
+      "workId",
+    ),
+    documentId: readReceiptIdentity<"Document">(
+      input.documentId,
+      "documentId",
+    ),
+    baseRevisionId: readReceiptIdentity<"DocumentRevision">(
+      input.baseRevisionId,
+      "baseRevisionId",
+    ),
+    batchId: readReceiptIdentity<"ChangeBatch">(
+      input.batchId,
+      "batchId",
+    ),
+    sequence: readReceiptInteger(input.sequence, "sequence"),
+  };
+  if (isRevisionReceipt) {
+    return Object.freeze({
+      ...identity,
+      revisionId:
+        readReceiptIdentity<"DocumentRevision">(
+          input.revisionId,
+          "revisionId",
+        ),
+    });
   }
 
   const frameStartByteOffset = readReceiptInteger(
@@ -111,25 +162,8 @@ export function parseSaveReceipt(value: unknown): SaveReceipt {
       "SaveReceipt frame byte range is inconsistent",
     );
   }
-
   return Object.freeze({
-    workId: readReceiptIdentity<"Work">(
-      input.workId,
-      "workId",
-    ),
-    documentId: readReceiptIdentity<"Document">(
-      input.documentId,
-      "documentId",
-    ),
-    baseRevisionId: readReceiptIdentity<"DocumentRevision">(
-      input.baseRevisionId,
-      "baseRevisionId",
-    ),
-    batchId: readReceiptIdentity<"ChangeBatch">(
-      input.batchId,
-      "batchId",
-    ),
-    sequence: readReceiptInteger(input.sequence, "sequence"),
+    ...identity,
     frameStartByteOffset,
     frameEndByteOffset,
     frameByteLength,

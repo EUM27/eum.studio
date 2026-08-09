@@ -8,7 +8,7 @@
 
 현재 storage 결정: [POC-3 SQLite·blob·backup 결정](docs/poc-3-storage-decisions.md)
 
-마지막 갱신: 2026-07-30
+마지막 갱신: 2026-08-07
 
 ## 현재 Gate
 
@@ -31,9 +31,24 @@ POC-3 완료 증거:
 
 다음 Gate: `POC-M — 현행 데이터 이주 rehearsal`
 
-실사용 원고 저장: `NO-GO`
+실사용 원고 저장: `GO`
 
 POC-3 완료: `GO`
+
+## 제품 화면 연결
+
+- [x] 노션의 화면 구조를 참고해 만든 로컬 작업실 셸을 renderer 진입점으로 연결
+- [x] `오늘`의 이어 쓰기와 사이드바 `작업실`에서 실제 CodeMirror 원고 편집기 열기
+- [x] 화면을 이동해도 편집기를 파괴하지 않아 종료 전 flush·문서별 undo·selection·scroll 상태 계약 유지
+- [x] 기존 typed preload·durable save·recovery·IME·문서 전환·검색 경계를 변경 없이 보존
+- [x] production build와 단위·통합 56개 파일 281개, 실제 Electron E2E 24개 통과
+- [x] 빈 로컬 작업실에서 작품·첫 원고를 생성하고 불변 revision으로 저장한 뒤 같은 저장소를 재실행해 정확한 작품·원고·본문 재개방
+
+다음 제품 단위:
+
+- [ ] POC-M 읽기 전용 source snapshot·100% receipt coverage·원고 checksum·미매핑 raw 보존·멱등 재실행
+
+현재 셸은 노션 데이터를 가져오거나 쓰지 않는다. 로컬 첫 작품 생성·durable 저장·재실행 후 exact reopen 폐회로가 실제 Electron에서 통과했으므로 실사용 원고 저장은 `GO`다.
 
 ## 완료
 

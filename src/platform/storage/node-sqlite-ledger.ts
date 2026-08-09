@@ -34,6 +34,8 @@ import type {
 import type {
   Poc3AnchorRecord,
   Poc3LedgerRecord,
+  Poc3MigrationDecisionRecord,
+  Poc3RawPreservedItemRecord,
   Poc3ResumeCheckpointRecord,
 } from "../../domain/poc-3-storage-ledger";
 import {
@@ -263,6 +265,41 @@ CREATE TABLE IF NOT EXISTS blob_manifests (
     ON DELETE RESTRICT
 ) STRICT;
 
+CREATE TABLE IF NOT EXISTS raw_preserved_items (
+  id TEXT PRIMARY KEY,
+  batch_id TEXT NOT NULL,
+  source_snapshot_id TEXT NOT NULL,
+  source_collection TEXT NOT NULL,
+  source_identity TEXT NOT NULL,
+  source_occurrence INTEGER NOT NULL,
+  serialization_identity TEXT NOT NULL,
+  raw_bytes BLOB NOT NULL,
+  checksum_identity TEXT NOT NULL,
+  checksum_value TEXT NOT NULL,
+  byte_length INTEGER NOT NULL,
+  mapper_version TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (
+    batch_id,
+    source_snapshot_id,
+    source_collection,
+    source_identity,
+    source_occurrence
+  )
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS migration_decisions (
+  id TEXT PRIMARY KEY,
+  batch_id TEXT NOT NULL,
+  source_snapshot_id TEXT NOT NULL,
+  source_collection TEXT NOT NULL,
+  source_identity TEXT NOT NULL,
+  command_kind TEXT NOT NULL,
+  decision_payload_json TEXT NOT NULL,
+  decided_at TEXT NOT NULL,
+  actor_ref TEXT NOT NULL
+) STRICT;
+
 CREATE TABLE IF NOT EXISTS document_revisions (
   id TEXT PRIMARY KEY,
   work_id TEXT NOT NULL,
@@ -384,6 +421,41 @@ CREATE TABLE IF NOT EXISTS anchors (
       document_id,
       id
     )
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS scene_overrides (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  document_id TEXT NOT NULL,
+  operation TEXT NOT NULL,
+  base_rule_set_revision INTEGER NOT NULL,
+  note TEXT,
+  UNIQUE (work_id, id),
+  UNIQUE (work_id, document_id, id),
+  FOREIGN KEY (work_id, document_id)
+    REFERENCES documents (work_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS scene_override_anchors (
+  work_id TEXT NOT NULL,
+  document_id TEXT NOT NULL,
+  scene_override_id TEXT NOT NULL,
+  anchor_id TEXT NOT NULL,
+  order_index INTEGER NOT NULL,
+  PRIMARY KEY (scene_override_id, anchor_id),
+  UNIQUE (scene_override_id, order_index),
+  FOREIGN KEY (work_id, document_id, scene_override_id)
+    REFERENCES scene_overrides (work_id, document_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, document_id, anchor_id)
+    REFERENCES anchors (work_id, document_id, id)
     ON DELETE RESTRICT
 ) STRICT;
 
@@ -1390,6 +1462,77 @@ function writeLedgerRecord(
         ],
       );
       return;
+    case "rawPreservedItem":
+      runStatement(
+        database,
+        `
+          INSERT INTO raw_preserved_items (
+            id,
+            batch_id,
+            source_snapshot_id,
+            source_collection,
+            source_identity,
+            source_occurrence,
+            serialization_identity,
+            raw_bytes,
+            checksum_identity,
+            checksum_value,
+            byte_length,
+            mapper_version,
+            created_at
+          )
+          VALUES (
+            ?, ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?
+          )
+        `,
+        [
+          record.id,
+          record.batchId,
+          record.sourceSnapshotId,
+          record.sourceCollection,
+          record.sourceIdentity,
+          record.sourceOccurrence,
+          record.serializationIdentity,
+          record.rawBytes,
+          record.checksumIdentity,
+          record.checksumValue,
+          record.byteLength,
+          record.mapperVersion,
+          record.createdAt,
+        ],
+      );
+      return;
+    case "migrationDecision":
+      runStatement(
+        database,
+        `
+          INSERT INTO migration_decisions (
+            id,
+            batch_id,
+            source_snapshot_id,
+            source_collection,
+            source_identity,
+            command_kind,
+            decision_payload_json,
+            decided_at,
+            actor_ref
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.batchId,
+          record.sourceSnapshotId,
+          record.sourceCollection,
+          record.sourceIdentity,
+          record.commandKind,
+          record.decisionPayloadJson,
+          record.decidedAt,
+          record.actorRef,
+        ],
+      );
+      return;
     case "documentRevision":
       runStatement(
         database,
@@ -1570,6 +1713,62 @@ function writeLedgerRecord(
             );
           },
         );
+      return;
+    case "sceneOverride":
+      runStatement(
+        database,
+        `
+          INSERT INTO scene_overrides (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            work_id,
+            document_id,
+            operation,
+            base_rule_set_revision,
+            note
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.workId,
+          record.documentId,
+          record.operation,
+          record.baseRuleSetRevision,
+          nullable(record.note),
+        ],
+      );
+      record.anchorIds.forEach((anchorId, orderIndex) => {
+        runStatement(
+          database,
+          `
+            INSERT INTO scene_override_anchors (
+              work_id,
+              document_id,
+              scene_override_id,
+              anchor_id,
+              order_index
+            )
+            VALUES (?, ?, ?, ?, ?)
+          `,
+          [
+            record.workId,
+            record.documentId,
+            record.id,
+            anchorId,
+            orderIndex,
+          ],
+        );
+      });
       return;
     case "eventBlock":
       runStatement(
@@ -2091,6 +2290,18 @@ function readNonNegativeSafeInteger(
     );
   }
   return value;
+}
+
+function readRequiredBytes(
+  row: Readonly<Record<string, unknown>>,
+  column: string,
+  label: string,
+): Uint8Array {
+  const value = row[column];
+  if (!(value instanceof Uint8Array)) {
+    throw new Error(`${label} returned an invalid ${column}`);
+  }
+  return new Uint8Array(value);
 }
 
 function sameAddress(
@@ -3925,6 +4136,118 @@ function readCheckpoint(
   );
 }
 
+const RAW_PRESERVED_ITEM_SELECT_SQL = `
+SELECT
+  id AS "id",
+  batch_id AS "batchId",
+  source_snapshot_id AS "sourceSnapshotId",
+  source_collection AS "sourceCollection",
+  source_identity AS "sourceIdentity",
+  source_occurrence AS "sourceOccurrence",
+  serialization_identity AS "serializationIdentity",
+  raw_bytes AS "rawBytes",
+  checksum_identity AS "checksumIdentity",
+  checksum_value AS "checksumValue",
+  byte_length AS "byteLength",
+  mapper_version AS "mapperVersion",
+  created_at AS "createdAt"
+FROM raw_preserved_items
+`;
+
+function readRawPreservedItem(
+  database: NodeSqliteDatabase,
+  rawItemId: string,
+): Poc3RawPreservedItemRecord | null {
+  const rows = database
+    .prepare(
+      `${RAW_PRESERVED_ITEM_SELECT_SQL}
+       WHERE id = ?`,
+    )
+    .all(rawItemId);
+  if (rows.length === 0) {
+    return null;
+  }
+  if (rows.length !== 1 || rows[0] === undefined) {
+    throw new Error("RawPreservedItem lookup returned an invalid result");
+  }
+  const row = rows[0];
+  const label = "RawPreservedItem lookup";
+  return Object.freeze({
+    kind: "rawPreservedItem",
+    id: readRequiredString(row, "id", label),
+    batchId: readRequiredString(row, "batchId", label),
+    sourceSnapshotId: readRequiredString(row, "sourceSnapshotId", label),
+    sourceCollection: readRequiredString(row, "sourceCollection", label),
+    sourceIdentity: readRequiredString(row, "sourceIdentity", label),
+    sourceOccurrence: readNonNegativeSafeInteger(
+      row,
+      "sourceOccurrence",
+      label,
+    ),
+    serializationIdentity: readRequiredString(
+      row,
+      "serializationIdentity",
+      label,
+    ),
+    rawBytes: readRequiredBytes(row, "rawBytes", label),
+    checksumIdentity: readRequiredString(row, "checksumIdentity", label),
+    checksumValue: readRequiredString(row, "checksumValue", label),
+    byteLength: readNonNegativeSafeInteger(row, "byteLength", label),
+    mapperVersion: readRequiredString(row, "mapperVersion", label),
+    createdAt: readRequiredString(row, "createdAt", label),
+  });
+}
+
+const MIGRATION_DECISION_SELECT_SQL = `
+SELECT
+  id AS "id",
+  batch_id AS "batchId",
+  source_snapshot_id AS "sourceSnapshotId",
+  source_collection AS "sourceCollection",
+  source_identity AS "sourceIdentity",
+  command_kind AS "commandKind",
+  decision_payload_json AS "decisionPayloadJson",
+  decided_at AS "decidedAt",
+  actor_ref AS "actorRef"
+FROM migration_decisions
+`;
+
+function readMigrationDecision(
+  database: NodeSqliteDatabase,
+  decisionId: string,
+): Poc3MigrationDecisionRecord | null {
+  const rows = queryRows(
+    database,
+    `${MIGRATION_DECISION_SELECT_SQL}
+     WHERE id = ?`,
+    [decisionId],
+  );
+  if (rows.length === 0) {
+    return null;
+  }
+  if (rows.length !== 1 || rows[0] === undefined) {
+    throw new Error("MigrationDecision lookup returned an invalid result");
+  }
+  const row = rows[0];
+  const label = "MigrationDecision lookup";
+  return Object.freeze({
+    kind: "migrationDecision",
+    id: readRequiredString(row, "id", label),
+    batchId: readRequiredString(row, "batchId", label),
+    sourceSnapshotId: readRequiredString(row, "sourceSnapshotId", label),
+    sourceCollection: readRequiredString(row, "sourceCollection", label),
+    sourceIdentity: readRequiredString(row, "sourceIdentity", label),
+    commandKind: readRequiredString(row, "commandKind", label),
+    decisionPayloadJson: readRequiredString(
+      row,
+      "decisionPayloadJson",
+      label,
+    ),
+    decidedAt: readRequiredString(row, "decidedAt", label),
+    actorRef: readRequiredString(row, "actorRef", label),
+  });
+}
+
 function normalizeJsonValue(
   value: unknown,
 ): unknown {
@@ -4709,6 +5032,15 @@ export async function openNodeSqliteLedger(
         NodeSqliteResumeCheckpointCaptureOptions,
     ):
       ResumeCheckpointWithAnchorsCaptureTransaction;
+    getAnchorById(
+      anchorId: EntityId<"Anchor">,
+    ): Promise<Anchor | null>;
+    getRawPreservedItemById(
+      rawItemId: string,
+    ): Promise<Poc3RawPreservedItemRecord | null>;
+    getMigrationDecisionById(
+      decisionId: string,
+    ): Promise<Poc3MigrationDecisionRecord | null>;
     close(): void;
   }
 > {
@@ -4781,6 +5113,24 @@ export async function openNodeSqliteLedger(
             options,
           );
         },
+      getAnchorById: async (
+        anchorId: EntityId<"Anchor">,
+      ): Promise<Anchor | null> => {
+        assertOpen();
+        return readAnchor(database, anchorId);
+      },
+      getRawPreservedItemById: async (
+        rawItemId: string,
+      ): Promise<Poc3RawPreservedItemRecord | null> => {
+        assertOpen();
+        return readRawPreservedItem(database, rawItemId);
+      },
+      getMigrationDecisionById: async (
+        decisionId: string,
+      ): Promise<Poc3MigrationDecisionRecord | null> => {
+        assertOpen();
+        return readMigrationDecision(database, decisionId);
+      },
       transaction: async <T>(
         run: (
           tx:

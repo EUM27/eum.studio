@@ -179,6 +179,17 @@ export type Poc3RangeGroupRecord =
       readonly string[];
   };
 
+export type Poc3SceneOverrideRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "sceneOverride";
+    readonly workId: string;
+    readonly documentId: string;
+    readonly operation: "add" | "ignore" | "merge" | "split";
+    readonly anchorIds: readonly string[];
+    readonly baseRuleSetRevision: number;
+    readonly note?: string;
+  };
+
 export type Poc3EventBlockRecord =
   Poc3LedgerRecordMeta & {
     readonly kind: "eventBlock";
@@ -316,6 +327,36 @@ export type Poc3MigrationReceiptRecord = {
     string;
 };
 
+export type Poc3RawPreservedItemRecord = {
+  readonly kind: "rawPreservedItem";
+  readonly id: string;
+  readonly batchId: string;
+  readonly sourceSnapshotId: string;
+  readonly sourceCollection: string;
+  readonly sourceIdentity: string;
+  readonly sourceOccurrence: number;
+  readonly serializationIdentity: string;
+  readonly rawBytes: Uint8Array;
+  readonly checksumIdentity: string;
+  readonly checksumValue: string;
+  readonly byteLength: number;
+  readonly mapperVersion: string;
+  readonly createdAt: string;
+};
+
+export type Poc3MigrationDecisionRecord = {
+  readonly kind: "migrationDecision";
+  readonly id: string;
+  readonly batchId: string;
+  readonly sourceSnapshotId: string;
+  readonly sourceCollection: string;
+  readonly sourceIdentity: string;
+  readonly commandKind: string;
+  readonly decisionPayloadJson: string;
+  readonly decidedAt: string;
+  readonly actorRef: string;
+};
+
 export type Poc3LedgerRecord =
   | Poc3StudioRecord
   | Poc3WorkRecord
@@ -329,10 +370,13 @@ export type Poc3LedgerRecord =
   | Poc3ManuscriptRecord
   | Poc3AnchorRecord
   | Poc3RangeGroupRecord
+  | Poc3SceneOverrideRecord
   | Poc3EventBlockRecord
   | Poc3ResumeCheckpointRecord
   | Poc3WritingSessionRecord
   | Poc3ActivityIntervalRecord
   | Poc3FocusCycleRecord
   | Poc3WorkSnapshotRecord
+  | Poc3RawPreservedItemRecord
+  | Poc3MigrationDecisionRecord
   | Poc3MigrationReceiptRecord;

@@ -407,6 +407,71 @@ select {
   white-space: nowrap;
 }
 
+.activity-status-controls {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-right: auto;
+}
+
+.activity-status-controls > button,
+.activity-timer button {
+  flex: none;
+  min-height: 1.5rem;
+  padding: 0 0.5rem;
+  border: 1px solid #d4cec3;
+  border-radius: 999px;
+  color: #5b554d;
+  background: #fffdf8;
+  font: inherit;
+  cursor: pointer;
+}
+
+.activity-status-controls button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.activity-timer {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  padding-left: 0.55rem;
+  border: 1px solid #d8d0e2;
+  border-radius: 999px;
+  color: #5e5270;
+  background: #f7f2fb;
+}
+
+.activity-timer > span {
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-timer output {
+  color: #3f374a;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-timer button {
+  min-height: 1.35rem;
+  border-color: transparent;
+  background: transparent;
+}
+
+.activity-status-error {
+  max-width: 14rem;
+  overflow: hidden;
+  color: #a34f4f;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .selection-count {
   display: inline-flex;
   gap: 0.2rem;

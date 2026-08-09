@@ -69,6 +69,13 @@ export type ManuscriptEditorHandle = {
   readonly materializeDocumentText: (
     document: ManuscriptDocumentSource,
   ) => string;
+  readonly readDocumentState: (
+    document: ManuscriptDocumentSource,
+  ) => ManuscriptDocumentStateSummary | null;
+  readonly selectDocumentRange: (
+    document: ManuscriptDocumentSource,
+    range: { readonly from: number; readonly to: number },
+  ) => boolean;
 };
 
 function summarizeState(state: EditorState): ManuscriptDocumentStateSummary {
@@ -148,6 +155,40 @@ export const ManuscriptEditor = forwardRef<
           return view.state.doc.toString();
         }
         return storedText ?? document.initialText;
+      },
+      readDocumentState(document) {
+        const view = viewRef.current;
+        const active = activeDocumentRef.current;
+        if (
+          view === null ||
+          active?.documentId !== document.documentId ||
+          active.workId !== document.workId
+        ) {
+          return null;
+        }
+        return summarizeState(view.state);
+      },
+      selectDocumentRange(document, range) {
+        const view = viewRef.current;
+        const active = activeDocumentRef.current;
+        if (
+          view === null ||
+          active?.documentId !== document.documentId ||
+          active.workId !== document.workId ||
+          !Number.isSafeInteger(range.from) ||
+          !Number.isSafeInteger(range.to) ||
+          range.from < 0 ||
+          range.to < range.from ||
+          range.to > view.state.doc.length
+        ) {
+          return false;
+        }
+        view.dispatch({
+          selection: EditorSelection.single(range.from, range.to),
+          scrollIntoView: true,
+        });
+        view.focus();
+        return true;
       },
     }),
     [],

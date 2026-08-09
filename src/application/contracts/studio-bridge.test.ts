@@ -2,6 +2,14 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  ACTIVITY_LIST_WORK_CHANNEL,
+  ACTIVITY_START_FOCUS_CHANNEL,
+  ACTIVITY_START_SESSION_CHANNEL,
+  ACTIVITY_STOP_FOCUS_CHANNEL,
+  ACTIVITY_STOP_SESSION_CHANNEL,
+  BACKUP_CREATE_CHANNEL,
+  BACKUP_GET_STATUS_CHANNEL,
+  BACKUP_RESTORE_CHANNEL,
   MANUSCRIPT_CLOSE_REQUEST_CHANNEL,
   MANUSCRIPT_COMPLETE_CLOSE_REQUEST_CHANNEL,
   MANUSCRIPT_INPUT_PROFILE_CHANNEL,
@@ -9,8 +17,17 @@ import {
   MANUSCRIPT_PERSISTENCE_PROFILE_CHANNEL,
   MANUSCRIPT_RESUME_CHECKPOINT_CHANNEL,
   MANUSCRIPT_STARTUP_RECOVERY_CHANNEL,
+  MIGRATION_RUN_LEGACY_REHEARSAL_CHANNEL,
   MANUSCRIPT_SAVE_CHANGE_BATCH_CHANNEL,
   RUNTIME_INFO_CHANNEL,
+  STRUCTURE_CREATE_EVENT_BLOCK_CHANNEL,
+  STRUCTURE_CREATE_SCENE_OVERRIDE_CHANNEL,
+  STRUCTURE_LIST_EVENT_BLOCKS_CHANNEL,
+  STRUCTURE_LIST_SCENE_OVERRIDES_CHANNEL,
+  VERSION_CREATE_WORK_SNAPSHOT_CHANNEL,
+  VERSION_LIST_DOCUMENT_REVISIONS_CHANNEL,
+  VERSION_LIST_WORK_SNAPSHOTS_CHANNEL,
+  VERSION_RESTORE_DOCUMENT_REVISION_CHANNEL,
   createStudioBridge as createStudioBridgeContract,
   isRuntimeInfo,
   type BridgeInvoke,
@@ -427,6 +444,382 @@ describe("studio bridge contract", () => {
     ).toBe(true);
     expect(isRuntimeInfo(null)).toBe(false);
     expect(isRuntimeInfo({})).toBe(false);
+  });
+
+  it("exposes only strict EventBlock create and list commands", async () => {
+    const workId = entityId<"Work">(randomUUID());
+    const documentId = entityId<"Document">(randomUUID());
+    const eventBlock = {
+      schemaVersion: 1,
+      eventBlockId: randomUUID(),
+      anchorId: randomUUID(),
+      workId,
+      documentId,
+      documentRevisionId: randomUUID(),
+      title: "첫 사건",
+      note: "",
+      exactQuote: "선택한 원문",
+      integrity: "resolved",
+      range: { from: 2, to: 8 },
+      createdAt: new Date().toISOString(),
+    } as const;
+    const invoke = vi.fn(async (channel) =>
+      channel === STRUCTURE_CREATE_EVENT_BLOCK_CHANNEL
+        ? eventBlock
+        : {
+            schemaVersion: 1,
+            workId,
+            eventBlocks: [eventBlock],
+          },
+    );
+    const bridge = createStudioBridge(invoke);
+    const command = {
+      schemaVersion: 1,
+      workId,
+      documentId,
+      selection: { anchor: 8, head: 2 },
+      exactQuote: "선택한 원문",
+      title: "첫 사건",
+      note: "",
+    } as const;
+
+    await expect(
+      bridge.structure.createEventBlock(command),
+    ).resolves.toEqual(eventBlock);
+    await expect(
+      bridge.structure.listEventBlocks({ schemaVersion: 1, workId }),
+    ).resolves.toEqual({
+      schemaVersion: 1,
+      workId,
+      eventBlocks: [eventBlock],
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_CREATE_EVENT_BLOCK_CHANNEL,
+      command,
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_LIST_EVENT_BLOCKS_CHANNEL,
+      { schemaVersion: 1, workId },
+    );
+  });
+
+  it("exposes only strict SceneOverride create and list commands", async () => {
+    const workId = entityId<"Work">(randomUUID());
+    const documentId = entityId<"Document">(randomUUID());
+    const sceneOverride = {
+      schemaVersion: 1,
+      sceneOverrideId: randomUUID(),
+      workId,
+      documentId,
+      operation: "add",
+      baseRuleSetRevision: 3,
+      note: "커서 경계",
+      boundaries: [
+        {
+          anchorId: randomUUID(),
+          documentRevisionId: randomUUID(),
+          exactQuote: "",
+          integrity: "resolved",
+          range: { from: 5, to: 5 },
+        },
+      ],
+      createdAt: new Date().toISOString(),
+    } as const;
+    const invoke = vi.fn(async (channel) =>
+      channel === STRUCTURE_CREATE_SCENE_OVERRIDE_CHANNEL
+        ? sceneOverride
+        : {
+            schemaVersion: 1,
+            workId,
+            sceneOverrides: [sceneOverride],
+          },
+    );
+    const bridge = createStudioBridge(invoke);
+    const command = {
+      schemaVersion: 1,
+      workId,
+      documentId,
+      selection: { anchor: 5, head: 5 },
+      exactQuote: "",
+      operation: "add",
+      note: "커서 경계",
+    } as const;
+
+    await expect(
+      bridge.structure.createSceneOverride(command),
+    ).resolves.toEqual(sceneOverride);
+    await expect(
+      bridge.structure.listSceneOverrides({ schemaVersion: 1, workId }),
+    ).resolves.toEqual({
+      schemaVersion: 1,
+      workId,
+      sceneOverrides: [sceneOverride],
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_CREATE_SCENE_OVERRIDE_CHANNEL,
+      command,
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_LIST_SCENE_OVERRIDES_CHANNEL,
+      { schemaVersion: 1, workId },
+    );
+  });
+
+  it("exposes strict Work activity commands without a fixed focus duration", async () => {
+    const workId = entityId<"Work">(randomUUID());
+    const documentId = entityId<"Document">(randomUUID());
+    const sessionId = entityId<"WritingSession">(randomUUID());
+    const focusCycleId = entityId<"FocusCycle">(randomUUID());
+    const now = new Date().toISOString();
+    const targetDurationMs = 37 * 60 * 1_000;
+    const projection = {
+      schemaVersion: 1,
+      workId,
+      activeSessionId: sessionId,
+      activeFocusCycleId: focusCycleId,
+      sessions: [{
+        schemaVersion: 1,
+        sessionId,
+        workId,
+        documentId,
+        state: "active",
+        startedAt: now,
+        endedAt: null,
+        activeDurationMs: 0,
+        startRevisionId: entityId<"DocumentRevision">(randomUUID()),
+        endRevisionId: null,
+        characterDelta: null,
+        note: "",
+      }],
+      focusCycles: [{
+        schemaVersion: 1,
+        focusCycleId,
+        workId,
+        sessionId,
+        state: "running",
+        phaseRef: "초고 집중",
+        targetDurationMs,
+        startedAt: now,
+        deadlineAt: new Date(Date.parse(now) + targetDurationMs).toISOString(),
+        completedAt: null,
+        note: "",
+      }],
+    } as const;
+    const invoke = vi.fn().mockResolvedValue(projection);
+    const bridge = createStudioBridge(invoke);
+    const list = { schemaVersion: 1, workId } as const;
+    const startSession = {
+      schemaVersion: 1,
+      workId,
+      documentId,
+      note: "",
+    } as const;
+    const stopSession = { schemaVersion: 1, workId, sessionId } as const;
+    const startFocus = {
+      schemaVersion: 1,
+      workId,
+      documentId,
+      phaseRef: "초고 집중",
+      targetDurationMs,
+      note: "",
+    } as const;
+    const stopFocus = { schemaVersion: 1, workId, focusCycleId } as const;
+
+    await expect(bridge.activity.listWork(list)).resolves.toEqual(projection);
+    await expect(bridge.activity.startSession(startSession)).resolves.toEqual(projection);
+    await expect(bridge.activity.stopSession(stopSession)).resolves.toEqual(projection);
+    await expect(bridge.activity.startFocus(startFocus)).resolves.toEqual(projection);
+    await expect(bridge.activity.stopFocus(stopFocus)).resolves.toEqual(projection);
+    expect(invoke).toHaveBeenCalledWith(ACTIVITY_LIST_WORK_CHANNEL, list);
+    expect(invoke).toHaveBeenCalledWith(ACTIVITY_START_SESSION_CHANNEL, startSession);
+    expect(invoke).toHaveBeenCalledWith(ACTIVITY_STOP_SESSION_CHANNEL, stopSession);
+    expect(invoke).toHaveBeenCalledWith(ACTIVITY_START_FOCUS_CHANNEL, startFocus);
+    expect(invoke).toHaveBeenCalledWith(ACTIVITY_STOP_FOCUS_CHANNEL, stopFocus);
+  });
+
+  it("exposes strict Document revision and WorkSnapshot commands", async () => {
+    const workId = entityId<"Work">(randomUUID());
+    const documentId = entityId<"Document">(randomUUID());
+    const revisionId = entityId<"DocumentRevision">(randomUUID());
+    const restoredRevisionId = entityId<"DocumentRevision">(randomUUID());
+    const workSnapshotId = entityId<"WorkSnapshot">(randomUUID());
+    const now = new Date().toISOString();
+    const revisionList = {
+      schemaVersion: 1,
+      workId,
+      documentId,
+      revisions: [{
+        schemaVersion: 1,
+        revisionId,
+        workId,
+        documentId,
+        parentRevisionId: null,
+        length: 12,
+        cause: "manuscript-edit",
+        createdAt: now,
+        durableAt: now,
+        isCurrent: true,
+      }],
+    } as const;
+    const restoreResult = {
+      schemaVersion: 1,
+      workId,
+      documentId,
+      targetRevisionId: revisionId,
+      restoredRevisionId,
+    } as const;
+    const snapshot = {
+      schemaVersion: 1,
+      workSnapshotId,
+      workId,
+      label: "초고 기준",
+      cause: "manual",
+      manifestHash: randomUUID(),
+      createdAt: now,
+      documentRevisions: [{ documentId, documentRevisionId: revisionId }],
+    } as const;
+    const snapshotList = {
+      schemaVersion: 1,
+      workId,
+      snapshots: [snapshot],
+    } as const;
+    const invoke = vi.fn(async (channel) => {
+      if (channel === VERSION_LIST_DOCUMENT_REVISIONS_CHANNEL) {
+        return revisionList;
+      }
+      if (channel === VERSION_RESTORE_DOCUMENT_REVISION_CHANNEL) {
+        return restoreResult;
+      }
+      if (channel === VERSION_CREATE_WORK_SNAPSHOT_CHANNEL) {
+        return snapshot;
+      }
+      return snapshotList;
+    });
+    const bridge = createStudioBridge(invoke);
+    const listRevisions = { schemaVersion: 1, workId, documentId } as const;
+    const restore = {
+      schemaVersion: 1,
+      workId,
+      documentId,
+      targetRevisionId: revisionId,
+    } as const;
+    const createSnapshot = {
+      schemaVersion: 1,
+      workId,
+      label: "초고 기준",
+    } as const;
+    const listSnapshots = { schemaVersion: 1, workId } as const;
+
+    await expect(
+      bridge.version.listDocumentRevisions(listRevisions),
+    ).resolves.toEqual(revisionList);
+    await expect(
+      bridge.version.restoreDocumentRevision(restore),
+    ).resolves.toEqual(restoreResult);
+    await expect(
+      bridge.version.createWorkSnapshot(createSnapshot),
+    ).resolves.toEqual(snapshot);
+    await expect(
+      bridge.version.listWorkSnapshots(listSnapshots),
+    ).resolves.toEqual(snapshotList);
+    expect(invoke).toHaveBeenCalledWith(
+      VERSION_LIST_DOCUMENT_REVISIONS_CHANNEL,
+      listRevisions,
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      VERSION_RESTORE_DOCUMENT_REVISION_CHANNEL,
+      restore,
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      VERSION_CREATE_WORK_SNAPSHOT_CHANNEL,
+      createSnapshot,
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      VERSION_LIST_WORK_SNAPSHOTS_CHANNEL,
+      listSnapshots,
+    );
+  });
+
+  it("exposes verified local backup status, creation, and restore actions", async () => {
+    const summary = {
+      schemaVersion: 1,
+      bundlePath: "D:\\Backups\\eum-studio-2026-08-07",
+      targetPath: null,
+      createdAt: "2026-08-07T00:00:00.000Z",
+      verifiedAt: "2026-08-07T00:00:01.000Z",
+      lastAction: "created",
+      counts: {
+        workCount: 1,
+        documentCount: 2,
+        revisionCount: 3,
+        resumeCheckpointCount: 1,
+        writingSessionCount: 1,
+      },
+    } as const;
+    const status = { schemaVersion: 1, lastVerified: summary } as const;
+    const completed = {
+      schemaVersion: 1,
+      status: "completed",
+      summary,
+    } as const;
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === BACKUP_GET_STATUS_CHANNEL) {
+        return status;
+      }
+      return completed;
+    });
+    const bridge = createStudioBridge(invoke);
+
+    await expect(bridge.backup.getStatus()).resolves.toEqual(status);
+    await expect(bridge.backup.create()).resolves.toEqual(completed);
+    await expect(bridge.backup.restore()).resolves.toEqual(completed);
+    expect(invoke).toHaveBeenCalledWith(BACKUP_GET_STATUS_CHANNEL);
+    expect(invoke).toHaveBeenCalledWith(BACKUP_CREATE_CHANNEL);
+    expect(invoke).toHaveBeenCalledWith(BACKUP_RESTORE_CHANNEL);
+  });
+
+  it("exposes a strict read-only legacy import rehearsal action", async () => {
+    const completed = {
+      schemaVersion: 1,
+      status: "completed",
+      summary: {
+        schemaVersion: 1,
+        sourceRootPath: "D:\\eum.editor",
+        sourceSnapshotId: "snapshot",
+        sourceChecksumIdentity: "sha256",
+        sourceChecksumValue: "checksum",
+        sourceByteLength: 10,
+        targetRootPath: "D:\\rehearsal",
+        rehearsalWorkspacePath: "D:\\rehearsal\\workspace",
+        reportPath: "D:\\rehearsal\\workspace\\report.json",
+        capturedAt: "2026-08-07T00:00:00.000Z",
+        publication: "published",
+        sourceUnchanged: true,
+        issueCount: 0,
+        counts: {
+          workCount: 1,
+          folderCount: 0,
+          documentCount: 1,
+          revisionCount: 1,
+          resumeCheckpointCount: 1,
+          writingSessionCount: 0,
+          rawItemCount: 1,
+          receiptCount: 3,
+          sourceItemCount: 3,
+          uncoveredItemCount: 0,
+          orphanManuscriptCount: 0,
+        },
+      },
+    } as const;
+    const invoke = vi.fn().mockResolvedValue(completed);
+    const bridge = createStudioBridge(invoke);
+
+    await expect(
+      bridge.migration.runLegacyLoreRehearsal(),
+    ).resolves.toEqual(completed);
+    expect(invoke).toHaveBeenCalledWith(
+      MIGRATION_RUN_LEGACY_REHEARSAL_CHANNEL,
+    );
   });
 
   it("strictly receives and completes the manuscript close handshake", async () => {

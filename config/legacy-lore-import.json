@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "sourceProfileId": "legacy-eum-editor-lore-v1",
+    "formatIdentity": "eum-source-archive",
+    "formatVersion": "1",
+    "checksumIdentity": "sha256",
+    "checksumAlgorithm": "sha256",
+    "sourceFileSegments": ["data", "lorebooks.json"],
+    "sourceLocator": "data/lorebooks.json",
+    "archiveDirectoryName": "source-archive",
+    "rawEntrySegments": ["raw", "lorebooks.json"],
+    "manifestEntrySegments": ["manifest.json"]
+  },
+  "rehearsal": {
+    "directoryName": "rehearsal-workspace",
+    "reportFileName": "migration-report.json",
+    "mapperVersion": "legacy-lore-v1",
+    "resumeWorkspaceMode": "manuscript",
+    "completedWritingSessionState": "completed",
+    "secretLikeFieldFragments": [
+      "accessToken",
+      "refreshToken",
+      "apiKey",
+      "clientSecret"
+    ],
+    "secretRedactionValue": "[REDACTED]",
+    "anchorPolicy": {
+      "schemaVersion": 1,
+      "version": "legacy-lore-v1",
+      "contextOffsetLength": 16
+    },
+    "anchorEvidenceChecksumAlgorithm": "sha256"
+  },
+  "content": {
+    "manuscriptChecksumIdentity": "eum-studio-ledger-sha256-v1",
+    "manuscriptChecksumAlgorithm": "sha256",
+    "rawSerializationIdentity": "canonical-json-utf8-v1",
+    "rawChecksumIdentity": "sha256-canonical-json-utf8-v1",
+    "rawChecksumAlgorithm": "sha256"
+  }
+}

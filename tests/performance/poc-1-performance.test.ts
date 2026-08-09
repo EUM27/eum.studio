@@ -402,6 +402,11 @@ describe("POC-1 longform performance", () => {
 
     try {
       const page = await electronApp.firstWindow();
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await page.getByRole("button", {
+        name: "작업실",
+        exact: true,
+      }).click();
       page.on("console", (message) => {
         if (message.type() === "error") {
           consoleErrors.push(message.text());

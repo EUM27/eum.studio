@@ -1,8 +1,9 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
-import { App } from "./App";
+import { StudioShell } from "./StudioShell";
 import "./styles.css";
+import "./shell.css";
 
 const root = document.getElementById("root");
 
@@ -12,6 +13,6 @@ if (root === null) {
 
 createRoot(root).render(
   <StrictMode>
-    <App />
+    <StudioShell />
   </StrictMode>,
 );
