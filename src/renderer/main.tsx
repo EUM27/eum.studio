@@ -2,8 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { StudioShell } from "./StudioShell";
-import "./styles.css";
-import "./shell.css";
+import "./shell/studio-app-shell.css";
 
 const root = document.getElementById("root");
 

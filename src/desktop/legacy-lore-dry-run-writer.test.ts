@@ -8,8 +8,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createLegacyLoreDryRunPlan } from "../application/migration/legacy-lore-dry-run";
 import { encodeDurableText } from "../application/persistence/change-batch";
 import { parseManuscriptDocumentProfile } from "../application/editor/manuscript-document-profile";
+import { parseManuscriptFormattingProfile } from "../application/editor/manuscript-formatting";
 import { parseLocalWorkspaceBackupProfile } from "../application/storage/local-workspace-backup-profile";
 import { parseLocalWorkspaceDefaults } from "../application/workspace/local-workspace-defaults";
+import { parseAppSettingsProfile } from "../application/settings/app-settings";
+import { parseMusicSettingsProfile } from "../application/music/work-music-settings";
 import { entityId } from "../domain/writing";
 import { openNodeSqliteLedger } from "../platform/storage/node-sqlite-ledger";
 import { openLocalWorkspaceRuntime } from "./local-workspace-runtime";
@@ -145,6 +148,40 @@ describe("legacy lore dry-run writer", () => {
       },
       anchorEvidenceChecksumAlgorithm: "sha256",
       plan,
+      browserSourceReceipt: {
+        schemaVersion: 1,
+        formatIdentity: "eum-browser-source-export",
+        formatVersion: "1",
+        exportedAt: "2026-08-07T00:00:00.000Z",
+        sourceOrigin: "http://localhost",
+        bundleByteLength: 10,
+        bundleChecksumIdentity: "sha256-v1",
+        bundleChecksumValue: "browser-bundle-checksum",
+        coverage: {
+          sourceEntryCount: 1,
+          capturedEntryCount: 1,
+          uncoveredEntryCount: 0,
+        },
+        branchReceipts: [{
+          snapshotId: "browser-snapshot",
+          sourceLocator: "browser-export:localStorage",
+          branchKind: "local-storage",
+          itemCount: 1,
+        }],
+        entryReceipts: [{
+          snapshotId: "browser-snapshot",
+          sourceLocator: "browser-export:localStorage",
+          branchKind: "local-storage",
+          sourceCollection: "manuscripts",
+          sourceIdentity: "source-document",
+          sourceOccurrence: 0,
+          ownershipRef: "source-work",
+          disposition: "captured",
+          redactedFieldCount: 0,
+          checksumIdentity: "sha256-v1",
+          checksumValue: "browser-entry-checksum",
+        }],
+      },
     } as const;
     const result = await writeLegacyLoreDryRun(writeInput);
 
@@ -154,8 +191,41 @@ describe("legacy lore dry-run writer", () => {
       revisionCount: 2,
       resumeCheckpointCount: 1,
       writingSessionCount: 1,
+      sourceItemCount: plan.receiptCoverage.sourceItemCount + 1,
+      receiptCount: plan.receiptCoverage.receiptCount + 1,
       uncoveredItemCount: 0,
     });
+    expect(result.report.browserSourceReceipt?.coverage.sourceEntryCount).toBe(1);
+    expect(result.report.sourceInventory.counts).toMatchObject({
+      workCount: 1,
+      documentCount: 2,
+      manuscriptCount: 2,
+      orphanManuscriptCount: 0,
+      sessionCount: 1,
+    });
+    expect(result.report.dispositionCounts).toEqual({
+      exact: 0,
+      adapted: 7,
+      review: 0,
+      "raw-only": 0,
+      "derived-skip": 0,
+    });
+    expect(result.report.manuscriptProofs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceDocumentId: "source-document",
+          preservation: "target-revision-checksum-match",
+          sourceChecksumValue: expect.any(String),
+          targetChecksumValue: expect.any(String),
+        }),
+        expect.objectContaining({
+          sourceDocumentId: "empty-document",
+          preservation: "target-revision-checksum-match",
+          sourceChecksumValue: expect.any(String),
+          targetChecksumValue: expect.any(String),
+        }),
+      ]),
+    );
     const opened = await openLocalWorkspaceRuntime({
       rootDirectoryPath: targetRootDirectoryPath,
       studioDisplayName: "이음 스튜디오",
@@ -166,6 +236,34 @@ describe("legacy lore dry-run writer", () => {
         maxTransactionsPerBatch: 1,
         maxDelayMs: 0,
       },
+      formattingProfile: parseManuscriptFormattingProfile(
+        JSON.parse(
+          readFileSync(
+            join(
+              process.cwd(),
+              "config",
+              "manuscript-formatting.json",
+            ),
+            "utf8",
+          ),
+        ),
+      ),
+      appSettingsProfile: parseAppSettingsProfile(
+        JSON.parse(
+          readFileSync(
+            join(process.cwd(), "config", "app-settings.json"),
+            "utf8",
+          ),
+        ),
+      ),
+      musicSettingsProfile: parseMusicSettingsProfile(
+        JSON.parse(
+          readFileSync(
+            join(process.cwd(), "config", "music-settings.json"),
+            "utf8",
+          ),
+        ),
+      ),
       emptyDocumentProfile: parseManuscriptDocumentProfile({
         schemaVersion: 1,
         initialDocumentId: "empty-document",

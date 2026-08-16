@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "connectors": [
+    {
+      "connectorKind": "google-mail-oauth-v1",
+      "displayName": "Google Mail (읽기 전용)",
+      "authorizationEndpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+      "tokenEndpoint": "https://oauth2.googleapis.com/token",
+      "revocationEndpoint": "https://oauth2.googleapis.com/revoke",
+      "apiBaseUrl": "https://gmail.googleapis.com/gmail/v1/users/me",
+      "scope": "https://www.googleapis.com/auth/gmail.readonly"
+    }
+  ]
+}

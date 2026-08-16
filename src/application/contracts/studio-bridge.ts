@@ -7,6 +7,38 @@ import {
   type ManuscriptDocumentProfile,
 } from "../editor/manuscript-document-profile";
 import {
+  parseManuscriptFormattingProfile,
+  parseSaveManuscriptDocumentChangeCommand,
+  parseSaveManuscriptFormattingCommand,
+  parseSaveManuscriptFormattingReceipt,
+  type ManuscriptFormattingProfile,
+  type SaveManuscriptDocumentChangeCommand,
+  type SaveManuscriptFormattingCommand,
+  type SaveManuscriptFormattingReceipt,
+} from "../editor/manuscript-formatting";
+import {
+  parseExportManuscriptTextCommand,
+  parseExportManuscriptTextResult,
+  parseGetManuscriptPreflightSettingsCommand,
+  parseManuscriptPreflightProfile,
+  parseManuscriptPreflightSettingsProjection,
+  parseSaveManuscriptPreflightSettingsCommand,
+  type ExportManuscriptTextCommand,
+  type ExportManuscriptTextResult,
+  type GetManuscriptPreflightSettingsCommand,
+  type ManuscriptPreflightProfile,
+  type ManuscriptPreflightSettingsProjection,
+  type SaveManuscriptPreflightSettingsCommand,
+} from "../editor/manuscript-preflight";
+import {
+  parseGetContinuousReadingProgressCommand,
+  parseSaveContinuousReadingProgressCommand,
+  parseWorkContinuousReadingProgressProjection,
+  type GetContinuousReadingProgressCommand,
+  type SaveContinuousReadingProgressCommand,
+  type WorkContinuousReadingProgressProjection,
+} from "../editor/continuous-reading-progress";
+import {
   parseChangeBatch,
   type ChangeBatch,
 } from "../persistence/change-batch";
@@ -33,23 +65,55 @@ import {
 import {
   parseActivateWorkspaceLocationCommand,
   parseCaptureWorkspaceResumeCommand,
+  parseCreateDocumentFolderCommand,
   parseCreateDocumentCommand,
   parseCreateDocumentResult,
   parseCreateFirstWorkCommand,
   parseCreateFirstWorkResult,
   parseCreateWorkCommand,
   parseCreateWorkResult,
+  parseMoveDocumentCommand,
+  parsePlaceDocumentInFolderCommand,
+  parseRenameDocumentFolderCommand,
+  parseRenameDocumentCommand,
+  parseRenameWorkCommand,
+  parseRetireDocumentCommand,
+  parseRetireDocumentFolderCommand,
+  parseRetireWorkCommand,
   parseWorkspaceCatalogProjection,
   type ActivateWorkspaceLocationCommand,
   type CaptureWorkspaceResumeCommand,
+  type CreateDocumentFolderCommand,
   type CreateDocumentCommand,
   type CreateDocumentResult,
   type CreateFirstWorkCommand,
   type CreateFirstWorkResult,
   type CreateWorkCommand,
   type CreateWorkResult,
+  type MoveDocumentCommand,
+  type PlaceDocumentInFolderCommand,
+  type RenameDocumentFolderCommand,
+  type RenameDocumentCommand,
+  type RenameWorkCommand,
+  type RetireDocumentCommand,
+  type RetireDocumentFolderCommand,
+  type RetireWorkCommand,
   type WorkspaceCatalogProjection,
 } from "../workspace/workspace-contract";
+import {
+  parseSetWorkFavoriteCommand,
+  parseWorkFavoritesProjection,
+  type SetWorkFavoriteCommand,
+  type WorkFavoritesProjection,
+} from "../workspace/work-favorites";
+import {
+  parseSelectWorkCoverCommand,
+  parseWorkCoverProjection,
+  parseWorkCoversProjection,
+  type SelectWorkCoverCommand,
+  type WorkCoverProjection,
+  type WorkCoversProjection,
+} from "../workspace/work-covers";
 import {
   parseCreateEventBlockCommand,
   parseEventBlockListProjection,
@@ -71,6 +135,306 @@ import {
   type SceneOverrideProjection,
 } from "../structure/scene-override-contract";
 import {
+  parseCaptureFragmentCommand,
+  parseFragmentListProjection,
+  parseFragmentProjection,
+  parseFragmentShelfProfile,
+  parseListFragmentsCommand,
+  parseRecordFragmentUseCommand,
+  parseRetireFragmentCommand,
+  parseUpdateFragmentCommand,
+  type CaptureFragmentCommand,
+  type FragmentListProjection,
+  type FragmentProjection,
+  type FragmentShelfProfile,
+  type ListFragmentsCommand,
+  type RecordFragmentUseCommand,
+  type RetireFragmentCommand,
+  type UpdateFragmentCommand,
+} from "../fragments/fragment-contract";
+import {
+  parseCreateForeshadowLineCommand,
+  parseForeshadowLineListProjection,
+  parseForeshadowLineProjection,
+  parseListForeshadowLinesCommand,
+  parseRetireForeshadowLineCommand,
+  parseUpdateForeshadowLineCommand,
+  type CreateForeshadowLineCommand,
+  type ForeshadowLineListProjection,
+  type ForeshadowLineProjection,
+  type ListForeshadowLinesCommand,
+  type RetireForeshadowLineCommand,
+  type UpdateForeshadowLineCommand,
+} from "../foreshadowing/foreshadow-line-contract";
+import {
+  parseCharacterListProjection,
+  parseCharacterProjection,
+  parseCreateCharacterCommand,
+  parseListCharactersCommand,
+  parseRetireCharacterCommand,
+  parseUpdateCharacterCommand,
+  type CharacterListProjection,
+  type CharacterProjection,
+  type CreateCharacterCommand,
+  type ListCharactersCommand,
+  type RetireCharacterCommand,
+  type UpdateCharacterCommand,
+} from "../characters/character-contract";
+import {
+  parseAddLoreEntryEvidenceCommand,
+  parseCreateLoreEntryCommand,
+  parseListLoreEntriesCommand,
+  parseLoreEntryListProjection,
+  parseLoreEntryProjection,
+  parseRetireLoreEntryCommand,
+  parseUpdateLoreEntryCommand,
+  type AddLoreEntryEvidenceCommand,
+  type CreateLoreEntryCommand,
+  type ListLoreEntriesCommand,
+  type LoreEntryListProjection,
+  type LoreEntryProjection,
+  type RetireLoreEntryCommand,
+  type UpdateLoreEntryCommand,
+} from "../lore/lore-entry-contract";
+import {
+  parseLinkLoreForeshadowCommand,
+  parseListLoreForeshadowLinksCommand,
+  parseLoreForeshadowLinkListProjection,
+  parseLoreForeshadowLinkProjection,
+  parseUnlinkLoreForeshadowCommand,
+  type LinkLoreForeshadowCommand,
+  type ListLoreForeshadowLinksCommand,
+  type LoreForeshadowLinkListProjection,
+  type LoreForeshadowLinkProjection,
+  type UnlinkLoreForeshadowCommand,
+} from "../lore/lore-foreshadow-link-contract";
+import {
+  parseCreateLoreCandidateCommand,
+  parseListLoreCandidatesCommand,
+  parseLoreCandidateApprovalResult,
+  parseLoreCandidateListProjection,
+  parseLoreCandidateProjection,
+  parseReviewLoreCandidateCommand,
+  type CreateLoreCandidateCommand,
+  type ListLoreCandidatesCommand,
+  type LoreCandidateApprovalResult,
+  type LoreCandidateListProjection,
+  type LoreCandidateProjection,
+  type ReviewLoreCandidateCommand,
+} from "../lore/lore-candidate-contract";
+import {
+  parseCreatePublishingPartnerCommand,
+  parseListPublishingPartnersCommand,
+  parsePublishingPartnerListProjection,
+  parsePublishingPartnerProjection,
+  parseUpdatePublishingPartnerCommand,
+  type CreatePublishingPartnerCommand,
+  type ListPublishingPartnersCommand,
+  type PublishingPartnerListProjection,
+  type PublishingPartnerProjection,
+  type UpdatePublishingPartnerCommand,
+} from "../publishing/publishing-partner-contract";
+import {
+  parseCreatePublishingSubmissionCommand,
+  parseListPublishingSubmissionsCommand,
+  parsePublishingSubmissionListProjection,
+  parsePublishingSubmissionProjection,
+  parseUpdatePublishingSubmissionCommand,
+  type CreatePublishingSubmissionCommand,
+  type ListPublishingSubmissionsCommand,
+  type PublishingSubmissionListProjection,
+  type PublishingSubmissionProjection,
+  type UpdatePublishingSubmissionCommand,
+} from "../publishing/publishing-submission-contract";
+import {
+  parseCreatePublishingContractCommand,
+  parseListPublishingContractsCommand,
+  parsePublishingContractListProjection,
+  parsePublishingContractProjection,
+  parseUpdatePublishingContractCommand,
+  type CreatePublishingContractCommand,
+  type ListPublishingContractsCommand,
+  type PublishingContractListProjection,
+  type PublishingContractProjection,
+  type UpdatePublishingContractCommand,
+} from "../publishing/publishing-contract-contract";
+import {
+  parseCreatePublishingPublicationCommand,
+  parseListPublishingPublicationsCommand,
+  parsePublishingPublicationListProjection,
+  parsePublishingPublicationProjection,
+  parseUpdatePublishingPublicationCommand,
+  type CreatePublishingPublicationCommand,
+  type ListPublishingPublicationsCommand,
+  type PublishingPublicationListProjection,
+  type PublishingPublicationProjection,
+  type UpdatePublishingPublicationCommand,
+} from "../publishing/publishing-publication-contract";
+import {
+  parseCreatePublishingSettlementCommand,
+  parseListPublishingSettlementsCommand,
+  parsePublishingSettlementListProjection,
+  parsePublishingSettlementProjection,
+  parseUpdatePublishingSettlementCommand,
+  type CreatePublishingSettlementCommand,
+  type ListPublishingSettlementsCommand,
+  type PublishingSettlementListProjection,
+  type PublishingSettlementProjection,
+  type UpdatePublishingSettlementCommand,
+} from "../publishing/publishing-settlement-contract";
+import {
+  parseCreatePublishingPaymentCommand,
+  parseListPublishingPaymentsCommand,
+  parsePublishingPaymentListProjection,
+  parsePublishingPaymentProjection,
+  parseUpdatePublishingPaymentCommand,
+  type CreatePublishingPaymentCommand,
+  type ListPublishingPaymentsCommand,
+  type PublishingPaymentListProjection,
+  type PublishingPaymentProjection,
+  type UpdatePublishingPaymentCommand,
+} from "../publishing/publishing-payment-contract";
+import {
+  parseCreatePublishingSourceCommand,
+  parseListPublishingSourcesCommand,
+  parsePublishingSourceListProjection,
+  parsePublishingSourceProjection,
+  type CreatePublishingSourceCommand,
+  type ListPublishingSourcesCommand,
+  type PublishingSourceListProjection,
+  type PublishingSourceProjection,
+} from "../publishing/publishing-source-contract";
+import {
+  parseApprovePublishingResearchCommand,
+  parsePreviewPublishingResearchCommand,
+  parsePublishingResearchApprovalResult,
+  parsePublishingResearchCandidateProjection,
+  type ApprovePublishingResearchCommand,
+  type PreviewPublishingResearchCommand,
+  type PublishingResearchApprovalResult,
+  type PublishingResearchCandidateProjection,
+} from "../publishing/publishing-research-contract";
+import {
+  parseApprovePublishingAssistantCandidateCommand,
+  parsePublishingAssistantApprovalResult,
+  parsePublishingAssistantResult,
+  parseRunPublishingAssistantCommand,
+  type ApprovePublishingAssistantCandidateCommand,
+  type PublishingAssistantApprovalResult,
+  type PublishingAssistantResult,
+  type RunPublishingAssistantCommand,
+} from "../publishing/publishing-assistant-contract";
+import {
+  parsePublishingEvidenceLinksProjection,
+  parseSetPublishingEvidenceLinksCommand,
+  type PublishingEvidenceLinksProjection,
+  type SetPublishingEvidenceLinksCommand,
+} from "../publishing/publishing-evidence-link-contract";
+import {
+  parseApplyPublishingPartnerCsvImportCommand,
+  parsePublishingPartnerCsvImportResult,
+  parsePublishingPartnerCsvSelectionProjection,
+  parseSelectPublishingPartnerCsvCommand,
+  type ApplyPublishingPartnerCsvImportCommand,
+  type PublishingPartnerCsvImportResult,
+  type PublishingPartnerCsvSelectionProjection,
+  type SelectPublishingPartnerCsvCommand,
+} from "../publishing/publishing-partner-csv-import";
+import {
+  parseApplyPublishingSubmissionCsvImportCommand,
+  parsePublishingSubmissionCsvImportResult,
+  parsePublishingSubmissionCsvSelectionProjection,
+  parseSelectPublishingSubmissionCsvCommand,
+  type ApplyPublishingSubmissionCsvImportCommand,
+  type PublishingSubmissionCsvImportResult,
+  type PublishingSubmissionCsvSelectionProjection,
+  type SelectPublishingSubmissionCsvCommand,
+} from "../publishing/publishing-submission-csv-import";
+import {
+  parseLinkPublishingMailCandidateCommand,
+  parseListPublishingMailCandidatesCommand,
+  parsePublishingMailCandidateListProjection,
+  parsePublishingMailCandidateProjection,
+  parsePublishingMailCandidateReviewResult,
+  parseReviewPublishingMailCandidateCommand,
+  parseUpdatePublishingMailCandidateCommand,
+  type LinkPublishingMailCandidateCommand,
+  type ListPublishingMailCandidatesCommand,
+  type PublishingMailCandidateListProjection,
+  type PublishingMailCandidateProjection,
+  type PublishingMailCandidateReviewResult,
+  type ReviewPublishingMailCandidateCommand,
+  type UpdatePublishingMailCandidateCommand,
+} from "../publishing/publishing-mail-candidate-contract";
+import {
+  parseConnectPublishingMailCommand,
+  parseDisconnectPublishingMailCommand,
+  parseGetPublishingMailConnectionCommand,
+  parsePublishingMailConnectionProjection,
+  parsePublishingMailSyncResult,
+  parseSyncPublishingMailCommand,
+  type ConnectPublishingMailCommand,
+  type DisconnectPublishingMailCommand,
+  type GetPublishingMailConnectionCommand,
+  type PublishingMailConnectionProjection,
+  type PublishingMailSyncResult,
+  type SyncPublishingMailCommand,
+} from "../publishing/publishing-mail-connection-contract";
+import {
+  parseGetPublishingMailScheduleCommand,
+  parsePublishingMailScheduleProjection,
+  parseSavePublishingMailScheduleCommand,
+  type GetPublishingMailScheduleCommand,
+  type PublishingMailScheduleProjection,
+  type SavePublishingMailScheduleCommand,
+} from "../publishing/publishing-mail-schedule-contract";
+import {
+  parseCreatePlotThreadCommand,
+  parseListPlotThreadsCommand,
+  parsePlotThreadListProjection,
+  parsePlotThreadProjection,
+  parseRetirePlotThreadCommand,
+  parseUpdatePlotThreadCommand,
+  type CreatePlotThreadCommand,
+  type ListPlotThreadsCommand,
+  type PlotThreadListProjection,
+  type PlotThreadProjection,
+  type RetirePlotThreadCommand,
+  type UpdatePlotThreadCommand,
+} from "../plots/plot-contract";
+import {
+  parseLinkPlotThreadSourceCommand,
+  parseListPlotThreadSourcesCommand,
+  parsePlotThreadSourceListProjection,
+  parsePlotThreadSourceProjection,
+  type LinkPlotThreadSourceCommand,
+  type ListPlotThreadSourcesCommand,
+  type PlotThreadSourceListProjection,
+  type PlotThreadSourceProjection,
+} from "../plots/plot-source-contract";
+import {
+  parseCreateForeshadowPointCommand,
+  parseForeshadowPointListProjection,
+  parseForeshadowPointProfile,
+  parseForeshadowPointProjection,
+  parseListForeshadowPointsCommand,
+  type CreateForeshadowPointCommand,
+  type ForeshadowPointListProjection,
+  type ForeshadowPointProfile,
+  type ForeshadowPointProjection,
+  type ListForeshadowPointsCommand,
+} from "../foreshadowing/foreshadow-point-contract";
+import {
+  parseConfigureAndStartPomodoroCommand,
+  parseGetPomodoroCommand,
+  parsePomodoroPhaseCommand,
+  parsePomodoroProjection,
+  type ConfigureAndStartPomodoroCommand,
+  type GetPomodoroCommand,
+  type PomodoroPhaseCommand,
+  type PomodoroProjection,
+} from "../activity/pomodoro-contract";
+import {
   parseListWorkActivityCommand,
   parseStartFocusCycleCommand,
   parseStartWritingSessionCommand,
@@ -84,6 +448,142 @@ import {
   type StopWritingSessionCommand,
   type WorkActivityProjection,
 } from "../activity/work-activity-contract";
+import {
+  parseExportWorkRecordsCommand,
+  parseExportWorkRecordsResult,
+  type ExportWorkRecordsCommand,
+  type ExportWorkRecordsResult,
+} from "../activity/work-records-export";
+import {
+  parseGetWorkRecordsGoalsCommand,
+  parseSaveWorkRecordsGoalsCommand,
+  parseWorkRecordsGoalsProjection,
+  type GetWorkRecordsGoalsCommand,
+  type SaveWorkRecordsGoalsCommand,
+  type WorkRecordsGoalsProjection,
+} from "../activity/work-records-preferences";
+import {
+  parseGetWorkReadthroughCommand,
+  parseSaveWorkReadthroughCommand,
+  parseWorkReadthroughProjection,
+  type GetWorkReadthroughCommand,
+  type SaveWorkReadthroughCommand,
+  type WorkReadthroughProjection,
+} from "../activity/work-readthrough-calculator";
+import {
+  parseCreateWorkScheduleItemCommand,
+  parseListWorkScheduleCommand,
+  parseRetireWorkScheduleItemCommand,
+  parseSetWorkScheduleCompletionCommand,
+  parseUpdateWorkScheduleItemCommand,
+  parseWorkScheduleItemProjection,
+  parseWorkScheduleProjection,
+  type CreateWorkScheduleItemCommand,
+  type ListWorkScheduleCommand,
+  type RetireWorkScheduleItemCommand,
+  type SetWorkScheduleCompletionCommand,
+  type UpdateWorkScheduleItemCommand,
+  type WorkScheduleItemProjection,
+  type WorkScheduleProjection,
+} from "../schedule/work-schedule-contract";
+import {
+  parseGetWorkQuickMemoCommand,
+  parseSaveWorkQuickMemoCommand,
+  parseWorkQuickMemoProjection,
+  type GetWorkQuickMemoCommand,
+  type SaveWorkQuickMemoCommand,
+  type WorkQuickMemoProjection,
+} from "../quick-tools/work-quick-memo";
+import {
+  parseAssistantContextPermissionGrant,
+  type AssistantContextPermissionGrant,
+} from "../assistant/assistant-context-permission";
+import {
+  parseAssistantConnectionListProjection,
+  parseAssistantConnectionProjection,
+  parseDeleteAssistantConnectionCommand,
+  parseSaveAssistantConnectionCommand,
+  type AssistantConnectionListProjection,
+  type AssistantConnectionProjection,
+  type DeleteAssistantConnectionCommand,
+  type SaveAssistantConnectionCommand,
+} from "../assistant/assistant-connection";
+import {
+  parseChatGptOAuthConnectionStatus,
+  type ChatGptOAuthConnectionStatus,
+} from "../assistant/chatgpt-oauth";
+import {
+  parseAssistantContextStateProjection,
+  parseGrantAssistantContextPermissionCommand,
+  parseListAssistantContextStateCommand,
+  parseRevokeAssistantContextPermissionCommand,
+  type AssistantContextStateProjection,
+  type GrantAssistantContextPermissionCommand,
+  type ListAssistantContextStateCommand,
+  type RevokeAssistantContextPermissionCommand,
+} from "../assistant/assistant-context-state";
+import {
+  parseAssistantDestinationProfile,
+  type AssistantDestinationProfile,
+} from "../assistant/assistant-destination-profile";
+import {
+  parseAssistantConnectorManifestProfile,
+  type AssistantConnectorManifestProfile,
+} from "../assistant/assistant-connector-manifest";
+import {
+  parseAssistantVocabularyLookupResult,
+  parseRunAssistantVocabularyLookupCommand,
+  type AssistantVocabularyLookupResult,
+  type RunAssistantVocabularyLookupCommand,
+} from "../assistant/assistant-vocabulary-lookup";
+import {
+  parseAssistantVocabularySuggestionResult,
+  parseRunAssistantVocabularySuggestionCommand,
+  type AssistantVocabularySuggestionResult,
+  type RunAssistantVocabularySuggestionCommand,
+} from "../assistant/assistant-vocabulary-suggestion";
+import {
+  parseAssistantExternalSettingReviewResult,
+  parseRunAssistantExternalSettingReviewCommand,
+  type AssistantExternalSettingReviewResult,
+  type RunAssistantExternalSettingReviewCommand,
+} from "../assistant/assistant-external-setting-review";
+import {
+  parseAssistantNotationReviewResult,
+  parseRunAssistantNotationReviewCommand,
+  type AssistantNotationReviewResult,
+  type RunAssistantNotationReviewCommand,
+} from "../assistant/assistant-notation-review";
+import {
+  parseAssistantSettingReviewResult,
+  parseRunAssistantSettingReviewCommand,
+  type AssistantSettingReviewResult,
+  type RunAssistantSettingReviewCommand,
+} from "../assistant/assistant-setting-review";
+import {
+  parseAppSettingsProfile,
+  parseAppSettingsProjection,
+  parseSaveAppSettingsCommand,
+  type AppSettingsProfile,
+  type AppSettingsProjection,
+  type SaveAppSettingsCommand,
+} from "../settings/app-settings";
+import {
+  parseGetWorkMusicSettingsCommand,
+  parseMusicSettingsProfile,
+  parseSaveWorkMusicSettingsCommand,
+  parseWorkMusicSettingsProjection,
+  type GetWorkMusicSettingsCommand,
+  type MusicSettingsProfile,
+  type SaveWorkMusicSettingsCommand,
+  type WorkMusicSettingsProjection,
+} from "../music/work-music-settings";
+import {
+  parseSaveYouTubeMusicConnectionCommand,
+  parseYouTubeMusicConnectionStatus,
+  type SaveYouTubeMusicConnectionCommand,
+  type YouTubeMusicConnectionStatus,
+} from "../music/youtube-music-connection";
 import {
   parseCreateWorkSnapshotCommand,
   parseDocumentRevisionListProjection,
@@ -103,6 +603,12 @@ import {
   type WorkSnapshotProjection,
 } from "../revisions/work-version-contract";
 import {
+  parseCompareWorkSnapshotCommand,
+  parseWorkSnapshotComparisonProjection,
+  type CompareWorkSnapshotCommand,
+  type WorkSnapshotComparisonProjection,
+} from "../revisions/work-snapshot-comparison";
+import {
   parseLocalWorkspaceBackupActionResult,
   parseLocalWorkspaceBackupStatusProjection,
   type LocalWorkspaceBackupActionResult,
@@ -118,14 +624,32 @@ export const MANUSCRIPT_INPUT_PROFILE_CHANNEL =
   "studio:editor:get-manuscript-input-profile";
 export const MANUSCRIPT_DOCUMENT_PROFILE_CHANNEL =
   "studio:editor:get-manuscript-document-profile";
+export const MANUSCRIPT_FORMATTING_PROFILE_CHANNEL =
+  "studio:editor:get-manuscript-formatting-profile";
+export const MANUSCRIPT_PREFLIGHT_PROFILE_CHANNEL =
+  "studio:editor:get-manuscript-preflight-profile";
+export const MANUSCRIPT_PREFLIGHT_GET_SETTINGS_CHANNEL =
+  "studio:editor:get-manuscript-preflight-settings";
+export const MANUSCRIPT_PREFLIGHT_SAVE_SETTINGS_CHANNEL =
+  "studio:editor:save-manuscript-preflight-settings";
+export const MANUSCRIPT_EXPORT_TEXT_CHANNEL =
+  "studio:editor:export-manuscript-text";
 export const MANUSCRIPT_SAVE_CHANGE_BATCH_CHANNEL =
   "studio:editor:save-change-batch";
+export const MANUSCRIPT_SAVE_DOCUMENT_CHANGE_CHANNEL =
+  "studio:editor:save-document-change";
+export const MANUSCRIPT_SAVE_FORMATTING_CHANNEL =
+  "studio:editor:save-formatting";
 export const MANUSCRIPT_PERSISTENCE_PROFILE_CHANNEL =
   "studio:editor:get-manuscript-persistence-profile";
 export const MANUSCRIPT_STARTUP_RECOVERY_CHANNEL =
   "studio:editor:get-manuscript-startup-recovery";
 export const MANUSCRIPT_RESUME_CHECKPOINT_CHANNEL =
   "studio:editor:get-manuscript-resume-checkpoint";
+export const MANUSCRIPT_GET_CONTINUOUS_READING_PROGRESS_CHANNEL =
+  "studio:editor:get-continuous-reading-progress";
+export const MANUSCRIPT_SAVE_CONTINUOUS_READING_PROGRESS_CHANNEL =
+  "studio:editor:save-continuous-reading-progress";
 export const MANUSCRIPT_APPLY_STARTUP_RECOVERY_CHANNEL =
   "studio:editor:apply-manuscript-startup-recovery";
 export const MANUSCRIPT_CLOSE_REQUEST_CHANNEL =
@@ -134,12 +658,38 @@ export const MANUSCRIPT_COMPLETE_CLOSE_REQUEST_CHANNEL =
   "studio:editor:complete-manuscript-close-request";
 export const WORKSPACE_CATALOG_CHANNEL =
   "studio:workspace:get-catalog";
+export const WORKSPACE_FAVORITES_CHANNEL =
+  "studio:workspace:get-favorites";
+export const WORKSPACE_SET_FAVORITE_CHANNEL =
+  "studio:workspace:set-favorite";
+export const WORKSPACE_COVERS_CHANNEL =
+  "studio:workspace:get-covers";
+export const WORKSPACE_SELECT_COVER_CHANNEL =
+  "studio:workspace:select-cover";
 export const WORKSPACE_CREATE_FIRST_WORK_CHANNEL =
   "studio:workspace:create-first-work";
 export const WORKSPACE_CREATE_WORK_CHANNEL =
   "studio:workspace:create-work";
 export const WORKSPACE_CREATE_DOCUMENT_CHANNEL =
   "studio:workspace:create-document";
+export const WORKSPACE_RENAME_WORK_CHANNEL =
+  "studio:workspace:rename-work";
+export const WORKSPACE_RENAME_DOCUMENT_CHANNEL =
+  "studio:workspace:rename-document";
+export const WORKSPACE_RETIRE_WORK_CHANNEL =
+  "studio:workspace:retire-work";
+export const WORKSPACE_RETIRE_DOCUMENT_CHANNEL =
+  "studio:workspace:retire-document";
+export const WORKSPACE_MOVE_DOCUMENT_CHANNEL =
+  "studio:workspace:move-document";
+export const WORKSPACE_CREATE_DOCUMENT_FOLDER_CHANNEL =
+  "studio:workspace:create-document-folder";
+export const WORKSPACE_RENAME_DOCUMENT_FOLDER_CHANNEL =
+  "studio:workspace:rename-document-folder";
+export const WORKSPACE_PLACE_DOCUMENT_IN_FOLDER_CHANNEL =
+  "studio:workspace:place-document-in-folder";
+export const WORKSPACE_RETIRE_DOCUMENT_FOLDER_CHANNEL =
+  "studio:workspace:retire-document-folder";
 export const WORKSPACE_ACTIVATE_LOCATION_CHANNEL =
   "studio:workspace:activate-location";
 export const WORKSPACE_CAPTURE_RESUME_CHANNEL =
@@ -152,8 +702,166 @@ export const STRUCTURE_CREATE_SCENE_OVERRIDE_CHANNEL =
   "studio:structure:create-scene-override";
 export const STRUCTURE_LIST_SCENE_OVERRIDES_CHANNEL =
   "studio:structure:list-scene-overrides";
+export const FRAGMENT_PROFILE_CHANNEL =
+  "studio:fragments:get-profile";
+export const FRAGMENT_CAPTURE_CHANNEL =
+  "studio:fragments:capture";
+export const FRAGMENT_LIST_CHANNEL =
+  "studio:fragments:list";
+export const FRAGMENT_UPDATE_CHANNEL =
+  "studio:fragments:update";
+export const FRAGMENT_RECORD_USE_CHANNEL =
+  "studio:fragments:record-use";
+export const FRAGMENT_RETIRE_CHANNEL =
+  "studio:fragments:retire";
+export const CHARACTER_CREATE_CHANNEL =
+  "studio:characters:create";
+export const CHARACTER_LIST_CHANNEL =
+  "studio:characters:list";
+export const CHARACTER_UPDATE_CHANNEL =
+  "studio:characters:update";
+export const CHARACTER_RETIRE_CHANNEL =
+  "studio:characters:retire";
+export const LORE_ENTRY_CREATE_CHANNEL =
+  "studio:lore-entries:create";
+export const LORE_ENTRY_LIST_CHANNEL =
+  "studio:lore-entries:list";
+export const LORE_ENTRY_UPDATE_CHANNEL =
+  "studio:lore-entries:update";
+export const LORE_ENTRY_ADD_EVIDENCE_CHANNEL =
+  "studio:lore-entries:add-evidence";
+export const LORE_ENTRY_RETIRE_CHANNEL =
+  "studio:lore-entries:retire";
+export const LORE_CANDIDATE_CREATE_CHANNEL =
+  "studio:lore-candidates:create";
+export const LORE_CANDIDATE_LIST_CHANNEL =
+  "studio:lore-candidates:list";
+export const LORE_CANDIDATE_APPROVE_CHANNEL =
+  "studio:lore-candidates:approve";
+export const LORE_CANDIDATE_REJECT_CHANNEL =
+  "studio:lore-candidates:reject";
+export const LORE_FORESHADOW_LINK_CHANNEL =
+  "studio:lore-foreshadow-links:link";
+export const LORE_FORESHADOW_LIST_CHANNEL =
+  "studio:lore-foreshadow-links:list";
+export const LORE_FORESHADOW_UNLINK_CHANNEL =
+  "studio:lore-foreshadow-links:unlink";
+export const PUBLISHING_PARTNER_CREATE_CHANNEL =
+  "studio:publishing-partners:create";
+export const PUBLISHING_PARTNER_LIST_CHANNEL =
+  "studio:publishing-partners:list";
+export const PUBLISHING_PARTNER_UPDATE_CHANNEL =
+  "studio:publishing-partners:update";
+export const PUBLISHING_SUBMISSION_CREATE_CHANNEL =
+  "studio:publishing-submissions:create";
+export const PUBLISHING_SUBMISSION_LIST_CHANNEL =
+  "studio:publishing-submissions:list";
+export const PUBLISHING_SUBMISSION_UPDATE_CHANNEL =
+  "studio:publishing-submissions:update";
+export const PUBLISHING_CONTRACT_CREATE_CHANNEL =
+  "studio:publishing-contracts:create";
+export const PUBLISHING_CONTRACT_LIST_CHANNEL =
+  "studio:publishing-contracts:list";
+export const PUBLISHING_CONTRACT_UPDATE_CHANNEL =
+  "studio:publishing-contracts:update";
+export const PUBLISHING_PUBLICATION_CREATE_CHANNEL =
+  "studio:publishing-publications:create";
+export const PUBLISHING_PUBLICATION_LIST_CHANNEL =
+  "studio:publishing-publications:list";
+export const PUBLISHING_PUBLICATION_UPDATE_CHANNEL =
+  "studio:publishing-publications:update";
+export const PUBLISHING_SETTLEMENT_CREATE_CHANNEL =
+  "studio:publishing-settlements:create";
+export const PUBLISHING_SETTLEMENT_LIST_CHANNEL =
+  "studio:publishing-settlements:list";
+export const PUBLISHING_SETTLEMENT_UPDATE_CHANNEL =
+  "studio:publishing-settlements:update";
+export const PUBLISHING_PAYMENT_CREATE_CHANNEL =
+  "studio:publishing-payments:create";
+export const PUBLISHING_PAYMENT_LIST_CHANNEL =
+  "studio:publishing-payments:list";
+export const PUBLISHING_PAYMENT_UPDATE_CHANNEL =
+  "studio:publishing-payments:update";
+export const PUBLISHING_SOURCE_CREATE_CHANNEL =
+  "studio:publishing-sources:create";
+export const PUBLISHING_SOURCE_LIST_CHANNEL =
+  "studio:publishing-sources:list";
+export const PUBLISHING_RESEARCH_PREVIEW_CHANNEL =
+  "studio:publishing-research:preview";
+export const PUBLISHING_RESEARCH_APPROVE_CHANNEL =
+  "studio:publishing-research:approve";
+export const PUBLISHING_ASSISTANT_RUN_CHANNEL =
+  "studio:publishing-assistant:run";
+export const PUBLISHING_ASSISTANT_APPROVE_CHANNEL =
+  "studio:publishing-assistant:approve";
+export const PUBLISHING_EVIDENCE_SET_LINKS_CHANNEL =
+  "studio:publishing-evidence:set-links";
+export const PUBLISHING_PARTNER_CSV_SELECT_CHANNEL =
+  "studio:publishing-imports:select-partner-csv";
+export const PUBLISHING_PARTNER_CSV_APPLY_CHANNEL =
+  "studio:publishing-imports:apply-partner-csv";
+export const PUBLISHING_SUBMISSION_CSV_SELECT_CHANNEL =
+  "studio:publishing-imports:select-submission-csv";
+export const PUBLISHING_SUBMISSION_CSV_APPLY_CHANNEL =
+  "studio:publishing-imports:apply-submission-csv";
+export const PUBLISHING_MAIL_CANDIDATE_LIST_CHANNEL =
+  "studio:publishing-mail-candidates:list";
+export const PUBLISHING_MAIL_CANDIDATE_LINK_CHANNEL =
+  "studio:publishing-mail-candidates:link";
+export const PUBLISHING_MAIL_CANDIDATE_UPDATE_CHANNEL =
+  "studio:publishing-mail-candidates:update";
+export const PUBLISHING_MAIL_CANDIDATE_REVIEW_CHANNEL =
+  "studio:publishing-mail-candidates:review";
+export const PUBLISHING_MAIL_CONNECTION_STATUS_CHANNEL =
+  "studio:publishing-mail-connection:status";
+export const PUBLISHING_MAIL_CONNECTION_CONNECT_CHANNEL =
+  "studio:publishing-mail-connection:connect";
+export const PUBLISHING_MAIL_CONNECTION_SYNC_CHANNEL =
+  "studio:publishing-mail-connection:sync";
+export const PUBLISHING_MAIL_CONNECTION_DISCONNECT_CHANNEL =
+  "studio:publishing-mail-connection:disconnect";
+export const PUBLISHING_MAIL_SCHEDULE_STATUS_CHANNEL =
+  "studio:publishing-mail-schedule:status";
+export const PUBLISHING_MAIL_SCHEDULE_SAVE_CHANNEL =
+  "studio:publishing-mail-schedule:save";
+export const PLOT_CREATE_CHANNEL =
+  "studio:plots:create";
+export const PLOT_LIST_CHANNEL =
+  "studio:plots:list";
+export const PLOT_UPDATE_CHANNEL =
+  "studio:plots:update";
+export const PLOT_RETIRE_CHANNEL =
+  "studio:plots:retire";
+export const PLOT_LINK_SOURCE_CHANNEL =
+  "studio:plots:link-source";
+export const PLOT_SOURCE_LIST_CHANNEL =
+  "studio:plots:list-sources";
+export const FORESHADOW_CREATE_LINE_CHANNEL =
+  "studio:foreshadowing:create-line";
+export const FORESHADOW_LIST_LINES_CHANNEL =
+  "studio:foreshadowing:list-lines";
+export const FORESHADOW_UPDATE_LINE_CHANNEL =
+  "studio:foreshadowing:update-line";
+export const FORESHADOW_RETIRE_LINE_CHANNEL =
+  "studio:foreshadowing:retire-line";
+export const FORESHADOW_POINT_PROFILE_CHANNEL =
+  "studio:foreshadowing:get-point-profile";
+export const FORESHADOW_CREATE_POINT_CHANNEL =
+  "studio:foreshadowing:create-point";
+export const FORESHADOW_LIST_POINTS_CHANNEL =
+  "studio:foreshadowing:list-points";
 export const ACTIVITY_LIST_WORK_CHANNEL =
   "studio:activity:list-work";
+export const ACTIVITY_EXPORT_RECORDS_CHANNEL =
+  "studio:activity:export-records";
+export const ACTIVITY_GET_RECORDS_GOALS_CHANNEL =
+  "studio:activity:get-records-goals";
+export const ACTIVITY_SAVE_RECORDS_GOALS_CHANNEL =
+  "studio:activity:save-records-goals";
+export const ACTIVITY_GET_READTHROUGH_CHANNEL =
+  "studio:activity:get-readthrough";
+export const ACTIVITY_SAVE_READTHROUGH_CHANNEL =
+  "studio:activity:save-readthrough";
 export const ACTIVITY_START_SESSION_CHANNEL =
   "studio:activity:start-session";
 export const ACTIVITY_STOP_SESSION_CHANNEL =
@@ -162,6 +870,78 @@ export const ACTIVITY_START_FOCUS_CHANNEL =
   "studio:activity:start-focus";
 export const ACTIVITY_STOP_FOCUS_CHANNEL =
   "studio:activity:stop-focus";
+export const ACTIVITY_GET_POMODORO_CHANNEL =
+  "studio:activity:get-pomodoro";
+export const ACTIVITY_CONFIGURE_START_POMODORO_CHANNEL =
+  "studio:activity:configure-start-pomodoro";
+export const ACTIVITY_PAUSE_POMODORO_CHANNEL =
+  "studio:activity:pause-pomodoro";
+export const ACTIVITY_RESUME_POMODORO_CHANNEL =
+  "studio:activity:resume-pomodoro";
+export const ACTIVITY_RECONCILE_POMODORO_CHANNEL =
+  "studio:activity:reconcile-pomodoro";
+export const ACTIVITY_STOP_POMODORO_CHANNEL =
+  "studio:activity:stop-pomodoro";
+export const SCHEDULE_LIST_WORK_CHANNEL =
+  "studio:schedule:list-work";
+export const SCHEDULE_CREATE_ITEM_CHANNEL =
+  "studio:schedule:create-item";
+export const SCHEDULE_UPDATE_ITEM_CHANNEL =
+  "studio:schedule:update-item";
+export const SCHEDULE_RETIRE_ITEM_CHANNEL =
+  "studio:schedule:retire-item";
+export const SCHEDULE_SET_COMPLETION_CHANNEL =
+  "studio:schedule:set-completion";
+export const QUICK_TOOLS_GET_MEMO_CHANNEL =
+  "studio:quick-tools:get-memo";
+export const QUICK_TOOLS_SAVE_MEMO_CHANNEL =
+  "studio:quick-tools:save-memo";
+export const ASSISTANT_CHATGPT_OAUTH_STATUS_CHANNEL =
+  "studio:assistant:chatgpt-oauth-status";
+export const ASSISTANT_CHATGPT_OAUTH_START_LOGIN_CHANNEL =
+  "studio:assistant:chatgpt-oauth-start-login";
+export const ASSISTANT_LIST_CONTEXT_STATE_CHANNEL =
+  "studio:assistant:list-context-state";
+export const ASSISTANT_GRANT_CONTEXT_PERMISSION_CHANNEL =
+  "studio:assistant:grant-context-permission";
+export const ASSISTANT_REVOKE_CONTEXT_PERMISSION_CHANNEL =
+  "studio:assistant:revoke-context-permission";
+export const ASSISTANT_DESTINATION_PROFILE_CHANNEL =
+  "studio:assistant:get-destination-profile";
+export const ASSISTANT_CONNECTOR_PROFILE_CHANNEL =
+  "studio:assistant:get-connector-profile";
+export const ASSISTANT_RUN_VOCABULARY_LOOKUP_CHANNEL =
+  "studio:assistant:run-vocabulary-lookup";
+export const ASSISTANT_RUN_VOCABULARY_SUGGESTION_CHANNEL =
+  "studio:assistant:run-vocabulary-suggestion";
+export const ASSISTANT_RUN_EXTERNAL_SETTING_REVIEW_CHANNEL =
+  "studio:assistant:run-external-setting-review";
+export const ASSISTANT_RUN_NOTATION_REVIEW_CHANNEL =
+  "studio:assistant:run-notation-review";
+export const ASSISTANT_RUN_SETTING_REVIEW_CHANNEL =
+  "studio:assistant:run-setting-review";
+export const ASSISTANT_LIST_CONNECTIONS_CHANNEL =
+  "studio:assistant:list-connections";
+export const ASSISTANT_SAVE_CONNECTION_CHANNEL =
+  "studio:assistant:save-connection";
+export const ASSISTANT_DELETE_CONNECTION_CHANNEL =
+  "studio:assistant:delete-connection";
+export const APP_SETTINGS_PROFILE_CHANNEL =
+  "studio:settings:profile";
+export const APP_SETTINGS_GET_CHANNEL =
+  "studio:settings:get";
+export const APP_SETTINGS_SAVE_CHANNEL =
+  "studio:settings:save";
+export const MUSIC_SETTINGS_PROFILE_CHANNEL =
+  "studio:music:settings-profile";
+export const MUSIC_SETTINGS_GET_WORK_CHANNEL =
+  "studio:music:get-work-settings";
+export const MUSIC_SETTINGS_SAVE_WORK_CHANNEL =
+  "studio:music:save-work-settings";
+export const YOUTUBE_MUSIC_CONNECTION_STATUS_CHANNEL =
+  "studio:music:youtube-connection-status";
+export const YOUTUBE_MUSIC_CONNECTION_SAVE_CHANNEL =
+  "studio:music:youtube-connection-save";
 export const VERSION_LIST_DOCUMENT_REVISIONS_CHANNEL =
   "studio:version:list-document-revisions";
 export const VERSION_RESTORE_DOCUMENT_REVISION_CHANNEL =
@@ -170,6 +950,8 @@ export const VERSION_CREATE_WORK_SNAPSHOT_CHANNEL =
   "studio:version:create-work-snapshot";
 export const VERSION_LIST_WORK_SNAPSHOTS_CHANNEL =
   "studio:version:list-work-snapshots";
+export const VERSION_COMPARE_WORK_SNAPSHOT_CHANNEL =
+  "studio:version:compare-work-snapshot";
 export const BACKUP_GET_STATUS_CHANNEL =
   "studio:backup:get-status";
 export const BACKUP_CREATE_CHANNEL =
@@ -203,6 +985,14 @@ export type StudioBridge = {
   };
   workspace: {
     getCatalog: () => Promise<WorkspaceCatalogProjection>;
+    getFavorites: () => Promise<WorkFavoritesProjection>;
+    setFavorite: (
+      command: SetWorkFavoriteCommand,
+    ) => Promise<WorkFavoritesProjection>;
+    getCovers: () => Promise<WorkCoversProjection>;
+    selectCover: (
+      command: SelectWorkCoverCommand,
+    ) => Promise<WorkCoverProjection | null>;
     activateLocation: (
       command: ActivateWorkspaceLocationCommand,
     ) => Promise<WorkspaceCatalogProjection>;
@@ -215,6 +1005,33 @@ export type StudioBridge = {
     createDocument: (
       command: CreateDocumentCommand,
     ) => Promise<CreateDocumentResult>;
+    renameWork: (
+      command: RenameWorkCommand,
+    ) => Promise<WorkspaceCatalogProjection>;
+    renameDocument: (
+      command: RenameDocumentCommand,
+    ) => Promise<WorkspaceCatalogProjection>;
+    retireWork: (
+      command: RetireWorkCommand,
+    ) => Promise<WorkspaceCatalogProjection>;
+    retireDocument: (
+      command: RetireDocumentCommand,
+    ) => Promise<WorkspaceCatalogProjection>;
+    moveDocument: (
+      command: MoveDocumentCommand,
+    ) => Promise<WorkspaceCatalogProjection>;
+    createDocumentFolder: (
+      command: CreateDocumentFolderCommand,
+    ) => Promise<WorkspaceCatalogProjection>;
+    renameDocumentFolder: (
+      command: RenameDocumentFolderCommand,
+    ) => Promise<WorkspaceCatalogProjection>;
+    placeDocumentInFolder: (
+      command: PlaceDocumentInFolderCommand,
+    ) => Promise<WorkspaceCatalogProjection>;
+    retireDocumentFolder: (
+      command: RetireDocumentFolderCommand,
+    ) => Promise<WorkspaceCatalogProjection>;
     captureResume: (
       command: CaptureWorkspaceResumeCommand,
     ) => Promise<ManuscriptResumeCheckpointProjection>;
@@ -233,10 +1050,285 @@ export type StudioBridge = {
       command: ListSceneOverridesCommand,
     ) => Promise<SceneOverrideListProjection>;
   };
+  fragments: {
+    getProfile: () => Promise<FragmentShelfProfile>;
+    capture: (
+      command: CaptureFragmentCommand,
+    ) => Promise<FragmentProjection>;
+    list: (
+      command: ListFragmentsCommand,
+    ) => Promise<FragmentListProjection>;
+    update: (
+      command: UpdateFragmentCommand,
+    ) => Promise<FragmentProjection>;
+    recordUse: (
+      command: RecordFragmentUseCommand,
+    ) => Promise<FragmentProjection>;
+    retire: (
+      command: RetireFragmentCommand,
+    ) => Promise<FragmentProjection>;
+  };
+  characters: {
+    create: (
+      command: CreateCharacterCommand,
+    ) => Promise<CharacterProjection>;
+    list: (
+      command: ListCharactersCommand,
+    ) => Promise<CharacterListProjection>;
+    update: (
+      command: UpdateCharacterCommand,
+    ) => Promise<CharacterProjection>;
+    retire: (
+      command: RetireCharacterCommand,
+    ) => Promise<CharacterProjection>;
+  };
+  loreEntries: {
+    create: (
+      command: CreateLoreEntryCommand,
+    ) => Promise<LoreEntryProjection>;
+    list: (
+      command: ListLoreEntriesCommand,
+    ) => Promise<LoreEntryListProjection>;
+    update: (
+      command: UpdateLoreEntryCommand,
+    ) => Promise<LoreEntryProjection>;
+    addEvidence: (
+      command: AddLoreEntryEvidenceCommand,
+    ) => Promise<LoreEntryProjection>;
+    retire: (
+      command: RetireLoreEntryCommand,
+    ) => Promise<LoreEntryProjection>;
+  };
+  loreCandidates: {
+    create: (
+      command: CreateLoreCandidateCommand,
+    ) => Promise<LoreCandidateProjection>;
+    list: (
+      command: ListLoreCandidatesCommand,
+    ) => Promise<LoreCandidateListProjection>;
+    approve: (
+      command: ReviewLoreCandidateCommand,
+    ) => Promise<LoreCandidateApprovalResult>;
+    reject: (
+      command: ReviewLoreCandidateCommand,
+    ) => Promise<LoreCandidateProjection>;
+  };
+  loreForeshadowLinks: {
+    link: (
+      command: LinkLoreForeshadowCommand,
+    ) => Promise<LoreForeshadowLinkProjection>;
+    list: (
+      command: ListLoreForeshadowLinksCommand,
+    ) => Promise<LoreForeshadowLinkListProjection>;
+    unlink: (
+      command: UnlinkLoreForeshadowCommand,
+    ) => Promise<LoreForeshadowLinkProjection>;
+  };
+  publishingPartners: {
+    create: (
+      command: CreatePublishingPartnerCommand,
+    ) => Promise<PublishingPartnerProjection>;
+    list: (
+      command: ListPublishingPartnersCommand,
+    ) => Promise<PublishingPartnerListProjection>;
+    update: (
+      command: UpdatePublishingPartnerCommand,
+    ) => Promise<PublishingPartnerProjection>;
+  };
+  publishingSubmissions: {
+    create: (
+      command: CreatePublishingSubmissionCommand,
+    ) => Promise<PublishingSubmissionProjection>;
+    list: (
+      command: ListPublishingSubmissionsCommand,
+    ) => Promise<PublishingSubmissionListProjection>;
+    update: (
+      command: UpdatePublishingSubmissionCommand,
+    ) => Promise<PublishingSubmissionProjection>;
+  };
+  publishingContracts: {
+    create: (
+      command: CreatePublishingContractCommand,
+    ) => Promise<PublishingContractProjection>;
+    list: (
+      command: ListPublishingContractsCommand,
+    ) => Promise<PublishingContractListProjection>;
+    update: (
+      command: UpdatePublishingContractCommand,
+    ) => Promise<PublishingContractProjection>;
+  };
+  publishingPublications: {
+    create: (
+      command: CreatePublishingPublicationCommand,
+    ) => Promise<PublishingPublicationProjection>;
+    list: (
+      command: ListPublishingPublicationsCommand,
+    ) => Promise<PublishingPublicationListProjection>;
+    update: (
+      command: UpdatePublishingPublicationCommand,
+    ) => Promise<PublishingPublicationProjection>;
+  };
+  publishingSettlements: {
+    create: (
+      command: CreatePublishingSettlementCommand,
+    ) => Promise<PublishingSettlementProjection>;
+    list: (
+      command: ListPublishingSettlementsCommand,
+    ) => Promise<PublishingSettlementListProjection>;
+    update: (
+      command: UpdatePublishingSettlementCommand,
+    ) => Promise<PublishingSettlementProjection>;
+  };
+  publishingPayments: {
+    create: (
+      command: CreatePublishingPaymentCommand,
+    ) => Promise<PublishingPaymentProjection>;
+    list: (
+      command: ListPublishingPaymentsCommand,
+    ) => Promise<PublishingPaymentListProjection>;
+    update: (
+      command: UpdatePublishingPaymentCommand,
+    ) => Promise<PublishingPaymentProjection>;
+  };
+  publishingSources: {
+    create: (
+      command: CreatePublishingSourceCommand,
+    ) => Promise<PublishingSourceProjection>;
+    list: (
+      command: ListPublishingSourcesCommand,
+    ) => Promise<PublishingSourceListProjection>;
+  };
+  publishingResearch: {
+    preview: (
+      command: PreviewPublishingResearchCommand,
+    ) => Promise<PublishingResearchCandidateProjection>;
+    approve: (
+      command: ApprovePublishingResearchCommand,
+    ) => Promise<PublishingResearchApprovalResult>;
+  };
+  publishingAssistant: {
+    run: (
+      command: RunPublishingAssistantCommand,
+    ) => Promise<PublishingAssistantResult>;
+    approve: (
+      command: ApprovePublishingAssistantCandidateCommand,
+    ) => Promise<PublishingAssistantApprovalResult>;
+  };
+  publishingEvidence: {
+    setLinks: (
+      command: SetPublishingEvidenceLinksCommand,
+    ) => Promise<PublishingEvidenceLinksProjection>;
+  };
+  publishingImports: {
+    selectPartnerCsv: (
+      command: SelectPublishingPartnerCsvCommand,
+    ) => Promise<PublishingPartnerCsvSelectionProjection>;
+    applyPartnerCsv: (
+      command: ApplyPublishingPartnerCsvImportCommand,
+    ) => Promise<PublishingPartnerCsvImportResult>;
+    selectSubmissionCsv: (
+      command: SelectPublishingSubmissionCsvCommand,
+    ) => Promise<PublishingSubmissionCsvSelectionProjection>;
+    applySubmissionCsv: (
+      command: ApplyPublishingSubmissionCsvImportCommand,
+    ) => Promise<PublishingSubmissionCsvImportResult>;
+  };
+  publishingMailCandidates: {
+    list: (
+      command: ListPublishingMailCandidatesCommand,
+    ) => Promise<PublishingMailCandidateListProjection>;
+    link: (
+      command: LinkPublishingMailCandidateCommand,
+    ) => Promise<PublishingMailCandidateProjection>;
+    update: (
+      command: UpdatePublishingMailCandidateCommand,
+    ) => Promise<PublishingMailCandidateProjection>;
+    review: (
+      command: ReviewPublishingMailCandidateCommand,
+    ) => Promise<PublishingMailCandidateReviewResult>;
+  };
+  publishingMailConnection: {
+    status: (
+      command: GetPublishingMailConnectionCommand,
+    ) => Promise<PublishingMailConnectionProjection>;
+    connect: (
+      command: ConnectPublishingMailCommand,
+    ) => Promise<PublishingMailConnectionProjection>;
+    sync: (
+      command: SyncPublishingMailCommand,
+    ) => Promise<PublishingMailSyncResult>;
+    disconnect: (
+      command: DisconnectPublishingMailCommand,
+    ) => Promise<PublishingMailConnectionProjection>;
+  };
+  publishingMailSchedule: {
+    status: (
+      command: GetPublishingMailScheduleCommand,
+    ) => Promise<PublishingMailScheduleProjection>;
+    save: (
+      command: SavePublishingMailScheduleCommand,
+    ) => Promise<PublishingMailScheduleProjection>;
+  };
+  plots: {
+    create: (
+      command: CreatePlotThreadCommand,
+    ) => Promise<PlotThreadProjection>;
+    list: (
+      command: ListPlotThreadsCommand,
+    ) => Promise<PlotThreadListProjection>;
+    update: (
+      command: UpdatePlotThreadCommand,
+    ) => Promise<PlotThreadProjection>;
+    retire: (
+      command: RetirePlotThreadCommand,
+    ) => Promise<PlotThreadProjection>;
+    linkSource: (
+      command: LinkPlotThreadSourceCommand,
+    ) => Promise<PlotThreadSourceProjection>;
+    listSources: (
+      command: ListPlotThreadSourcesCommand,
+    ) => Promise<PlotThreadSourceListProjection>;
+  };
+  foreshadowing: {
+    getPointProfile: () => Promise<ForeshadowPointProfile>;
+    createLine: (
+      command: CreateForeshadowLineCommand,
+    ) => Promise<ForeshadowLineProjection>;
+    listLines: (
+      command: ListForeshadowLinesCommand,
+    ) => Promise<ForeshadowLineListProjection>;
+    updateLine: (
+      command: UpdateForeshadowLineCommand,
+    ) => Promise<ForeshadowLineProjection>;
+    retireLine: (
+      command: RetireForeshadowLineCommand,
+    ) => Promise<ForeshadowLineProjection>;
+    createPoint: (
+      command: CreateForeshadowPointCommand,
+    ) => Promise<ForeshadowPointProjection>;
+    listPoints: (
+      command: ListForeshadowPointsCommand,
+    ) => Promise<ForeshadowPointListProjection>;
+  };
   activity: {
+    exportRecords: (
+      command: ExportWorkRecordsCommand,
+    ) => Promise<ExportWorkRecordsResult>;
     listWork: (
       command: ListWorkActivityCommand,
     ) => Promise<WorkActivityProjection>;
+    getRecordsGoals: (
+      command: GetWorkRecordsGoalsCommand,
+    ) => Promise<WorkRecordsGoalsProjection>;
+    saveRecordsGoals: (
+      command: SaveWorkRecordsGoalsCommand,
+    ) => Promise<WorkRecordsGoalsProjection>;
+    getReadthrough: (
+      command: GetWorkReadthroughCommand,
+    ) => Promise<WorkReadthroughProjection>;
+    saveReadthrough: (
+      command: SaveWorkReadthroughCommand,
+    ) => Promise<WorkReadthroughProjection>;
     startSession: (
       command: StartWritingSessionCommand,
     ) => Promise<WorkActivityProjection>;
@@ -249,8 +1341,109 @@ export type StudioBridge = {
     stopFocus: (
       command: StopFocusCycleCommand,
     ) => Promise<WorkActivityProjection>;
+    getPomodoro: (
+      command: GetPomodoroCommand,
+    ) => Promise<PomodoroProjection>;
+    configureAndStartPomodoro: (
+      command: ConfigureAndStartPomodoroCommand,
+    ) => Promise<PomodoroProjection>;
+    pausePomodoro: (
+      command: PomodoroPhaseCommand,
+    ) => Promise<PomodoroProjection>;
+    resumePomodoro: (
+      command: PomodoroPhaseCommand,
+    ) => Promise<PomodoroProjection>;
+    reconcilePomodoro: (
+      command: PomodoroPhaseCommand,
+    ) => Promise<PomodoroProjection>;
+    stopPomodoro: (
+      command: PomodoroPhaseCommand,
+    ) => Promise<PomodoroProjection>;
+  };
+  schedule: {
+    listWork: (
+      command: ListWorkScheduleCommand,
+    ) => Promise<WorkScheduleProjection>;
+    createItem: (
+      command: CreateWorkScheduleItemCommand,
+    ) => Promise<WorkScheduleItemProjection>;
+    updateItem: (
+      command: UpdateWorkScheduleItemCommand,
+    ) => Promise<WorkScheduleItemProjection>;
+    retireItem: (
+      command: RetireWorkScheduleItemCommand,
+    ) => Promise<void>;
+    setCompletion: (
+      command: SetWorkScheduleCompletionCommand,
+    ) => Promise<WorkScheduleItemProjection>;
+  };
+  settings: {
+    getProfile: () => Promise<AppSettingsProfile>;
+    get: () => Promise<AppSettingsProjection>;
+    save: (
+      command: SaveAppSettingsCommand,
+    ) => Promise<AppSettingsProjection>;
+    getMusicProfile: () => Promise<MusicSettingsProfile>;
+    getWorkMusic: (
+      command: GetWorkMusicSettingsCommand,
+    ) => Promise<WorkMusicSettingsProjection>;
+    saveWorkMusic: (
+      command: SaveWorkMusicSettingsCommand,
+    ) => Promise<WorkMusicSettingsProjection>;
+    getYouTubeMusicConnectionStatus: () => Promise<YouTubeMusicConnectionStatus>;
+    saveYouTubeMusicConnection: (
+      command: SaveYouTubeMusicConnectionCommand,
+    ) => Promise<YouTubeMusicConnectionStatus>;
+  };
+  quickTools: {
+    getMemo: (
+      command: GetWorkQuickMemoCommand,
+    ) => Promise<WorkQuickMemoProjection>;
+    saveMemo: (
+      command: SaveWorkQuickMemoCommand,
+    ) => Promise<WorkQuickMemoProjection>;
+  };
+  assistant: {
+    getChatGptOAuthStatus: () => Promise<ChatGptOAuthConnectionStatus>;
+    startChatGptOAuthLogin: () => Promise<ChatGptOAuthConnectionStatus>;
+    listConnections: () => Promise<AssistantConnectionListProjection>;
+    saveConnection: (
+      command: SaveAssistantConnectionCommand,
+    ) => Promise<AssistantConnectionProjection>;
+    deleteConnection: (
+      command: DeleteAssistantConnectionCommand,
+    ) => Promise<void>;
+    getConnectorProfile: () => Promise<AssistantConnectorManifestProfile>;
+    getDestinationProfile: () => Promise<AssistantDestinationProfile>;
+    listContextState: (
+      command: ListAssistantContextStateCommand,
+    ) => Promise<AssistantContextStateProjection>;
+    grantContextPermission: (
+      command: GrantAssistantContextPermissionCommand,
+    ) => Promise<AssistantContextPermissionGrant>;
+    revokeContextPermission: (
+      command: RevokeAssistantContextPermissionCommand,
+    ) => Promise<AssistantContextPermissionGrant>;
+    runVocabularyLookup: (
+      command: RunAssistantVocabularyLookupCommand,
+    ) => Promise<AssistantVocabularyLookupResult>;
+    runVocabularySuggestion: (
+      command: RunAssistantVocabularySuggestionCommand,
+    ) => Promise<AssistantVocabularySuggestionResult>;
+    runExternalSettingReview: (
+      command: RunAssistantExternalSettingReviewCommand,
+    ) => Promise<AssistantExternalSettingReviewResult>;
+    runNotationReview: (
+      command: RunAssistantNotationReviewCommand,
+    ) => Promise<AssistantNotationReviewResult>;
+    runSettingReview: (
+      command: RunAssistantSettingReviewCommand,
+    ) => Promise<AssistantSettingReviewResult>;
   };
   version: {
+    compareWorkSnapshot: (
+      command: CompareWorkSnapshotCommand,
+    ) => Promise<WorkSnapshotComparisonProjection>;
     listDocumentRevisions: (
       command: ListDocumentRevisionsCommand,
     ) => Promise<DocumentRevisionListProjection>;
@@ -275,10 +1468,33 @@ export type StudioBridge = {
   editor: {
     getManuscriptInputProfile: () => Promise<ManuscriptInputProfile>;
     getManuscriptDocumentProfile: () => Promise<ManuscriptDocumentProfile>;
+    getManuscriptFormattingProfile: () => Promise<ManuscriptFormattingProfile>;
+    getManuscriptPreflightProfile: () => Promise<ManuscriptPreflightProfile>;
+    getManuscriptPreflightSettings: (
+      command: GetManuscriptPreflightSettingsCommand,
+    ) => Promise<ManuscriptPreflightSettingsProjection>;
+    saveManuscriptPreflightSettings: (
+      command: SaveManuscriptPreflightSettingsCommand,
+    ) => Promise<ManuscriptPreflightSettingsProjection>;
+    exportManuscriptText: (
+      command: ExportManuscriptTextCommand,
+    ) => Promise<ExportManuscriptTextResult>;
     getManuscriptPersistenceProfile: () => Promise<ManuscriptPersistenceProfile | null>;
     getManuscriptStartupRecovery: () => Promise<StartupRecoveryProjection>;
     getManuscriptResumeCheckpoint: () => Promise<ManuscriptResumeCheckpointProjection>;
+    getContinuousReadingProgress: (
+      command: GetContinuousReadingProgressCommand,
+    ) => Promise<WorkContinuousReadingProgressProjection>;
+    saveContinuousReadingProgress: (
+      command: SaveContinuousReadingProgressCommand,
+    ) => Promise<WorkContinuousReadingProgressProjection>;
     saveChangeBatch: (batch: ChangeBatch) => Promise<SaveReceipt>;
+    saveDocumentChange: (
+      command: SaveManuscriptDocumentChangeCommand,
+    ) => Promise<SaveReceipt>;
+    saveFormatting: (
+      command: SaveManuscriptFormattingCommand,
+    ) => Promise<SaveManuscriptFormattingReceipt>;
     applyManuscriptStartupRecovery: (
       command: ApplyStartupRecoveryCommand,
     ) => Promise<ApplyStartupRecoveryAcknowledgement>;
@@ -298,57 +1514,269 @@ export type BridgeInvoke = (
     | typeof RUNTIME_INFO_CHANNEL
     | typeof MANUSCRIPT_INPUT_PROFILE_CHANNEL
     | typeof MANUSCRIPT_DOCUMENT_PROFILE_CHANNEL
+    | typeof MANUSCRIPT_FORMATTING_PROFILE_CHANNEL
+    | typeof MANUSCRIPT_PREFLIGHT_PROFILE_CHANNEL
+    | typeof MANUSCRIPT_PREFLIGHT_GET_SETTINGS_CHANNEL
+    | typeof MANUSCRIPT_PREFLIGHT_SAVE_SETTINGS_CHANNEL
+    | typeof MANUSCRIPT_EXPORT_TEXT_CHANNEL
     | typeof MANUSCRIPT_PERSISTENCE_PROFILE_CHANNEL
     | typeof MANUSCRIPT_SAVE_CHANGE_BATCH_CHANNEL
+    | typeof MANUSCRIPT_SAVE_DOCUMENT_CHANGE_CHANNEL
+    | typeof MANUSCRIPT_SAVE_FORMATTING_CHANNEL
     | typeof MANUSCRIPT_STARTUP_RECOVERY_CHANNEL
     | typeof MANUSCRIPT_RESUME_CHECKPOINT_CHANNEL
+    | typeof MANUSCRIPT_GET_CONTINUOUS_READING_PROGRESS_CHANNEL
+    | typeof MANUSCRIPT_SAVE_CONTINUOUS_READING_PROGRESS_CHANNEL
     | typeof MANUSCRIPT_APPLY_STARTUP_RECOVERY_CHANNEL
     | typeof MANUSCRIPT_COMPLETE_CLOSE_REQUEST_CHANNEL
     | typeof WORKSPACE_CATALOG_CHANNEL
+    | typeof WORKSPACE_FAVORITES_CHANNEL
+    | typeof WORKSPACE_SET_FAVORITE_CHANNEL
+    | typeof WORKSPACE_COVERS_CHANNEL
+    | typeof WORKSPACE_SELECT_COVER_CHANNEL
     | typeof WORKSPACE_CREATE_FIRST_WORK_CHANNEL
     | typeof WORKSPACE_CREATE_WORK_CHANNEL
     | typeof WORKSPACE_CREATE_DOCUMENT_CHANNEL
+    | typeof WORKSPACE_RENAME_WORK_CHANNEL
+    | typeof WORKSPACE_RENAME_DOCUMENT_CHANNEL
+    | typeof WORKSPACE_RETIRE_WORK_CHANNEL
+    | typeof WORKSPACE_RETIRE_DOCUMENT_CHANNEL
+    | typeof WORKSPACE_MOVE_DOCUMENT_CHANNEL
+    | typeof WORKSPACE_CREATE_DOCUMENT_FOLDER_CHANNEL
+    | typeof WORKSPACE_RENAME_DOCUMENT_FOLDER_CHANNEL
+    | typeof WORKSPACE_PLACE_DOCUMENT_IN_FOLDER_CHANNEL
+    | typeof WORKSPACE_RETIRE_DOCUMENT_FOLDER_CHANNEL
     | typeof WORKSPACE_ACTIVATE_LOCATION_CHANNEL
     | typeof WORKSPACE_CAPTURE_RESUME_CHANNEL
     | typeof STRUCTURE_CREATE_EVENT_BLOCK_CHANNEL
     | typeof STRUCTURE_LIST_EVENT_BLOCKS_CHANNEL
     | typeof STRUCTURE_CREATE_SCENE_OVERRIDE_CHANNEL
     | typeof STRUCTURE_LIST_SCENE_OVERRIDES_CHANNEL
+    | typeof FRAGMENT_PROFILE_CHANNEL
+    | typeof FRAGMENT_CAPTURE_CHANNEL
+    | typeof FRAGMENT_LIST_CHANNEL
+    | typeof FRAGMENT_UPDATE_CHANNEL
+    | typeof FRAGMENT_RECORD_USE_CHANNEL
+    | typeof FRAGMENT_RETIRE_CHANNEL
+    | typeof CHARACTER_CREATE_CHANNEL
+    | typeof CHARACTER_LIST_CHANNEL
+    | typeof CHARACTER_UPDATE_CHANNEL
+    | typeof CHARACTER_RETIRE_CHANNEL
+    | typeof LORE_ENTRY_CREATE_CHANNEL
+    | typeof LORE_ENTRY_LIST_CHANNEL
+    | typeof LORE_ENTRY_UPDATE_CHANNEL
+    | typeof LORE_ENTRY_ADD_EVIDENCE_CHANNEL
+    | typeof LORE_ENTRY_RETIRE_CHANNEL
+    | typeof LORE_CANDIDATE_CREATE_CHANNEL
+    | typeof LORE_CANDIDATE_LIST_CHANNEL
+    | typeof LORE_CANDIDATE_APPROVE_CHANNEL
+    | typeof LORE_CANDIDATE_REJECT_CHANNEL
+    | typeof LORE_FORESHADOW_LINK_CHANNEL
+    | typeof LORE_FORESHADOW_LIST_CHANNEL
+    | typeof LORE_FORESHADOW_UNLINK_CHANNEL
+    | typeof PUBLISHING_PARTNER_CREATE_CHANNEL
+    | typeof PUBLISHING_PARTNER_LIST_CHANNEL
+    | typeof PUBLISHING_PARTNER_UPDATE_CHANNEL
+    | typeof PUBLISHING_SUBMISSION_CREATE_CHANNEL
+    | typeof PUBLISHING_SUBMISSION_LIST_CHANNEL
+    | typeof PUBLISHING_SUBMISSION_UPDATE_CHANNEL
+    | typeof PUBLISHING_CONTRACT_CREATE_CHANNEL
+    | typeof PUBLISHING_CONTRACT_LIST_CHANNEL
+    | typeof PUBLISHING_CONTRACT_UPDATE_CHANNEL
+    | typeof PUBLISHING_PUBLICATION_CREATE_CHANNEL
+    | typeof PUBLISHING_PUBLICATION_LIST_CHANNEL
+    | typeof PUBLISHING_PUBLICATION_UPDATE_CHANNEL
+    | typeof PUBLISHING_SETTLEMENT_CREATE_CHANNEL
+    | typeof PUBLISHING_SETTLEMENT_LIST_CHANNEL
+    | typeof PUBLISHING_SETTLEMENT_UPDATE_CHANNEL
+    | typeof PUBLISHING_PAYMENT_CREATE_CHANNEL
+    | typeof PUBLISHING_PAYMENT_LIST_CHANNEL
+    | typeof PUBLISHING_PAYMENT_UPDATE_CHANNEL
+    | typeof PUBLISHING_SOURCE_CREATE_CHANNEL
+    | typeof PUBLISHING_SOURCE_LIST_CHANNEL
+    | typeof PUBLISHING_RESEARCH_PREVIEW_CHANNEL
+    | typeof PUBLISHING_RESEARCH_APPROVE_CHANNEL
+    | typeof PUBLISHING_ASSISTANT_RUN_CHANNEL
+    | typeof PUBLISHING_ASSISTANT_APPROVE_CHANNEL
+    | typeof PUBLISHING_EVIDENCE_SET_LINKS_CHANNEL
+    | typeof PUBLISHING_PARTNER_CSV_SELECT_CHANNEL
+    | typeof PUBLISHING_PARTNER_CSV_APPLY_CHANNEL
+    | typeof PUBLISHING_SUBMISSION_CSV_SELECT_CHANNEL
+    | typeof PUBLISHING_SUBMISSION_CSV_APPLY_CHANNEL
+    | typeof PUBLISHING_MAIL_CANDIDATE_LIST_CHANNEL
+    | typeof PUBLISHING_MAIL_CANDIDATE_LINK_CHANNEL
+    | typeof PUBLISHING_MAIL_CANDIDATE_UPDATE_CHANNEL
+    | typeof PUBLISHING_MAIL_CANDIDATE_REVIEW_CHANNEL
+    | typeof PUBLISHING_MAIL_CONNECTION_STATUS_CHANNEL
+    | typeof PUBLISHING_MAIL_CONNECTION_CONNECT_CHANNEL
+    | typeof PUBLISHING_MAIL_CONNECTION_SYNC_CHANNEL
+    | typeof PUBLISHING_MAIL_CONNECTION_DISCONNECT_CHANNEL
+    | typeof PUBLISHING_MAIL_SCHEDULE_STATUS_CHANNEL
+    | typeof PUBLISHING_MAIL_SCHEDULE_SAVE_CHANNEL
+    | typeof PLOT_CREATE_CHANNEL
+    | typeof PLOT_LIST_CHANNEL
+    | typeof PLOT_UPDATE_CHANNEL
+    | typeof PLOT_RETIRE_CHANNEL
+    | typeof PLOT_LINK_SOURCE_CHANNEL
+    | typeof PLOT_SOURCE_LIST_CHANNEL
+    | typeof FORESHADOW_CREATE_LINE_CHANNEL
+    | typeof FORESHADOW_LIST_LINES_CHANNEL
+    | typeof FORESHADOW_UPDATE_LINE_CHANNEL
+    | typeof FORESHADOW_RETIRE_LINE_CHANNEL
+    | typeof FORESHADOW_POINT_PROFILE_CHANNEL
+    | typeof FORESHADOW_CREATE_POINT_CHANNEL
+    | typeof FORESHADOW_LIST_POINTS_CHANNEL
     | typeof ACTIVITY_LIST_WORK_CHANNEL
+    | typeof ACTIVITY_EXPORT_RECORDS_CHANNEL
+    | typeof ACTIVITY_GET_RECORDS_GOALS_CHANNEL
+    | typeof ACTIVITY_SAVE_RECORDS_GOALS_CHANNEL
+    | typeof ACTIVITY_GET_READTHROUGH_CHANNEL
+    | typeof ACTIVITY_SAVE_READTHROUGH_CHANNEL
     | typeof ACTIVITY_START_SESSION_CHANNEL
     | typeof ACTIVITY_STOP_SESSION_CHANNEL
     | typeof ACTIVITY_START_FOCUS_CHANNEL
     | typeof ACTIVITY_STOP_FOCUS_CHANNEL
+    | typeof ACTIVITY_GET_POMODORO_CHANNEL
+    | typeof ACTIVITY_CONFIGURE_START_POMODORO_CHANNEL
+    | typeof ACTIVITY_PAUSE_POMODORO_CHANNEL
+    | typeof ACTIVITY_RESUME_POMODORO_CHANNEL
+    | typeof ACTIVITY_RECONCILE_POMODORO_CHANNEL
+    | typeof ACTIVITY_STOP_POMODORO_CHANNEL
+    | typeof SCHEDULE_LIST_WORK_CHANNEL
+    | typeof SCHEDULE_CREATE_ITEM_CHANNEL
+    | typeof SCHEDULE_UPDATE_ITEM_CHANNEL
+    | typeof SCHEDULE_RETIRE_ITEM_CHANNEL
+    | typeof SCHEDULE_SET_COMPLETION_CHANNEL
+    | typeof QUICK_TOOLS_GET_MEMO_CHANNEL
+    | typeof QUICK_TOOLS_SAVE_MEMO_CHANNEL
+    | typeof ASSISTANT_CHATGPT_OAUTH_STATUS_CHANNEL
+    | typeof ASSISTANT_CHATGPT_OAUTH_START_LOGIN_CHANNEL
+    | typeof ASSISTANT_LIST_CONTEXT_STATE_CHANNEL
+    | typeof ASSISTANT_GRANT_CONTEXT_PERMISSION_CHANNEL
+    | typeof ASSISTANT_REVOKE_CONTEXT_PERMISSION_CHANNEL
+    | typeof ASSISTANT_DESTINATION_PROFILE_CHANNEL
+    | typeof ASSISTANT_CONNECTOR_PROFILE_CHANNEL
+    | typeof ASSISTANT_RUN_VOCABULARY_LOOKUP_CHANNEL
+    | typeof ASSISTANT_RUN_VOCABULARY_SUGGESTION_CHANNEL
+    | typeof ASSISTANT_RUN_EXTERNAL_SETTING_REVIEW_CHANNEL
+    | typeof ASSISTANT_RUN_NOTATION_REVIEW_CHANNEL
+    | typeof ASSISTANT_RUN_SETTING_REVIEW_CHANNEL
+    | typeof ASSISTANT_LIST_CONNECTIONS_CHANNEL
+    | typeof ASSISTANT_SAVE_CONNECTION_CHANNEL
+    | typeof ASSISTANT_DELETE_CONNECTION_CHANNEL
+    | typeof APP_SETTINGS_PROFILE_CHANNEL
+    | typeof APP_SETTINGS_GET_CHANNEL
+    | typeof APP_SETTINGS_SAVE_CHANNEL
+    | typeof MUSIC_SETTINGS_PROFILE_CHANNEL
+    | typeof MUSIC_SETTINGS_GET_WORK_CHANNEL
+    | typeof MUSIC_SETTINGS_SAVE_WORK_CHANNEL
+    | typeof YOUTUBE_MUSIC_CONNECTION_STATUS_CHANNEL
+    | typeof YOUTUBE_MUSIC_CONNECTION_SAVE_CHANNEL
     | typeof VERSION_LIST_DOCUMENT_REVISIONS_CHANNEL
     | typeof VERSION_RESTORE_DOCUMENT_REVISION_CHANNEL
     | typeof VERSION_CREATE_WORK_SNAPSHOT_CHANNEL
     | typeof VERSION_LIST_WORK_SNAPSHOTS_CHANNEL
+    | typeof VERSION_COMPARE_WORK_SNAPSHOT_CHANNEL
     | typeof BACKUP_GET_STATUS_CHANNEL
     | typeof BACKUP_CREATE_CHANNEL
     | typeof BACKUP_RESTORE_CHANNEL
     | typeof MIGRATION_RUN_LEGACY_REHEARSAL_CHANNEL,
   payload?:
     | ChangeBatch
+    | SaveManuscriptDocumentChangeCommand
+    | SaveManuscriptFormattingCommand
+    | GetManuscriptPreflightSettingsCommand
+    | SaveManuscriptPreflightSettingsCommand
+    | ExportManuscriptTextCommand
     | ApplyStartupRecoveryCommand
     | ManuscriptCloseResult
+    | GetContinuousReadingProgressCommand
+    | SaveContinuousReadingProgressCommand
     | CreateFirstWorkCommand
     | CreateWorkCommand
     | CreateDocumentCommand
+    | RenameWorkCommand
+    | RenameDocumentCommand
+    | RetireWorkCommand
+    | RetireDocumentCommand
     | ActivateWorkspaceLocationCommand
     | CaptureWorkspaceResumeCommand
     | CreateEventBlockCommand
     | ListEventBlocksCommand
     | CreateSceneOverrideCommand
     | ListSceneOverridesCommand
+    | CaptureFragmentCommand
+    | ListFragmentsCommand
+    | UpdateFragmentCommand
+    | RecordFragmentUseCommand
+    | RetireFragmentCommand
+    | CreateCharacterCommand
+    | ListCharactersCommand
+    | UpdateCharacterCommand
+    | RetireCharacterCommand
+    | CreateLoreEntryCommand
+    | ListLoreEntriesCommand
+    | UpdateLoreEntryCommand
+    | AddLoreEntryEvidenceCommand
+    | RetireLoreEntryCommand
+    | CreateLoreCandidateCommand
+    | ListLoreCandidatesCommand
+    | ReviewLoreCandidateCommand
+    | LinkLoreForeshadowCommand
+    | ListLoreForeshadowLinksCommand
+    | UnlinkLoreForeshadowCommand
+    | CreatePublishingPartnerCommand
+    | ListPublishingPartnersCommand
+    | UpdatePublishingPartnerCommand
+    | CreatePlotThreadCommand
+    | ListPlotThreadsCommand
+    | UpdatePlotThreadCommand
+    | RetirePlotThreadCommand
+    | CreateForeshadowLineCommand
+    | ListForeshadowLinesCommand
+    | UpdateForeshadowLineCommand
+    | RetireForeshadowLineCommand
+    | CreateForeshadowPointCommand
+    | ListForeshadowPointsCommand
     | ListWorkActivityCommand
+    | ExportWorkRecordsCommand
+    | GetWorkRecordsGoalsCommand
+    | SaveWorkRecordsGoalsCommand
+    | GetWorkReadthroughCommand
+    | SaveWorkReadthroughCommand
     | StartWritingSessionCommand
     | StopWritingSessionCommand
     | StartFocusCycleCommand
     | StopFocusCycleCommand
+    | GetPomodoroCommand
+    | ConfigureAndStartPomodoroCommand
+    | PomodoroPhaseCommand
+    | ListWorkScheduleCommand
+    | CreateWorkScheduleItemCommand
+    | UpdateWorkScheduleItemCommand
+    | RetireWorkScheduleItemCommand
+    | SetWorkScheduleCompletionCommand
+    | GetWorkQuickMemoCommand
+    | SaveWorkQuickMemoCommand
+    | ListAssistantContextStateCommand
+    | GrantAssistantContextPermissionCommand
+    | RevokeAssistantContextPermissionCommand
+    | RunAssistantVocabularyLookupCommand
+    | RunAssistantVocabularySuggestionCommand
+    | RunAssistantExternalSettingReviewCommand
+    | RunAssistantNotationReviewCommand
+    | RunAssistantSettingReviewCommand
+    | SaveAssistantConnectionCommand
+    | DeleteAssistantConnectionCommand
+    | SaveAppSettingsCommand
+    | GetWorkMusicSettingsCommand
+    | SaveWorkMusicSettingsCommand
+    | SaveYouTubeMusicConnectionCommand
     | ListDocumentRevisionsCommand
     | RestoreDocumentRevisionCommand
     | CreateWorkSnapshotCommand
-    | ListWorkSnapshotsCommand,
+    | ListWorkSnapshotsCommand
+    | CompareWorkSnapshotCommand,
 ) => Promise<unknown>;
 
 export type BridgeListen = (
@@ -504,6 +1932,41 @@ export function createStudioBridge(
           throw new Error("Invalid workspace catalog");
         }
       },
+      getFavorites: async () => {
+        const value = await invoke(WORKSPACE_FAVORITES_CHANNEL);
+        try {
+          return parseWorkFavoritesProjection(value);
+        } catch {
+          throw new Error("Invalid Work favorites projection");
+        }
+      },
+      setFavorite: async (input) => {
+        const command = parseSetWorkFavoriteCommand(input);
+        const value = await invoke(WORKSPACE_SET_FAVORITE_CHANNEL, command);
+        try {
+          return parseWorkFavoritesProjection(value);
+        } catch {
+          throw new Error("Invalid Work favorites update result");
+        }
+      },
+      getCovers: async () => {
+        const value = await invoke(WORKSPACE_COVERS_CHANNEL);
+        try {
+          return parseWorkCoversProjection(value);
+        } catch {
+          throw new Error("Invalid Work covers projection");
+        }
+      },
+      selectCover: async (input) => {
+        const command = parseSelectWorkCoverCommand(input);
+        const value = await invoke(WORKSPACE_SELECT_COVER_CHANNEL, command);
+        if (value === null) return null;
+        try {
+          return parseWorkCoverProjection(value);
+        } catch {
+          throw new Error("Invalid Work cover selection result");
+        }
+      },
       activateLocation: async (input) => {
         const command = parseActivateWorkspaceLocationCommand(input);
         const value = await invoke(
@@ -547,6 +2010,114 @@ export function createStudioBridge(
           return parseCreateDocumentResult(value);
         } catch {
           throw new Error("Invalid Document creation result");
+        }
+      },
+      renameWork: async (input) => {
+        const command = parseRenameWorkCommand(input);
+        const value = await invoke(
+          WORKSPACE_RENAME_WORK_CHANNEL,
+          command,
+        );
+        try {
+          return parseWorkspaceCatalogProjection(value);
+        } catch {
+          throw new Error("Invalid Work rename result");
+        }
+      },
+      renameDocument: async (input) => {
+        const command = parseRenameDocumentCommand(input);
+        const value = await invoke(
+          WORKSPACE_RENAME_DOCUMENT_CHANNEL,
+          command,
+        );
+        try {
+          return parseWorkspaceCatalogProjection(value);
+        } catch {
+          throw new Error("Invalid Document rename result");
+        }
+      },
+      retireWork: async (input) => {
+        const command = parseRetireWorkCommand(input);
+        const value = await invoke(
+          WORKSPACE_RETIRE_WORK_CHANNEL,
+          command,
+        );
+        try {
+          return parseWorkspaceCatalogProjection(value);
+        } catch {
+          throw new Error("Invalid Work retirement result");
+        }
+      },
+      retireDocument: async (input) => {
+        const command = parseRetireDocumentCommand(input);
+        const value = await invoke(
+          WORKSPACE_RETIRE_DOCUMENT_CHANNEL,
+          command,
+        );
+        try {
+          return parseWorkspaceCatalogProjection(value);
+        } catch {
+          throw new Error("Invalid Document retirement result");
+        }
+      },
+      moveDocument: async (input) => {
+        const command = parseMoveDocumentCommand(input);
+        const value = await invoke(
+          WORKSPACE_MOVE_DOCUMENT_CHANNEL,
+          command,
+        );
+        try {
+          return parseWorkspaceCatalogProjection(value);
+        } catch {
+          throw new Error("Invalid Document move result");
+        }
+      },
+      createDocumentFolder: async (input) => {
+        const command = parseCreateDocumentFolderCommand(input);
+        const value = await invoke(
+          WORKSPACE_CREATE_DOCUMENT_FOLDER_CHANNEL,
+          command,
+        );
+        try {
+          return parseWorkspaceCatalogProjection(value);
+        } catch {
+          throw new Error("Invalid Document folder creation result");
+        }
+      },
+      renameDocumentFolder: async (input) => {
+        const command = parseRenameDocumentFolderCommand(input);
+        const value = await invoke(
+          WORKSPACE_RENAME_DOCUMENT_FOLDER_CHANNEL,
+          command,
+        );
+        try {
+          return parseWorkspaceCatalogProjection(value);
+        } catch {
+          throw new Error("Invalid Document folder rename result");
+        }
+      },
+      placeDocumentInFolder: async (input) => {
+        const command = parsePlaceDocumentInFolderCommand(input);
+        const value = await invoke(
+          WORKSPACE_PLACE_DOCUMENT_IN_FOLDER_CHANNEL,
+          command,
+        );
+        try {
+          return parseWorkspaceCatalogProjection(value);
+        } catch {
+          throw new Error("Invalid Document folder placement result");
+        }
+      },
+      retireDocumentFolder: async (input) => {
+        const command = parseRetireDocumentFolderCommand(input);
+        const value = await invoke(
+          WORKSPACE_RETIRE_DOCUMENT_FOLDER_CHANNEL,
+          command,
+        );
+        try {
+          return parseWorkspaceCatalogProjection(value);
+        } catch {
+          throw new Error("Invalid Document folder retirement result");
         }
       },
       captureResume: async (input) => {
@@ -612,7 +2183,764 @@ export function createStudioBridge(
         }
       },
     },
+    fragments: {
+      getProfile: async () => {
+        const value = await invoke(FRAGMENT_PROFILE_CHANNEL);
+        try {
+          return parseFragmentShelfProfile(value);
+        } catch {
+          throw new Error("Invalid fragment shelf profile");
+        }
+      },
+      capture: async (input) => {
+        const command = parseCaptureFragmentCommand(input);
+        const value = await invoke(FRAGMENT_CAPTURE_CHANNEL, command);
+        try {
+          return parseFragmentProjection(value);
+        } catch {
+          throw new Error("Invalid fragment capture result");
+        }
+      },
+      list: async (input) => {
+        const command = parseListFragmentsCommand(input);
+        const value = await invoke(FRAGMENT_LIST_CHANNEL, command);
+        try {
+          return parseFragmentListProjection(value);
+        } catch {
+          throw new Error("Invalid fragment list");
+        }
+      },
+      update: async (input) => {
+        const command = parseUpdateFragmentCommand(input);
+        const value = await invoke(FRAGMENT_UPDATE_CHANNEL, command);
+        try {
+          return parseFragmentProjection(value);
+        } catch {
+          throw new Error("Invalid fragment update result");
+        }
+      },
+      recordUse: async (input) => {
+        const command = parseRecordFragmentUseCommand(input);
+        const value = await invoke(FRAGMENT_RECORD_USE_CHANNEL, command);
+        try {
+          return parseFragmentProjection(value);
+        } catch {
+          throw new Error("Invalid fragment use result");
+        }
+      },
+      retire: async (input) => {
+        const command = parseRetireFragmentCommand(input);
+        const value = await invoke(FRAGMENT_RETIRE_CHANNEL, command);
+        try {
+          return parseFragmentProjection(value);
+        } catch {
+          throw new Error("Invalid fragment retirement result");
+        }
+      },
+    },
+    characters: {
+      create: async (input) => {
+        const command = parseCreateCharacterCommand(input);
+        const value = await invoke(CHARACTER_CREATE_CHANNEL, command);
+        try {
+          return parseCharacterProjection(value);
+        } catch {
+          throw new Error("Invalid character creation result");
+        }
+      },
+      list: async (input) => {
+        const command = parseListCharactersCommand(input);
+        const value = await invoke(CHARACTER_LIST_CHANNEL, command);
+        try {
+          return parseCharacterListProjection(value);
+        } catch {
+          throw new Error("Invalid character list");
+        }
+      },
+      update: async (input) => {
+        const command = parseUpdateCharacterCommand(input);
+        const value = await invoke(CHARACTER_UPDATE_CHANNEL, command);
+        try {
+          return parseCharacterProjection(value);
+        } catch {
+          throw new Error("Invalid character update result");
+        }
+      },
+      retire: async (input) => {
+        const command = parseRetireCharacterCommand(input);
+        const value = await invoke(CHARACTER_RETIRE_CHANNEL, command);
+        try {
+          return parseCharacterProjection(value);
+        } catch {
+          throw new Error("Invalid character retirement result");
+        }
+      },
+    },
+    loreEntries: {
+      create: async (input) => {
+        const command = parseCreateLoreEntryCommand(input);
+        const value = await invoke(LORE_ENTRY_CREATE_CHANNEL, command);
+        try {
+          return parseLoreEntryProjection(value);
+        } catch {
+          throw new Error("Invalid lore entry creation result");
+        }
+      },
+      list: async (input) => {
+        const command = parseListLoreEntriesCommand(input);
+        const value = await invoke(LORE_ENTRY_LIST_CHANNEL, command);
+        try {
+          return parseLoreEntryListProjection(value);
+        } catch {
+          throw new Error("Invalid lore entry list");
+        }
+      },
+      update: async (input) => {
+        const command = parseUpdateLoreEntryCommand(input);
+        const value = await invoke(LORE_ENTRY_UPDATE_CHANNEL, command);
+        try {
+          return parseLoreEntryProjection(value);
+        } catch {
+          throw new Error("Invalid lore entry update result");
+        }
+      },
+      addEvidence: async (input) => {
+        const command = parseAddLoreEntryEvidenceCommand(input);
+        const value = await invoke(LORE_ENTRY_ADD_EVIDENCE_CHANNEL, command);
+        try {
+          return parseLoreEntryProjection(value);
+        } catch {
+          throw new Error("Invalid lore entry evidence result");
+        }
+      },
+      retire: async (input) => {
+        const command = parseRetireLoreEntryCommand(input);
+        const value = await invoke(LORE_ENTRY_RETIRE_CHANNEL, command);
+        try {
+          return parseLoreEntryProjection(value);
+        } catch {
+          throw new Error("Invalid lore entry retirement result");
+        }
+      },
+    },
+    loreCandidates: {
+      create: async (input) => {
+        const command = parseCreateLoreCandidateCommand(input);
+        const value = await invoke(LORE_CANDIDATE_CREATE_CHANNEL, command);
+        try {
+          return parseLoreCandidateProjection(value);
+        } catch {
+          throw new Error("Invalid lore candidate creation result");
+        }
+      },
+      list: async (input) => {
+        const command = parseListLoreCandidatesCommand(input);
+        const value = await invoke(LORE_CANDIDATE_LIST_CHANNEL, command);
+        try {
+          return parseLoreCandidateListProjection(value);
+        } catch {
+          throw new Error("Invalid lore candidate list");
+        }
+      },
+      approve: async (input) => {
+        const command = parseReviewLoreCandidateCommand(input);
+        const value = await invoke(LORE_CANDIDATE_APPROVE_CHANNEL, command);
+        try {
+          return parseLoreCandidateApprovalResult(value);
+        } catch {
+          throw new Error("Invalid lore candidate approval result");
+        }
+      },
+      reject: async (input) => {
+        const command = parseReviewLoreCandidateCommand(input);
+        const value = await invoke(LORE_CANDIDATE_REJECT_CHANNEL, command);
+        try {
+          return parseLoreCandidateProjection(value);
+        } catch {
+          throw new Error("Invalid lore candidate rejection result");
+        }
+      },
+    },
+    loreForeshadowLinks: {
+      link: async (input) => {
+        const command = parseLinkLoreForeshadowCommand(input);
+        const value = await invoke(LORE_FORESHADOW_LINK_CHANNEL, command);
+        try {
+          return parseLoreForeshadowLinkProjection(value);
+        } catch {
+          throw new Error("Invalid lore/foreshadow link result");
+        }
+      },
+      list: async (input) => {
+        const command = parseListLoreForeshadowLinksCommand(input);
+        const value = await invoke(LORE_FORESHADOW_LIST_CHANNEL, command);
+        try {
+          return parseLoreForeshadowLinkListProjection(value);
+        } catch {
+          throw new Error("Invalid lore/foreshadow link list");
+        }
+      },
+      unlink: async (input) => {
+        const command = parseUnlinkLoreForeshadowCommand(input);
+        const value = await invoke(LORE_FORESHADOW_UNLINK_CHANNEL, command);
+        try {
+          return parseLoreForeshadowLinkProjection(value);
+        } catch {
+          throw new Error("Invalid lore/foreshadow unlink result");
+        }
+      },
+    },
+    publishingPartners: {
+      create: async (input) => {
+        const command = parseCreatePublishingPartnerCommand(input);
+        const value = await invoke(PUBLISHING_PARTNER_CREATE_CHANNEL, command);
+        try {
+          return parsePublishingPartnerProjection(value);
+        } catch {
+          throw new Error("Invalid publishing partner creation result");
+        }
+      },
+      list: async (input) => {
+        const command = parseListPublishingPartnersCommand(input);
+        const value = await invoke(PUBLISHING_PARTNER_LIST_CHANNEL, command);
+        try {
+          return parsePublishingPartnerListProjection(value);
+        } catch {
+          throw new Error("Invalid publishing partner list");
+        }
+      },
+      update: async (input) => {
+        const command = parseUpdatePublishingPartnerCommand(input);
+        const value = await invoke(PUBLISHING_PARTNER_UPDATE_CHANNEL, command);
+        try {
+          return parsePublishingPartnerProjection(value);
+        } catch {
+          throw new Error("Invalid publishing partner update result");
+        }
+      },
+    },
+    publishingSubmissions: {
+      create: async (input) => {
+        const command = parseCreatePublishingSubmissionCommand(input);
+        const value = await invoke(PUBLISHING_SUBMISSION_CREATE_CHANNEL, command);
+        try {
+          return parsePublishingSubmissionProjection(value);
+        } catch {
+          throw new Error("Invalid publishing submission creation result");
+        }
+      },
+      list: async (input) => {
+        const command = parseListPublishingSubmissionsCommand(input);
+        const value = await invoke(PUBLISHING_SUBMISSION_LIST_CHANNEL, command);
+        try {
+          return parsePublishingSubmissionListProjection(value);
+        } catch {
+          throw new Error("Invalid publishing submission list");
+        }
+      },
+      update: async (input) => {
+        const command = parseUpdatePublishingSubmissionCommand(input);
+        const value = await invoke(PUBLISHING_SUBMISSION_UPDATE_CHANNEL, command);
+        try {
+          return parsePublishingSubmissionProjection(value);
+        } catch {
+          throw new Error("Invalid publishing submission update result");
+        }
+      },
+    },
+    publishingContracts: {
+      create: async (input) => {
+        const command = parseCreatePublishingContractCommand(input);
+        const value = await invoke(PUBLISHING_CONTRACT_CREATE_CHANNEL, command);
+        try {
+          return parsePublishingContractProjection(value);
+        } catch {
+          throw new Error("Invalid publishing contract creation result");
+        }
+      },
+      list: async (input) => {
+        const command = parseListPublishingContractsCommand(input);
+        const value = await invoke(PUBLISHING_CONTRACT_LIST_CHANNEL, command);
+        try {
+          return parsePublishingContractListProjection(value);
+        } catch {
+          throw new Error("Invalid publishing contract list");
+        }
+      },
+      update: async (input) => {
+        const command = parseUpdatePublishingContractCommand(input);
+        const value = await invoke(PUBLISHING_CONTRACT_UPDATE_CHANNEL, command);
+        try {
+          return parsePublishingContractProjection(value);
+        } catch {
+          throw new Error("Invalid publishing contract update result");
+        }
+      },
+    },
+    publishingPublications: {
+      create: async (input) => {
+        const command = parseCreatePublishingPublicationCommand(input);
+        const value = await invoke(PUBLISHING_PUBLICATION_CREATE_CHANNEL, command);
+        try {
+          return parsePublishingPublicationProjection(value);
+        } catch {
+          throw new Error("Invalid publishing publication creation result");
+        }
+      },
+      list: async (input) => {
+        const command = parseListPublishingPublicationsCommand(input);
+        const value = await invoke(PUBLISHING_PUBLICATION_LIST_CHANNEL, command);
+        try {
+          return parsePublishingPublicationListProjection(value);
+        } catch {
+          throw new Error("Invalid publishing publication list");
+        }
+      },
+      update: async (input) => {
+        const command = parseUpdatePublishingPublicationCommand(input);
+        const value = await invoke(PUBLISHING_PUBLICATION_UPDATE_CHANNEL, command);
+        try {
+          return parsePublishingPublicationProjection(value);
+        } catch {
+          throw new Error("Invalid publishing publication update result");
+        }
+      },
+    },
+    publishingSettlements: {
+      create: async (input) => {
+        const command = parseCreatePublishingSettlementCommand(input);
+        const value = await invoke(PUBLISHING_SETTLEMENT_CREATE_CHANNEL, command);
+        try {
+          return parsePublishingSettlementProjection(value);
+        } catch {
+          throw new Error("Invalid publishing settlement creation result");
+        }
+      },
+      list: async (input) => {
+        const command = parseListPublishingSettlementsCommand(input);
+        const value = await invoke(PUBLISHING_SETTLEMENT_LIST_CHANNEL, command);
+        try {
+          return parsePublishingSettlementListProjection(value);
+        } catch {
+          throw new Error("Invalid publishing settlement list");
+        }
+      },
+      update: async (input) => {
+        const command = parseUpdatePublishingSettlementCommand(input);
+        const value = await invoke(PUBLISHING_SETTLEMENT_UPDATE_CHANNEL, command);
+        try {
+          return parsePublishingSettlementProjection(value);
+        } catch {
+          throw new Error("Invalid publishing settlement update result");
+        }
+      },
+    },
+    publishingPayments: {
+      create: async (input) => {
+        const command = parseCreatePublishingPaymentCommand(input);
+        const value = await invoke(PUBLISHING_PAYMENT_CREATE_CHANNEL, command);
+        try {
+          return parsePublishingPaymentProjection(value);
+        } catch {
+          throw new Error("Invalid publishing payment creation result");
+        }
+      },
+      list: async (input) => {
+        const command = parseListPublishingPaymentsCommand(input);
+        const value = await invoke(PUBLISHING_PAYMENT_LIST_CHANNEL, command);
+        try {
+          return parsePublishingPaymentListProjection(value);
+        } catch {
+          throw new Error("Invalid publishing payment list");
+        }
+      },
+      update: async (input) => {
+        const command = parseUpdatePublishingPaymentCommand(input);
+        const value = await invoke(PUBLISHING_PAYMENT_UPDATE_CHANNEL, command);
+        try {
+          return parsePublishingPaymentProjection(value);
+        } catch {
+          throw new Error("Invalid publishing payment update result");
+        }
+      },
+    },
+    publishingSources: {
+      create: async (input) => {
+        const command = parseCreatePublishingSourceCommand(input);
+        const value = await invoke(PUBLISHING_SOURCE_CREATE_CHANNEL, command);
+        try {
+          return parsePublishingSourceProjection(value);
+        } catch {
+          throw new Error("Invalid publishing source creation result");
+        }
+      },
+      list: async (input) => {
+        const command = parseListPublishingSourcesCommand(input);
+        const value = await invoke(PUBLISHING_SOURCE_LIST_CHANNEL, command);
+        try {
+          return parsePublishingSourceListProjection(value);
+        } catch {
+          throw new Error("Invalid publishing source list");
+        }
+      },
+    },
+    publishingResearch: {
+      preview: async (input) => {
+        const command = parsePreviewPublishingResearchCommand(input);
+        const value = await invoke(PUBLISHING_RESEARCH_PREVIEW_CHANNEL, command);
+        try {
+          return parsePublishingResearchCandidateProjection(value);
+        } catch {
+          throw new Error("Invalid publishing research preview");
+        }
+      },
+      approve: async (input) => {
+        const command = parseApprovePublishingResearchCommand(input);
+        const value = await invoke(PUBLISHING_RESEARCH_APPROVE_CHANNEL, command);
+        try {
+          return parsePublishingResearchApprovalResult(value);
+        } catch {
+          throw new Error("Invalid publishing research approval result");
+        }
+      },
+    },
+    publishingAssistant: {
+      run: async (input) => {
+        const command = parseRunPublishingAssistantCommand(input);
+        const value = await invoke(PUBLISHING_ASSISTANT_RUN_CHANNEL, command);
+        try {
+          return parsePublishingAssistantResult(value);
+        } catch {
+          throw new Error("Invalid publishing assistant result");
+        }
+      },
+      approve: async (input) => {
+        const command = parseApprovePublishingAssistantCandidateCommand(input);
+        const value = await invoke(PUBLISHING_ASSISTANT_APPROVE_CHANNEL, command);
+        try {
+          return parsePublishingAssistantApprovalResult(value);
+        } catch {
+          throw new Error("Invalid publishing assistant approval result");
+        }
+      },
+    },
+    publishingEvidence: {
+      setLinks: async (input) => {
+        const command = parseSetPublishingEvidenceLinksCommand(input);
+        const value = await invoke(PUBLISHING_EVIDENCE_SET_LINKS_CHANNEL, command);
+        try {
+          return parsePublishingEvidenceLinksProjection(value);
+        } catch {
+          throw new Error("Invalid publishing evidence link result");
+        }
+      },
+    },
+    publishingImports: {
+      selectPartnerCsv: async (input) => {
+        const command = parseSelectPublishingPartnerCsvCommand(input);
+        const value = await invoke(PUBLISHING_PARTNER_CSV_SELECT_CHANNEL, command);
+        try {
+          return parsePublishingPartnerCsvSelectionProjection(value);
+        } catch {
+          throw new Error("Invalid publishing partner CSV selection result");
+        }
+      },
+      applyPartnerCsv: async (input) => {
+        const command = parseApplyPublishingPartnerCsvImportCommand(input);
+        const value = await invoke(PUBLISHING_PARTNER_CSV_APPLY_CHANNEL, command);
+        try {
+          return parsePublishingPartnerCsvImportResult(value);
+        } catch {
+          throw new Error("Invalid publishing partner CSV import result");
+        }
+      },
+      selectSubmissionCsv: async (input) => {
+        const command = parseSelectPublishingSubmissionCsvCommand(input);
+        const value = await invoke(PUBLISHING_SUBMISSION_CSV_SELECT_CHANNEL, command);
+        try {
+          return parsePublishingSubmissionCsvSelectionProjection(value);
+        } catch {
+          throw new Error("Invalid publishing submission CSV selection result");
+        }
+      },
+      applySubmissionCsv: async (input) => {
+        const command = parseApplyPublishingSubmissionCsvImportCommand(input);
+        const value = await invoke(PUBLISHING_SUBMISSION_CSV_APPLY_CHANNEL, command);
+        try {
+          return parsePublishingSubmissionCsvImportResult(value);
+        } catch {
+          throw new Error("Invalid publishing submission CSV import result");
+        }
+      },
+    },
+    publishingMailCandidates: {
+      list: async (input) => {
+        const command = parseListPublishingMailCandidatesCommand(input);
+        const value = await invoke(PUBLISHING_MAIL_CANDIDATE_LIST_CHANNEL, command);
+        try {
+          return parsePublishingMailCandidateListProjection(value);
+        } catch {
+          throw new Error("Invalid publishing mail candidate list");
+        }
+      },
+      link: async (input) => {
+        const command = parseLinkPublishingMailCandidateCommand(input);
+        const value = await invoke(PUBLISHING_MAIL_CANDIDATE_LINK_CHANNEL, command);
+        try {
+          return parsePublishingMailCandidateProjection(value);
+        } catch {
+          throw new Error("Invalid publishing mail candidate link result");
+        }
+      },
+      update: async (input) => {
+        const command = parseUpdatePublishingMailCandidateCommand(input);
+        const value = await invoke(PUBLISHING_MAIL_CANDIDATE_UPDATE_CHANNEL, command);
+        try {
+          return parsePublishingMailCandidateProjection(value);
+        } catch {
+          throw new Error("Invalid publishing mail candidate update result");
+        }
+      },
+      review: async (input) => {
+        const command = parseReviewPublishingMailCandidateCommand(input);
+        const value = await invoke(PUBLISHING_MAIL_CANDIDATE_REVIEW_CHANNEL, command);
+        try {
+          return parsePublishingMailCandidateReviewResult(value);
+        } catch {
+          throw new Error("Invalid publishing mail candidate review result");
+        }
+      },
+    },
+    publishingMailConnection: {
+      status: async (input) => {
+        const command = parseGetPublishingMailConnectionCommand(input);
+        const value = await invoke(PUBLISHING_MAIL_CONNECTION_STATUS_CHANNEL, command);
+        try {
+          return parsePublishingMailConnectionProjection(value);
+        } catch {
+          throw new Error("Invalid publishing mail connection status");
+        }
+      },
+      connect: async (input) => {
+        const command = parseConnectPublishingMailCommand(input);
+        const value = await invoke(PUBLISHING_MAIL_CONNECTION_CONNECT_CHANNEL, command);
+        try {
+          return parsePublishingMailConnectionProjection(value);
+        } catch {
+          throw new Error("Invalid publishing mail connection result");
+        }
+      },
+      sync: async (input) => {
+        const command = parseSyncPublishingMailCommand(input);
+        const value = await invoke(PUBLISHING_MAIL_CONNECTION_SYNC_CHANNEL, command);
+        try {
+          return parsePublishingMailSyncResult(value);
+        } catch {
+          throw new Error("Invalid publishing mail sync result");
+        }
+      },
+      disconnect: async (input) => {
+        const command = parseDisconnectPublishingMailCommand(input);
+        const value = await invoke(PUBLISHING_MAIL_CONNECTION_DISCONNECT_CHANNEL, command);
+        try {
+          return parsePublishingMailConnectionProjection(value);
+        } catch {
+          throw new Error("Invalid publishing mail disconnection result");
+        }
+      },
+    },
+    publishingMailSchedule: {
+      status: async (input) => {
+        const command = parseGetPublishingMailScheduleCommand(input);
+        const value = await invoke(PUBLISHING_MAIL_SCHEDULE_STATUS_CHANNEL, command);
+        try {
+          return parsePublishingMailScheduleProjection(value);
+        } catch {
+          throw new Error("Invalid publishing mail schedule status");
+        }
+      },
+      save: async (input) => {
+        const command = parseSavePublishingMailScheduleCommand(input);
+        const value = await invoke(PUBLISHING_MAIL_SCHEDULE_SAVE_CHANNEL, command);
+        try {
+          return parsePublishingMailScheduleProjection(value);
+        } catch {
+          throw new Error("Invalid publishing mail schedule save result");
+        }
+      },
+    },
+    plots: {
+      create: async (input) => {
+        const command = parseCreatePlotThreadCommand(input);
+        const value = await invoke(PLOT_CREATE_CHANNEL, command);
+        try {
+          return parsePlotThreadProjection(value);
+        } catch {
+          throw new Error("Invalid plot creation result");
+        }
+      },
+      list: async (input) => {
+        const command = parseListPlotThreadsCommand(input);
+        const value = await invoke(PLOT_LIST_CHANNEL, command);
+        try {
+          return parsePlotThreadListProjection(value);
+        } catch {
+          throw new Error("Invalid plot list");
+        }
+      },
+      update: async (input) => {
+        const command = parseUpdatePlotThreadCommand(input);
+        const value = await invoke(PLOT_UPDATE_CHANNEL, command);
+        try {
+          return parsePlotThreadProjection(value);
+        } catch {
+          throw new Error("Invalid plot update result");
+        }
+      },
+      retire: async (input) => {
+        const command = parseRetirePlotThreadCommand(input);
+        const value = await invoke(PLOT_RETIRE_CHANNEL, command);
+        try {
+          return parsePlotThreadProjection(value);
+        } catch {
+          throw new Error("Invalid plot retirement result");
+        }
+      },
+      linkSource: async (input) => {
+        const command = parseLinkPlotThreadSourceCommand(input);
+        const value = await invoke(PLOT_LINK_SOURCE_CHANNEL, command);
+        try {
+          return parsePlotThreadSourceProjection(value);
+        } catch {
+          throw new Error("Invalid plot source link result");
+        }
+      },
+      listSources: async (input) => {
+        const command = parseListPlotThreadSourcesCommand(input);
+        const value = await invoke(PLOT_SOURCE_LIST_CHANNEL, command);
+        try {
+          return parsePlotThreadSourceListProjection(value);
+        } catch {
+          throw new Error("Invalid plot source list");
+        }
+      },
+    },
+    foreshadowing: {
+      getPointProfile: async () => {
+        const value = await invoke(FORESHADOW_POINT_PROFILE_CHANNEL);
+        try {
+          return parseForeshadowPointProfile(value);
+        } catch {
+          throw new Error("Invalid foreshadow point profile");
+        }
+      },
+      createLine: async (input) => {
+        const command = parseCreateForeshadowLineCommand(input);
+        const value = await invoke(FORESHADOW_CREATE_LINE_CHANNEL, command);
+        try {
+          return parseForeshadowLineProjection(value);
+        } catch {
+          throw new Error("Invalid foreshadow line creation result");
+        }
+      },
+      listLines: async (input) => {
+        const command = parseListForeshadowLinesCommand(input);
+        const value = await invoke(FORESHADOW_LIST_LINES_CHANNEL, command);
+        try {
+          return parseForeshadowLineListProjection(value);
+        } catch {
+          throw new Error("Invalid foreshadow line list");
+        }
+      },
+      updateLine: async (input) => {
+        const command = parseUpdateForeshadowLineCommand(input);
+        const value = await invoke(FORESHADOW_UPDATE_LINE_CHANNEL, command);
+        try {
+          return parseForeshadowLineProjection(value);
+        } catch {
+          throw new Error("Invalid foreshadow line update result");
+        }
+      },
+      retireLine: async (input) => {
+        const command = parseRetireForeshadowLineCommand(input);
+        const value = await invoke(FORESHADOW_RETIRE_LINE_CHANNEL, command);
+        try {
+          return parseForeshadowLineProjection(value);
+        } catch {
+          throw new Error("Invalid foreshadow line retirement result");
+        }
+      },
+      createPoint: async (input) => {
+        const command = parseCreateForeshadowPointCommand(input);
+        const value = await invoke(FORESHADOW_CREATE_POINT_CHANNEL, command);
+        try {
+          return parseForeshadowPointProjection(value);
+        } catch {
+          throw new Error("Invalid foreshadow point creation result");
+        }
+      },
+      listPoints: async (input) => {
+        const command = parseListForeshadowPointsCommand(input);
+        const value = await invoke(FORESHADOW_LIST_POINTS_CHANNEL, command);
+        try {
+          return parseForeshadowPointListProjection(value);
+        } catch {
+          throw new Error("Invalid foreshadow point list");
+        }
+      },
+    },
     activity: {
+      exportRecords: async (input) => {
+        const command = parseExportWorkRecordsCommand(input);
+        const value = await invoke(ACTIVITY_EXPORT_RECORDS_CHANNEL, command);
+        try {
+          return parseExportWorkRecordsResult(value);
+        } catch {
+          throw new Error("Invalid Work records export result");
+        }
+      },
+      getRecordsGoals: async (input) => {
+        const command = parseGetWorkRecordsGoalsCommand(input);
+        const value = await invoke(
+          ACTIVITY_GET_RECORDS_GOALS_CHANNEL,
+          command,
+        );
+        try {
+          return parseWorkRecordsGoalsProjection(value);
+        } catch {
+          throw new Error("Invalid Work records goals projection");
+        }
+      },
+      saveRecordsGoals: async (input) => {
+        const command = parseSaveWorkRecordsGoalsCommand(input);
+        const value = await invoke(
+          ACTIVITY_SAVE_RECORDS_GOALS_CHANNEL,
+          command,
+        );
+        try {
+          return parseWorkRecordsGoalsProjection(value);
+        } catch {
+          throw new Error("Invalid saved Work records goals projection");
+        }
+      },
+      getReadthrough: async (input) => {
+        const command = parseGetWorkReadthroughCommand(input);
+        const value = await invoke(ACTIVITY_GET_READTHROUGH_CHANNEL, command);
+        try {
+          return parseWorkReadthroughProjection(value);
+        } catch {
+          throw new Error("Invalid Work readthrough projection");
+        }
+      },
+      saveReadthrough: async (input) => {
+        const command = parseSaveWorkReadthroughCommand(input);
+        const value = await invoke(ACTIVITY_SAVE_READTHROUGH_CHANNEL, command);
+        try {
+          return parseWorkReadthroughProjection(value);
+        } catch {
+          throw new Error("Invalid saved Work readthrough projection");
+        }
+      },
       listWork: async (input) => {
         const command = parseListWorkActivityCommand(input);
         const value = await invoke(ACTIVITY_LIST_WORK_CHANNEL, command);
@@ -658,8 +2986,380 @@ export function createStudioBridge(
           throw new Error("Invalid FocusCycle result");
         }
       },
+      getPomodoro: async (input) => {
+        const command = parseGetPomodoroCommand(input);
+        const value = await invoke(ACTIVITY_GET_POMODORO_CHANNEL, command);
+        try {
+          return parsePomodoroProjection(value);
+        } catch {
+          throw new Error("Invalid Pomodoro projection");
+        }
+      },
+      configureAndStartPomodoro: async (input) => {
+        const command = parseConfigureAndStartPomodoroCommand(input);
+        const value = await invoke(
+          ACTIVITY_CONFIGURE_START_POMODORO_CHANNEL,
+          command,
+        );
+        try {
+          return parsePomodoroProjection(value);
+        } catch {
+          throw new Error("Invalid configured Pomodoro projection");
+        }
+      },
+      pausePomodoro: async (input) => {
+        const command = parsePomodoroPhaseCommand(input);
+        const value = await invoke(ACTIVITY_PAUSE_POMODORO_CHANNEL, command);
+        try {
+          return parsePomodoroProjection(value);
+        } catch {
+          throw new Error("Invalid paused Pomodoro projection");
+        }
+      },
+      resumePomodoro: async (input) => {
+        const command = parsePomodoroPhaseCommand(input);
+        const value = await invoke(ACTIVITY_RESUME_POMODORO_CHANNEL, command);
+        try {
+          return parsePomodoroProjection(value);
+        } catch {
+          throw new Error("Invalid resumed Pomodoro projection");
+        }
+      },
+      reconcilePomodoro: async (input) => {
+        const command = parsePomodoroPhaseCommand(input);
+        const value = await invoke(
+          ACTIVITY_RECONCILE_POMODORO_CHANNEL,
+          command,
+        );
+        try {
+          return parsePomodoroProjection(value);
+        } catch {
+          throw new Error("Invalid reconciled Pomodoro projection");
+        }
+      },
+      stopPomodoro: async (input) => {
+        const command = parsePomodoroPhaseCommand(input);
+        const value = await invoke(ACTIVITY_STOP_POMODORO_CHANNEL, command);
+        try {
+          return parsePomodoroProjection(value);
+        } catch {
+          throw new Error("Invalid stopped Pomodoro projection");
+        }
+      },
+    },
+    schedule: {
+      listWork: async (input) => {
+        const command = parseListWorkScheduleCommand(input);
+        const value = await invoke(SCHEDULE_LIST_WORK_CHANNEL, command);
+        try {
+          return parseWorkScheduleProjection(value);
+        } catch {
+          throw new Error("Invalid Work schedule projection");
+        }
+      },
+      createItem: async (input) => {
+        const command = parseCreateWorkScheduleItemCommand(input);
+        const value = await invoke(SCHEDULE_CREATE_ITEM_CHANNEL, command);
+        try {
+          return parseWorkScheduleItemProjection(value);
+        } catch {
+          throw new Error("Invalid created Work schedule item");
+        }
+      },
+      updateItem: async (input) => {
+        const command = parseUpdateWorkScheduleItemCommand(input);
+        const value = await invoke(SCHEDULE_UPDATE_ITEM_CHANNEL, command);
+        try {
+          return parseWorkScheduleItemProjection(value);
+        } catch {
+          throw new Error("Invalid updated Work schedule item");
+        }
+      },
+      retireItem: async (input) => {
+        const command = parseRetireWorkScheduleItemCommand(input);
+        const value = await invoke(SCHEDULE_RETIRE_ITEM_CHANNEL, command);
+        if (value !== undefined) {
+          throw new Error("Invalid Work schedule retirement result");
+        }
+      },
+      setCompletion: async (input) => {
+        const command = parseSetWorkScheduleCompletionCommand(input);
+        const value = await invoke(SCHEDULE_SET_COMPLETION_CHANNEL, command);
+        try {
+          return parseWorkScheduleItemProjection(value);
+        } catch {
+          throw new Error("Invalid Work schedule completion result");
+        }
+      },
+    },
+    settings: {
+      getProfile: async () => {
+        const value = await invoke(APP_SETTINGS_PROFILE_CHANNEL);
+        try {
+          return parseAppSettingsProfile(value);
+        } catch {
+          throw new Error("Invalid app settings profile");
+        }
+      },
+      get: async () => {
+        const value = await invoke(APP_SETTINGS_GET_CHANNEL);
+        try {
+          return parseAppSettingsProjection(value);
+        } catch {
+          throw new Error("Invalid app settings projection");
+        }
+      },
+      save: async (input) => {
+        const profileValue = await invoke(APP_SETTINGS_PROFILE_CHANNEL);
+        let profile: AppSettingsProfile;
+        try {
+          profile = parseAppSettingsProfile(profileValue);
+        } catch {
+          throw new Error("Invalid app settings profile");
+        }
+        const command = parseSaveAppSettingsCommand(input, profile);
+        const value = await invoke(APP_SETTINGS_SAVE_CHANNEL, command);
+        try {
+          return parseAppSettingsProjection(value, profile);
+        } catch {
+          throw new Error("Invalid saved app settings projection");
+        }
+      },
+      getMusicProfile: async () => {
+        const value = await invoke(MUSIC_SETTINGS_PROFILE_CHANNEL);
+        try {
+          return parseMusicSettingsProfile(value);
+        } catch {
+          throw new Error("Invalid music settings profile");
+        }
+      },
+      getWorkMusic: async (input) => {
+        const command = parseGetWorkMusicSettingsCommand(input);
+        const profileValue = await invoke(MUSIC_SETTINGS_PROFILE_CHANNEL);
+        const profile = parseMusicSettingsProfile(profileValue);
+        const value = await invoke(MUSIC_SETTINGS_GET_WORK_CHANNEL, command);
+        try {
+          return parseWorkMusicSettingsProjection(value, profile);
+        } catch {
+          throw new Error("Invalid Work music settings projection");
+        }
+      },
+      saveWorkMusic: async (input) => {
+        const profileValue = await invoke(MUSIC_SETTINGS_PROFILE_CHANNEL);
+        const profile = parseMusicSettingsProfile(profileValue);
+        const command = parseSaveWorkMusicSettingsCommand(input, profile);
+        const value = await invoke(MUSIC_SETTINGS_SAVE_WORK_CHANNEL, command);
+        try {
+          return parseWorkMusicSettingsProjection(value, profile);
+        } catch {
+          throw new Error("Invalid saved Work music settings projection");
+        }
+      },
+      getYouTubeMusicConnectionStatus: async () => {
+        const value = await invoke(YOUTUBE_MUSIC_CONNECTION_STATUS_CHANNEL);
+        try {
+          return parseYouTubeMusicConnectionStatus(value);
+        } catch {
+          throw new Error("Invalid YouTube music connection status");
+        }
+      },
+      saveYouTubeMusicConnection: async (input) => {
+        const command = parseSaveYouTubeMusicConnectionCommand(input);
+        const value = await invoke(YOUTUBE_MUSIC_CONNECTION_SAVE_CHANNEL, command);
+        try {
+          return parseYouTubeMusicConnectionStatus(value);
+        } catch {
+          throw new Error("Invalid saved YouTube music connection status");
+        }
+      },
+    },
+    quickTools: {
+      getMemo: async (input) => {
+        const command = parseGetWorkQuickMemoCommand(input);
+        const value = await invoke(QUICK_TOOLS_GET_MEMO_CHANNEL, command);
+        try {
+          return parseWorkQuickMemoProjection(value);
+        } catch {
+          throw new Error("Invalid Work quick memo projection");
+        }
+      },
+      saveMemo: async (input) => {
+        const command = parseSaveWorkQuickMemoCommand(input);
+        const value = await invoke(QUICK_TOOLS_SAVE_MEMO_CHANNEL, command);
+        try {
+          return parseWorkQuickMemoProjection(value);
+        } catch {
+          throw new Error("Invalid saved Work quick memo projection");
+        }
+      },
+    },
+    assistant: {
+      getChatGptOAuthStatus: async () => {
+        const value = await invoke(ASSISTANT_CHATGPT_OAUTH_STATUS_CHANNEL);
+        try {
+          return parseChatGptOAuthConnectionStatus(value);
+        } catch {
+          throw new Error("Invalid ChatGPT OAuth connection status");
+        }
+      },
+      startChatGptOAuthLogin: async () => {
+        const value = await invoke(ASSISTANT_CHATGPT_OAUTH_START_LOGIN_CHANNEL);
+        try {
+          return parseChatGptOAuthConnectionStatus(value);
+        } catch {
+          throw new Error("Invalid ChatGPT OAuth login result");
+        }
+      },
+      listConnections: async () => {
+        const value = await invoke(ASSISTANT_LIST_CONNECTIONS_CHANNEL);
+        try {
+          return parseAssistantConnectionListProjection(value);
+        } catch {
+          throw new Error("Invalid assistant connection list projection");
+        }
+      },
+      saveConnection: async (input) => {
+        const command = parseSaveAssistantConnectionCommand(input);
+        const value = await invoke(ASSISTANT_SAVE_CONNECTION_CHANNEL, command);
+        try {
+          return parseAssistantConnectionProjection(value);
+        } catch {
+          throw new Error("Invalid saved assistant connection projection");
+        }
+      },
+      deleteConnection: async (input) => {
+        const command = parseDeleteAssistantConnectionCommand(input);
+        const value = await invoke(ASSISTANT_DELETE_CONNECTION_CHANNEL, command);
+        if (value !== undefined) {
+          throw new Error("Invalid assistant connection deletion result");
+        }
+      },
+      getConnectorProfile: async () => {
+        const value = await invoke(ASSISTANT_CONNECTOR_PROFILE_CHANNEL);
+        try {
+          return parseAssistantConnectorManifestProfile(value);
+        } catch {
+          throw new Error("Invalid assistant connector profile");
+        }
+      },
+      getDestinationProfile: async () => {
+        const value = await invoke(ASSISTANT_DESTINATION_PROFILE_CHANNEL);
+        try {
+          return parseAssistantDestinationProfile(value);
+        } catch {
+          throw new Error("Invalid assistant destination profile");
+        }
+      },
+      listContextState: async (input) => {
+        const command = parseListAssistantContextStateCommand(input);
+        const value = await invoke(
+          ASSISTANT_LIST_CONTEXT_STATE_CHANNEL,
+          command,
+        );
+        try {
+          return parseAssistantContextStateProjection(value);
+        } catch {
+          throw new Error("Invalid assistant context state projection");
+        }
+      },
+      grantContextPermission: async (input) => {
+        const command = parseGrantAssistantContextPermissionCommand(input);
+        const value = await invoke(
+          ASSISTANT_GRANT_CONTEXT_PERMISSION_CHANNEL,
+          command,
+        );
+        try {
+          return parseAssistantContextPermissionGrant(value);
+        } catch {
+          throw new Error("Invalid assistant context permission grant");
+        }
+      },
+      revokeContextPermission: async (input) => {
+        const command = parseRevokeAssistantContextPermissionCommand(input);
+        const value = await invoke(
+          ASSISTANT_REVOKE_CONTEXT_PERMISSION_CHANNEL,
+          command,
+        );
+        try {
+          return parseAssistantContextPermissionGrant(value);
+        } catch {
+          throw new Error("Invalid revoked assistant context permission grant");
+        }
+      },
+      runVocabularyLookup: async (input) => {
+        const command = parseRunAssistantVocabularyLookupCommand(input);
+        const value = await invoke(
+          ASSISTANT_RUN_VOCABULARY_LOOKUP_CHANNEL,
+          command,
+        );
+        try {
+          return parseAssistantVocabularyLookupResult(value);
+        } catch {
+          throw new Error("Invalid assistant vocabulary lookup result");
+        }
+      },
+      runVocabularySuggestion: async (input) => {
+        const command = parseRunAssistantVocabularySuggestionCommand(input);
+        const value = await invoke(
+          ASSISTANT_RUN_VOCABULARY_SUGGESTION_CHANNEL,
+          command,
+        );
+        try {
+          return parseAssistantVocabularySuggestionResult(value);
+        } catch {
+          throw new Error("Invalid assistant vocabulary suggestion result");
+        }
+      },
+      runExternalSettingReview: async (input) => {
+        const command = parseRunAssistantExternalSettingReviewCommand(input);
+        const value = await invoke(
+          ASSISTANT_RUN_EXTERNAL_SETTING_REVIEW_CHANNEL,
+          command,
+        );
+        try {
+          return parseAssistantExternalSettingReviewResult(value);
+        } catch {
+          throw new Error("Invalid assistant external setting review result");
+        }
+      },
+      runNotationReview: async (input) => {
+        const command = parseRunAssistantNotationReviewCommand(input);
+        const value = await invoke(
+          ASSISTANT_RUN_NOTATION_REVIEW_CHANNEL,
+          command,
+        );
+        try {
+          return parseAssistantNotationReviewResult(value);
+        } catch {
+          throw new Error("Invalid assistant notation review result");
+        }
+      },
+      runSettingReview: async (input) => {
+        const command = parseRunAssistantSettingReviewCommand(input);
+        const value = await invoke(
+          ASSISTANT_RUN_SETTING_REVIEW_CHANNEL,
+          command,
+        );
+        try {
+          return parseAssistantSettingReviewResult(value);
+        } catch {
+          throw new Error("Invalid assistant setting review result");
+        }
+      },
     },
     version: {
+      compareWorkSnapshot: async (input) => {
+        const command = parseCompareWorkSnapshotCommand(input);
+        const value = await invoke(
+          VERSION_COMPARE_WORK_SNAPSHOT_CHANNEL,
+          command,
+        );
+        try {
+          return parseWorkSnapshotComparisonProjection(value);
+        } catch {
+          throw new Error("Invalid WorkSnapshot comparison");
+        }
+      },
       listDocumentRevisions: async (input) => {
         const command = parseListDocumentRevisionsCommand(input);
         const value = await invoke(
@@ -762,6 +3462,55 @@ export function createStudioBridge(
           throw new Error("Invalid manuscript document profile");
         }
       },
+      getManuscriptFormattingProfile: async () => {
+        const value = await invoke(MANUSCRIPT_FORMATTING_PROFILE_CHANNEL);
+        try {
+          return parseManuscriptFormattingProfile(value);
+        } catch {
+          throw new Error("Invalid manuscript formatting profile");
+        }
+      },
+      getManuscriptPreflightProfile: async () => {
+        const value = await invoke(MANUSCRIPT_PREFLIGHT_PROFILE_CHANNEL);
+        try {
+          return parseManuscriptPreflightProfile(value);
+        } catch {
+          throw new Error("Invalid manuscript preflight profile");
+        }
+      },
+      getManuscriptPreflightSettings: async (input) => {
+        const command = parseGetManuscriptPreflightSettingsCommand(input);
+        const value = await invoke(
+          MANUSCRIPT_PREFLIGHT_GET_SETTINGS_CHANNEL,
+          command,
+        );
+        try {
+          return parseManuscriptPreflightSettingsProjection(value);
+        } catch {
+          throw new Error("Invalid manuscript preflight settings");
+        }
+      },
+      saveManuscriptPreflightSettings: async (input) => {
+        const command = parseSaveManuscriptPreflightSettingsCommand(input);
+        const value = await invoke(
+          MANUSCRIPT_PREFLIGHT_SAVE_SETTINGS_CHANNEL,
+          command,
+        );
+        try {
+          return parseManuscriptPreflightSettingsProjection(value);
+        } catch {
+          throw new Error("Invalid saved manuscript preflight settings");
+        }
+      },
+      exportManuscriptText: async (input) => {
+        const command = parseExportManuscriptTextCommand(input);
+        const value = await invoke(MANUSCRIPT_EXPORT_TEXT_CHANNEL, command);
+        try {
+          return parseExportManuscriptTextResult(value);
+        } catch {
+          throw new Error("Invalid manuscript text export result");
+        }
+      },
       getManuscriptPersistenceProfile: async () => {
         const value = await invoke(
           MANUSCRIPT_PERSISTENCE_PROFILE_CHANNEL,
@@ -802,6 +3551,30 @@ export function createStudioBridge(
           );
         }
       },
+      getContinuousReadingProgress: async (input) => {
+        const command = parseGetContinuousReadingProgressCommand(input);
+        const value = await invoke(
+          MANUSCRIPT_GET_CONTINUOUS_READING_PROGRESS_CHANNEL,
+          command,
+        );
+        try {
+          return parseWorkContinuousReadingProgressProjection(value);
+        } catch {
+          throw new Error("Invalid continuous reading progress projection");
+        }
+      },
+      saveContinuousReadingProgress: async (input) => {
+        const command = parseSaveContinuousReadingProgressCommand(input);
+        const value = await invoke(
+          MANUSCRIPT_SAVE_CONTINUOUS_READING_PROGRESS_CHANNEL,
+          command,
+        );
+        try {
+          return parseWorkContinuousReadingProgressProjection(value);
+        } catch {
+          throw new Error("Invalid saved continuous reading progress projection");
+        }
+      },
       saveChangeBatch: async (input) => {
         const batch = parseChangeBatch(input);
         const value = await invoke(
@@ -812,6 +3585,30 @@ export function createStudioBridge(
           return parseSaveReceipt(value);
         } catch {
           throw new Error("Invalid save receipt");
+        }
+      },
+      saveDocumentChange: async (input) => {
+        const command = parseSaveManuscriptDocumentChangeCommand(input);
+        const value = await invoke(
+          MANUSCRIPT_SAVE_DOCUMENT_CHANGE_CHANNEL,
+          command,
+        );
+        try {
+          return parseSaveReceipt(value);
+        } catch {
+          throw new Error("Invalid document change save receipt");
+        }
+      },
+      saveFormatting: async (input) => {
+        const command = parseSaveManuscriptFormattingCommand(input);
+        const value = await invoke(
+          MANUSCRIPT_SAVE_FORMATTING_CHANNEL,
+          command,
+        );
+        try {
+          return parseSaveManuscriptFormattingReceipt(value);
+        } catch {
+          throw new Error("Invalid manuscript formatting save receipt");
         }
       },
       applyManuscriptStartupRecovery: async (

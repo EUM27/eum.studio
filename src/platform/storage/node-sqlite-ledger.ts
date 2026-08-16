@@ -202,6 +202,425 @@ CREATE TABLE IF NOT EXISTS work_settings (
     DEFERRABLE INITIALLY DEFERRED
 ) STRICT;
 
+CREATE TABLE IF NOT EXISTS work_favorites (
+  work_id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  favorited_at TEXT NOT NULL,
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS work_covers (
+  work_id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  media_type TEXT NOT NULL,
+  content_base64 TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS app_settings (
+  singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  default_episode_characters INTEGER NOT NULL
+    CHECK (default_episode_characters > 0),
+  updated_at TEXT NOT NULL
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS work_music_settings (
+  work_id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  settings_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS manuscript_preflight_settings (
+  work_id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  settings_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS work_continuous_reading_progress (
+  work_id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  document_id TEXT,
+  document_revision_id TEXT,
+  text_offset INTEGER,
+  updated_at TEXT NOT NULL,
+  CHECK (
+    (document_id IS NULL AND document_revision_id IS NULL AND text_offset IS NULL) OR
+    (document_id IS NOT NULL AND document_revision_id IS NOT NULL AND text_offset >= 0)
+  ),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED,
+  FOREIGN KEY (work_id, document_id)
+    REFERENCES documents (work_id, id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED,
+  FOREIGN KEY (work_id, document_id, document_revision_id)
+    REFERENCES document_revisions (work_id, document_id, id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS work_records_goals (
+  work_id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  goals_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS work_readthrough_settings (
+  work_id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  entries_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS work_quick_memos (
+  work_id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  memo_text TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS assistant_context_permission_grants (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  work_id TEXT NOT NULL,
+  conversation_id TEXT,
+  capability TEXT NOT NULL
+    CHECK (capability IN ('vocabulary-lookup', 'lore-review')),
+  destination_id TEXT NOT NULL,
+  local_scope TEXT NOT NULL
+    CHECK (local_scope IN ('none', 'selection', 'paragraph', 'scene', 'chapter', 'work')),
+  external_scope TEXT NOT NULL
+    CHECK (external_scope IN ('none', 'selection', 'paragraph', 'scene', 'chapter', 'work')),
+  duration TEXT NOT NULL
+    CHECK (duration IN ('once', 'conversation', 'work')),
+  created_at TEXT NOT NULL,
+  revoked_at TEXT,
+  consumed_at TEXT,
+  UNIQUE (work_id, id),
+  CHECK (
+    (duration = 'work' AND conversation_id IS NULL) OR
+    (duration <> 'work' AND conversation_id IS NOT NULL)
+  ),
+  CHECK (duration = 'once' OR consumed_at IS NULL),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS assistant_context_receipts (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  request_id TEXT NOT NULL,
+  work_id TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  capability TEXT NOT NULL
+    CHECK (capability IN ('vocabulary-lookup', 'lore-review')),
+  destination_id TEXT NOT NULL,
+  read_ranges_json TEXT NOT NULL,
+  transmitted_ranges_json TEXT NOT NULL,
+  read_character_count INTEGER NOT NULL CHECK (read_character_count >= 0),
+  transmitted_character_count INTEGER NOT NULL
+    CHECK (transmitted_character_count >= 0),
+  grant_ids_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (work_id, request_id),
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS assistant_connector_receipts (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  request_id TEXT NOT NULL,
+  work_id TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  connection_id TEXT NOT NULL,
+  connector_kind TEXT NOT NULL,
+  operation TEXT NOT NULL
+    CHECK (operation IN ('vocabulary-suggestions', 'setting-review')),
+  request_fingerprint TEXT NOT NULL,
+  started_at TEXT NOT NULL,
+  completed_at TEXT NOT NULL,
+  result_state TEXT NOT NULL CHECK (result_state = 'succeeded'),
+  UNIQUE (work_id, request_id),
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS assistant_vocabulary_candidates (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  work_id TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  destination_id TEXT NOT NULL,
+  source_range_json TEXT NOT NULL,
+  query_text TEXT NOT NULL,
+  occurrences_json TEXT NOT NULL,
+  receipt_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED,
+  FOREIGN KEY (work_id, receipt_id)
+    REFERENCES assistant_context_receipts (work_id, id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS assistant_vocabulary_suggestion_candidates (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  work_id TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  connection_id TEXT NOT NULL,
+  query_text TEXT NOT NULL,
+  source_range_json TEXT NOT NULL,
+  suggestions_json TEXT NOT NULL,
+  note_text TEXT NOT NULL,
+  connector_receipt_id TEXT NOT NULL,
+  context_receipt_id TEXT,
+  created_at TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED,
+  FOREIGN KEY (work_id, context_receipt_id)
+    REFERENCES assistant_context_receipts (work_id, id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED,
+  FOREIGN KEY (work_id, connector_receipt_id)
+    REFERENCES assistant_connector_receipts (work_id, id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS assistant_external_setting_review_receipts (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  request_id TEXT NOT NULL,
+  work_id TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  connection_id TEXT NOT NULL,
+  source_range_json TEXT NOT NULL,
+  transmitted_settings_json TEXT NOT NULL,
+  transmitted_setting_count INTEGER NOT NULL CHECK (transmitted_setting_count >= 0),
+  connector_receipt_id TEXT NOT NULL,
+  context_receipt_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (work_id, request_id),
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED,
+  FOREIGN KEY (work_id, connector_receipt_id)
+    REFERENCES assistant_connector_receipts (work_id, id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED,
+  FOREIGN KEY (work_id, context_receipt_id)
+    REFERENCES assistant_context_receipts (work_id, id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS assistant_external_setting_review_candidates (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  work_id TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  connection_id TEXT NOT NULL,
+  query_text TEXT NOT NULL,
+  reply_text TEXT NOT NULL,
+  proposals_json TEXT NOT NULL,
+  review_notes_json TEXT NOT NULL,
+  receipt_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED,
+  FOREIGN KEY (work_id, receipt_id)
+    REFERENCES assistant_external_setting_review_receipts (work_id, id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS assistant_notation_candidates (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  work_id TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  destination_id TEXT NOT NULL,
+  source_range_json TEXT NOT NULL,
+  findings_json TEXT NOT NULL,
+  regex_error TEXT,
+  receipt_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED,
+  FOREIGN KEY (work_id, receipt_id)
+    REFERENCES assistant_context_receipts (work_id, id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS assistant_setting_review_receipts (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  request_id TEXT NOT NULL,
+  work_id TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  destination_id TEXT NOT NULL,
+  reviewed_settings_json TEXT NOT NULL,
+  transmitted_setting_count INTEGER NOT NULL
+    CHECK (transmitted_setting_count = 0),
+  grant_ids_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (work_id, request_id),
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS assistant_setting_review_findings (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  work_id TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  destination_id TEXT NOT NULL,
+  finding_kind TEXT NOT NULL CHECK (finding_kind = 'duplicate'),
+  setting_kind TEXT NOT NULL
+    CHECK (setting_kind IN ('character', 'plot', 'foreshadow')),
+  duplicate_label TEXT NOT NULL,
+  references_json TEXT NOT NULL,
+  receipt_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED,
+  FOREIGN KEY (work_id, receipt_id)
+    REFERENCES assistant_setting_review_receipts (work_id, id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS assistant_setting_conflict_findings (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  work_id TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  destination_id TEXT NOT NULL,
+  finding_kind TEXT NOT NULL CHECK (finding_kind = 'conflict'),
+  setting_kind TEXT NOT NULL
+    CHECK (setting_kind IN ('character', 'plot', 'foreshadow')),
+  duplicate_label TEXT NOT NULL,
+  field_name TEXT NOT NULL,
+  references_json TEXT NOT NULL,
+  receipt_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED,
+  FOREIGN KEY (work_id, receipt_id)
+    REFERENCES assistant_setting_review_receipts (work_id, id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS work_schedule_items (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('task', 'routine', 'dday')),
+  label TEXT NOT NULL,
+  schedule_date TEXT NOT NULL,
+  schedule_time TEXT,
+  workload_json TEXT,
+  completed_at TEXT,
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS work_routine_completions (
+  work_id TEXT NOT NULL,
+  routine_id TEXT NOT NULL,
+  occurrence_date TEXT NOT NULL,
+  completed_at TEXT NOT NULL,
+  PRIMARY KEY (work_id, routine_id, occurrence_date),
+  FOREIGN KEY (work_id, routine_id)
+    REFERENCES work_schedule_items (work_id, id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
 CREATE TABLE IF NOT EXISTS document_folders (
   id TEXT PRIMARY KEY,
   schema_version INTEGER NOT NULL,
@@ -424,6 +843,16 @@ CREATE TABLE IF NOT EXISTS anchors (
     ON DELETE RESTRICT
 ) STRICT;
 
+CREATE TABLE IF NOT EXISTS document_revision_editor_states (
+  revision_id TEXT PRIMARY KEY,
+  work_id TEXT NOT NULL,
+  document_id TEXT NOT NULL,
+  editor_state_json TEXT NOT NULL,
+  FOREIGN KEY (work_id, document_id, revision_id)
+    REFERENCES document_revisions (work_id, document_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
 CREATE TABLE IF NOT EXISTS scene_overrides (
   id TEXT PRIMARY KEY,
   schema_version INTEGER NOT NULL,
@@ -518,6 +947,291 @@ CREATE TABLE IF NOT EXISTS event_blocks (
     REFERENCES event_blocks (work_id, id)
     ON DELETE RESTRICT
     DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS fragments (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  source_document_id TEXT NOT NULL,
+  source_anchor_id TEXT NOT NULL,
+  kind_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  pinned INTEGER NOT NULL CHECK (pinned IN (0, 1)),
+  use_count INTEGER NOT NULL CHECK (use_count >= 0),
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id, source_document_id)
+    REFERENCES documents (work_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, source_document_id, source_anchor_id)
+    REFERENCES anchors (work_id, document_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS characters (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  role TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  note TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS lore_entries (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  category TEXT NOT NULL,
+  aliases_json TEXT NOT NULL,
+  enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS lore_entry_evidence (
+  work_id TEXT NOT NULL,
+  lore_entry_id TEXT NOT NULL,
+  source_document_id TEXT NOT NULL,
+  source_anchor_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (work_id, lore_entry_id, source_anchor_id),
+  FOREIGN KEY (work_id, lore_entry_id)
+    REFERENCES lore_entries (work_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, source_document_id, source_anchor_id)
+    REFERENCES anchors (work_id, document_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS lore_entry_history (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  work_id TEXT NOT NULL,
+  lore_entry_id TEXT NOT NULL,
+  entry_revision INTEGER NOT NULL CHECK (entry_revision >= 1),
+  change_kind TEXT NOT NULL
+    CHECK (change_kind IN ('created', 'updated', 'evidence-added', 'retired')),
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  category TEXT NOT NULL,
+  aliases_json TEXT NOT NULL,
+  enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+  evidence_anchor_ids_json TEXT NOT NULL,
+  changed_at TEXT NOT NULL,
+  UNIQUE (work_id, lore_entry_id, entry_revision),
+  FOREIGN KEY (work_id, lore_entry_id)
+    REFERENCES lore_entries (work_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE TRIGGER IF NOT EXISTS lore_entry_history_no_update
+BEFORE UPDATE ON lore_entry_history
+BEGIN
+  SELECT RAISE(ABORT, 'lore_entry_history is immutable');
+END;
+
+CREATE TRIGGER IF NOT EXISTS lore_entry_history_no_delete
+BEFORE DELETE ON lore_entry_history
+BEGIN
+  SELECT RAISE(ABORT, 'lore_entry_history is immutable');
+END;
+
+CREATE TABLE IF NOT EXISTS lore_foreshadow_links (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  lore_entry_id TEXT NOT NULL,
+  line_id TEXT NOT NULL,
+  linked_at TEXT NOT NULL,
+  unlinked_at TEXT,
+  unlink_reason TEXT
+    CHECK (
+      unlink_reason IS NULL OR
+      unlink_reason IN ('user', 'lore-retired', 'foreshadow-retired')
+    ),
+  CHECK ((unlinked_at IS NULL) = (unlink_reason IS NULL)),
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id, lore_entry_id)
+    REFERENCES lore_entries (work_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, line_id)
+    REFERENCES foreshadow_lines (work_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS unique_active_lore_foreshadow_link
+ON lore_foreshadow_links (work_id, lore_entry_id, line_id)
+WHERE unlinked_at IS NULL AND retired_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS lore_candidates (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL CHECK (revision >= 1),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  source_document_id TEXT NOT NULL,
+  source_document_revision_id TEXT NOT NULL,
+  source_anchor_id TEXT NOT NULL,
+  exact_text TEXT NOT NULL,
+  source TEXT NOT NULL CHECK (source IN ('user', 'assistant')),
+  certainty TEXT NOT NULL CHECK (certainty IN ('explicit', 'inferred')),
+  proposal_json TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'rejected')),
+  approved_lore_entry_id TEXT,
+  reviewed_at TEXT,
+  CHECK ((status = 'pending') = (reviewed_at IS NULL)),
+  CHECK ((status = 'approved') = (approved_lore_entry_id IS NOT NULL)),
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id, source_document_id, source_anchor_id)
+    REFERENCES anchors (work_id, document_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, source_document_id, source_document_revision_id)
+    REFERENCES document_revisions (work_id, document_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, approved_lore_entry_id)
+    REFERENCES lore_entries (work_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS publishing_partners (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  name TEXT NOT NULL,
+  parent_partner_id TEXT,
+  submission_method TEXT NOT NULL,
+  website_url TEXT NOT NULL,
+  email TEXT NOT NULL,
+  genres_json TEXT NOT NULL,
+  required_length TEXT NOT NULL,
+  priority TEXT NOT NULL,
+  note TEXT NOT NULL,
+  source_ids_json TEXT NOT NULL,
+  FOREIGN KEY (parent_partner_id)
+    REFERENCES publishing_partners (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS plot_threads (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  stage TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  note TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS plot_thread_sources (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  plot_thread_id TEXT NOT NULL,
+  source_document_id TEXT NOT NULL,
+  source_anchor_id TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id, plot_thread_id)
+    REFERENCES plot_threads (work_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, source_document_id)
+    REFERENCES documents (work_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, source_document_id, source_anchor_id)
+    REFERENCES anchors (work_id, document_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS unique_active_plot_thread_source
+ON plot_thread_sources (work_id, plot_thread_id)
+WHERE retired_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS foreshadow_lines (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  note TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS foreshadow_points (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  line_id TEXT NOT NULL,
+  source_document_id TEXT NOT NULL,
+  source_anchor_id TEXT NOT NULL,
+  role_id TEXT NOT NULL,
+  note TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id, line_id)
+    REFERENCES foreshadow_lines (work_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, source_document_id)
+    REFERENCES documents (work_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, source_document_id, source_anchor_id)
+    REFERENCES anchors (work_id, document_id, id)
+    ON DELETE RESTRICT
 ) STRICT;
 
 CREATE TABLE IF NOT EXISTS resume_checkpoints (
@@ -752,6 +1466,237 @@ CREATE TABLE IF NOT EXISTS work_snapshot_document_revisions (
     ON DELETE RESTRICT
 ) STRICT;
 
+CREATE TABLE IF NOT EXISTS submission_packages (
+  id TEXT PRIMARY KEY,
+  work_id TEXT NOT NULL,
+  partner_id TEXT NOT NULL,
+  work_snapshot_id TEXT NOT NULL UNIQUE,
+  work_title_snapshot TEXT NOT NULL,
+  partner_name_snapshot TEXT NOT NULL,
+  manifest_hash TEXT NOT NULL,
+  sealed_at TEXT NOT NULL,
+  UNIQUE (work_id, partner_id, id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (partner_id)
+    REFERENCES publishing_partners (id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, work_snapshot_id)
+    REFERENCES work_snapshots (work_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS publishing_submissions (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  partner_id TEXT NOT NULL,
+  submission_package_id TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  status TEXT NOT NULL,
+  submitted_on TEXT,
+  responded_on TEXT,
+  result TEXT NOT NULL,
+  note TEXT NOT NULL,
+  card_note TEXT NOT NULL,
+  source_ids_json TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (partner_id)
+    REFERENCES publishing_partners (id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, partner_id, submission_package_id)
+    REFERENCES submission_packages (work_id, partner_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS publishing_contracts (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  partner_id TEXT NOT NULL,
+  submission_id TEXT,
+  title TEXT NOT NULL,
+  work_title_snapshot TEXT NOT NULL,
+  partner_name_snapshot TEXT NOT NULL,
+  status TEXT NOT NULL,
+  signed_on TEXT,
+  starts_on TEXT,
+  ends_on TEXT,
+  rights_scope TEXT NOT NULL,
+  advance_amount REAL,
+  currency_code TEXT NOT NULL,
+  revenue_share_note TEXT NOT NULL,
+  note TEXT NOT NULL,
+  source_ids_json TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (partner_id)
+    REFERENCES publishing_partners (id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (submission_id)
+    REFERENCES publishing_submissions (id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS publishing_publications (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  contract_id TEXT,
+  channel_partner_id TEXT,
+  title TEXT NOT NULL,
+  work_title_snapshot TEXT NOT NULL,
+  channel_name_snapshot TEXT NOT NULL,
+  status TEXT NOT NULL,
+  format TEXT NOT NULL,
+  scheduled_on TEXT,
+  starts_on TEXT,
+  ends_on TEXT,
+  published_unit_count INTEGER,
+  planned_unit_count INTEGER,
+  schedule_note TEXT NOT NULL,
+  note TEXT NOT NULL,
+  source_ids_json TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  CHECK (published_unit_count IS NULL OR published_unit_count >= 0),
+  CHECK (planned_unit_count IS NULL OR planned_unit_count >= 0),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, contract_id)
+    REFERENCES publishing_contracts (work_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (channel_partner_id)
+    REFERENCES publishing_partners (id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS publishing_settlements (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  publication_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  work_title_snapshot TEXT NOT NULL,
+  publication_title_snapshot TEXT NOT NULL,
+  period_starts_on TEXT,
+  period_ends_on TEXT,
+  issued_on TEXT,
+  review_status TEXT NOT NULL,
+  currency_code TEXT NOT NULL,
+  reported_amount REAL,
+  items_json TEXT NOT NULL,
+  note TEXT NOT NULL,
+  source_ids_json TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, publication_id)
+    REFERENCES publishing_publications (work_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS publishing_payments (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  settlement_id TEXT,
+  work_title_snapshot TEXT NOT NULL,
+  settlement_title_snapshot TEXT NOT NULL,
+  received_on TEXT,
+  confirmed_on TEXT,
+  amount REAL NOT NULL,
+  currency_code TEXT NOT NULL,
+  match_status TEXT NOT NULL,
+  payer_label TEXT NOT NULL,
+  reference TEXT NOT NULL,
+  note TEXT NOT NULL,
+  source_ids_json TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, settlement_id)
+    REFERENCES publishing_settlements (work_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS publishing_sources (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  source_kind TEXT NOT NULL,
+  label TEXT NOT NULL,
+  url TEXT,
+  observed_at TEXT,
+  authority TEXT NOT NULL,
+  imported_fields_json TEXT NOT NULL
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS publishing_mail_candidates (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  source_id TEXT NOT NULL UNIQUE,
+  source_account_id TEXT NOT NULL,
+  message_id TEXT NOT NULL,
+  thread_id TEXT NOT NULL,
+  sender TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  received_at TEXT NOT NULL,
+  snippet TEXT NOT NULL,
+  body_fingerprint TEXT NOT NULL,
+  submission_id TEXT,
+  match_reason TEXT NOT NULL,
+  proposed_status TEXT NOT NULL,
+  proposed_result TEXT NOT NULL,
+  proposed_responded_on TEXT,
+  proposed_note TEXT NOT NULL,
+  classification_connection_id TEXT,
+  classification_model TEXT NOT NULL,
+  review_status TEXT NOT NULL,
+  UNIQUE (source_account_id, message_id),
+  FOREIGN KEY (source_id)
+    REFERENCES publishing_sources (id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (submission_id)
+    REFERENCES publishing_submissions (id)
+    ON DELETE RESTRICT
+) STRICT;
+
 CREATE TABLE IF NOT EXISTS migration_receipts (
   id TEXT PRIMARY KEY,
   migration_id TEXT NOT NULL UNIQUE,
@@ -784,6 +1729,24 @@ BEGIN
   SELECT RAISE(
     ABORT,
     'DocumentRevision is immutable'
+  );
+END;
+
+CREATE TRIGGER IF NOT EXISTS document_revision_editor_states_reject_update
+BEFORE UPDATE ON document_revision_editor_states
+BEGIN
+  SELECT RAISE(
+    ABORT,
+    'DocumentRevision editor state is immutable'
+  );
+END;
+
+CREATE TRIGGER IF NOT EXISTS document_revision_editor_states_reject_delete
+BEFORE DELETE ON document_revision_editor_states
+BEGIN
+  SELECT RAISE(
+    ABORT,
+    'DocumentRevision editor state is immutable'
   );
 END;
 
@@ -820,6 +1783,24 @@ BEGIN
   SELECT RAISE(
     ABORT,
     'WorkSnapshot manifest is immutable'
+  );
+END;
+
+CREATE TRIGGER IF NOT EXISTS submission_packages_reject_update
+BEFORE UPDATE ON submission_packages
+BEGIN
+  SELECT RAISE(
+    ABORT,
+    'SubmissionPackage is immutable'
+  );
+END;
+
+CREATE TRIGGER IF NOT EXISTS submission_packages_reject_delete
+BEFORE DELETE ON submission_packages
+BEGIN
+  SELECT RAISE(
+    ABORT,
+    'SubmissionPackage is immutable'
   );
 END;
 
@@ -1827,6 +2808,487 @@ function writeLedgerRecord(
         ],
       );
       return;
+    case "fragment":
+      runStatement(
+        database,
+        `
+          INSERT INTO fragments (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            work_id,
+            source_document_id,
+            source_anchor_id,
+            kind_id,
+            title,
+            pinned,
+            use_count
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.workId,
+          record.sourceDocumentId,
+          record.sourceAnchorId,
+          record.kindId,
+          record.title,
+          booleanInteger(record.pinned),
+          record.useCount,
+        ],
+      );
+      return;
+    case "character":
+      runStatement(
+        database,
+        `
+          INSERT INTO characters (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            work_id,
+            name,
+            role,
+            summary,
+            note
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.workId,
+          record.name,
+          record.role,
+          record.summary,
+          record.note,
+        ],
+      );
+      return;
+    case "loreEntry":
+      runStatement(
+        database,
+        `
+          INSERT INTO lore_entries (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            work_id,
+            title,
+            content,
+            category,
+            aliases_json,
+            enabled
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.workId,
+          record.title,
+          record.content,
+          record.category,
+          JSON.stringify(record.aliases),
+          booleanInteger(record.enabled),
+        ],
+      );
+      return;
+    case "loreEntryEvidence":
+      runStatement(
+        database,
+        `
+          INSERT INTO lore_entry_evidence (
+            work_id,
+            lore_entry_id,
+            source_document_id,
+            source_anchor_id,
+            created_at
+          )
+          VALUES (?, ?, ?, ?, ?)
+        `,
+        [
+          record.workId,
+          record.loreEntryId,
+          record.sourceDocumentId,
+          record.sourceAnchorId,
+          record.createdAt,
+        ],
+      );
+      return;
+    case "loreEntryHistory":
+      runStatement(
+        database,
+        `
+          INSERT INTO lore_entry_history (
+            id,
+            schema_version,
+            work_id,
+            lore_entry_id,
+            entry_revision,
+            change_kind,
+            title,
+            content,
+            category,
+            aliases_json,
+            enabled,
+            evidence_anchor_ids_json,
+            changed_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.workId,
+          record.loreEntryId,
+          record.entryRevision,
+          record.changeKind,
+          record.title,
+          record.content,
+          record.category,
+          JSON.stringify(record.aliases),
+          booleanInteger(record.enabled),
+          JSON.stringify(record.evidenceAnchorIds),
+          record.changedAt,
+        ],
+      );
+      return;
+    case "loreForeshadowLink":
+      runStatement(
+        database,
+        `
+          INSERT INTO lore_foreshadow_links (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            work_id,
+            lore_entry_id,
+            line_id,
+            linked_at,
+            unlinked_at,
+            unlink_reason
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.workId,
+          record.loreEntryId,
+          record.lineId,
+          record.linkedAt,
+          nullable(record.unlinkedAt),
+          nullable(record.unlinkReason),
+        ],
+      );
+      return;
+    case "loreCandidate":
+      runStatement(
+        database,
+        `
+          INSERT INTO lore_candidates (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            work_id,
+            source_document_id,
+            source_document_revision_id,
+            source_anchor_id,
+            exact_text,
+            source,
+            certainty,
+            proposal_json,
+            reason,
+            status,
+            approved_lore_entry_id,
+            reviewed_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.workId,
+          record.sourceDocumentId,
+          record.sourceDocumentRevisionId,
+          record.sourceAnchorId,
+          record.exactText,
+          record.source,
+          record.certainty,
+          record.proposalJson,
+          record.reason,
+          record.status,
+          nullable(record.approvedLoreEntryId),
+          nullable(record.reviewedAt),
+        ],
+      );
+      return;
+    case "publishingPartner":
+      runStatement(
+        database,
+        `
+          INSERT INTO publishing_partners (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            name,
+            parent_partner_id,
+            submission_method,
+            website_url,
+            email,
+            genres_json,
+            required_length,
+            priority,
+            note,
+            source_ids_json
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.name,
+          nullable(record.parentPartnerId),
+          record.submissionMethod,
+          record.websiteUrl,
+          record.email,
+          JSON.stringify(record.genres),
+          record.requiredLength,
+          record.priority,
+          record.note,
+          JSON.stringify(record.sourceIds),
+        ],
+      );
+      return;
+    case "plotThread":
+      runStatement(
+        database,
+        `
+          INSERT INTO plot_threads (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            work_id,
+            title,
+            stage,
+            summary,
+            note
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.workId,
+          record.title,
+          record.stage,
+          record.summary,
+          record.note,
+        ],
+      );
+      return;
+    case "plotThreadSource":
+      {
+        const currentRows = database.prepare(`
+          SELECT id
+          FROM plot_thread_sources
+          WHERE
+            work_id = ?
+            AND plot_thread_id = ?
+            AND retired_at IS NULL
+        `).all(record.workId, record.plotThreadId);
+        if (currentRows.length > 1) {
+          throw new Error(
+            `Plot source lookup returned duplicate rows: ${record.plotThreadId}`,
+          );
+        }
+        const currentRow = currentRows[0] as Record<string, unknown> | undefined;
+        const currentSourceId = currentRow === undefined
+          ? null
+          : typeof currentRow.id === "string"
+            ? currentRow.id
+            : (() => {
+                throw new Error("Plot source lookup returned an invalid id");
+              })();
+        if (currentSourceId !== record.expectedSourceId) {
+          throw new Error(
+            `Plot source revision conflict: ${record.plotThreadId}`,
+          );
+        }
+        if (currentSourceId !== null) {
+          const result = database.prepare(`
+            UPDATE plot_thread_sources
+            SET
+              revision = revision + 1,
+              updated_at = ?,
+              retired_at = ?
+            WHERE
+              work_id = ?
+              AND plot_thread_id = ?
+              AND id = ?
+              AND retired_at IS NULL
+          `).run(
+            record.createdAt,
+            record.createdAt,
+            record.workId,
+            record.plotThreadId,
+            currentSourceId,
+          ) as { readonly changes: number | bigint };
+          if (Number(result.changes) !== 1) {
+            throw new Error(
+              `Plot source revision conflict: ${record.plotThreadId}`,
+            );
+          }
+        }
+      }
+      runStatement(
+        database,
+        `
+          INSERT INTO plot_thread_sources (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            work_id,
+            plot_thread_id,
+            source_document_id,
+            source_anchor_id
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.workId,
+          record.plotThreadId,
+          record.sourceDocumentId,
+          record.sourceAnchorId,
+        ],
+      );
+      return;
+    case "foreshadowLine":
+      runStatement(
+        database,
+        `
+          INSERT INTO foreshadow_lines (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            work_id,
+            title,
+            note
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.workId,
+          record.title,
+          record.note,
+        ],
+      );
+      return;
+    case "foreshadowPoint":
+      runStatement(
+        database,
+        `
+          INSERT INTO foreshadow_points (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            work_id,
+            line_id,
+            source_document_id,
+            source_anchor_id,
+            role_id,
+            note
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.workId,
+          record.lineId,
+          record.sourceDocumentId,
+          record.sourceAnchorId,
+          record.roleId,
+          record.note,
+        ],
+      );
+      return;
     case "resumeCheckpoint":
       runStatement(
         database,
@@ -2135,6 +3597,390 @@ function writeLedgerRecord(
             ],
           );
         });
+      return;
+    case "submissionPackage":
+      runStatement(
+        database,
+        `
+          INSERT INTO submission_packages (
+            id,
+            work_id,
+            partner_id,
+            work_snapshot_id,
+            work_title_snapshot,
+            partner_name_snapshot,
+            manifest_hash,
+            sealed_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.workId,
+          record.partnerId,
+          record.workSnapshotId,
+          record.workTitleSnapshot,
+          record.partnerNameSnapshot,
+          record.manifestHash,
+          record.sealedAt,
+        ],
+      );
+      return;
+    case "publishingSubmission":
+      runStatement(
+        database,
+        `
+          INSERT INTO publishing_submissions (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            work_id,
+            partner_id,
+            submission_package_id,
+            title,
+            status,
+            submitted_on,
+            responded_on,
+            result,
+            note,
+            card_note,
+            source_ids_json
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.workId,
+          record.partnerId,
+          record.submissionPackageId,
+          record.title,
+          record.status,
+          nullable(record.submittedOn),
+          nullable(record.respondedOn),
+          record.result,
+          record.note,
+          record.cardNote,
+          JSON.stringify(record.sourceIds),
+        ],
+      );
+      return;
+    case "publishingContract":
+      runStatement(
+        database,
+        `
+          INSERT INTO publishing_contracts (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            work_id,
+            partner_id,
+            submission_id,
+            title,
+            work_title_snapshot,
+            partner_name_snapshot,
+            status,
+            signed_on,
+            starts_on,
+            ends_on,
+            rights_scope,
+            advance_amount,
+            currency_code,
+            revenue_share_note,
+            note,
+            source_ids_json
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.workId,
+          record.partnerId,
+          nullable(record.submissionId),
+          record.title,
+          record.workTitleSnapshot,
+          record.partnerNameSnapshot,
+          record.status,
+          nullable(record.signedOn),
+          nullable(record.startsOn),
+          nullable(record.endsOn),
+          record.rightsScope,
+          nullable(record.advanceAmount),
+          record.currencyCode,
+          record.revenueShareNote,
+          record.note,
+          JSON.stringify(record.sourceIds),
+        ],
+      );
+      return;
+    case "publishingPublication":
+      runStatement(
+        database,
+        `
+          INSERT INTO publishing_publications (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            work_id,
+            contract_id,
+            channel_partner_id,
+            title,
+            work_title_snapshot,
+            channel_name_snapshot,
+            status,
+            format,
+            scheduled_on,
+            starts_on,
+            ends_on,
+            published_unit_count,
+            planned_unit_count,
+            schedule_note,
+            note,
+            source_ids_json
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.workId,
+          nullable(record.contractId),
+          nullable(record.channelPartnerId),
+          record.title,
+          record.workTitleSnapshot,
+          record.channelNameSnapshot,
+          record.status,
+          record.format,
+          nullable(record.scheduledOn),
+          nullable(record.startsOn),
+          nullable(record.endsOn),
+          nullable(record.publishedUnitCount),
+          nullable(record.plannedUnitCount),
+          record.scheduleNote,
+          record.note,
+          JSON.stringify(record.sourceIds),
+        ],
+      );
+      return;
+    case "publishingSettlement":
+      runStatement(
+        database,
+        `
+          INSERT INTO publishing_settlements (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            work_id,
+            publication_id,
+            title,
+            work_title_snapshot,
+            publication_title_snapshot,
+            period_starts_on,
+            period_ends_on,
+            issued_on,
+            review_status,
+            currency_code,
+            reported_amount,
+            items_json,
+            note,
+            source_ids_json
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.workId,
+          record.publicationId,
+          record.title,
+          record.workTitleSnapshot,
+          record.publicationTitleSnapshot,
+          nullable(record.periodStartsOn),
+          nullable(record.periodEndsOn),
+          nullable(record.issuedOn),
+          record.reviewStatus,
+          record.currencyCode,
+          nullable(record.reportedAmount),
+          JSON.stringify(record.items),
+          record.note,
+          JSON.stringify(record.sourceIds),
+        ],
+      );
+      return;
+    case "publishingPayment":
+      runStatement(
+        database,
+        `
+          INSERT INTO publishing_payments (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            work_id,
+            settlement_id,
+            work_title_snapshot,
+            settlement_title_snapshot,
+            received_on,
+            confirmed_on,
+            amount,
+            currency_code,
+            match_status,
+            payer_label,
+            reference,
+            note,
+            source_ids_json
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.workId,
+          nullable(record.settlementId),
+          record.workTitleSnapshot,
+          record.settlementTitleSnapshot,
+          nullable(record.receivedOn),
+          nullable(record.confirmedOn),
+          record.amount,
+          record.currencyCode,
+          record.matchStatus,
+          record.payerLabel,
+          record.reference,
+          record.note,
+          JSON.stringify(record.sourceIds),
+        ],
+      );
+      return;
+    case "publishingSource":
+      runStatement(
+        database,
+        `
+          INSERT INTO publishing_sources (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            source_kind,
+            label,
+            url,
+            observed_at,
+            authority,
+            imported_fields_json
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.sourceKind,
+          record.label,
+          nullable(record.url),
+          nullable(record.observedAt),
+          record.authority,
+          JSON.stringify(record.importedFields),
+        ],
+      );
+      return;
+    case "publishingMailCandidate":
+      runStatement(
+        database,
+        `
+          INSERT INTO publishing_mail_candidates (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            source_id,
+            source_account_id,
+            message_id,
+            thread_id,
+            sender,
+            subject,
+            received_at,
+            snippet,
+            body_fingerprint,
+            submission_id,
+            match_reason,
+            proposed_status,
+            proposed_result,
+            proposed_responded_on,
+            proposed_note,
+            classification_connection_id,
+            classification_model,
+            review_status
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.sourceId,
+          record.sourceAccountId,
+          record.messageId,
+          record.threadId,
+          record.from,
+          record.subject,
+          record.receivedAt,
+          record.snippet,
+          record.bodyFingerprint,
+          nullable(record.submissionId),
+          record.matchReason,
+          record.proposedStatus,
+          record.proposedResult,
+          nullable(record.proposedRespondedOn),
+          record.proposedNote,
+          nullable(record.classificationConnectionId),
+          record.classificationModel,
+          record.reviewStatus,
+        ],
+      );
       return;
     case "migrationReceipt":
       runStatement(
@@ -3001,6 +4847,25 @@ function createNodeSqliteRevisionStore(
                 .durableAt,
           },
         );
+        if (input.editorStateJson !== undefined) {
+          runStatement(
+            database,
+            `
+              INSERT INTO document_revision_editor_states (
+                revision_id,
+                work_id,
+                document_id,
+                editor_state_json
+              ) VALUES (?, ?, ?, ?)
+            `,
+            [
+              committedRevision.id,
+              input.workId,
+              input.documentId,
+              input.editorStateJson,
+            ],
+          );
+        }
         runStatement(
           database,
           `

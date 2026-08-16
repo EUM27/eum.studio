@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "displayName": "GPT",
+  "issuer": "https://auth.openai.com",
+  "clientId": "app_EMoamEEZ73f0CkXaXp7hrann",
+  "authorizationPath": "/oauth/authorize",
+  "tokenPath": "/oauth/token",
+  "scopes": [
+    "openid",
+    "profile",
+    "email",
+    "offline_access",
+    "api.connectors.read",
+    "api.connectors.invoke"
+  ],
+  "authorizeParameters": {
+    "id_token_add_organizations": "true",
+    "codex_cli_simplified_flow": "true",
+    "originator": "codex_cli_rs"
+  },
+  "callback": {
+    "listenHost": "127.0.0.1",
+    "redirectHost": "localhost",
+    "path": "/auth/callback",
+    "portRange": {
+      "start": 1455,
+      "end": 1475
+    }
+  }
+}

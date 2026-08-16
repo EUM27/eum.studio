@@ -44,6 +44,7 @@ export type AppendRevisionInput = {
   readonly documentId: EntityId<"Document">;
   readonly expectedCurrentRevisionId: EntityId<"DocumentRevision"> | null;
   readonly content: string;
+  readonly editorStateJson?: string;
   readonly changeSetRef?: string;
   readonly cause: string;
   readonly createdAt: Instant;

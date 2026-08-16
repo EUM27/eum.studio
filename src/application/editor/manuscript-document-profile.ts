@@ -9,6 +9,7 @@ export type ManuscriptDocumentSource = {
   readonly documentRevisionId: EntityId<"DocumentRevision"> | null;
   readonly label: string;
   readonly initialText: string;
+  readonly editorStateJson?: string;
 };
 
 export type ManuscriptDocumentProfile = {
@@ -79,6 +80,10 @@ export function parseManuscriptDocumentProfile(
       throw new Error(`Duplicate document identity: ${documentId}`);
     }
     documentIds.add(documentId);
+    const editorStateJson =
+      document.editorStateJson === undefined
+        ? undefined
+        : readNonEmptyString(document, "editorStateJson");
     return Object.freeze({
       workId: entityId<"Work">(
         readNonEmptyString(document, "workId"),
@@ -87,6 +92,7 @@ export function parseManuscriptDocumentProfile(
       documentRevisionId: readRevisionId(document),
       label: readNonEmptyString(document, "label"),
       initialText: readText(document, "initialText"),
+      ...(editorStateJson === undefined ? {} : { editorStateJson }),
     });
   });
   const initialDocumentId = entityId<"Document">(

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "destinations": [
+    {
+      "destinationId": "local-exact-vocabulary-search",
+      "label": "작품 내 정확 어휘 검색",
+      "kind": "local-exact-vocabulary-search",
+      "capabilities": [
+        "vocabulary-lookup"
+      ],
+      "requiredLocalScope": "work",
+      "requiredExternalScope": "none"
+    },
+    {
+      "destinationId": "local-selected-notation-review",
+      "label": "선택 범위 표기 점검",
+      "kind": "local-selected-notation-review",
+      "capabilities": [
+        "vocabulary-lookup"
+      ],
+      "requiredLocalScope": "selection",
+      "requiredExternalScope": "none"
+    },
+    {
+      "destinationId": "local-exact-setting-review",
+      "label": "설정 중복 검토",
+      "kind": "local-exact-setting-review",
+      "capabilities": [
+        "lore-review"
+      ],
+      "requiredLocalScope": "work",
+      "requiredExternalScope": "none"
+    }
+  ]
+}

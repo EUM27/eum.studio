@@ -1,0 +1,258 @@
+{
+  "schemaVersion": 1,
+  "formatIdentity": "eum-browser-source-export",
+  "formatVersion": "1",
+  "checksumIdentity": "sha256-v1",
+  "checksumAlgorithm": "sha256",
+  "secretLikeFieldFragments": [
+    "apiKey",
+    "accessToken",
+    "refreshToken",
+    "clientSecret",
+    "authorization",
+    "credential",
+    "password",
+    "secret"
+  ],
+  "secretRedactionValue": "[REDACTED]",
+  "bundleArchive": {
+    "sourceLocator": "browser-export:bundle",
+    "rawEntrySegments": [
+      "raw",
+      "browser-source-export.json"
+    ]
+  },
+  "localStorageOwnershipIndex": {
+    "key": "eum-editor:library:v2",
+    "worksField": "works",
+    "documentsField": "episodes",
+    "workIdField": "id",
+    "documentIdField": "id",
+    "documentWorkIdField": "workId"
+  },
+  "localStorageRoutes": [
+    {
+      "matchKind": "exact",
+      "matchValue": "eum-editor:library:v2",
+      "sourceCollection": "libraryWorkspace",
+      "sourceIdentityKind": "key",
+      "valueKind": "json-or-text",
+      "ownershipKind": "none"
+    },
+    {
+      "matchKind": "prefix",
+      "matchValue": "eum-editor:manuscript:v2:",
+      "sourceCollection": "manuscripts",
+      "sourceIdentityKind": "suffix",
+      "valueKind": "text",
+      "ownershipKind": "document-index"
+    },
+    {
+      "matchKind": "exact",
+      "matchValue": "eum-editor:lore-books:v1",
+      "sourceCollection": "loreBooks",
+      "sourceIdentityKind": "key",
+      "valueKind": "json-or-text",
+      "ownershipKind": "none"
+    },
+    {
+      "matchKind": "exact",
+      "matchValue": "eum-editor:lore-entries:v1",
+      "sourceCollection": "loreEntries",
+      "sourceIdentityKind": "key",
+      "valueKind": "json-or-text",
+      "ownershipKind": "none"
+    },
+    {
+      "matchKind": "exact",
+      "matchValue": "eum-editor:character-profiles:v1",
+      "sourceCollection": "characterProfiles",
+      "sourceIdentityKind": "key",
+      "valueKind": "json-or-text",
+      "ownershipKind": "none"
+    },
+    {
+      "matchKind": "exact",
+      "matchValue": "eum-editor:plot-threads:v1",
+      "sourceCollection": "plotThreads",
+      "sourceIdentityKind": "key",
+      "valueKind": "json-or-text",
+      "ownershipKind": "none"
+    },
+    {
+      "matchKind": "exact",
+      "matchValue": "eum-editor:foreshadow:v1",
+      "sourceCollection": "foreshadowStates",
+      "sourceIdentityKind": "key",
+      "valueKind": "json-or-text",
+      "ownershipKind": "none"
+    },
+    {
+      "matchKind": "exact",
+      "matchValue": "eum-editor:fragment-shelf:v1",
+      "sourceCollection": "fragments",
+      "sourceIdentityKind": "key",
+      "valueKind": "json-or-text",
+      "ownershipKind": "none"
+    },
+    {
+      "matchKind": "exact",
+      "matchValue": "eum-editor:manuscript-preflight:v1",
+      "sourceCollection": "manuscriptPreflight",
+      "sourceIdentityKind": "key",
+      "valueKind": "json-or-text",
+      "ownershipKind": "none"
+    },
+    {
+      "matchKind": "prefix",
+      "matchValue": "eum-editor:model-candidates:v1:",
+      "sourceCollection": "modelCandidates",
+      "sourceIdentityKind": "suffix",
+      "valueKind": "json-or-text",
+      "ownershipKind": "document-index"
+    },
+    {
+      "matchKind": "exact",
+      "matchValue": "eum-editor:assistant-context-permissions:v1",
+      "sourceCollection": "assistantContextPermissions",
+      "sourceIdentityKind": "key",
+      "valueKind": "json-or-text",
+      "ownershipKind": "none"
+    },
+    {
+      "matchKind": "prefix",
+      "matchValue": "eum-editor:home-schedule:v1:",
+      "sourceCollection": "homeSchedules",
+      "sourceIdentityKind": "suffix",
+      "valueKind": "json-or-text",
+      "ownershipKind": "none"
+    },
+    {
+      "matchKind": "prefix",
+      "matchValue": "eum-editor:home-dday-widget:v1:",
+      "sourceCollection": "homeDdayWidgets",
+      "sourceIdentityKind": "suffix",
+      "valueKind": "json-or-text",
+      "ownershipKind": "none"
+    },
+    {
+      "matchKind": "prefix",
+      "matchValue": "eum:lore-assistant:v1:",
+      "sourceCollection": "loreAssistantThreads",
+      "sourceIdentityKind": "suffix",
+      "valueKind": "json-or-text",
+      "ownershipKind": "none"
+    },
+    {
+      "matchKind": "prefix",
+      "matchValue": "eum:records-preferences:v1:",
+      "sourceCollection": "recordsPreferences",
+      "sourceIdentityKind": "suffix",
+      "valueKind": "json-or-text",
+      "ownershipKind": "none"
+    },
+    {
+      "matchKind": "exact",
+      "matchValue": "eum:session-logs:v1",
+      "sourceCollection": "writingSessionLogs",
+      "sourceIdentityKind": "key",
+      "valueKind": "json-or-text",
+      "ownershipKind": "none"
+    },
+    {
+      "matchKind": "exact",
+      "matchValue": "eum:pomodoro:v1",
+      "sourceCollection": "pomodoroRuntime",
+      "sourceIdentityKind": "key",
+      "valueKind": "json-or-text",
+      "ownershipKind": "none"
+    },
+    {
+      "matchKind": "exact",
+      "matchValue": "eum.quick-memos.v1",
+      "sourceCollection": "quickMemos",
+      "sourceIdentityKind": "key",
+      "valueKind": "json-or-text",
+      "ownershipKind": "none"
+    },
+    {
+      "matchKind": "exact",
+      "matchValue": "eum-editor:app-settings:v1",
+      "sourceCollection": "appSettings",
+      "sourceIdentityKind": "key",
+      "valueKind": "json-or-text",
+      "ownershipKind": "none"
+    },
+    {
+      "matchKind": "exact",
+      "matchValue": "eum-editor-theme",
+      "sourceCollection": "appSettings",
+      "sourceIdentityKind": "key",
+      "valueKind": "text",
+      "ownershipKind": "none"
+    },
+    {
+      "matchKind": "exact",
+      "matchValue": "eum-editor:nanogpt-api-key:v1",
+      "sourceCollection": "connectorSecrets",
+      "sourceIdentityKind": "key",
+      "valueKind": "text",
+      "ownershipKind": "none"
+    },
+    {
+      "matchKind": "exact",
+      "matchValue": "eum-editor:nanogpt-api-key-persist:v1",
+      "sourceCollection": "connectorSettings",
+      "sourceIdentityKind": "key",
+      "valueKind": "text",
+      "ownershipKind": "none"
+    },
+    {
+      "matchKind": "exact",
+      "matchValue": "eum-editor:nanogpt-model:v1",
+      "sourceCollection": "connectorSettings",
+      "sourceIdentityKind": "key",
+      "valueKind": "text",
+      "ownershipKind": "none"
+    },
+    {
+      "matchKind": "exact",
+      "matchValue": "eum-editor:ai-provider-settings:v1",
+      "sourceCollection": "connectorSettings",
+      "sourceIdentityKind": "key",
+      "valueKind": "json-or-text",
+      "ownershipKind": "none"
+    },
+    {
+      "matchKind": "exact",
+      "matchValue": "eum-editor:music:v1",
+      "sourceCollection": "legacyMusicState",
+      "sourceIdentityKind": "key",
+      "valueKind": "json-or-text",
+      "ownershipKind": "none"
+    }
+  ],
+  "indexedDbRoutes": [
+    {
+      "databaseName": "eum-work-store",
+      "storeName": "works",
+      "sourceCollection": "workSnapshots",
+      "ownershipField": "id",
+      "required": true
+    },
+    {
+      "databaseName": "eum-work-store",
+      "storeName": "backups",
+      "sourceCollection": "workBackups",
+      "ownershipField": "workId",
+      "required": true
+    },
+    {
+      "databaseName": "eum-publishing-store",
+      "storeName": "publishing-state",
+      "sourceCollection": "publishingSnapshots",
+      "ownershipField": null,
+      "required": true
+    }
+  ]
+}

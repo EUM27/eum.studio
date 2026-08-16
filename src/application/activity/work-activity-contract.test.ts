@@ -59,6 +59,8 @@ describe("work activity contract", () => {
           targetDurationMs: 60_000,
           startedAt: now,
           deadlineAt: new Date(Date.parse(now) + 60_000).toISOString(),
+          remainingDurationMs: null,
+          pauseReason: null,
           completedAt: null,
           note: "",
         },

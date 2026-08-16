@@ -1,5 +1,9 @@
 import type { ManuscriptDocumentProfile } from "../application/editor/manuscript-document-profile";
 import {
+  parseSaveManuscriptDocumentChangeCommand,
+  type SaveManuscriptFormattingReceipt,
+} from "../application/editor/manuscript-formatting";
+import {
   parseManuscriptPersistenceProfile,
   type ManuscriptBatchingPolicy,
   type ManuscriptPersistenceProfile,
@@ -49,6 +53,8 @@ export type ManuscriptRuntimeCoordinator = {
   getManuscriptStartupRecovery(): StartupRecoveryProjection;
   getManuscriptResumeCheckpoint(): ManuscriptResumeCheckpointProjection;
   saveChangeBatch(value: unknown): Promise<SaveReceipt>;
+  saveDocumentChange(value: unknown): Promise<SaveReceipt>;
+  saveFormatting(value: unknown): Promise<SaveManuscriptFormattingReceipt>;
   applyManuscriptStartupRecovery(
     value: unknown,
   ): Promise<ApplyStartupRecoveryAcknowledgement>;
@@ -246,6 +252,20 @@ class DefaultManuscriptRuntimeCoordinator
     }
     return this.#persistenceRuntime.saveChangeBatch.execute(
       value,
+    );
+  }
+
+  async saveDocumentChange(value: unknown): Promise<SaveReceipt> {
+    const command = parseSaveManuscriptDocumentChangeCommand(value);
+    return this.saveChangeBatch(command.batch);
+  }
+
+  async saveFormatting(
+    value: unknown,
+  ): Promise<SaveManuscriptFormattingReceipt> {
+    void value;
+    throw new Error(
+      "Manuscript formatting persistence is unavailable in the configured runtime",
     );
   }
 

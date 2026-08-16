@@ -45,6 +45,7 @@ type LockManifest = {
 
 type GeneratedDocument = LongformFixtureDocument & {
   readonly workId: string;
+  readonly workTitle: string;
   readonly label: string;
 };
 
@@ -128,9 +129,24 @@ async function activateDocument(input: {
   readonly document: GeneratedDocument;
   readonly expectedCharacterCount: number;
 }): Promise<void> {
+  const activeWorkDocument = input.page
+    .getByRole("region", { name: "회차 폴더" })
+    .getByRole("button", { name: input.document.label, exact: true });
+  if ((await activeWorkDocument.count()) === 0) {
+    await input.page
+      .getByRole("button", { name: "홈 열기", exact: true })
+      .click();
+    await input.page
+      .getByRole("button", {
+        name: `${input.document.workTitle} 이어쓰기`,
+        exact: true,
+      })
+      .click();
+  }
   await input.page
-    .getByRole("combobox", { name: "문서 전환" })
-    .selectOption(input.document.documentId);
+    .getByRole("region", { name: "회차 폴더" })
+    .getByRole("button", { name: input.document.label, exact: true })
+    .click();
   await expectPlaywright(
     input.page.locator(".workspace-center"),
   ).toHaveAttribute(
@@ -306,14 +322,21 @@ describe("POC-1 longform performance", () => {
       JSON.parse(longformManifestRaw) as unknown,
     );
     const fixture = generateLongformFixture(longformManifest);
-    const works = fixture.works.map((work) => ({
-      workId: work.workId,
-      documents: work.documents.map((document) => ({
-        ...document,
+    const works = fixture.works.map((work) => {
+      const workTitle = work.documents[0]?.documentId;
+      if (workTitle === undefined) {
+        throw new Error("Longform fixture Work must contain documents");
+      }
+      return {
         workId: work.workId,
-        label: document.documentId,
-      })),
-    }));
+        documents: work.documents.map((document) => ({
+          ...document,
+          workId: work.workId,
+          workTitle,
+          label: document.documentId,
+        })),
+      };
+    });
     const documents = works.flatMap((work) => work.documents);
     const initialDocument = documents.reduce((longest, document) =>
       document.manuscript.length > longest.manuscript.length

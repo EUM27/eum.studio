@@ -37,26 +37,43 @@ describe("legacy lore dry-run lifecycle", () => {
     cleanupRoots.push(parent);
     const dryRunRoot = join(parent, "dry-run");
     const restoredRoot = join(parent, "restored");
+    const defaultWorkspaceRoot = join(parent, "default-workspace");
+    await mkdir(defaultWorkspaceRoot);
+    const defaultWorkspaceProfiles = createLocalWorkspaceStorageProfiles(
+      defaultWorkspaceRoot,
+    );
+    const defaultWorkspaceLedger = await openNodeSqliteLedger(
+      defaultWorkspaceProfiles.ledgerProfile,
+    );
+    defaultWorkspaceLedger.close();
+    const defaultWorkspaceChecksum = createHash("sha256")
+      .update(await readFile(defaultWorkspaceProfiles.databasePath))
+      .digest("hex");
     const manuscript = "복원할 원고\n둘째 줄";
-    const plan = createLegacyLoreDryRunPlan({
-      mapperVersion: "legacy-lore-v1",
-      sourceSnapshotId: "snapshot-a",
-      sourceSnapshotChecksumValue: "source-checksum-a",
-      createdAt: "2026-08-07T00:00:00.000Z",
-      resumeWorkspaceMode: "manuscript",
-      completedWritingSessionState: "completed",
-      secretLikeFieldFragments: [
-        "accessToken",
-        "refreshToken",
-        "apiKey",
-        "clientSecret",
-      ],
-      secretRedactionValue: "[REDACTED]",
-      payload: {
+    const createPlan = (
+      sourceSnapshotId: string,
+      sourceSnapshotChecksumValue: string,
+      workTitle: string,
+      manuscriptText: string,
+    ) => createLegacyLoreDryRunPlan({
+        mapperVersion: "legacy-lore-v1",
+        sourceSnapshotId,
+        sourceSnapshotChecksumValue,
+        createdAt: "2026-08-07T00:00:00.000Z",
+        resumeWorkspaceMode: "manuscript",
+        completedWritingSessionState: "completed",
+        secretLikeFieldFragments: [
+          "accessToken",
+          "refreshToken",
+          "apiKey",
+          "clientSecret",
+        ],
+        secretRedactionValue: "[REDACTED]",
+        payload: {
         library: {
           works: [{
             id: "source-work",
-            title: "복원 작품",
+            title: workTitle,
             episodeIds: ["source-document"],
             createdAt: 1_700_000_000_000,
             updatedAt: 1_700_000_100_000,
@@ -71,7 +88,7 @@ describe("legacy lore dry-run lifecycle", () => {
             updatedAt: 1_700_000_100_000,
           }],
         },
-        manuscripts: { "source-document": manuscript },
+        manuscripts: { "source-document": manuscriptText },
         recentWork: {
           "source-work": {
             episodeId: "source-document",
@@ -84,27 +101,33 @@ describe("legacy lore dry-run lifecycle", () => {
         books: [],
         entries: [],
       },
-      deriveTargetId: (identity) => digest(identity),
-      describeManuscript: (text) => {
-        const bytes = encodeDurableText(text);
-        return {
-          checksumIdentity: "eum-studio-ledger-sha256-v1",
-          checksumValue: createHash("sha256").update(bytes).digest("hex"),
-          byteLength: bytes.byteLength,
-          lengthUtf16: text.length,
-        };
-      },
-      describeRawItem: ({ value }) => {
-        const bytes = new TextEncoder().encode(JSON.stringify(value));
-        return {
-          serializationIdentity: "json-utf8",
-          checksumIdentity: "sha256-json-utf8",
-          checksumValue: createHash("sha256").update(bytes).digest("hex"),
-          byteLength: bytes.byteLength,
-          bytes,
-        };
-      },
-    });
+        deriveTargetId: (identity) => digest(identity),
+        describeManuscript: (text) => {
+          const bytes = encodeDurableText(text);
+          return {
+            checksumIdentity: "eum-studio-ledger-sha256-v1",
+            checksumValue: createHash("sha256").update(bytes).digest("hex"),
+            byteLength: bytes.byteLength,
+            lengthUtf16: text.length,
+          };
+        },
+        describeRawItem: ({ value }) => {
+          const bytes = new TextEncoder().encode(JSON.stringify(value));
+          return {
+            serializationIdentity: "json-utf8",
+            checksumIdentity: "sha256-json-utf8",
+            checksumValue: createHash("sha256").update(bytes).digest("hex"),
+            byteLength: bytes.byteLength,
+            bytes,
+          };
+        },
+      });
+    const plan = createPlan(
+      "snapshot-a",
+      "source-checksum-a",
+      "복원 작품",
+      manuscript,
+    );
     const writerInput = {
       targetRootDirectoryPath: dryRunRoot,
       studioDisplayName: "이음 스튜디오",
@@ -120,6 +143,10 @@ describe("legacy lore dry-run lifecycle", () => {
       plan,
     };
     const source = await writeLegacyLoreDryRun(writerInput);
+    const sourceReportText = await readFile(
+      join(dryRunRoot, "migration-report.json"),
+      "utf8",
+    );
     const decisionInput = {
       targetRootDirectoryPath: dryRunRoot,
       reportFileName: "migration-report.json",
@@ -134,10 +161,43 @@ describe("legacy lore dry-run lifecycle", () => {
     expect(
       (await recordLegacyLoreMigrationDecision(decisionInput)).publication,
     ).toBe("published");
-    expect((await writeLegacyLoreDryRun(writerInput)).publication).toBe("reused");
+    const repeated = await writeLegacyLoreDryRun(writerInput);
+    expect(repeated.publication).toBe("reused");
+    expect(repeated.report).toEqual(source.report);
+    expect(await readFile(join(dryRunRoot, "migration-report.json"), "utf8"))
+      .toBe(sourceReportText);
     expect(
       (await recordLegacyLoreMigrationDecision(decisionInput)).publication,
     ).toBe("reused");
+
+    const differentDryRunRoot = join(parent, "different-dry-run");
+    const differentPlan = createPlan(
+      "snapshot-b",
+      "source-checksum-b",
+      "다른 archive 작품",
+      "다른 archive 원고",
+    );
+    const different = await writeLegacyLoreDryRun({
+      ...writerInput,
+      targetRootDirectoryPath: differentDryRunRoot,
+      plan: differentPlan,
+    });
+    expect(different.report.batchId).not.toBe(source.report.batchId);
+    expect(different.report.sourceSnapshotId).toBe("snapshot-b");
+    expect(await readFile(join(dryRunRoot, "migration-report.json"), "utf8"))
+      .toBe(sourceReportText);
+    const sourceLedgerAfterDifferentBatch = await openNodeSqliteLedger(
+      createLocalWorkspaceStorageProfiles(dryRunRoot).ledgerProfile,
+    );
+    try {
+      expect(
+        await sourceLedgerAfterDifferentBatch.getMigrationDecisionById(
+          "decision-a",
+        ),
+      ).toMatchObject({ batchId: source.report.batchId });
+    } finally {
+      sourceLedgerAfterDifferentBatch.close();
+    }
     const lifecycle = await backupAndRestoreLegacyLoreDryRun({
       writerInput,
       temporaryBundleRootPath: join(parent, "backup.staging"),
@@ -187,20 +247,30 @@ describe("legacy lore dry-run lifecycle", () => {
     } finally {
       restoredLedger.close();
     }
+    expect(
+      createHash("sha256")
+        .update(await readFile(defaultWorkspaceProfiles.databasePath))
+        .digest("hex"),
+    ).toBe(defaultWorkspaceChecksum);
 
     const archiveRoot = join(parent, "source-archive");
     const archiveManifestPath = join(archiveRoot, "manifest.json");
+    const archiveRawPath = join(archiveRoot, "raw.json");
     await mkdir(archiveRoot);
     await writeFile(archiveManifestPath, "source archive proof", "utf8");
+    await writeFile(archiveRawPath, "source archive raw proof", "utf8");
     const discarded = await discardLegacyLoreDryRun({
       dryRunTargetRootPath: dryRunRoot,
       sourceArchiveRootPath: archiveRoot,
-      sourceArchiveProofPaths: [archiveManifestPath],
+      sourceArchiveProofPaths: [archiveManifestPath, archiveRawPath],
       checksum: { identity: "sha256", algorithm: "sha256" },
     });
-    expect(discarded.sourceArchiveProofCount).toBe(1);
+    expect(discarded.sourceArchiveProofCount).toBe(2);
     expect(await readFile(archiveManifestPath, "utf8")).toBe(
       "source archive proof",
+    );
+    expect(await readFile(archiveRawPath, "utf8")).toBe(
+      "source archive raw proof",
     );
   });
 });

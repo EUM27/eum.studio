@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "fontFamilies": [
+    {
+      "id": "maruburi",
+      "label": "마루부리",
+      "cssFamily": "\"MaruBuri\", \"Nanum Myeongjo\", serif"
+    },
+    {
+      "id": "ridibatang",
+      "label": "리디바탕",
+      "cssFamily": "\"RIDIBatang\", \"Nanum Myeongjo\", serif"
+    },
+    {
+      "id": "nanum-myeongjo",
+      "label": "나눔명조",
+      "cssFamily": "\"Nanum Myeongjo\", serif"
+    },
+    {
+      "id": "pretendard",
+      "label": "프리텐다드",
+      "cssFamily": "\"Pretendard\", \"Noto Sans KR\", sans-serif"
+    },
+    {
+      "id": "nanum-gothic",
+      "label": "나눔고딕",
+      "cssFamily": "\"Nanum Gothic\", \"Noto Sans KR\", sans-serif"
+    }
+  ],
+  "fontSizesPx": [11, 12, 14, 15, 16, 18, 20, 22, 24, 28, 32, 36, 48, 72],
+  "contentWidthRangePx": {
+    "min": 480,
+    "max": 1200,
+    "step": 20
+  },
+  "lineHeights": [1.5, 1.75, 1.9, 2.05, 2.2, 2.4],
+  "paragraphSpacingsPx": [0, 4, 8, 12, 16],
+  "letterSpacingsEm": [-0.02, -0.01, 0, 0.02, 0.04, 0.08],
+  "defaults": {
+    "fontFamilyId": "maruburi",
+    "fontSizePx": 18,
+    "contentWidthPx": 720,
+    "lineHeight": 2.05,
+    "paragraphSpacingPx": 0,
+    "letterSpacingEm": 0,
+    "textColor": "#25231f",
+    "highlightColor": "#fff0a8"
+  }
+}

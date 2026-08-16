@@ -128,6 +128,17 @@ export function toggleWorkspaceRail(
   });
 }
 
+export function openWorkspaceRail(
+  state: WorkspaceRailState,
+  workId: EntityId<"Work">,
+  rail: WorkspaceRail,
+): WorkspaceRailState {
+  if (projectWorkspaceRails(state, workId)[rail].visible) {
+    return state;
+  }
+  return toggleWorkspaceRail(state, workId, rail);
+}
+
 export function projectWorkspaceRails(
   state: WorkspaceRailState,
   workId: EntityId<"Work">,

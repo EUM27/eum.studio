@@ -1,3 +1,12 @@
+import {
+  parseMigrationSourceInspection,
+  type MigrationSourceInspection,
+} from "./source-branch-inventory";
+import {
+  parseLegacyBrowserSourceExportReceipt,
+  type LegacyBrowserSourceExportReceipt,
+} from "./browser-source-export";
+
 export type LegacyLoreImportRehearsalCounts = {
   readonly workCount: number;
   readonly folderCount: number;
@@ -12,6 +21,20 @@ export type LegacyLoreImportRehearsalCounts = {
   readonly orphanManuscriptCount: number;
 };
 
+export type LegacyLoreImportRehearsalSourceSnapshot = {
+  readonly sourceSnapshotId: string;
+  readonly sourceLocator: string;
+  readonly checksumIdentity: string;
+  readonly checksumValue: string;
+  readonly byteLength: number;
+};
+
+export type LegacyLoreImportRehearsalConnectorMetadata = {
+  readonly connectorKind: string;
+  readonly credentialKind: string;
+  readonly present: boolean;
+};
+
 export type LegacyLoreImportRehearsalSummary = {
   readonly schemaVersion: 1;
   readonly sourceRootPath: string;
@@ -19,6 +42,10 @@ export type LegacyLoreImportRehearsalSummary = {
   readonly sourceChecksumIdentity: string;
   readonly sourceChecksumValue: string;
   readonly sourceByteLength: number;
+  readonly sourceSnapshots: readonly LegacyLoreImportRehearsalSourceSnapshot[];
+  readonly connectorMetadata: readonly LegacyLoreImportRehearsalConnectorMetadata[];
+  readonly browserSourceReceipt: LegacyBrowserSourceExportReceipt | null;
+  readonly sourceInspection: MigrationSourceInspection;
   readonly targetRootPath: string;
   readonly rehearsalWorkspacePath: string;
   readonly reportPath: string;
@@ -74,6 +101,83 @@ function count(input: Record<string, unknown>, field: string, label: string): nu
   return value;
 }
 
+function parseSourceSnapshots(
+  value: unknown,
+  label: string,
+): readonly LegacyLoreImportRehearsalSourceSnapshot[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`${label} must be a non-empty array`);
+  }
+  const snapshotIds = new Set<string>();
+  const sourceLocators = new Set<string>();
+  return Object.freeze(value.map((entry, index) => {
+    const entryLabel = `${label}[${index}]`;
+    const input = record(entry, entryLabel);
+    exact(
+      input,
+      [
+        "sourceSnapshotId",
+        "sourceLocator",
+        "checksumIdentity",
+        "checksumValue",
+        "byteLength",
+      ],
+      entryLabel,
+    );
+    const sourceSnapshotId = text(input, "sourceSnapshotId", entryLabel);
+    const sourceLocator = text(input, "sourceLocator", entryLabel);
+    if (
+      snapshotIds.has(sourceSnapshotId) ||
+      sourceLocators.has(sourceLocator)
+    ) {
+      throw new Error(`${label} contains a duplicate snapshot identity`);
+    }
+    snapshotIds.add(sourceSnapshotId);
+    sourceLocators.add(sourceLocator);
+    return Object.freeze({
+      sourceSnapshotId,
+      sourceLocator,
+      checksumIdentity: text(input, "checksumIdentity", entryLabel),
+      checksumValue: text(input, "checksumValue", entryLabel),
+      byteLength: count(input, "byteLength", entryLabel),
+    });
+  }));
+}
+
+function parseConnectorMetadata(
+  value: unknown,
+  label: string,
+): readonly LegacyLoreImportRehearsalConnectorMetadata[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`${label} must be an array`);
+  }
+  const identities = new Set<string>();
+  return Object.freeze(value.map((entry, index) => {
+    const entryLabel = `${label}[${index}]`;
+    const input = record(entry, entryLabel);
+    exact(
+      input,
+      ["connectorKind", "credentialKind", "present"],
+      entryLabel,
+    );
+    const connectorKind = text(input, "connectorKind", entryLabel);
+    const credentialKind = text(input, "credentialKind", entryLabel);
+    if (typeof input.present !== "boolean") {
+      throw new Error(`${entryLabel}.present must be a boolean`);
+    }
+    const identity = JSON.stringify([connectorKind, credentialKind]);
+    if (identities.has(identity)) {
+      throw new Error(`${label} contains a duplicate connector identity`);
+    }
+    identities.add(identity);
+    return Object.freeze({
+      connectorKind,
+      credentialKind,
+      present: input.present,
+    });
+  }));
+}
+
 export function parseLegacyLoreImportRehearsalSummary(
   value: unknown,
 ): LegacyLoreImportRehearsalSummary {
@@ -88,6 +192,10 @@ export function parseLegacyLoreImportRehearsalSummary(
       "sourceChecksumIdentity",
       "sourceChecksumValue",
       "sourceByteLength",
+      "sourceSnapshots",
+      "connectorMetadata",
+      "browserSourceReceipt",
+      "sourceInspection",
       "targetRootPath",
       "rehearsalWorkspacePath",
       "reportPath",
@@ -126,13 +234,38 @@ export function parseLegacyLoreImportRehearsalSummary(
       countFields.map((field) => [field, count(countsInput, field, `${label}.counts`)]),
     ),
   ) as LegacyLoreImportRehearsalCounts;
+  const sourceSnapshotId = text(input, "sourceSnapshotId", label);
+  const sourceChecksumIdentity = text(input, "sourceChecksumIdentity", label);
+  const sourceChecksumValue = text(input, "sourceChecksumValue", label);
+  const sourceByteLength = count(input, "sourceByteLength", label);
+  const sourceSnapshots = parseSourceSnapshots(
+    input.sourceSnapshots,
+    `${label}.sourceSnapshots`,
+  );
+  if (!sourceSnapshots.some((snapshot) =>
+    snapshot.sourceSnapshotId === sourceSnapshotId &&
+    snapshot.checksumIdentity === sourceChecksumIdentity &&
+    snapshot.checksumValue === sourceChecksumValue &&
+    snapshot.byteLength === sourceByteLength
+  )) {
+    throw new Error(`${label} mapping snapshot is not in sourceSnapshots`);
+  }
   return Object.freeze({
     schemaVersion: 1,
     sourceRootPath: text(input, "sourceRootPath", label),
-    sourceSnapshotId: text(input, "sourceSnapshotId", label),
-    sourceChecksumIdentity: text(input, "sourceChecksumIdentity", label),
-    sourceChecksumValue: text(input, "sourceChecksumValue", label),
-    sourceByteLength: count(input, "sourceByteLength", label),
+    sourceSnapshotId,
+    sourceChecksumIdentity,
+    sourceChecksumValue,
+    sourceByteLength,
+    sourceSnapshots,
+    connectorMetadata: parseConnectorMetadata(
+      input.connectorMetadata,
+      `${label}.connectorMetadata`,
+    ),
+    browserSourceReceipt: input.browserSourceReceipt === null
+      ? null
+      : parseLegacyBrowserSourceExportReceipt(input.browserSourceReceipt),
+    sourceInspection: parseMigrationSourceInspection(input.sourceInspection),
     targetRootPath: text(input, "targetRootPath", label),
     rehearsalWorkspacePath: text(input, "rehearsalWorkspacePath", label),
     reportPath: text(input, "reportPath", label),

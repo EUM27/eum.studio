@@ -1,0 +1,28 @@
+export type QuickToolTarget = {
+  readonly id: string;
+  readonly kind: "command" | "work" | "document";
+  readonly label: string;
+  readonly detail: string;
+  readonly workId: string | null;
+  readonly documentId: string | null;
+};
+
+function normalize(value: string): string {
+  return value.normalize("NFKC").toLocaleLowerCase();
+}
+
+export function searchQuickToolTargets(input: {
+  readonly targets: readonly QuickToolTarget[];
+  readonly query: string;
+  readonly activeWorkId: string | null;
+  readonly activeDocumentId: string | null;
+}): readonly QuickToolTarget[] {
+  const query = normalize(input.query.trim());
+  return Object.freeze(
+    query.length === 0
+      ? [...input.targets]
+      : input.targets.filter((target) =>
+          normalize(`${target.label}\n${target.detail}`).includes(query),
+        ),
+  );
+}

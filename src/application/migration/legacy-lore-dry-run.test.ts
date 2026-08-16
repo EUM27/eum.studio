@@ -49,8 +49,17 @@ describe("legacy lore dry-run plan", () => {
           updatedAt: 1_700_000_200_000,
         },
       },
-      books: [],
-      entries: [],
+      books: [{
+        id: "global-book",
+        scope: "global",
+        title: "공용 별지도",
+      }],
+      entries: [{
+        id: "global-entry",
+        bookId: "global-book",
+        title: "공용 별빛",
+        body: "원문은 raw 보존",
+      }],
       sessionLogs: [{
         id: "source-session",
         workId: "source-work",
@@ -158,6 +167,33 @@ describe("legacy lore dry-run plan", () => {
       manuscript: "첫 줄\n둘째 줄 ⋯",
       manuscriptLengthUtf16: "첫 줄\n둘째 줄 ⋯".length,
     });
+    expect(first.manuscriptProofs).toEqual([
+      expect.objectContaining({
+        sourceDocumentId: "orphan-document",
+        sourceOwnershipRef: null,
+        preservation: "quarantine-raw-exact",
+        targetDocumentId: null,
+        targetRevisionId: null,
+        targetChecksumIdentity: null,
+        targetChecksumValue: null,
+        rawItemId: expect.any(String),
+      }),
+      expect.objectContaining({
+        sourceDocumentId: "source-document",
+        sourceOwnershipRef: "source-work",
+        preservation: "target-revision-checksum-match",
+        targetDocumentId: first.documents[0]?.documentId,
+        targetRevisionId: first.documents[0]?.revisionId,
+        sourceChecksumValue: first.documents[0]?.manuscriptChecksumValue,
+        targetChecksumValue: first.documents[0]?.manuscriptChecksumValue,
+        rawItemId: expect.any(String),
+      }),
+    ]);
+    expect(first.sharedLoreFinalization).toEqual({
+      status: "blocked-by-schema-decision",
+      globalBookCount: 1,
+      globalEntryCount: 1,
+    });
     expect(first.receipts).toEqual(expect.arrayContaining([
       expect.objectContaining({
         sourceCollection: "manuscripts",
@@ -171,6 +207,20 @@ describe("legacy lore dry-run plan", () => {
         targetEntityKind: "RawPreservedItem",
         targetEntityId: null,
         disposition: "raw-only",
+      }),
+      expect.objectContaining({
+        sourceCollection: "books",
+        sourceIdentity: "global-book",
+        issueKinds: expect.arrayContaining([
+          "shared-lore-canonical-finalization-blocked",
+        ]),
+      }),
+      expect.objectContaining({
+        sourceCollection: "entries",
+        sourceIdentity: "global-entry",
+        issueKinds: expect.arrayContaining([
+          "shared-lore-canonical-finalization-blocked",
+        ]),
       }),
     ]));
     expect(JSON.stringify(first.receipts)).not.toContain("귀속하지 않을 원문");

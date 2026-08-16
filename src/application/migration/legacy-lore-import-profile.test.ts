@@ -19,7 +19,28 @@ describe("legacy lore import profile", () => {
     expect(profile).toMatchObject({
       schemaVersion: 1,
       source: {
-        sourceFileSegments: ["data", "lorebooks.json"],
+        mappingSourceLocator: "data/lorebooks.json",
+        captures: [
+          {
+            branchKind: "live-file",
+            sourceFileSegments: ["data", "lorebooks.json"],
+            sourceLocator: "data/lorebooks.json",
+            rawEntrySegments: ["raw", "lorebooks.json"],
+          },
+          {
+            branchKind: "backup-file",
+            sourceFileSegments: ["data", "lorebooks.json.bak"],
+            sourceLocator: "data/lorebooks.json.bak",
+            rawEntrySegments: ["raw", "lorebooks.json.bak"],
+          },
+        ],
+        connectorProbes: expect.arrayContaining([
+          {
+            sourceFileSegments: ["data", "spotify-auth.json"],
+            connectorKind: "spotify",
+            credentialKind: "oauth-token-envelope",
+          },
+        ]),
         archiveDirectoryName: "source-archive",
       },
       rehearsal: {

@@ -8,17 +8,23 @@ import {
 } from "react";
 import {
   Archive,
-  BookOpen,
+  Building2,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   Download,
-  Feather,
   FileText,
   Home,
+  MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
+  Pencil,
   Plus,
   RotateCcw,
   Search,
+  Settings,
+  Star,
+  Trash2,
   X,
 } from "lucide-react";
 
@@ -27,8 +33,19 @@ import type {
   WorkspaceWorkSummary,
 } from "../application/workspace/workspace-contract";
 import type {
+  WorkCoverProjection,
+} from "../application/workspace/work-covers";
+import type {
   WorkActivityProjection,
 } from "../application/activity/work-activity-contract";
+import type {
+  WorkRecordsGoals,
+  WorkRecordsGoalsProjection,
+} from "../application/activity/work-records-preferences";
+import type {
+  WorkReadthroughEntry,
+  WorkReadthroughProjection,
+} from "../application/activity/work-readthrough-calculator";
 import type {
   LocalWorkspaceBackupStatusProjection,
 } from "../application/storage/local-workspace-backup-contract";
@@ -39,6 +56,91 @@ import {
   App as ManuscriptWorkspace,
   type ManuscriptWorkspaceHandle,
 } from "./App";
+import { WorkRecordsDialog } from "./records/WorkRecordsDialog";
+import { WorkScheduleDashboard } from "./schedule/WorkScheduleDashboard";
+import {
+  QUICK_TOOL_CREATE_WORK_COMMAND_ID,
+  QUICK_TOOL_MAIN_COMMAND_ID,
+  QuickToolsDialog,
+} from "./quick-tools/QuickToolsDialog";
+import type { QuickToolTarget } from "../application/quick-tools/quick-tool-search";
+import type {
+  AppSettingsProfile,
+  AppSettingsProjection,
+} from "../application/settings/app-settings";
+import type {
+  MusicSettingsProfile,
+  WorkMusicSettingsProjection,
+} from "../application/music/work-music-settings";
+import type { YouTubeMusicConnectionStatus } from "../application/music/youtube-music-connection";
+import type { ChatGptOAuthConnectionStatus } from "../application/assistant/chatgpt-oauth";
+import {
+  AppSettingsDialog,
+  type AppSettingsSaveValue,
+} from "./settings/AppSettingsDialog";
+import { StudioAppShell } from "./shell/StudioAppShell";
+import type {
+  PublishingPartnerProjection,
+  UpdatePublishingPartnerCommand,
+} from "../application/publishing/publishing-partner-contract";
+import type {
+  PublishingSubmissionProjection,
+  UpdatePublishingSubmissionCommand,
+} from "../application/publishing/publishing-submission-contract";
+import type {
+  PublishingContractProjection,
+  UpdatePublishingContractCommand,
+} from "../application/publishing/publishing-contract-contract";
+import type {
+  PublishingPublicationProjection,
+  UpdatePublishingPublicationCommand,
+} from "../application/publishing/publishing-publication-contract";
+import type {
+  PublishingSettlementProjection,
+  UpdatePublishingSettlementCommand,
+} from "../application/publishing/publishing-settlement-contract";
+import type {
+  PublishingPaymentProjection,
+  UpdatePublishingPaymentCommand,
+} from "../application/publishing/publishing-payment-contract";
+import type { PublishingSourceProjection } from "../application/publishing/publishing-source-contract";
+import type { PublishingEvidenceTargetKind } from "../application/publishing/publishing-evidence-link-contract";
+import type {
+  ApplyPublishingPartnerCsvImportCommand,
+  PublishingPartnerCsvSelectionProjection,
+} from "../application/publishing/publishing-partner-csv-import";
+import type {
+  ApplyPublishingSubmissionCsvImportCommand,
+  PublishingSubmissionCsvSelectionProjection,
+} from "../application/publishing/publishing-submission-csv-import";
+import type {
+  PublishingMailCandidateProjection,
+  UpdatePublishingMailCandidateCommand,
+} from "../application/publishing/publishing-mail-candidate-contract";
+import type {
+  PublishingMailConnectionProjection,
+  PublishingMailSyncResult,
+} from "../application/publishing/publishing-mail-connection-contract";
+import type { PublishingMailScheduleProjection } from "../application/publishing/publishing-mail-schedule-contract";
+import type {
+  ApprovePublishingResearchCommand,
+  PreviewPublishingResearchCommand,
+  PublishingResearchCandidateProjection,
+} from "../application/publishing/publishing-research-contract";
+import type { PublishingAssistantResult } from "../application/publishing/publishing-assistant-contract";
+import type { AssistantConnectionProjection } from "../application/assistant/assistant-connection";
+import { entityId, type EntityId } from "../domain/writing";
+import {
+  PublishingPartnerDialog,
+  type PublishingPartnerDialogActionState,
+  type PublishingPartnerDraft,
+  type PublishingContractDraft,
+  type PublishingPublicationDraft,
+  type PublishingSettlementDraft,
+  type PublishingPaymentDraft,
+  type PublishingSourceDraft,
+  type PublishingSubmissionDraft,
+} from "./publishing/PublishingPartnerDialog";
 
 type CatalogState =
   | { readonly status: "loading" }
@@ -57,113 +159,307 @@ function formatUpdatedAt(value: string): string {
   }).format(new Date(value));
 }
 
-function formatActivityDuration(durationMs: number): string {
-  const totalMinutes = Math.max(0, Math.floor(durationMs / 60_000));
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return hours > 0 ? `${hours}시간 ${minutes}분` : `${minutes}분`;
-}
-
 function WorkCard({
   work,
   activeDocumentId,
+  favorite,
+  cover,
   disabled,
   onOpen,
+  onRename,
+  onRetire,
+  onToggleFavorite,
+  onSelectCover,
+  onRetireDocument,
+  onMoveDocument,
 }: {
   readonly work: WorkspaceWorkSummary;
-  readonly activeDocumentId: string | null;
+  readonly activeDocumentId:
+    WorkspaceWorkSummary["documents"][number]["documentId"] | null;
+  readonly favorite: boolean;
+  readonly cover: WorkCoverProjection | null;
   readonly disabled: boolean;
   readonly onOpen: (
     workId: WorkspaceWorkSummary["workId"],
     documentId: WorkspaceWorkSummary["documents"][number]["documentId"] | null,
   ) => void;
+  readonly onRetire: (work: WorkspaceWorkSummary) => void;
+  readonly onRename: (work: WorkspaceWorkSummary) => void;
+  readonly onToggleFavorite: (work: WorkspaceWorkSummary) => void;
+  readonly onSelectCover: (work: WorkspaceWorkSummary) => void;
+  readonly onRetireDocument: (
+    work: WorkspaceWorkSummary,
+    document: WorkspaceWorkSummary["documents"][number],
+  ) => void;
+  readonly onMoveDocument: (
+    work: WorkspaceWorkSummary,
+    document: WorkspaceWorkSummary["documents"][number],
+    direction: "earlier" | "later",
+  ) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
+
   return (
-    <article className="library-work-card">
+    <article className={expanded ? "library-work-card is-expanded" : "library-work-card"}>
       <header>
-        <span className="work-cover" aria-hidden="true">
-          {work.title.slice(0, 1)}
-        </span>
-        <div>
-          <h3>{work.title}</h3>
-          <p className="continue-description">
-            {work.documents.length}개 회차 · {formatUpdatedAt(work.updatedAt)}
-          </p>
-        </div>
-        <button
-          aria-label={`${work.title} 이어쓰기`}
-          className="work-open-button"
-          disabled={disabled}
-          onClick={() => onOpen(work.workId, null)}
-          type="button"
-        >
-          이어쓰기
-          <ChevronRight aria-hidden="true" size={16} />
-        </button>
-      </header>
-      <div className="document-list" aria-label={`${work.title} 회차 목록`}>
-        {work.documents.map((document) => (
+        <div className="work-cover-column">
           <button
-            className={
-              document.documentId === activeDocumentId
-                ? "document-list-item is-active"
-                : "document-list-item"
-            }
+            aria-label={`${work.title} 표지 이미지 등록`}
+            className="work-cover"
             disabled={disabled}
-            key={document.documentId}
-            onClick={() => onOpen(work.workId, document.documentId)}
+            onClick={() => onSelectCover(work)}
+            title="표지 이미지 등록"
             type="button"
           >
-            <FileText aria-hidden="true" size={15} />
-            <span>{document.title}</span>
-            <ChevronRight aria-hidden="true" size={14} />
+            {cover === null ? (
+              <span className="work-cover-placeholder" aria-hidden="true">
+                {work.title.slice(0, 1)}
+              </span>
+            ) : (
+              <img
+                alt=""
+                className="work-cover-image"
+                src={`data:${cover.mediaType};base64,${cover.contentBase64}`}
+              />
+            )}
           </button>
+          <button
+            aria-label={`${work.title} ${favorite ? "즐겨찾기 해제" : "즐겨찾기"}`}
+            aria-pressed={favorite}
+            className={
+              favorite
+                ? "work-favorite-button is-active"
+                : "work-favorite-button"
+            }
+            disabled={disabled}
+            onClick={() => onToggleFavorite(work)}
+            title={favorite ? "즐겨찾기 해제" : "즐겨찾기"}
+            type="button"
+          >
+            <Star aria-hidden="true" fill={favorite ? "currentColor" : "none"} size={15} />
+          </button>
+          <div className="work-cover-actions">
+            <button
+              aria-label={`${work.title} 작품 이름 변경`}
+              className="work-rename-button"
+              disabled={disabled}
+              onClick={() => onRename(work)}
+              title="작품 이름 변경"
+              type="button"
+            >
+              <Pencil aria-hidden="true" size={14} />
+            </button>
+            <button
+              aria-label={`${work.title} 작품 삭제`}
+              className="work-retire-button"
+              disabled={disabled}
+              onClick={() => onRetire(work)}
+              title="작품 삭제"
+              type="button"
+            >
+              <Trash2 aria-hidden="true" size={15} />
+            </button>
+          </div>
+        </div>
+        <button
+          aria-label={`${work.title} 작품 열기`}
+          className="work-card-heading"
+          disabled={disabled}
+          onClick={() =>
+            onOpen(
+              work.workId,
+              activeDocumentId ?? work.documents[0]?.documentId ?? null,
+            )
+          }
+          type="button"
+        >
+          <span>
+            <strong className="work-card-title">{work.title}</strong>
+            <p className="continue-description">
+              {formatUpdatedAt(work.updatedAt)}
+            </p>
+          </span>
+          <ChevronRight aria-hidden="true" size={16} />
+        </button>
+        <div className="work-card-actions">
+          <button
+            aria-expanded={expanded}
+            aria-label={`${work.title} 회차 목록 ${expanded ? "닫기" : "열기"}`}
+            className="work-expand-button"
+            disabled={disabled}
+            onClick={() => setExpanded((current) => !current)}
+            type="button"
+          >
+            <FileText aria-hidden="true" size={14} />
+            <span>{work.documents.length}개 회차</span>
+            {expanded ? (
+              <ChevronUp aria-hidden="true" size={14} />
+            ) : (
+              <ChevronDown aria-hidden="true" size={14} />
+            )}
+          </button>
+        </div>
+      </header>
+      {expanded && <div className="document-list" aria-label={`${work.title} 회차 목록`}>
+        {work.documents.map((document, index) => (
+          <div className="document-list-entry" key={document.documentId}>
+            <button
+              className={
+                document.documentId === activeDocumentId
+                  ? "document-list-item is-active"
+                  : "document-list-item"
+              }
+              disabled={disabled}
+              onClick={() => onOpen(work.workId, document.documentId)}
+              type="button"
+            >
+              <FileText aria-hidden="true" size={15} />
+              <span>{document.title}</span>
+              <ChevronRight aria-hidden="true" size={14} />
+            </button>
+            <div className="document-move-actions">
+              <button
+                aria-label={`${work.title} ${document.title} 앞으로 이동`}
+                className="document-move-button"
+                disabled={disabled || index === 0}
+                onClick={() => onMoveDocument(work, document, "earlier")}
+                title="앞으로 이동"
+                type="button"
+              >
+                <ChevronUp aria-hidden="true" size={14} />
+              </button>
+              <button
+                aria-label={`${work.title} ${document.title} 뒤로 이동`}
+                className="document-move-button"
+                disabled={disabled || index === work.documents.length - 1}
+                onClick={() => onMoveDocument(work, document, "later")}
+                title="뒤로 이동"
+                type="button"
+              >
+                <ChevronDown aria-hidden="true" size={14} />
+              </button>
+            </div>
+            <button
+              aria-label={`${work.title} ${document.title} 회차 삭제`}
+              className="document-retire-button"
+              disabled={disabled}
+              onClick={() => onRetireDocument(work, document)}
+              title="회차 삭제"
+              type="button"
+            >
+              <Trash2 aria-hidden="true" size={14} />
+            </button>
+          </div>
         ))}
-      </div>
+      </div>}
     </article>
   );
 }
 
 function MainDashboard({
   catalog,
+  favoriteWorkIds,
+  workCovers,
   activityByWork,
   busy,
   backupBusy,
   importBusy,
+  settingsRevision,
   error,
-  onCreateWork,
   onOpenBackup,
   onOpenImport,
+  onOpenPublishing,
   onOpen,
+  onRename,
+  onRetire,
+  onToggleFavorite,
+  onSelectCover,
+  onRetireDocument,
+  onMoveDocument,
 }: {
   readonly catalog: WorkspaceCatalogProjection;
+  readonly favoriteWorkIds: readonly EntityId<"Work">[];
+  readonly workCovers: readonly WorkCoverProjection[];
   readonly activityByWork: Readonly<Record<string, WorkActivityProjection>>;
   readonly busy: boolean;
   readonly error: string | null;
   readonly backupBusy: boolean;
   readonly importBusy: boolean;
-  readonly onCreateWork: () => void;
+  readonly settingsRevision: number;
   readonly onOpenBackup: () => void;
   readonly onOpenImport: () => void;
+  readonly onOpenPublishing: () => void;
   readonly onOpen: (
     workId: WorkspaceWorkSummary["workId"],
     documentId: WorkspaceWorkSummary["documents"][number]["documentId"] | null,
   ) => void;
+  readonly onRetire: (work: WorkspaceWorkSummary) => void;
+  readonly onRename: (work: WorkspaceWorkSummary) => void;
+  readonly onToggleFavorite: (work: WorkspaceWorkSummary) => void;
+  readonly onSelectCover: (work: WorkspaceWorkSummary) => void;
+  readonly onRetireDocument: (
+    work: WorkspaceWorkSummary,
+    document: WorkspaceWorkSummary["documents"][number],
+  ) => void;
+  readonly onMoveDocument: (
+    work: WorkspaceWorkSummary,
+    document: WorkspaceWorkSummary["documents"][number],
+    direction: "earlier" | "later",
+  ) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [workView, setWorkView] = useState<"all" | "favorites">("all");
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [showLibraryTools, setShowLibraryTools] = useState(false);
+  const recordsRequestIdRef = useRef(0);
+  const [recordsNowMs, setRecordsNowMs] = useState<number | null>(null);
+  const [recordsGoals, setRecordsGoals] =
+    useState<WorkRecordsGoalsProjection | null>(null);
+  const [recordsGoalActionState, setRecordsGoalActionState] = useState<
+    "loading" | "idle" | "saving"
+  >("idle");
+  const [recordsGoalError, setRecordsGoalError] = useState<string | null>(null);
+  const [readthroughSettings, setReadthroughSettings] =
+    useState<WorkReadthroughProjection | null>(null);
+  const [readthroughActionState, setReadthroughActionState] = useState<
+    "loading" | "idle" | "saving"
+  >("idle");
+  const [readthroughError, setReadthroughError] = useState<string | null>(null);
+  const [recordsExportActionState, setRecordsExportActionState] = useState<
+    "idle" | "exporting-json" | "exporting-csv"
+  >("idle");
+  const [recordsExportError, setRecordsExportError] = useState<string | null>(
+    null,
+  );
+  const [recordsExportMessage, setRecordsExportMessage] = useState<
+    string | null
+  >(null);
   const normalizedQuery = query.trim().toLocaleLowerCase();
+  const favoriteWorkIdSet = useMemo(
+    () => new Set(favoriteWorkIds),
+    [favoriteWorkIds],
+  );
+  const workCoverById = useMemo(
+    () => new Map(workCovers.map((cover) => [cover.workId, cover] as const)),
+    [workCovers],
+  );
   const filteredWorks = useMemo(
-    () =>
-      normalizedQuery.length === 0
-        ? catalog.works
-        : catalog.works.filter(
+    () => {
+      const works =
+        workView === "favorites"
+          ? catalog.works.filter((work) => favoriteWorkIdSet.has(work.workId))
+          : catalog.works;
+      return normalizedQuery.length === 0
+        ? works
+        : works.filter(
             (work) =>
               work.title.toLocaleLowerCase().includes(normalizedQuery) ||
               work.documents.some((document) =>
                 document.title.toLocaleLowerCase().includes(normalizedQuery),
               ),
-          ),
-    [catalog.works, normalizedQuery],
+          );
+    },
+    [catalog.works, favoriteWorkIdSet, normalizedQuery, workView],
   );
   const activeWork = catalog.works.find(
     (work) => work.workId === catalog.activeWorkId,
@@ -173,130 +469,70 @@ function MainDashboard({
   );
   const activeActivity =
     activeWork === undefined ? undefined : activityByWork[activeWork.workId];
-  const sessionRecords = useMemo(
-    () =>
-      catalog.works
-        .flatMap((work) => {
-          const activity = activityByWork[work.workId];
-          if (activity === undefined) {
-            return [];
-          }
-          return activity.sessions.map((session) => ({
-            work,
-            session,
-            document: work.documents.find(
-              (document) => document.documentId === session.documentId,
-            ),
-          }));
-        })
-        .sort(
-          (left, right) =>
-            Date.parse(right.session.startedAt) -
-            Date.parse(left.session.startedAt),
-        ),
-    [activityByWork, catalog.works],
-  );
 
   return (
-    <div className="main-dashboard-real">
-      <section className="continue-panel">
-        <div>
-          <p className="panel-kicker">CONTINUE WRITING</p>
-          <h2>
-            {activeWork === undefined ? "첫 작품을 시작하세요" : activeWork.title}
-          </h2>
-          <p>
-            {activeDocument === undefined
-              ? "작품과 첫 회차를 만들면 바로 원고를 쓸 수 있습니다."
-              : `${activeDocument.title}에서 정확히 이어 씁니다.`}
-          </p>
-          {activeActivity !== undefined &&
-            (activeActivity.activeSessionId !== null ||
-              activeActivity.activeFocusCycleId !== null) && (
-              <div className="dashboard-live-activity" aria-label="진행 중인 작업">
-                {activeActivity.activeSessionId !== null && (
-                  <span>집필 기록 중</span>
-                )}
-                {activeActivity.focusCycles
-                  .filter(
-                    (cycle) =>
-                      cycle.focusCycleId === activeActivity.activeFocusCycleId,
-                  )
-                  .map((cycle) => (
-                    <span key={cycle.focusCycleId}>{cycle.phaseRef}</span>
-                  ))}
-              </div>
-            )}
-        </div>
-        <button
-          className="continue-button"
-          disabled={busy}
-          onClick={() => {
-            if (activeWork === undefined) {
-              onCreateWork();
-              return;
-            }
-            onOpen(activeWork.workId, activeDocument?.documentId ?? null);
-          }}
-          type="button"
-        >
-          <Feather aria-hidden="true" size={18} />
-          {activeWork === undefined ? "작품 만들기" : "이어쓰기"}
-        </button>
-      </section>
-
-      {sessionRecords.length > 0 && (
-        <section className="records-overview" aria-labelledby="records-heading">
-          <header>
-            <div>
-              <p className="panel-kicker">WRITING RECORDS</p>
-              <h2 id="records-heading">집필 기록</h2>
+    <div
+      data-layout="eum-studio-library"
+      className="library-home"
+    >
+      {activeWork !== undefined && (
+        <section className="resume-strip" aria-labelledby="resume-strip-heading">
+          <div className="resume-strip-copy">
+            <p id="resume-strip-heading">마지막 작업</p>
+            <div className="resume-strip-location">
+              <strong>{activeWork.title}</strong>
+              {activeDocument !== undefined && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span>{activeDocument.title}</span>
+                </>
+              )}
             </div>
-            <span>{sessionRecords.length}회</span>
-          </header>
-          <div className="records-strip">
-            {sessionRecords.map(({ work, session, document }) => (
-              <button
-                disabled={busy || document === undefined}
-                key={session.sessionId}
-                onClick={() => {
-                  if (document !== undefined) {
-                    onOpen(work.workId, document.documentId);
-                  }
-                }}
-                type="button"
-              >
-                <span className="record-state">
-                  {session.state === "active" ? "진행 중" : "완료"}
-                </span>
-                <strong>{work.title}</strong>
-                <span>{document?.title ?? "연결된 회차 없음"}</span>
-                <span>
-                  {formatActivityDuration(session.activeDurationMs)}
-                  {session.characterDelta === null
-                    ? ""
-                    : ` · ${session.characterDelta >= 0 ? "+" : ""}${session.characterDelta}자`}
-                </span>
-                <time dateTime={session.startedAt}>
-                  {formatUpdatedAt(session.startedAt)}
-                </time>
-              </button>
-            ))}
+            <time dateTime={activeWork.updatedAt}>
+              {formatUpdatedAt(activeWork.updatedAt)}
+            </time>
           </div>
+          <button
+            className="resume-strip-action"
+            disabled={busy}
+            onClick={() =>
+              onOpen(
+                activeWork.workId,
+                activeDocument?.documentId ??
+                  activeWork.documents[0]?.documentId ??
+                  null,
+              )
+            }
+            type="button"
+          >
+            이어쓰기
+            <ChevronRight aria-hidden="true" size={15} />
+          </button>
         </section>
       )}
 
       <section className="library-section" aria-labelledby="library-heading">
         <header className="library-heading-row">
-          <div>
-            <p className="panel-kicker">MY WORKS</p>
-            <h2 id="library-heading">내 작품</h2>
-            <p>
-              {catalog.works.length}개 작품 · {catalog.works.reduce(
-                (count, work) => count + work.documents.length,
-                0,
-              )}개 회차
-            </p>
+          <div className="library-title-group">
+            <h2 id="library-heading">작품</h2>
+            <div className="library-tabs" aria-label="작품 보기">
+              <button
+                aria-pressed={workView === "all"}
+                className={workView === "all" ? "is-active" : undefined}
+                onClick={() => setWorkView("all")}
+                type="button"
+              >
+                전체 {catalog.works.length}
+              </button>
+              <button
+                aria-pressed={workView === "favorites"}
+                className={workView === "favorites" ? "is-active" : undefined}
+                onClick={() => setWorkView("favorites")}
+                type="button"
+              >
+                즐겨찾기 {favoriteWorkIds.length}
+              </button>
+            </div>
           </div>
           <div className="library-actions">
             {catalog.works.length > 0 && (
@@ -311,33 +547,124 @@ function MainDashboard({
                 />
               </label>
             )}
+            <span className="library-sort-label">최근 편집순</span>
             <button
-              className="secondary-button backup-button"
-              disabled={busy || backupBusy}
-              onClick={onOpenBackup}
-              type="button"
-            >
-              <Archive aria-hidden="true" size={16} />
-              백업
-            </button>
-            <button
-              className="secondary-button import-button"
-              disabled={busy || importBusy}
-              onClick={onOpenImport}
-              type="button"
-            >
-              <Download aria-hidden="true" size={16} />
-              기존 작업 가져오기
-            </button>
-            <button
-              className="primary-button new-work-button"
+              aria-expanded={showLibraryTools}
+              aria-label="작품 도구 열기"
+              className="secondary-button library-more-button"
               disabled={busy}
-              onClick={onCreateWork}
+              onClick={() => setShowLibraryTools((current) => !current)}
               type="button"
             >
-              <Plus aria-hidden="true" size={16} />
-              새 작품
+              <MoreHorizontal aria-hidden="true" size={18} />
             </button>
+            {showLibraryTools && (
+              <div aria-label="작품 도구" className="library-tools-menu" role="menu">
+                {activeWork !== undefined && (
+                  <button
+                    className="schedule-button"
+                    disabled={busy}
+                    onClick={() => {
+                      setShowLibraryTools(false);
+                      setShowSchedule(true);
+                    }}
+                    role="menuitem"
+                    type="button"
+                  >
+                    일정
+                  </button>
+                )}
+                {activeWork !== undefined && activeActivity !== undefined && (
+                  <button
+                    disabled={busy}
+                    onClick={() => {
+                      setShowLibraryTools(false);
+                      const requestId = recordsRequestIdRef.current + 1;
+                      recordsRequestIdRef.current = requestId;
+                      setRecordsNowMs(Date.now());
+                      setRecordsGoals(null);
+                      setRecordsGoalError(null);
+                      setRecordsGoalActionState("loading");
+                      setReadthroughSettings(null);
+                      setReadthroughError(null);
+                      setReadthroughActionState("loading");
+                      void Promise.all([
+                        window.eumStudio.activity.getRecordsGoals({
+                          schemaVersion: 1,
+                          workId: activeWork.workId,
+                        }),
+                        window.eumStudio.activity.getReadthrough({
+                          schemaVersion: 1,
+                          workId: activeWork.workId,
+                        }),
+                      ]).then(
+                        ([goals, readthrough]) => {
+                          if (recordsRequestIdRef.current !== requestId) return;
+                          setRecordsGoals(goals);
+                          setRecordsGoalActionState("idle");
+                          setReadthroughSettings(readthrough);
+                          setReadthroughActionState("idle");
+                        },
+                        (loadError: unknown) => {
+                          if (recordsRequestIdRef.current !== requestId) return;
+                          const message =
+                            loadError instanceof Error
+                              ? loadError.message
+                              : "집필 기록 설정을 불러오지 못했습니다.";
+                          setRecordsGoalError(message);
+                          setRecordsGoalActionState("idle");
+                          setReadthroughError(message);
+                          setReadthroughActionState("idle");
+                        },
+                      );
+                    }}
+                    role="menuitem"
+                    type="button"
+                  >
+                    집필 기록
+                  </button>
+                )}
+                <button
+                  className="backup-button"
+                  disabled={busy || backupBusy}
+                  onClick={() => {
+                    setShowLibraryTools(false);
+                    onOpenBackup();
+                  }}
+                  role="menuitem"
+                  type="button"
+                >
+                  <Archive aria-hidden="true" size={15} />
+                  백업
+                </button>
+                <button
+                  className="publishing-button"
+                  disabled={busy}
+                  onClick={() => {
+                    setShowLibraryTools(false);
+                    onOpenPublishing();
+                  }}
+                  role="menuitem"
+                  type="button"
+                >
+                  <Building2 aria-hidden="true" size={15} />
+                  투고 운영
+                </button>
+                <button
+                  className="import-button"
+                  disabled={busy || importBusy}
+                  onClick={() => {
+                    setShowLibraryTools(false);
+                    onOpenImport();
+                  }}
+                  role="menuitem"
+                  type="button"
+                >
+                  <Download aria-hidden="true" size={15} />
+                  가져오기
+                </button>
+              </div>
+            )}
           </div>
         </header>
 
@@ -347,19 +674,14 @@ function MainDashboard({
           </p>
         )}
 
-        {catalog.works.length === 0 ? (
-          <button
-            className="empty-library"
-            disabled={busy}
-            onClick={onCreateWork}
-            type="button"
-          >
-            <BookOpen aria-hidden="true" size={28} />
-            <strong>아직 작품이 없습니다</strong>
-            <span>작품과 첫 회차를 로컬에 만듭니다.</span>
-          </button>
-        ) : filteredWorks.length === 0 ? (
-          <p className="empty-search-result">검색 결과가 없습니다.</p>
+        {filteredWorks.length === 0 ? (
+          <p className="empty-search-result">
+            {normalizedQuery.length > 0
+              ? "검색 결과가 없습니다."
+              : workView === "favorites"
+                ? "즐겨찾기한 작품이 없습니다."
+                : "작품이 없습니다."}
+          </p>
         ) : (
           <div className="library-work-list">
             {filteredWorks.map((work) => (
@@ -370,14 +692,190 @@ function MainDashboard({
                     : null
                 }
                 disabled={busy}
+                favorite={favoriteWorkIdSet.has(work.workId)}
+                cover={workCoverById.get(work.workId) ?? null}
                 key={work.workId}
                 onOpen={onOpen}
+                onMoveDocument={onMoveDocument}
+                onRename={onRename}
+                onRetire={onRetire}
+                onRetireDocument={onRetireDocument}
+                onToggleFavorite={onToggleFavorite}
+                onSelectCover={onSelectCover}
                 work={work}
               />
             ))}
           </div>
         )}
       </section>
+
+      {showSchedule && activeWork !== undefined && (
+        <div className="dialog-backdrop" role="presentation">
+          <section
+            aria-label="작업 일정"
+            aria-modal="true"
+            className="workspace-tool-dialog"
+            role="dialog"
+          >
+            <button
+              aria-label="작업 일정 닫기"
+              className="dialog-close workspace-tool-dialog-close"
+              onClick={() => setShowSchedule(false)}
+              type="button"
+            >
+              <X aria-hidden="true" size={17} />
+            </button>
+            <WorkScheduleDashboard
+              key={activeWork.workId}
+              settingsRevision={settingsRevision}
+              work={activeWork}
+            />
+          </section>
+        </div>
+      )}
+
+      {recordsNowMs !== null &&
+        activeWork !== undefined &&
+        activeActivity !== undefined && (
+          <WorkRecordsDialog
+            activity={activeActivity}
+            busy={busy || recordsExportActionState !== "idle"}
+            error={null}
+            exportActionState={recordsExportActionState}
+            exportError={recordsExportError}
+            exportMessage={recordsExportMessage}
+            goalActionState={recordsGoalActionState}
+            goalError={recordsGoalError}
+            goalSettings={recordsGoals}
+            nowMs={recordsNowMs}
+            onClose={() => {
+              recordsRequestIdRef.current += 1;
+              setRecordsNowMs(null);
+              setRecordsGoals(null);
+              setRecordsGoalError(null);
+              setRecordsGoalActionState("idle");
+              setReadthroughSettings(null);
+              setReadthroughError(null);
+              setReadthroughActionState("idle");
+              setRecordsExportActionState("idle");
+              setRecordsExportError(null);
+              setRecordsExportMessage(null);
+            }}
+            onExport={({ format, fromDate, toDate }) => {
+              setRecordsExportError(null);
+              setRecordsExportMessage(null);
+              setRecordsExportActionState(`exporting-${format}`);
+              const requestId = recordsRequestIdRef.current + 1;
+              recordsRequestIdRef.current = requestId;
+              void window.eumStudio.activity
+                .exportRecords({
+                  schemaVersion: 1,
+                  workId: activeWork.workId,
+                  format,
+                  fromDate,
+                  toDate,
+                })
+                .then(
+                  (result) => {
+                    if (recordsRequestIdRef.current !== requestId) return;
+                    setRecordsExportMessage(
+                      result.status === "cancelled"
+                        ? "기록 내보내기를 취소했습니다."
+                        : `${result.sessionCount}개 세션을 내보냈습니다.`,
+                    );
+                    setRecordsExportActionState("idle");
+                  },
+                  (exportError: unknown) => {
+                    if (recordsRequestIdRef.current !== requestId) return;
+                    setRecordsExportError(
+                      exportError instanceof Error
+                        ? exportError.message
+                        : "집필 기록을 내보내지 못했습니다.",
+                    );
+                    setRecordsExportActionState("idle");
+                  },
+                );
+            }}
+            onOpenDocument={(documentId) => {
+              recordsRequestIdRef.current += 1;
+              setRecordsNowMs(null);
+              setRecordsGoals(null);
+              setRecordsGoalError(null);
+              setRecordsGoalActionState("idle");
+              setReadthroughSettings(null);
+              setReadthroughError(null);
+              setReadthroughActionState("idle");
+              setRecordsExportActionState("idle");
+              setRecordsExportError(null);
+              setRecordsExportMessage(null);
+              onOpen(activeWork.workId, documentId);
+            }}
+            onSaveGoals={(goals: WorkRecordsGoals) => {
+              if (recordsGoals === null) return;
+              setRecordsGoalError(null);
+              setRecordsGoalActionState("saving");
+              const requestId = recordsRequestIdRef.current + 1;
+              recordsRequestIdRef.current = requestId;
+              void window.eumStudio.activity
+                .saveRecordsGoals({
+                  schemaVersion: 1,
+                  workId: activeWork.workId,
+                  expectedRevision: recordsGoals.revision,
+                  goals,
+                })
+                .then(
+                  (projection) => {
+                    if (recordsRequestIdRef.current !== requestId) return;
+                    setRecordsGoals(projection);
+                    setRecordsGoalActionState("idle");
+                  },
+                  (saveError: unknown) => {
+                    if (recordsRequestIdRef.current !== requestId) return;
+                    setRecordsGoalError(
+                      saveError instanceof Error
+                        ? saveError.message
+                        : "집필 목표를 저장하지 못했습니다.",
+                    );
+                    setRecordsGoalActionState("idle");
+                  },
+                );
+            }}
+            onSaveReadthrough={(entries: readonly WorkReadthroughEntry[]) => {
+              if (readthroughSettings === null) return;
+              setReadthroughError(null);
+              setReadthroughActionState("saving");
+              const requestId = recordsRequestIdRef.current + 1;
+              recordsRequestIdRef.current = requestId;
+              void window.eumStudio.activity
+                .saveReadthrough({
+                  schemaVersion: 1,
+                  workId: activeWork.workId,
+                  expectedRevision: readthroughSettings.revision,
+                  entries,
+                })
+                .then(
+                  (projection) => {
+                    if (recordsRequestIdRef.current !== requestId) return;
+                    setReadthroughSettings(projection);
+                    setReadthroughActionState("idle");
+                  },
+                  (saveError: unknown) => {
+                    if (recordsRequestIdRef.current !== requestId) return;
+                    setReadthroughError(
+                      saveError instanceof Error
+                        ? saveError.message
+                        : "연독률을 저장하지 못했습니다.",
+                    );
+                    setReadthroughActionState("idle");
+                  },
+                );
+            }}
+            readthroughActionState={readthroughActionState}
+            readthroughError={readthroughError}
+            readthroughSettings={readthroughSettings}
+            work={activeWork}
+          />
+        )}
     </div>
   );
 }
@@ -519,11 +1017,11 @@ function ImportRehearsalDialog({
           </button>
         </header>
         <p className="dialog-description">
-          기존 이음 에디터 폴더를 읽기 전용으로 봉인하고, 선택한 새 위치에 별도의 리허설 작업실을 만듭니다. 현재 작업실에는 합치지 않습니다.
+          기존 이음 에디터 폴더와 직접 내보낸 브라우저 데이터 JSON을 읽기 전용으로 봉인하고, 선택한 새 위치에 별도의 리허설 작업실을 만듭니다. 현재 작업실에는 합치지 않습니다.
         </p>
         {summary === null ? (
           <p className="backup-empty-state">
-            실행하면 원본 checksum, 원고별 checksum, receipt 누락 여부를 함께 검증합니다.
+            실행하면 원본 폴더, 브라우저 내보내기, 원고별 checksum과 receipt 누락 여부를 함께 검증합니다.
           </p>
         ) : (
           <section className="import-rehearsal-summary" aria-label="가져오기 리허설 결과">
@@ -547,6 +1045,10 @@ function ImportRehearsalDialog({
               <div><dt>원고 버전</dt><dd>{summary.counts.revisionCount}</dd></div>
               <div><dt>미귀속 원고</dt><dd>{summary.counts.orphanManuscriptCount}</dd></div>
               <div><dt>보존 원본</dt><dd>{summary.counts.rawItemCount}</dd></div>
+              <div>
+                <dt>브라우저 항목</dt>
+                <dd>{summary.browserSourceReceipt?.coverage.sourceEntryCount ?? "입력 없음"}</dd>
+              </div>
               <div><dt>검토 항목</dt><dd>{summary.issueCount}</dd></div>
             </dl>
             <p className="receipt-coverage">
@@ -601,7 +1103,6 @@ function CreateWorkDialog({
   const [firstDocumentTitle, setFirstDocumentTitle] = useState("");
   const canSubmit =
     title.trim().length > 0 &&
-    firstDocumentTitle.trim().length > 0 &&
     !submitting;
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -653,7 +1154,7 @@ function CreateWorkDialog({
             <input
               disabled={submitting}
               onChange={(event) => setFirstDocumentTitle(event.target.value)}
-              placeholder="예: 1화"
+              placeholder="비우면 제목없음"
               value={firstDocumentTitle}
             />
           </label>
@@ -686,6 +1187,82 @@ function CreateWorkDialog({
   );
 }
 
+function RenameWorkDialog({
+  work,
+  submitting,
+  error,
+  onCancel,
+  onSubmit,
+}: {
+  readonly work: WorkspaceWorkSummary;
+  readonly submitting: boolean;
+  readonly error: string | null;
+  readonly onCancel: () => void;
+  readonly onSubmit: (title: string) => void;
+}) {
+  const [title, setTitle] = useState(work.title);
+  const canSubmit = title.trim().length > 0 && !submitting;
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (canSubmit) onSubmit(title);
+  };
+
+  return (
+    <div className="dialog-backdrop" role="presentation">
+      <section
+        aria-labelledby="rename-work-heading"
+        aria-modal="true"
+        className="create-work-dialog rename-work-dialog"
+        role="dialog"
+      >
+        <header>
+          <div>
+            <p className="panel-kicker">WORK TITLE</p>
+            <h2 id="rename-work-heading">작품 이름 변경</h2>
+          </div>
+          <button
+            aria-label="작품 이름 변경 닫기"
+            className="dialog-close"
+            disabled={submitting}
+            onClick={onCancel}
+            type="button"
+          >
+            <X aria-hidden="true" size={17} />
+          </button>
+        </header>
+        <form onSubmit={handleSubmit}>
+          <label>
+            <span>작품 제목</span>
+            <input
+              autoFocus
+              disabled={submitting}
+              onChange={(event) => setTitle(event.target.value)}
+              value={title}
+            />
+          </label>
+          {error !== null && (
+            <p aria-live="polite" className="dialog-error">{error}</p>
+          )}
+          <div className="dialog-actions">
+            <button
+              className="secondary-button"
+              disabled={submitting}
+              onClick={onCancel}
+              type="button"
+            >
+              취소
+            </button>
+            <button className="primary-button" disabled={!canSubmit} type="submit">
+              {submitting ? "변경 중" : "변경"}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
 export function StudioShell() {
   const workspaceRef = useRef<ManuscriptWorkspaceHandle>(null);
   const [documentRailHost, setDocumentRailHost] =
@@ -695,11 +1272,29 @@ export function StudioShell() {
   const [catalogState, setCatalogState] = useState<CatalogState>({
     status: "loading",
   });
+  const [favoriteWorkIds, setFavoriteWorkIds] = useState<
+    readonly EntityId<"Work">[]
+  >([]);
+  const [workCovers, setWorkCovers] = useState<readonly WorkCoverProjection[]>([]);
   const [showCreateWork, setShowCreateWork] = useState(false);
+  const [renameWorkTarget, setRenameWorkTarget] =
+    useState<WorkspaceWorkSummary | null>(null);
+  const [showQuickTools, setShowQuickTools] = useState(false);
+  const [showAppSettings, setShowAppSettings] = useState(false);
   const [showBackup, setShowBackup] = useState(false);
   const [showImportRehearsal, setShowImportRehearsal] = useState(false);
+  const [showPublishingPartners, setShowPublishingPartners] = useState(false);
   const [actionState, setActionState] = useState<
-    "idle" | "opening" | "creating" | "leaving"
+    | "idle"
+    | "opening"
+    | "creating"
+    | "leaving"
+    | "retiring"
+    | "retiring-document"
+    | "moving-document"
+    | "renaming-work"
+    | "favoriting-work"
+    | "selecting-cover"
   >("idle");
   const [actionError, setActionError] = useState<string | null>(null);
   const [activityByWork, setActivityByWork] = useState<
@@ -719,6 +1314,81 @@ export function StudioShell() {
   const [importRehearsalError, setImportRehearsalError] = useState<
     string | null
   >(null);
+  const [appSettingsProfile, setAppSettingsProfile] =
+    useState<AppSettingsProfile | null>(null);
+  const [appSettingsProjection, setAppSettingsProjection] =
+    useState<AppSettingsProjection | null>(null);
+  const [musicSettingsProfile, setMusicSettingsProfile] =
+    useState<MusicSettingsProfile | null>(null);
+  const [workMusicSettingsProjection, setWorkMusicSettingsProjection] =
+    useState<WorkMusicSettingsProjection | null>(null);
+  const [youtubeMusicConnectionStatus, setYoutubeMusicConnectionStatus] =
+    useState<YouTubeMusicConnectionStatus | null>(null);
+  const [chatGptOAuthStatus, setChatGptOAuthStatus] =
+    useState<ChatGptOAuthConnectionStatus | null>(null);
+  const [chatGptOAuthLoginState, setChatGptOAuthLoginState] = useState<
+    "idle" | "waiting"
+  >("idle");
+  const [appSettingsActionState, setAppSettingsActionState] = useState<
+    "loading" | "idle" | "saving"
+  >("idle");
+  const [appSettingsError, setAppSettingsError] = useState<string | null>(null);
+  const [appSettingsScheduleRevision, setAppSettingsScheduleRevision] =
+    useState(0);
+  const [publishingPartners, setPublishingPartners] = useState<
+    readonly PublishingPartnerProjection[]
+  >([]);
+  const [selectedPublishingPartnerId, setSelectedPublishingPartnerId] =
+    useState<string | null>(null);
+  const [publishingSubmissions, setPublishingSubmissions] = useState<
+    readonly PublishingSubmissionProjection[]
+  >([]);
+  const [selectedPublishingSubmissionId, setSelectedPublishingSubmissionId] =
+    useState<string | null>(null);
+  const [publishingContracts, setPublishingContracts] = useState<
+    readonly PublishingContractProjection[]
+  >([]);
+  const [selectedPublishingContractId, setSelectedPublishingContractId] =
+    useState<string | null>(null);
+  const [publishingPublications, setPublishingPublications] = useState<
+    readonly PublishingPublicationProjection[]
+  >([]);
+  const [selectedPublishingPublicationId, setSelectedPublishingPublicationId] =
+    useState<string | null>(null);
+  const [publishingSettlements, setPublishingSettlements] = useState<
+    readonly PublishingSettlementProjection[]
+  >([]);
+  const [selectedPublishingSettlementId, setSelectedPublishingSettlementId] =
+    useState<string | null>(null);
+  const [publishingPayments, setPublishingPayments] = useState<
+    readonly PublishingPaymentProjection[]
+  >([]);
+  const [selectedPublishingPaymentId, setSelectedPublishingPaymentId] =
+    useState<string | null>(null);
+  const [publishingSources, setPublishingSources] = useState<
+    readonly PublishingSourceProjection[]
+  >([]);
+  const [publishingAssistantConnections, setPublishingAssistantConnections] =
+    useState<readonly AssistantConnectionProjection[]>([]);
+  const [publishingMailCandidates, setPublishingMailCandidates] = useState<
+    readonly PublishingMailCandidateProjection[]
+  >([]);
+  const [publishingMailConnection, setPublishingMailConnection] = useState<
+    PublishingMailConnectionProjection | null
+  >(null);
+  const [publishingMailSyncResult, setPublishingMailSyncResult] = useState<
+    PublishingMailSyncResult | null
+  >(null);
+  const [publishingMailSchedule, setPublishingMailSchedule] = useState<
+    PublishingMailScheduleProjection | null
+  >(null);
+  const [selectedPublishingSourceId, setSelectedPublishingSourceId] =
+    useState<string | null>(null);
+  const [publishingPartnerActionState, setPublishingPartnerActionState] =
+    useState<PublishingPartnerDialogActionState>("idle");
+  const [publishingPartnerError, setPublishingPartnerError] = useState<
+    string | null
+  >(null);
 
   const catalog =
     catalogState.status === "ready" ? catalogState.catalog : null;
@@ -726,8 +1396,14 @@ export function StudioShell() {
   const loadCatalog = useCallback(async () => {
     setCatalogState({ status: "loading" });
     try {
-      const loaded = await window.eumStudio.workspace.getCatalog();
-      setCatalogState({ status: "ready", catalog: loaded });
+      const [loadedCatalog, loadedFavorites, loadedCovers] = await Promise.all([
+        window.eumStudio.workspace.getCatalog(),
+        window.eumStudio.workspace.getFavorites(),
+        window.eumStudio.workspace.getCovers(),
+      ]);
+      setCatalogState({ status: "ready", catalog: loadedCatalog });
+      setFavoriteWorkIds(loadedFavorites.workIds);
+      setWorkCovers(loadedCovers.covers);
     } catch {
       setCatalogState({ status: "error" });
     }
@@ -735,10 +1411,16 @@ export function StudioShell() {
 
   useEffect(() => {
     let disposed = false;
-    void window.eumStudio.workspace.getCatalog().then(
-      (loaded) => {
+    void Promise.all([
+      window.eumStudio.workspace.getCatalog(),
+      window.eumStudio.workspace.getFavorites(),
+      window.eumStudio.workspace.getCovers(),
+    ]).then(
+      ([loadedCatalog, loadedFavorites, loadedCovers]) => {
         if (!disposed) {
-          setCatalogState({ status: "ready", catalog: loaded });
+          setCatalogState({ status: "ready", catalog: loadedCatalog });
+          setFavoriteWorkIds(loadedFavorites.workIds);
+          setWorkCovers(loadedCovers.covers);
         }
       },
       () => {
@@ -764,6 +1446,968 @@ export function StudioShell() {
       setBackupActionState("idle");
     }
   }, []);
+
+  const openPublishingPartners = useCallback(() => {
+    setShowPublishingPartners(true);
+    setPublishingPartnerActionState("loading");
+    setPublishingPartnerError(null);
+    void Promise.all([
+      window.eumStudio.publishingPartners.list({ schemaVersion: 1 }),
+      window.eumStudio.publishingSubmissions.list({
+        schemaVersion: 1,
+        workId: null,
+      }),
+      window.eumStudio.publishingContracts.list({
+        schemaVersion: 1,
+        workId: null,
+      }),
+      window.eumStudio.publishingPublications.list({
+        schemaVersion: 1,
+        workId: null,
+      }),
+      window.eumStudio.publishingSettlements.list({
+        schemaVersion: 1,
+        workId: null,
+      }),
+      window.eumStudio.publishingPayments.list({
+        schemaVersion: 1,
+        workId: null,
+      }),
+      window.eumStudio.publishingSources.list({ schemaVersion: 1 }),
+      window.eumStudio.publishingMailCandidates.list({ schemaVersion: 1 }),
+      window.eumStudio.publishingMailConnection.status({ schemaVersion: 1 }),
+      window.eumStudio.publishingMailSchedule.status({ schemaVersion: 1 }),
+      window.eumStudio.assistant.listConnections(),
+    ]).then(
+      ([
+        partnerProjection,
+        submissionProjection,
+        contractProjection,
+        publicationProjection,
+        settlementProjection,
+        paymentProjection,
+        sourceProjection,
+        mailCandidateProjection,
+        mailConnectionProjection,
+        mailScheduleProjection,
+        assistantConnectionProjection,
+      ]) => {
+        setPublishingPartners(partnerProjection.partners);
+        setPublishingSubmissions(submissionProjection.submissions);
+        setPublishingContracts(contractProjection.contracts);
+        setPublishingPublications(publicationProjection.publications);
+        setPublishingSettlements(settlementProjection.settlements);
+        setPublishingPayments(paymentProjection.payments);
+        setPublishingSources(sourceProjection.sources);
+        setPublishingMailCandidates(mailCandidateProjection.candidates);
+        setPublishingMailConnection(mailConnectionProjection);
+        setPublishingMailSchedule(mailScheduleProjection);
+        setPublishingAssistantConnections(assistantConnectionProjection.connections);
+        setPublishingMailSyncResult(null);
+        setSelectedPublishingPartnerId(
+          (current) => partnerProjection.partners.some(
+            (partner) => partner.partnerId === current,
+          )
+            ? current
+            : partnerProjection.partners[0]?.partnerId ?? null,
+        );
+        setSelectedPublishingSubmissionId(
+          (current) => submissionProjection.submissions.some(
+            (submission) => submission.submissionId === current,
+          )
+            ? current
+            : submissionProjection.submissions[0]?.submissionId ?? null,
+        );
+        setSelectedPublishingContractId(
+          (current) => contractProjection.contracts.some(
+            (contract) => contract.contractId === current,
+          )
+            ? current
+            : contractProjection.contracts[0]?.contractId ?? null,
+        );
+        setSelectedPublishingPublicationId(
+          (current) => publicationProjection.publications.some(
+            (publication) => publication.publicationId === current,
+          )
+            ? current
+            : publicationProjection.publications[0]?.publicationId ?? null,
+        );
+        setSelectedPublishingSettlementId(
+          (current) => settlementProjection.settlements.some(
+            (settlement) => settlement.settlementId === current,
+          )
+            ? current
+            : settlementProjection.settlements[0]?.settlementId ?? null,
+        );
+        setSelectedPublishingPaymentId(
+          (current) => paymentProjection.payments.some(
+            (payment) => payment.paymentId === current,
+          )
+            ? current
+            : paymentProjection.payments[0]?.paymentId ?? null,
+        );
+        setSelectedPublishingSourceId(
+          (current) => sourceProjection.sources.some(
+            (source) => source.sourceId === current,
+          )
+            ? current
+            : sourceProjection.sources[0]?.sourceId ?? null,
+        );
+        setPublishingPartnerActionState("idle");
+      },
+      () => {
+        setPublishingPartnerError("투고 운영 원장을 불러오지 못했습니다.");
+        setPublishingPartnerActionState("idle");
+      },
+    );
+  }, []);
+
+  const createPublishingPartner = useCallback(
+    (draft: PublishingPartnerDraft) => {
+      if (publishingPartnerActionState !== "idle") return;
+      setPublishingPartnerActionState("creating");
+      setPublishingPartnerError(null);
+      void window.eumStudio.publishingPartners.create({
+        schemaVersion: 1,
+        ...draft,
+      }).then(
+        (created) => {
+          setPublishingPartners((current) => Object.freeze([
+            created,
+            ...current.filter(
+              (partner) => partner.partnerId !== created.partnerId,
+            ),
+          ]));
+          setSelectedPublishingPartnerId(created.partnerId);
+          setPublishingPartnerActionState("idle");
+        },
+        () => {
+          setPublishingPartnerError("투고처를 추가하지 못했습니다.");
+          setPublishingPartnerActionState("idle");
+        },
+      );
+    },
+    [publishingPartnerActionState],
+  );
+
+  const updatePublishingPartner = useCallback(
+    (
+      partner: PublishingPartnerProjection,
+      changes: UpdatePublishingPartnerCommand["changes"],
+    ) => {
+      if (publishingPartnerActionState !== "idle") return;
+      setPublishingPartnerActionState("updating");
+      setPublishingPartnerError(null);
+      void window.eumStudio.publishingPartners.update({
+        schemaVersion: 1,
+        partnerId: partner.partnerId,
+        expectedRevision: partner.revision,
+        changes,
+      }).then(
+        (updated) => {
+          setPublishingPartners((current) => Object.freeze([
+            updated,
+            ...current.filter(
+              (candidate) => candidate.partnerId !== updated.partnerId,
+            ),
+          ]));
+          setSelectedPublishingPartnerId(updated.partnerId);
+          setPublishingPartnerActionState("idle");
+        },
+        () => {
+          setPublishingPartnerError("투고처 변경을 저장하지 못했습니다.");
+          setPublishingPartnerActionState("idle");
+        },
+      );
+    },
+    [publishingPartnerActionState],
+  );
+
+  const createPublishingSubmission = useCallback(
+    (draft: PublishingSubmissionDraft) => {
+      if (publishingPartnerActionState !== "idle") return;
+      setPublishingPartnerActionState("creating-submission");
+      setPublishingPartnerError(null);
+      void window.eumStudio.publishingSubmissions.create({
+        schemaVersion: 1,
+        ...draft,
+      }).then(
+        (created) => {
+          setPublishingSubmissions((current) => Object.freeze([
+            created,
+            ...current.filter(
+              (submission) => submission.submissionId !== created.submissionId,
+            ),
+          ]));
+          setSelectedPublishingSubmissionId(created.submissionId);
+          setPublishingPartnerActionState("idle");
+        },
+        () => {
+          setPublishingPartnerError("투고 이력을 추가하지 못했습니다.");
+          setPublishingPartnerActionState("idle");
+        },
+      );
+    },
+    [publishingPartnerActionState],
+  );
+
+  const updatePublishingSubmission = useCallback(
+    (
+      submission: PublishingSubmissionProjection,
+      changes: UpdatePublishingSubmissionCommand["changes"],
+    ) => {
+      if (publishingPartnerActionState !== "idle") return;
+      setPublishingPartnerActionState("updating-submission");
+      setPublishingPartnerError(null);
+      void window.eumStudio.publishingSubmissions.update({
+        schemaVersion: 1,
+        submissionId: submission.submissionId,
+        expectedRevision: submission.revision,
+        changes,
+      }).then(
+        (updated) => {
+          setPublishingSubmissions((current) => Object.freeze([
+            updated,
+            ...current.filter(
+              (candidate) => candidate.submissionId !== updated.submissionId,
+            ),
+          ]));
+          setSelectedPublishingSubmissionId(updated.submissionId);
+          setPublishingPartnerActionState("idle");
+        },
+        () => {
+          setPublishingPartnerError("투고 이력 변경을 저장하지 못했습니다.");
+          setPublishingPartnerActionState("idle");
+        },
+      );
+    },
+    [publishingPartnerActionState],
+  );
+
+  const createPublishingContract = useCallback(
+    (draft: PublishingContractDraft) => {
+      if (publishingPartnerActionState !== "idle") return;
+      setPublishingPartnerActionState("creating-contract");
+      setPublishingPartnerError(null);
+      void window.eumStudio.publishingContracts.create({
+        schemaVersion: 1,
+        ...draft,
+      }).then(
+        (created) => {
+          setPublishingContracts((current) => Object.freeze([
+            created,
+            ...current.filter((contract) => contract.contractId !== created.contractId),
+          ]));
+          setSelectedPublishingContractId(created.contractId);
+          setPublishingPartnerActionState("idle");
+        },
+        () => {
+          setPublishingPartnerError("계약을 추가하지 못했습니다.");
+          setPublishingPartnerActionState("idle");
+        },
+      );
+    },
+    [publishingPartnerActionState],
+  );
+
+  const updatePublishingContract = useCallback(
+    (
+      contract: PublishingContractProjection,
+      changes: UpdatePublishingContractCommand["changes"],
+    ) => {
+      if (publishingPartnerActionState !== "idle") return;
+      setPublishingPartnerActionState("updating-contract");
+      setPublishingPartnerError(null);
+      void window.eumStudio.publishingContracts.update({
+        schemaVersion: 1,
+        contractId: contract.contractId,
+        expectedRevision: contract.revision,
+        changes,
+      }).then(
+        (updated) => {
+          setPublishingContracts((current) => Object.freeze([
+            updated,
+            ...current.filter(
+              (candidate) => candidate.contractId !== updated.contractId,
+            ),
+          ]));
+          setSelectedPublishingContractId(updated.contractId);
+          setPublishingPartnerActionState("idle");
+        },
+        () => {
+          setPublishingPartnerError("계약 변경을 저장하지 못했습니다.");
+          setPublishingPartnerActionState("idle");
+        },
+      );
+    },
+    [publishingPartnerActionState],
+  );
+
+  const createPublishingPublication = useCallback(
+    (draft: PublishingPublicationDraft) => {
+      if (publishingPartnerActionState !== "idle") return;
+      setPublishingPartnerActionState("creating-publication");
+      setPublishingPartnerError(null);
+      void window.eumStudio.publishingPublications.create({
+        schemaVersion: 1,
+        ...draft,
+      }).then(
+        (created) => {
+          setPublishingPublications((current) => Object.freeze([
+            created,
+            ...current.filter(
+              (publication) => publication.publicationId !== created.publicationId,
+            ),
+          ]));
+          setSelectedPublishingPublicationId(created.publicationId);
+          setPublishingPartnerActionState("idle");
+        },
+        () => {
+          setPublishingPartnerError("발행·연재 항목을 추가하지 못했습니다.");
+          setPublishingPartnerActionState("idle");
+        },
+      );
+    },
+    [publishingPartnerActionState],
+  );
+
+  const updatePublishingPublication = useCallback(
+    (
+      publication: PublishingPublicationProjection,
+      changes: UpdatePublishingPublicationCommand["changes"],
+    ) => {
+      if (publishingPartnerActionState !== "idle") return;
+      setPublishingPartnerActionState("updating-publication");
+      setPublishingPartnerError(null);
+      void window.eumStudio.publishingPublications.update({
+        schemaVersion: 1,
+        publicationId: publication.publicationId,
+        expectedRevision: publication.revision,
+        changes,
+      }).then(
+        (updated) => {
+          setPublishingPublications((current) => Object.freeze([
+            updated,
+            ...current.filter(
+              (candidate) => candidate.publicationId !== updated.publicationId,
+            ),
+          ]));
+          setSelectedPublishingPublicationId(updated.publicationId);
+          setPublishingPartnerActionState("idle");
+        },
+        () => {
+          setPublishingPartnerError("발행·연재 변경을 저장하지 못했습니다.");
+          setPublishingPartnerActionState("idle");
+        },
+      );
+    },
+    [publishingPartnerActionState],
+  );
+
+  const createPublishingSettlement = useCallback(
+    (draft: PublishingSettlementDraft) => {
+      if (publishingPartnerActionState !== "idle") return;
+      setPublishingPartnerActionState("creating-settlement");
+      setPublishingPartnerError(null);
+      void window.eumStudio.publishingSettlements.create({
+        schemaVersion: 1,
+        ...draft,
+      }).then(
+        (created) => {
+          setPublishingSettlements((current) => Object.freeze([
+            created,
+            ...current.filter(
+              (settlement) => settlement.settlementId !== created.settlementId,
+            ),
+          ]));
+          setSelectedPublishingSettlementId(created.settlementId);
+          setPublishingPartnerActionState("idle");
+        },
+        () => {
+          setPublishingPartnerError("정산서를 추가하지 못했습니다.");
+          setPublishingPartnerActionState("idle");
+        },
+      );
+    },
+    [publishingPartnerActionState],
+  );
+
+  const updatePublishingSettlement = useCallback(
+    (
+      settlement: PublishingSettlementProjection,
+      changes: UpdatePublishingSettlementCommand["changes"],
+    ) => {
+      if (publishingPartnerActionState !== "idle") return;
+      setPublishingPartnerActionState("updating-settlement");
+      setPublishingPartnerError(null);
+      void window.eumStudio.publishingSettlements.update({
+        schemaVersion: 1,
+        settlementId: settlement.settlementId,
+        expectedRevision: settlement.revision,
+        changes,
+      }).then(
+        (updated) => {
+          setPublishingSettlements((current) => Object.freeze([
+            updated,
+            ...current.filter(
+              (candidate) => candidate.settlementId !== updated.settlementId,
+            ),
+          ]));
+          setSelectedPublishingSettlementId(updated.settlementId);
+          setPublishingPartnerActionState("idle");
+        },
+        () => {
+          setPublishingPartnerError("정산서 변경을 저장하지 못했습니다.");
+          setPublishingPartnerActionState("idle");
+        },
+      );
+    },
+    [publishingPartnerActionState],
+  );
+
+  const createPublishingPayment = useCallback(
+    (draft: PublishingPaymentDraft) => {
+      if (publishingPartnerActionState !== "idle") return;
+      setPublishingPartnerActionState("creating-payment");
+      setPublishingPartnerError(null);
+      void window.eumStudio.publishingPayments.create({
+        schemaVersion: 1,
+        ...draft,
+      }).then(
+        (created) => {
+          setPublishingPayments((current) => Object.freeze([
+            created,
+            ...current.filter(
+              (payment) => payment.paymentId !== created.paymentId,
+            ),
+          ]));
+          setSelectedPublishingPaymentId(created.paymentId);
+          setPublishingPartnerActionState("idle");
+        },
+        () => {
+          setPublishingPartnerError("입금을 추가하지 못했습니다.");
+          setPublishingPartnerActionState("idle");
+        },
+      );
+    },
+    [publishingPartnerActionState],
+  );
+
+  const updatePublishingPayment = useCallback(
+    (
+      payment: PublishingPaymentProjection,
+      changes: UpdatePublishingPaymentCommand["changes"],
+    ) => {
+      if (publishingPartnerActionState !== "idle") return;
+      setPublishingPartnerActionState("updating-payment");
+      setPublishingPartnerError(null);
+      void window.eumStudio.publishingPayments.update({
+        schemaVersion: 1,
+        paymentId: payment.paymentId,
+        expectedRevision: payment.revision,
+        changes,
+      }).then(
+        (updated) => {
+          setPublishingPayments((current) => Object.freeze([
+            updated,
+            ...current.filter(
+              (candidate) => candidate.paymentId !== updated.paymentId,
+            ),
+          ]));
+          setSelectedPublishingPaymentId(updated.paymentId);
+          setPublishingPartnerActionState("idle");
+        },
+        () => {
+          setPublishingPartnerError("입금 변경을 저장하지 못했습니다.");
+          setPublishingPartnerActionState("idle");
+        },
+      );
+    },
+    [publishingPartnerActionState],
+  );
+
+  const createPublishingSource = useCallback(
+    (draft: PublishingSourceDraft) => {
+      if (publishingPartnerActionState !== "idle") return;
+      setPublishingPartnerActionState("creating-source");
+      setPublishingPartnerError(null);
+      void window.eumStudio.publishingSources.create({
+        schemaVersion: 1,
+        ...draft,
+      }).then(
+        (created) => {
+          setPublishingSources((current) => Object.freeze([
+            created,
+            ...current.filter((source) => source.sourceId !== created.sourceId),
+          ]));
+          setSelectedPublishingSourceId(created.sourceId);
+          setPublishingPartnerActionState("idle");
+        },
+        () => {
+          setPublishingPartnerError("근거를 추가하지 못했습니다.");
+          setPublishingPartnerActionState("idle");
+        },
+      );
+    },
+    [publishingPartnerActionState],
+  );
+
+  const setPublishingEvidenceLinks = useCallback(
+    (
+      targetKind: PublishingEvidenceTargetKind,
+      targetId: string,
+      expectedRevision: number,
+      sourceIds: readonly string[],
+    ) => {
+      if (publishingPartnerActionState !== "idle") return;
+      setPublishingPartnerActionState("saving-evidence-links");
+      setPublishingPartnerError(null);
+      void window.eumStudio.publishingEvidence.setLinks({
+        schemaVersion: 1,
+        targetKind,
+        targetId,
+        expectedRevision,
+        sourceIds: sourceIds.map((sourceId) =>
+          entityId<"PublishingSource">(sourceId)),
+      }).then(
+        (updated) => {
+          const apply = <T extends {
+            readonly revision: number;
+            readonly sourceIds: readonly string[];
+            readonly updatedAt: string;
+          }>(record: T): T => ({
+            ...record,
+            revision: updated.revision,
+            sourceIds: updated.sourceIds,
+            updatedAt: updated.updatedAt,
+          });
+          switch (updated.targetKind) {
+            case "partner":
+              setPublishingPartners((current) => Object.freeze(current.map(
+                (record) => record.partnerId === updated.targetId ? apply(record) : record,
+              )));
+              break;
+            case "submission":
+              setPublishingSubmissions((current) => Object.freeze(current.map(
+                (record) => record.submissionId === updated.targetId ? apply(record) : record,
+              )));
+              break;
+            case "contract":
+              setPublishingContracts((current) => Object.freeze(current.map(
+                (record) => record.contractId === updated.targetId ? apply(record) : record,
+              )));
+              break;
+            case "publication":
+              setPublishingPublications((current) => Object.freeze(current.map(
+                (record) => record.publicationId === updated.targetId ? apply(record) : record,
+              )));
+              break;
+            case "settlement":
+              setPublishingSettlements((current) => Object.freeze(current.map(
+                (record) => record.settlementId === updated.targetId ? apply(record) : record,
+              )));
+              break;
+            case "payment":
+              setPublishingPayments((current) => Object.freeze(current.map(
+                (record) => record.paymentId === updated.targetId ? apply(record) : record,
+              )));
+              break;
+          }
+          setPublishingPartnerActionState("idle");
+        },
+        () => {
+          setPublishingPartnerError("근거 연결을 저장하지 못했습니다.");
+          setPublishingPartnerActionState("idle");
+        },
+      );
+    },
+    [publishingPartnerActionState],
+  );
+
+  const previewPublishingResearch = useCallback(async (
+    command: Omit<PreviewPublishingResearchCommand, "schemaVersion">,
+  ): Promise<PublishingResearchCandidateProjection | null> => {
+    if (publishingPartnerActionState !== "idle") return null;
+    setPublishingPartnerActionState("previewing-research");
+    setPublishingPartnerError(null);
+    try {
+      const candidate = await window.eumStudio.publishingResearch.preview({
+        schemaVersion: 1,
+        ...command,
+      });
+      setPublishingPartnerActionState("idle");
+      return candidate;
+    } catch {
+      setPublishingPartnerError("웹 자료를 현재 투고처 값과 비교하지 못했습니다.");
+      setPublishingPartnerActionState("idle");
+      return null;
+    }
+  }, [publishingPartnerActionState]);
+
+  const approvePublishingResearch = useCallback(async (
+    command: Omit<ApprovePublishingResearchCommand, "schemaVersion">,
+  ): Promise<boolean> => {
+    if (publishingPartnerActionState !== "idle") return false;
+    setPublishingPartnerActionState("approving-research");
+    setPublishingPartnerError(null);
+    try {
+      const result = await window.eumStudio.publishingResearch.approve({
+        schemaVersion: 1,
+        ...command,
+      });
+      setPublishingPartners((current) => Object.freeze(current.map((partner) =>
+        partner.partnerId === result.partner.partnerId ? result.partner : partner)));
+      setPublishingSources((current) => Object.freeze([result.source, ...current]));
+      setSelectedPublishingPartnerId(result.partner.partnerId);
+      setSelectedPublishingSourceId(result.source.sourceId);
+      setPublishingPartnerActionState("idle");
+      return true;
+    } catch {
+      setPublishingPartnerError("선택한 웹 자료 필드를 반영하지 못했습니다.");
+      setPublishingPartnerActionState("idle");
+      return false;
+    }
+  }, [publishingPartnerActionState]);
+
+  const runPublishingAssistant = useCallback(async (
+    connectionId: EntityId<"AssistantConnection">,
+    statement: string,
+  ): Promise<PublishingAssistantResult | null> => {
+    if (publishingPartnerActionState !== "idle") return null;
+    setPublishingPartnerActionState("running-assistant");
+    setPublishingPartnerError(null);
+    try {
+      const result = await window.eumStudio.publishingAssistant.run({
+        schemaVersion: 1,
+        requestId: entityId<"AssistantConnectorRequest">(crypto.randomUUID()),
+        connectionId,
+        statement,
+      });
+      setPublishingPartnerActionState("idle");
+      return result;
+    } catch {
+      setPublishingPartnerError("작업실 조수 요청을 해석하지 못했습니다.");
+      setPublishingPartnerActionState("idle");
+      return null;
+    }
+  }, [publishingPartnerActionState]);
+
+  const approvePublishingAssistant = useCallback(async (
+    candidateId: string,
+  ): Promise<boolean> => {
+    if (publishingPartnerActionState !== "idle") return false;
+    setPublishingPartnerActionState("approving-assistant");
+    setPublishingPartnerError(null);
+    try {
+      const result = await window.eumStudio.publishingAssistant.approve({
+        schemaVersion: 1,
+        candidateId,
+      });
+      setPublishingSources((current) => Object.freeze([
+        result.source,
+        ...current.filter((source) => source.sourceId !== result.source.sourceId),
+      ]));
+      setPublishingSubmissions((current) => Object.freeze([
+        ...result.submissions,
+        ...current.filter((submission) => !result.submissions.some(
+          (created) => created.submissionId === submission.submissionId,
+        )),
+      ]));
+      setSelectedPublishingSourceId(result.source.sourceId);
+      setSelectedPublishingSubmissionId(result.submissions[0]?.submissionId ?? null);
+      setPublishingPartnerActionState("idle");
+      return true;
+    } catch {
+      setPublishingPartnerError("작업실 조수의 투고 기록을 저장하지 못했습니다.");
+      setPublishingPartnerActionState("idle");
+      return false;
+    }
+  }, [publishingPartnerActionState]);
+
+  const selectPublishingPartnerCsv = useCallback(async (): Promise<
+    PublishingPartnerCsvSelectionProjection | null
+  > => {
+    if (publishingPartnerActionState !== "idle") return null;
+    setPublishingPartnerActionState("selecting-partner-csv");
+    setPublishingPartnerError(null);
+    try {
+      const selection = await window.eumStudio.publishingImports.selectPartnerCsv({
+        schemaVersion: 1,
+      });
+      setPublishingPartnerActionState("idle");
+      return selection;
+    } catch {
+      setPublishingPartnerError("투고처 CSV 파일을 읽지 못했습니다.");
+      setPublishingPartnerActionState("idle");
+      return null;
+    }
+  }, [publishingPartnerActionState]);
+
+  const applyPublishingPartnerCsv = useCallback(async (
+    command: Omit<ApplyPublishingPartnerCsvImportCommand, "schemaVersion">,
+  ): Promise<boolean> => {
+    if (publishingPartnerActionState !== "idle") return false;
+    setPublishingPartnerActionState("applying-partner-csv");
+    setPublishingPartnerError(null);
+    try {
+      const result = await window.eumStudio.publishingImports.applyPartnerCsv({
+        schemaVersion: 1,
+        ...command,
+      });
+      const [partnerProjection, sourceProjection] = await Promise.all([
+        window.eumStudio.publishingPartners.list({ schemaVersion: 1 }),
+        window.eumStudio.publishingSources.list({ schemaVersion: 1 }),
+      ]);
+      setPublishingPartners(partnerProjection.partners);
+      setPublishingSources(sourceProjection.sources);
+      setSelectedPublishingPartnerId(result.partnerIds[0] ?? null);
+      setPublishingPartnerActionState("idle");
+      return true;
+    } catch {
+      setPublishingPartnerError("투고처 CSV를 반영하지 못했습니다.");
+      setPublishingPartnerActionState("idle");
+      return false;
+    }
+  }, [publishingPartnerActionState]);
+
+  const selectPublishingSubmissionCsv = useCallback(async (): Promise<
+    PublishingSubmissionCsvSelectionProjection | null
+  > => {
+    if (publishingPartnerActionState !== "idle") return null;
+    setPublishingPartnerActionState("selecting-submission-csv");
+    setPublishingPartnerError(null);
+    try {
+      const selection = await window.eumStudio.publishingImports.selectSubmissionCsv({
+        schemaVersion: 1,
+      });
+      setPublishingPartnerActionState("idle");
+      return selection;
+    } catch {
+      setPublishingPartnerError("투고 이력 CSV 파일을 읽지 못했습니다.");
+      setPublishingPartnerActionState("idle");
+      return null;
+    }
+  }, [publishingPartnerActionState]);
+
+  const applyPublishingSubmissionCsv = useCallback(async (
+    command: Omit<ApplyPublishingSubmissionCsvImportCommand, "schemaVersion">,
+  ): Promise<boolean> => {
+    if (publishingPartnerActionState !== "idle") return false;
+    setPublishingPartnerActionState("applying-submission-csv");
+    setPublishingPartnerError(null);
+    try {
+      const result = await window.eumStudio.publishingImports.applySubmissionCsv({
+        schemaVersion: 1,
+        ...command,
+      });
+      const [submissionProjection, sourceProjection] = await Promise.all([
+        window.eumStudio.publishingSubmissions.list({ schemaVersion: 1, workId: null }),
+        window.eumStudio.publishingSources.list({ schemaVersion: 1 }),
+      ]);
+      setPublishingSubmissions(submissionProjection.submissions);
+      setPublishingSources(sourceProjection.sources);
+      setSelectedPublishingSubmissionId(result.submissionIds[0] ?? null);
+      setPublishingPartnerActionState("idle");
+      return true;
+    } catch {
+      setPublishingPartnerError("투고 이력 CSV를 반영하지 못했습니다.");
+      setPublishingPartnerActionState("idle");
+      return false;
+    }
+  }, [publishingPartnerActionState]);
+
+  const linkPublishingMailCandidate = useCallback((
+    candidate: PublishingMailCandidateProjection,
+    submissionId: PublishingSubmissionProjection["submissionId"],
+  ) => {
+    if (publishingPartnerActionState !== "idle") return;
+    setPublishingPartnerActionState("linking-mail-candidate");
+    setPublishingPartnerError(null);
+    void window.eumStudio.publishingMailCandidates.link({
+      schemaVersion: 1,
+      candidateId: candidate.candidateId,
+      expectedRevision: candidate.revision,
+      submissionId,
+    }).then(
+      (updated) => {
+        setPublishingMailCandidates((current) => Object.freeze(current.map(
+          (item) => item.candidateId === updated.candidateId ? updated : item,
+        )));
+        setPublishingPartnerActionState("idle");
+      },
+      () => {
+        setPublishingPartnerError("메일 후보를 투고에 연결하지 못했습니다.");
+        setPublishingPartnerActionState("idle");
+      },
+    );
+  }, [publishingPartnerActionState]);
+
+  const connectPublishingMail = useCallback((
+    connectorKind: string,
+    clientId: string,
+  ) => {
+    if (publishingPartnerActionState !== "idle") return;
+    setPublishingPartnerActionState("connecting-mail");
+    setPublishingPartnerError(null);
+    void window.eumStudio.publishingMailConnection.connect({
+      schemaVersion: 1,
+      connectorKind,
+      clientId,
+    }).then(
+      (connection) => {
+        setPublishingMailConnection(connection);
+        setPublishingMailSyncResult(null);
+        setPublishingPartnerActionState("idle");
+      },
+      () => {
+        setPublishingPartnerError("메일 계정을 연결하지 못했습니다.");
+        setPublishingPartnerActionState("idle");
+      },
+    );
+  }, [publishingPartnerActionState]);
+
+  const syncPublishingMail = useCallback(() => {
+    if (publishingPartnerActionState !== "idle") return;
+    setPublishingPartnerActionState("syncing-mail");
+    setPublishingPartnerError(null);
+    void (async () => {
+      try {
+        const result = await window.eumStudio.publishingMailConnection.sync({
+          schemaVersion: 1,
+        });
+        const [connection, candidates, schedule] = await Promise.all([
+          window.eumStudio.publishingMailConnection.status({ schemaVersion: 1 }),
+          window.eumStudio.publishingMailCandidates.list({ schemaVersion: 1 }),
+          window.eumStudio.publishingMailSchedule.status({ schemaVersion: 1 }),
+        ]);
+        setPublishingMailConnection(connection);
+        setPublishingMailCandidates(candidates.candidates);
+        setPublishingMailSchedule(schedule);
+        setPublishingMailSyncResult(result);
+      } catch {
+        setPublishingPartnerError("메일 회신을 동기화하지 못했습니다.");
+        void window.eumStudio.publishingMailSchedule.status({ schemaVersion: 1 }).then(
+          setPublishingMailSchedule,
+          () => undefined,
+        );
+      } finally {
+        setPublishingPartnerActionState("idle");
+      }
+    })();
+  }, [publishingPartnerActionState]);
+
+  const savePublishingMailSchedule = useCallback((
+    enabled: boolean,
+    localTime: string | null,
+  ) => {
+    if (publishingPartnerActionState !== "idle") return;
+    setPublishingPartnerActionState("saving-mail-schedule");
+    setPublishingPartnerError(null);
+    void (async () => {
+      try {
+        const schedule = await window.eumStudio.publishingMailSchedule.save({
+          schemaVersion: 1,
+          enabled,
+          localTime,
+        });
+        const [connection, candidates] = await Promise.all([
+          window.eumStudio.publishingMailConnection.status({ schemaVersion: 1 }),
+          window.eumStudio.publishingMailCandidates.list({ schemaVersion: 1 }),
+        ]);
+        setPublishingMailSchedule(schedule);
+        setPublishingMailConnection(connection);
+        setPublishingMailCandidates(candidates.candidates);
+      } catch {
+        setPublishingPartnerError("메일 자동 확인 일정을 저장하지 못했습니다.");
+      } finally {
+        setPublishingPartnerActionState("idle");
+      }
+    })();
+  }, [publishingPartnerActionState]);
+
+  const disconnectPublishingMail = useCallback(() => {
+    if (publishingPartnerActionState !== "idle") return;
+    setPublishingPartnerActionState("disconnecting-mail");
+    setPublishingPartnerError(null);
+    void window.eumStudio.publishingMailConnection.disconnect({
+      schemaVersion: 1,
+    }).then(
+      (connection) => {
+        setPublishingMailConnection(connection);
+        setPublishingMailSyncResult(null);
+        setPublishingPartnerActionState("idle");
+      },
+      () => {
+        setPublishingPartnerError("메일 계정 연결을 해제하지 못했습니다.");
+        setPublishingPartnerActionState("idle");
+      },
+    );
+  }, [publishingPartnerActionState]);
+
+  const updatePublishingMailCandidate = useCallback((
+    candidate: PublishingMailCandidateProjection,
+    changes: UpdatePublishingMailCandidateCommand["changes"],
+  ) => {
+    if (publishingPartnerActionState !== "idle") return;
+    setPublishingPartnerActionState("updating-mail-candidate");
+    setPublishingPartnerError(null);
+    void window.eumStudio.publishingMailCandidates.update({
+      schemaVersion: 1,
+      candidateId: candidate.candidateId,
+      expectedRevision: candidate.revision,
+      changes,
+    }).then(
+      (updated) => {
+        setPublishingMailCandidates((current) => Object.freeze(current.map(
+          (item) => item.candidateId === updated.candidateId ? updated : item,
+        )));
+        setPublishingPartnerActionState("idle");
+      },
+      () => {
+        setPublishingPartnerError("메일 후보 제안을 저장하지 못했습니다.");
+        setPublishingPartnerActionState("idle");
+      },
+    );
+  }, [publishingPartnerActionState]);
+
+  const reviewPublishingMailCandidate = useCallback((
+    candidate: PublishingMailCandidateProjection,
+    decision: "approve" | "ignore",
+  ) => {
+    if (publishingPartnerActionState !== "idle") return;
+    setPublishingPartnerActionState("reviewing-mail-candidate");
+    setPublishingPartnerError(null);
+    void window.eumStudio.publishingMailCandidates.review({
+      schemaVersion: 1,
+      candidateId: candidate.candidateId,
+      expectedRevision: candidate.revision,
+      decision,
+    }).then(
+      (result) => {
+        setPublishingMailCandidates((current) => Object.freeze(current.map(
+          (item) => item.candidateId === result.candidate.candidateId
+            ? result.candidate
+            : item,
+        )));
+        if (result.submission !== null) {
+          setPublishingSubmissions((current) => Object.freeze(current.map(
+            (submission) => submission.submissionId === result.submission?.submissionId
+              ? result.submission
+              : submission,
+          )));
+        }
+        setPublishingPartnerActionState("idle");
+      },
+      () => {
+        setPublishingPartnerError(
+          decision === "approve"
+            ? "메일 후보를 투고 이력에 반영하지 못했습니다."
+            : "메일 후보를 무시 처리하지 못했습니다.",
+        );
+        setPublishingPartnerActionState("idle");
+      },
+    );
+  }, [publishingPartnerActionState]);
 
   useEffect(() => {
     let disposed = false;
@@ -838,6 +2482,57 @@ export function StudioShell() {
       setCatalogState({ status: "ready", catalog: nextCatalog });
     },
     [],
+  );
+
+  const toggleWorkFavorite = useCallback(
+    (work: WorkspaceWorkSummary) => {
+      if (catalogState.status !== "ready" || actionState !== "idle") return;
+      const favorite = !favoriteWorkIds.includes(work.workId);
+      setActionState("favoriting-work");
+      setActionError(null);
+      void window.eumStudio.workspace.setFavorite({
+        schemaVersion: 1,
+        workId: work.workId,
+        favorite,
+      }).then(
+        (projection) => {
+          setFavoriteWorkIds(projection.workIds);
+          setActionState("idle");
+        },
+        () => {
+          setActionError("즐겨찾기를 변경하지 못했습니다.");
+          setActionState("idle");
+        },
+      );
+    },
+    [actionState, catalogState.status, favoriteWorkIds],
+  );
+
+  const selectWorkCover = useCallback(
+    (work: WorkspaceWorkSummary) => {
+      if (catalogState.status !== "ready" || actionState !== "idle") return;
+      setActionState("selecting-cover");
+      setActionError(null);
+      void window.eumStudio.workspace.selectCover({
+        schemaVersion: 1,
+        workId: work.workId,
+      }).then(
+        (cover) => {
+          if (cover !== null) {
+            setWorkCovers((current) => [
+              ...current.filter((candidate) => candidate.workId !== cover.workId),
+              cover,
+            ]);
+          }
+          setActionState("idle");
+        },
+        () => {
+          setActionError("표지 이미지를 등록하지 못했습니다.");
+          setActionState("idle");
+        },
+      );
+    },
+    [actionState, catalogState.status],
   );
 
   const openLocation = useCallback(
@@ -939,6 +2634,134 @@ export function StudioShell() {
     [acceptCatalog, actionState, catalogState],
   );
 
+  const renameWork = useCallback(
+    (work: WorkspaceWorkSummary, title: string) => {
+      if (
+        catalogState.status !== "ready" ||
+        workspaceRef.current === null ||
+        actionState !== "idle"
+      ) {
+        return;
+      }
+      setActionState("renaming-work");
+      setActionError(null);
+      void workspaceRef.current.renameWork(work.workId, title).then(
+        (nextCatalog) => {
+          acceptCatalog(nextCatalog);
+          setRenameWorkTarget(null);
+          setActionState("idle");
+        },
+        () => {
+          setActionError("작품 이름을 변경하지 못했습니다.");
+          setActionState("idle");
+        },
+      );
+    },
+    [acceptCatalog, actionState, catalogState.status],
+  );
+
+  const retireWork = useCallback(
+    (work: WorkspaceWorkSummary) => {
+      if (
+        catalogState.status !== "ready" ||
+        workspaceRef.current === null ||
+        actionState !== "idle"
+      ) {
+        return;
+      }
+      if (
+        !window.confirm(
+          `‘${work.title}’ 작품을 작업실에서 삭제할까요?\n원고와 기록은 복구를 위해 보존됩니다.`,
+        )
+      ) {
+        return;
+      }
+      setActionState("retiring");
+      setActionError(null);
+      void workspaceRef.current.retireWork(work.workId).then(
+        (nextCatalog) => {
+          acceptCatalog(nextCatalog);
+          setActivePage("main");
+          setActionState("idle");
+        },
+        () => {
+          setActionError("작품을 삭제하지 못했습니다.");
+          setActionState("idle");
+        },
+      );
+    },
+    [acceptCatalog, actionState, catalogState.status],
+  );
+
+  const retireDocument = useCallback(
+    (
+      work: WorkspaceWorkSummary,
+      document: WorkspaceWorkSummary["documents"][number],
+    ) => {
+      if (
+        catalogState.status !== "ready" ||
+        workspaceRef.current === null ||
+        actionState !== "idle"
+      ) {
+        return;
+      }
+      if (
+        !window.confirm(
+          `‘${document.title}’ 회차를 삭제할까요?\n원고와 기록은 복구를 위해 보존됩니다.`,
+        )
+      ) {
+        return;
+      }
+      setActionState("retiring-document");
+      setActionError(null);
+      void workspaceRef.current
+        .retireDocument(work.workId, document.documentId)
+        .then(
+          (nextCatalog) => {
+            acceptCatalog(nextCatalog);
+            setActivePage("main");
+            setActionState("idle");
+          },
+          () => {
+            setActionError("회차를 삭제하지 못했습니다.");
+            setActionState("idle");
+          },
+        );
+    },
+    [acceptCatalog, actionState, catalogState.status],
+  );
+
+  const moveDocument = useCallback(
+    (
+      work: WorkspaceWorkSummary,
+      document: WorkspaceWorkSummary["documents"][number],
+      direction: "earlier" | "later",
+    ) => {
+      if (
+        catalogState.status !== "ready" ||
+        workspaceRef.current === null ||
+        actionState !== "idle"
+      ) {
+        return;
+      }
+      setActionState("moving-document");
+      setActionError(null);
+      void workspaceRef.current
+        .moveDocument(work.workId, document.documentId, direction)
+        .then(
+          (nextCatalog) => {
+            acceptCatalog(nextCatalog);
+            setActionState("idle");
+          },
+          () => {
+            setActionError("회차 순서를 변경하지 못했습니다.");
+            setActionState("idle");
+          },
+        );
+    },
+    [acceptCatalog, actionState, catalogState.status],
+  );
+
   const runBackupAction = useCallback(
     (action: "create" | "restore") => {
       if (backupActionState !== "idle" || actionState !== "idle") {
@@ -1004,31 +2827,283 @@ export function StudioShell() {
 
   const busy = actionState !== "idle";
 
+  const openQuickTools = useCallback(() => {
+    if (catalogState.status === "ready" && actionState === "idle") {
+      setShowAppSettings(false);
+      setAppSettingsError(null);
+      setShowQuickTools(true);
+    }
+  }, [actionState, catalogState.status]);
+
+  const openAppSettings = useCallback(() => {
+    if (actionState !== "idle") return;
+    setShowQuickTools(false);
+    setShowAppSettings(true);
+    setAppSettingsProfile(null);
+    setAppSettingsProjection(null);
+    setMusicSettingsProfile(null);
+    setWorkMusicSettingsProjection(null);
+    setYoutubeMusicConnectionStatus(null);
+    setChatGptOAuthStatus(null);
+    setChatGptOAuthLoginState("idle");
+    setAppSettingsError(null);
+    setAppSettingsActionState("loading");
+    const activeWorkId = catalog?.activeWorkId ?? null;
+    void Promise.all([
+      window.eumStudio.settings.getProfile(),
+      window.eumStudio.settings.get(),
+      window.eumStudio.settings.getMusicProfile(),
+      window.eumStudio.settings.getYouTubeMusicConnectionStatus(),
+      window.eumStudio.assistant.getChatGptOAuthStatus(),
+      activeWorkId === null
+        ? Promise.resolve(null)
+        : window.eumStudio.settings.getWorkMusic({
+            schemaVersion: 1,
+            workId: activeWorkId,
+          }),
+    ]).then(
+      ([
+        profile,
+        projection,
+        musicProfile,
+        youtubeStatus,
+        chatGptStatus,
+        workMusicProjection,
+      ]) => {
+        setAppSettingsProfile(profile);
+        setAppSettingsProjection(projection);
+        setMusicSettingsProfile(musicProfile);
+        setYoutubeMusicConnectionStatus(youtubeStatus);
+        setChatGptOAuthStatus(chatGptStatus);
+        setWorkMusicSettingsProjection(workMusicProjection);
+        setAppSettingsActionState("idle");
+      },
+      (reason: unknown) => {
+        setAppSettingsError(
+          reason instanceof Error ? reason.message : "설정을 불러오지 못했습니다.",
+        );
+        setAppSettingsActionState("idle");
+      },
+    );
+  }, [actionState, catalog]);
+
+  const closeAppSettings = useCallback(() => {
+    if (appSettingsActionState === "saving") return;
+    setShowAppSettings(false);
+    setAppSettingsError(null);
+  }, [appSettingsActionState]);
+
+  const saveAppSettings = useCallback(
+    (value: AppSettingsSaveValue) => {
+      if (appSettingsProjection === null) return;
+      setAppSettingsActionState("saving");
+      setAppSettingsError(null);
+      const saveWorkMusic =
+        value.workMusicSettings === null || workMusicSettingsProjection === null
+          ? Promise.resolve(workMusicSettingsProjection)
+          : window.eumStudio.settings.saveWorkMusic({
+              schemaVersion: 1,
+              workId: workMusicSettingsProjection.workId,
+              expectedRevision: workMusicSettingsProjection.revision,
+              settings: value.workMusicSettings,
+            });
+      const saveYouTubeConnection = value.youtubeApiKey === null
+        ? Promise.resolve(youtubeMusicConnectionStatus)
+        : window.eumStudio.settings.saveYouTubeMusicConnection({
+            schemaVersion: 1,
+            expectedRevision: youtubeMusicConnectionStatus?.revision ?? 0,
+            apiKey: { mode: "replace", value: value.youtubeApiKey },
+          });
+      void Promise.all([
+        window.eumStudio.settings.save({
+          schemaVersion: 1,
+          expectedRevision: appSettingsProjection.revision,
+          settings: {
+            defaultEpisodeCharacters: value.defaultEpisodeCharacters,
+          },
+        }),
+        saveWorkMusic,
+        saveYouTubeConnection,
+      ]).then(
+          ([saved, savedWorkMusic, savedYouTubeStatus]) => {
+            setAppSettingsProjection(saved);
+            setWorkMusicSettingsProjection(savedWorkMusic);
+            setYoutubeMusicConnectionStatus(savedYouTubeStatus);
+            setAppSettingsScheduleRevision(saved.revision);
+            setAppSettingsActionState("idle");
+            setShowAppSettings(false);
+          },
+          (reason: unknown) => {
+            setAppSettingsError(
+              reason instanceof Error ? reason.message : "설정을 저장하지 못했습니다.",
+            );
+            setAppSettingsActionState("idle");
+          },
+        );
+    },
+    [
+      appSettingsProjection,
+      workMusicSettingsProjection,
+      youtubeMusicConnectionStatus,
+    ],
+  );
+
+  const removeYouTubeMusicConnection = useCallback(() => {
+    if (youtubeMusicConnectionStatus === null) return;
+    setAppSettingsActionState("saving");
+    setAppSettingsError(null);
+    void window.eumStudio.settings.saveYouTubeMusicConnection({
+      schemaVersion: 1,
+      expectedRevision: youtubeMusicConnectionStatus.revision,
+      apiKey: { mode: "remove" },
+    }).then(
+      (saved) => {
+        setYoutubeMusicConnectionStatus(saved);
+        setAppSettingsActionState("idle");
+      },
+      (reason: unknown) => {
+        setAppSettingsError(
+          reason instanceof Error ? reason.message : "YouTube 연결을 해제하지 못했습니다.",
+        );
+        setAppSettingsActionState("idle");
+      },
+    );
+  }, [youtubeMusicConnectionStatus]);
+
+  const startChatGptOAuthLogin = useCallback(() => {
+    if (chatGptOAuthLoginState === "waiting") return;
+    setChatGptOAuthLoginState("waiting");
+    setAppSettingsError(null);
+    void window.eumStudio.assistant.startChatGptOAuthLogin().then(
+      (status) => {
+        setChatGptOAuthStatus(status);
+        setChatGptOAuthLoginState("idle");
+      },
+      (reason: unknown) => {
+        setAppSettingsError(
+          reason instanceof Error ? reason.message : "GPT 로그인에 실패했습니다.",
+        );
+        setChatGptOAuthLoginState("idle");
+      },
+    );
+  }, [chatGptOAuthLoginState]);
+
+  useEffect(() => {
+    const handleQuickToolsShortcut = (event: KeyboardEvent) => {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        !event.altKey &&
+        event.key.toLocaleLowerCase() === "k"
+      ) {
+        event.preventDefault();
+        openQuickTools();
+      }
+    };
+    window.addEventListener("keydown", handleQuickToolsShortcut);
+    return () => {
+      window.removeEventListener("keydown", handleQuickToolsShortcut);
+    };
+  }, [openQuickTools]);
+
+  const selectQuickToolTarget = useCallback(
+    (target: QuickToolTarget) => {
+      setShowQuickTools(false);
+      if (target.id === QUICK_TOOL_MAIN_COMMAND_ID) {
+        returnToMain();
+        return;
+      }
+      if (target.id === QUICK_TOOL_CREATE_WORK_COMMAND_ID) {
+        setActionError(null);
+        setShowCreateWork(true);
+        return;
+      }
+      if (target.workId !== null && catalog !== null) {
+        const ownedWork = catalog.works.find(
+          (work) => work.workId === target.workId,
+        );
+        if (ownedWork === undefined) return;
+        const ownedDocument =
+          target.documentId === null
+            ? null
+            : ownedWork.documents.find(
+                (document) => document.documentId === target.documentId,
+              ) ?? null;
+        if (target.documentId !== null && ownedDocument === null) return;
+        void openLocation(ownedWork.workId, ownedDocument?.documentId ?? null);
+      }
+    },
+    [catalog, openLocation, returnToMain],
+  );
+
   return (
-    <div className={sidebarCompact ? "app-shell sidebar-compact" : "app-shell"}>
-      <aside className="sidebar">
+    <StudioAppShell
+      compact={sidebarCompact}
+      editor={activePage === "workspace"}
+      home={activePage === "main"}
+    >
+      <header className="app-topbar">
+        <span aria-hidden="true" className="app-topbar-mark">이</span>
+        <button
+          aria-label={sidebarCompact ? "사이드바 펼치기" : "사이드바 접기"}
+          className="app-topbar-button"
+          onClick={() => setSidebarCompact((current) => !current)}
+          type="button"
+        >
+          {sidebarCompact ? (
+            <PanelLeftOpen size={16} />
+          ) : (
+            <PanelLeftClose size={16} />
+          )}
+        </button>
+        <button
+          aria-label="홈 열기"
+          className="app-topbar-button"
+          disabled={busy}
+          onClick={returnToMain}
+          type="button"
+        >
+          <Home aria-hidden="true" size={15} />
+        </button>
+        <button
+          aria-label={showAppSettings ? "앱 설정 닫기" : "앱 설정 열기"}
+          aria-pressed={showAppSettings}
+          className={
+            showAppSettings
+              ? "app-topbar-button app-topbar-settings is-active"
+              : "app-topbar-button app-topbar-settings"
+          }
+          disabled={busy || appSettingsActionState === "saving"}
+          onClick={showAppSettings ? closeAppSettings : openAppSettings}
+          title="설정"
+          type="button"
+        >
+          <Settings aria-hidden="true" size={15} />
+        </button>
+      </header>
+      <aside className="sidebar studio-sidebar">
         <div className="brand-row">
           <div className="brand-mark" aria-hidden="true">이</div>
           <div className="brand-copy">
-            <strong>이음 스튜디오</strong>
-            <span>로컬 집필 작업실</span>
+            <strong>이음</strong>
           </div>
-          <button
-            aria-label={sidebarCompact ? "사이드바 펼치기" : "사이드바 접기"}
-            className="sidebar-toggle"
-            onClick={() => setSidebarCompact((current) => !current)}
-            type="button"
-          >
-            {sidebarCompact ? (
-              <PanelLeftOpen size={17} />
-            ) : (
-              <PanelLeftClose size={17} />
-            )}
-          </button>
+          <ChevronDown aria-hidden="true" className="brand-chevron" size={15} />
         </div>
 
         <nav aria-label="주요 화면" className="sidebar-navigation single-navigation">
           <button
+            aria-label="빠른 도구 열기"
+            className="sidebar-search"
+            disabled={busy || catalogState.status !== "ready"}
+            onClick={openQuickTools}
+            title="빠른 도구 (Ctrl+K)"
+            type="button"
+          >
+            <Search aria-hidden="true" size={16} />
+            <span>빠른 전환</span>
+            <kbd>Ctrl K</kbd>
+          </button>
+          <button
+            aria-label="메인"
             aria-current={activePage === "main" ? "page" : undefined}
             className={activePage === "main" ? "nav-item is-active" : "nav-item"}
             disabled={busy}
@@ -1037,18 +3112,6 @@ export function StudioShell() {
           >
             <Home aria-hidden="true" size={17} />
             <span>메인</span>
-          </button>
-          <button
-            className="sidebar-create-work"
-            disabled={busy || catalogState.status !== "ready"}
-            onClick={() => {
-              setActionError(null);
-              setShowCreateWork(true);
-            }}
-            type="button"
-          >
-            <Plus aria-hidden="true" size={16} />
-            <span>새 작품</span>
           </button>
         </nav>
 
@@ -1059,13 +3122,6 @@ export function StudioShell() {
           />
         )}
 
-        <div className="sidebar-footer">
-          <div className="profile-avatar">작</div>
-          <div>
-            <strong>나의 작업실</strong>
-            <span>이 컴퓨터에 저장됩니다</span>
-          </div>
-        </div>
       </aside>
 
       <main
@@ -1077,17 +3133,20 @@ export function StudioShell() {
       >
         {activePage === "main" && (
           <header className="page-header main-page-header">
-            <div>
-              <p className="eyebrow">이음 스튜디오</p>
-              <h1>메인</h1>
-              <p className="page-description">
-                작품과 회차를 한 화면에서 열고 바로 이어 씁니다.
-              </p>
-            </div>
-            <span className="local-badge">
-              <span className="status-dot" />
-              로컬 작업실
-            </span>
+            <h1>홈</h1>
+            <button
+              aria-label="작품 만들기"
+              className="header-create-work"
+              disabled={busy || catalogState.status !== "ready"}
+              onClick={() => {
+                setActionError(null);
+                setShowCreateWork(true);
+              }}
+              type="button"
+            >
+              <Plus aria-hidden="true" size={17} />
+              <span>새 작품</span>
+            </button>
           </header>
         )}
 
@@ -1114,11 +3173,10 @@ export function StudioShell() {
               busy={busy}
               catalog={catalog}
               error={actionError}
+              favoriteWorkIds={favoriteWorkIds}
+              workCovers={workCovers}
               importBusy={importRehearsalRunning}
-              onCreateWork={() => {
-                setActionError(null);
-                setShowCreateWork(true);
-              }}
+              settingsRevision={appSettingsScheduleRevision}
               onOpenBackup={() => {
                 setShowBackup(true);
                 void loadBackupStatus();
@@ -1127,9 +3185,19 @@ export function StudioShell() {
                 setImportRehearsalError(null);
                 setShowImportRehearsal(true);
               }}
+              onOpenPublishing={openPublishingPartners}
               onOpen={(workId, documentId) => {
                 void openLocation(workId, documentId);
               }}
+              onMoveDocument={moveDocument}
+              onRename={(work) => {
+                setActionError(null);
+                setRenameWorkTarget(work);
+              }}
+              onRetire={retireWork}
+              onRetireDocument={retireDocument}
+              onToggleFavorite={toggleWorkFavorite}
+              onSelectCover={selectWorkCover}
             />
           )}
           {catalog !== null && !catalog.canCreateFirstWork && (
@@ -1161,6 +3229,122 @@ export function StudioShell() {
           submitting={actionState === "creating"}
         />
       )}
+      {renameWorkTarget !== null && (
+        <RenameWorkDialog
+          error={actionError}
+          key={renameWorkTarget.workId}
+          onCancel={() => {
+            if (!busy) {
+              setRenameWorkTarget(null);
+              setActionError(null);
+            }
+          }}
+          onSubmit={(title) => renameWork(renameWorkTarget, title)}
+          submitting={actionState === "renaming-work"}
+          work={renameWorkTarget}
+        />
+      )}
+      {showQuickTools && catalog !== null && (
+        <QuickToolsDialog
+          catalog={catalog}
+          disabled={busy}
+          onClose={() => {
+            if (!busy) setShowQuickTools(false);
+          }}
+          onSelect={selectQuickToolTarget}
+        />
+      )}
+      {showAppSettings && (
+        <AppSettingsDialog
+          actionState={appSettingsActionState}
+          chatGptOAuthLoginState={chatGptOAuthLoginState}
+          chatGptOAuthStatus={chatGptOAuthStatus}
+          error={appSettingsError}
+          key={[
+            appSettingsProjection?.revision ?? "loading",
+            workMusicSettingsProjection?.revision ?? "no-work",
+            youtubeMusicConnectionStatus?.revision ?? "no-youtube",
+            chatGptOAuthStatus?.revision ?? "no-chatgpt",
+          ].join(":")}
+          musicProfile={musicSettingsProfile}
+          musicProjection={workMusicSettingsProjection}
+          onClose={closeAppSettings}
+          onSave={saveAppSettings}
+          onRemoveYouTubeApiKey={removeYouTubeMusicConnection}
+          onStartChatGptOAuthLogin={startChatGptOAuthLogin}
+          profile={appSettingsProfile}
+          projection={appSettingsProjection}
+          youtubeConnectionStatus={youtubeMusicConnectionStatus}
+        />
+      )}
+      {showPublishingPartners && catalog !== null && (
+        <PublishingPartnerDialog
+          actionState={publishingPartnerActionState}
+          assistantConnections={publishingAssistantConnections}
+          contracts={publishingContracts}
+          error={publishingPartnerError}
+          onClose={() => {
+            if (publishingPartnerActionState === "idle") {
+              setShowPublishingPartners(false);
+              setPublishingPartnerError(null);
+            }
+          }}
+          onCreate={createPublishingPartner}
+          onCreateContract={createPublishingContract}
+          onCreatePublication={createPublishingPublication}
+          onCreateSettlement={createPublishingSettlement}
+          onCreatePayment={createPublishingPayment}
+          onCreateSource={createPublishingSource}
+          onPreviewResearch={previewPublishingResearch}
+          onApproveResearch={approvePublishingResearch}
+          onRunAssistant={runPublishingAssistant}
+          onApproveAssistant={approvePublishingAssistant}
+          onSetEvidenceLinks={setPublishingEvidenceLinks}
+          onSelectPartnerCsv={selectPublishingPartnerCsv}
+          onApplyPartnerCsv={applyPublishingPartnerCsv}
+          onSelectSubmissionCsv={selectPublishingSubmissionCsv}
+          onApplySubmissionCsv={applyPublishingSubmissionCsv}
+          onLinkMailCandidate={linkPublishingMailCandidate}
+          onUpdateMailCandidate={updatePublishingMailCandidate}
+          onReviewMailCandidate={reviewPublishingMailCandidate}
+          onConnectMail={connectPublishingMail}
+          onSyncMail={syncPublishingMail}
+          onDisconnectMail={disconnectPublishingMail}
+          onSaveMailSchedule={savePublishingMailSchedule}
+          onCreateSubmission={createPublishingSubmission}
+          onSelect={setSelectedPublishingPartnerId}
+          onSelectContract={setSelectedPublishingContractId}
+          onSelectPublication={setSelectedPublishingPublicationId}
+          onSelectSettlement={setSelectedPublishingSettlementId}
+          onSelectPayment={setSelectedPublishingPaymentId}
+          onSelectSource={setSelectedPublishingSourceId}
+          onSelectSubmission={setSelectedPublishingSubmissionId}
+          onUpdate={updatePublishingPartner}
+          onUpdateContract={updatePublishingContract}
+          onUpdatePublication={updatePublishingPublication}
+          onUpdateSettlement={updatePublishingSettlement}
+          onUpdatePayment={updatePublishingPayment}
+          onUpdateSubmission={updatePublishingSubmission}
+          partners={publishingPartners}
+          mailCandidates={publishingMailCandidates}
+          mailConnection={publishingMailConnection}
+          mailSchedule={publishingMailSchedule}
+          mailSyncResult={publishingMailSyncResult}
+          payments={publishingPayments}
+          sources={publishingSources}
+          publications={publishingPublications}
+          settlements={publishingSettlements}
+          selectedContractId={selectedPublishingContractId}
+          selectedPartnerId={selectedPublishingPartnerId}
+          selectedPublicationId={selectedPublishingPublicationId}
+          selectedSettlementId={selectedPublishingSettlementId}
+          selectedPaymentId={selectedPublishingPaymentId}
+          selectedSourceId={selectedPublishingSourceId}
+          selectedSubmissionId={selectedPublishingSubmissionId}
+          submissions={publishingSubmissions}
+          works={catalog.works}
+        />
+      )}
       {showBackup && (
         <BackupDialog
           actionState={backupActionState}
@@ -1190,6 +3374,6 @@ export function StudioShell() {
           summary={importRehearsalSummary}
         />
       )}
-    </div>
+    </StudioAppShell>
   );
 }

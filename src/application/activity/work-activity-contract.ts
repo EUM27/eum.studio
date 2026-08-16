@@ -56,11 +56,13 @@ export type FocusCycleProjection = {
   readonly focusCycleId: EntityId<"FocusCycle">;
   readonly workId: EntityId<"Work">;
   readonly sessionId: EntityId<"WritingSession"> | null;
-  readonly state: "running" | "stopped";
+  readonly state: "running" | "paused" | "completed" | "stopped";
   readonly phaseRef: string;
   readonly targetDurationMs: number;
   readonly startedAt: string;
-  readonly deadlineAt: string;
+  readonly deadlineAt: string | null;
+  readonly remainingDurationMs: number | null;
+  readonly pauseReason: string | null;
   readonly completedAt: string | null;
   readonly note: string;
 };
@@ -326,16 +328,32 @@ export function parseFocusCycleProjection(
       "targetDurationMs",
       "startedAt",
       "deadlineAt",
+      "remainingDurationMs",
+      "pauseReason",
       "completedAt",
       "note",
     ],
     label,
   );
   schema(input, label);
-  if (input.state !== "running" && input.state !== "stopped") {
+  if (
+    input.state !== "running" &&
+    input.state !== "paused" &&
+    input.state !== "completed" &&
+    input.state !== "stopped"
+  ) {
     throw new Error(`${label}.state is invalid`);
   }
   const sessionId = nullableString(input, "sessionId", label);
+  const remainingDurationMs = input.remainingDurationMs;
+  if (
+    remainingDurationMs !== null &&
+    (typeof remainingDurationMs !== "number" ||
+      !Number.isSafeInteger(remainingDurationMs) ||
+      remainingDurationMs < 0)
+  ) {
+    throw new Error(`${label}.remainingDurationMs is invalid`);
+  }
   return Object.freeze({
     schemaVersion: 1,
     focusCycleId: id<"FocusCycle">(input, "focusCycleId", label),
@@ -346,7 +364,9 @@ export function parseFocusCycleProjection(
     phaseRef: nonEmptyString(input, "phaseRef", label),
     targetDurationMs: duration(input, "targetDurationMs", label, false),
     startedAt: nonEmptyString(input, "startedAt", label),
-    deadlineAt: nonEmptyString(input, "deadlineAt", label),
+    deadlineAt: nullableString(input, "deadlineAt", label),
+    remainingDurationMs,
+    pauseReason: nullableString(input, "pauseReason", label),
     completedAt: nullableString(input, "completedAt", label),
     note: stringValue(input, "note", label),
   });

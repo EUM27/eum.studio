@@ -9,9 +9,15 @@ import {
   CaptureResumeCheckpointWithAnchors,
 } from "../application/checkpoints/capture-resume-checkpoint-with-anchors";
 import {
+  type LegacyLoreDryRunManuscriptProof,
   type LegacyLoreDryRunPlan,
+  type LegacyLoreSharedLoreFinalization,
+  type MigrationDisposition,
   type MigrationItemReceipt,
 } from "../application/migration/legacy-lore-dry-run";
+import type { LegacyLoreInventoryReport } from "../application/migration/legacy-lore-inventory";
+import type { LegacyBrowserSourceExportReceipt } from "../application/migration/browser-source-export";
+import type { MigrationSourceInspection } from "../application/migration/source-branch-inventory";
 import type { StorageTransaction } from "../application/storage/storage-service";
 import type { Poc3LedgerRecord } from "../domain/poc-3-storage-ledger";
 import { createWritingCatalog, entityId } from "../domain/writing";
@@ -63,6 +69,7 @@ export type LegacyLoreDryRunRawItemTargetReceipt = {
   readonly sourceCollection: string;
   readonly sourceIdentity: string;
   readonly sourceOccurrence: number;
+  readonly ownershipRef: string | null;
   readonly serializationIdentity: string;
   readonly checksumIdentity: string;
   readonly checksumValue: string;
@@ -76,6 +83,16 @@ export type LegacyLoreDryRunReport = {
   readonly sourceSnapshotId: string;
   readonly sourceSnapshotChecksumValue: string;
   readonly createdAt: string;
+  readonly sourceInspection: MigrationSourceInspection | null;
+  readonly browserSourceReceipt: LegacyBrowserSourceExportReceipt | null;
+  readonly sourceInventory: LegacyLoreInventoryReport;
+  readonly dispositionCounts: Readonly<Record<MigrationDisposition, number>>;
+  readonly issueCounts: readonly {
+    readonly issueKind: string;
+    readonly count: number;
+  }[];
+  readonly manuscriptProofs: readonly LegacyLoreDryRunManuscriptProof[];
+  readonly sharedLoreFinalization: LegacyLoreSharedLoreFinalization;
   readonly counts: {
     readonly workCount: number;
     readonly folderCount: number;
@@ -107,6 +124,8 @@ export type WriteLegacyLoreDryRunInput = {
   readonly anchorPolicy: AnchorPolicy;
   readonly anchorEvidenceChecksumAlgorithm: string;
   readonly plan: LegacyLoreDryRunPlan;
+  readonly sourceInspection?: MigrationSourceInspection;
+  readonly browserSourceReceipt?: LegacyBrowserSourceExportReceipt;
 };
 
 export type WriteLegacyLoreDryRunResult = {
@@ -331,6 +350,20 @@ function createDryRunReport(
   manuscriptReceipts: readonly LegacyLoreDryRunTargetReceipt[],
   checkpointReceipts: readonly LegacyLoreDryRunCheckpointTargetReceipt[],
 ): LegacyLoreDryRunReport {
+  const dispositionCounts: Record<MigrationDisposition, number> = {
+    exact: 0,
+    adapted: 0,
+    review: 0,
+    "raw-only": 0,
+    "derived-skip": 0,
+  };
+  const issueCounts = new Map<string, number>();
+  for (const receipt of input.plan.receipts) {
+    dispositionCounts[receipt.disposition] += 1;
+    for (const issueKind of receipt.issueKinds) {
+      issueCounts.set(issueKind, (issueCounts.get(issueKind) ?? 0) + 1);
+    }
+  }
   return Object.freeze({
     schemaVersion: 1,
     mapperVersion: input.plan.mapperVersion,
@@ -338,6 +371,17 @@ function createDryRunReport(
     sourceSnapshotId: input.plan.sourceSnapshotId,
     sourceSnapshotChecksumValue: input.plan.sourceSnapshotChecksumValue,
     createdAt: input.plan.createdAt,
+    sourceInspection: input.sourceInspection ?? null,
+    browserSourceReceipt: input.browserSourceReceipt ?? null,
+    sourceInventory: input.plan.inventory,
+    dispositionCounts: Object.freeze({ ...dispositionCounts }),
+    issueCounts: Object.freeze(
+      [...issueCounts.entries()]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([issueKind, count]) => Object.freeze({ issueKind, count })),
+    ),
+    manuscriptProofs: input.plan.manuscriptProofs,
+    sharedLoreFinalization: input.plan.sharedLoreFinalization,
     counts: Object.freeze({
       workCount: input.plan.works.length,
       folderCount: input.plan.folders.length,
@@ -346,9 +390,12 @@ function createDryRunReport(
       resumeCheckpointCount: input.plan.resumeCheckpoints.length,
       writingSessionCount: input.plan.writingSessions.length,
       rawItemCount: input.plan.rawItems.length,
-      receiptCount: input.plan.receipts.length,
-      sourceItemCount: input.plan.receiptCoverage.sourceItemCount,
-      uncoveredItemCount: input.plan.receiptCoverage.uncoveredItemCount,
+      receiptCount: input.plan.receipts.length +
+        (input.browserSourceReceipt?.entryReceipts.length ?? 0),
+      sourceItemCount: input.plan.receiptCoverage.sourceItemCount +
+        (input.browserSourceReceipt?.coverage.sourceEntryCount ?? 0),
+      uncoveredItemCount: input.plan.receiptCoverage.uncoveredItemCount +
+        (input.browserSourceReceipt?.coverage.uncoveredEntryCount ?? 0),
       orphanManuscriptCount:
         input.plan.inventory.counts.orphanManuscriptCount,
     }),
@@ -370,6 +417,7 @@ function createDryRunReport(
         sourceCollection: item.sourceCollection,
         sourceIdentity: item.sourceIdentity,
         sourceOccurrence: item.sourceOccurrence,
+        ownershipRef: item.ownershipRef,
         serializationIdentity: item.serializationIdentity,
         checksumIdentity: item.checksumIdentity,
         checksumValue: item.checksumValue,

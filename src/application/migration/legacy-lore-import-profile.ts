@@ -1,4 +1,5 @@
 import type { AnchorPolicy } from "../anchors/create-anchor";
+import type { MigrationSourceBranchKind } from "./source-branch-inventory";
 
 export type LegacyLoreImportProfile = {
   readonly schemaVersion: 1;
@@ -8,10 +9,19 @@ export type LegacyLoreImportProfile = {
     readonly formatVersion: string;
     readonly checksumIdentity: string;
     readonly checksumAlgorithm: string;
-    readonly sourceFileSegments: readonly string[];
-    readonly sourceLocator: string;
+    readonly mappingSourceLocator: string;
+    readonly captures: readonly {
+      readonly branchKind: MigrationSourceBranchKind;
+      readonly sourceFileSegments: readonly string[];
+      readonly sourceLocator: string;
+      readonly rawEntrySegments: readonly string[];
+    }[];
+    readonly connectorProbes: readonly {
+      readonly sourceFileSegments: readonly string[];
+      readonly connectorKind: string;
+      readonly credentialKind: string;
+    }[];
     readonly archiveDirectoryName: string;
-    readonly rawEntrySegments: readonly string[];
     readonly manifestEntrySegments: readonly string[];
   };
   readonly rehearsal: {
@@ -118,6 +128,101 @@ function strings(
   );
 }
 
+function captures(
+  input: Record<string, unknown>,
+  field: string,
+  label: string,
+): LegacyLoreImportProfile["source"]["captures"] {
+  const value = input[field];
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`${label}.${field} must be a non-empty capture array`);
+  }
+  const sourceLocators = new Set<string>();
+  const rawEntries = new Set<string>();
+  return Object.freeze(value.map((entry, index) => {
+    const entryLabel = `${label}.${field}[${index}]`;
+    const capture = record(entry, entryLabel);
+    exact(
+      capture,
+      ["branchKind", "sourceFileSegments", "sourceLocator", "rawEntrySegments"],
+      entryLabel,
+    );
+    if (
+      capture.branchKind !== "live-file" &&
+      capture.branchKind !== "backup-file" &&
+      capture.branchKind !== "local-storage" &&
+      capture.branchKind !== "indexed-db"
+    ) {
+      throw new Error(`${entryLabel}.branchKind is unsupported`);
+    }
+    const sourceFileSegments = segments(
+      capture,
+      "sourceFileSegments",
+      entryLabel,
+    );
+    const sourceLocator = text(capture, "sourceLocator", entryLabel);
+    const rawEntrySegments = segments(
+      capture,
+      "rawEntrySegments",
+      entryLabel,
+    );
+    const rawEntry = rawEntrySegments.join("/");
+    if (sourceLocators.has(sourceLocator) || rawEntries.has(rawEntry)) {
+      throw new Error(`${label}.${field} contains a duplicate identity`);
+    }
+    sourceLocators.add(sourceLocator);
+    rawEntries.add(rawEntry);
+    return Object.freeze({
+      branchKind: capture.branchKind,
+      sourceFileSegments,
+      sourceLocator,
+      rawEntrySegments,
+    });
+  }));
+}
+
+function connectorProbes(
+  input: Record<string, unknown>,
+  field: string,
+  label: string,
+): LegacyLoreImportProfile["source"]["connectorProbes"] {
+  const value = input[field];
+  if (!Array.isArray(value)) {
+    throw new Error(`${label}.${field} must be a connector probe array`);
+  }
+  const identities = new Set<string>();
+  return Object.freeze(value.map((entry, index) => {
+    const entryLabel = `${label}.${field}[${index}]`;
+    const probe = record(entry, entryLabel);
+    exact(
+      probe,
+      ["sourceFileSegments", "connectorKind", "credentialKind"],
+      entryLabel,
+    );
+    const sourceFileSegments = segments(
+      probe,
+      "sourceFileSegments",
+      entryLabel,
+    );
+    const connectorKind = text(probe, "connectorKind", entryLabel);
+    const credentialKind = text(probe, "credentialKind", entryLabel);
+    const identity = JSON.stringify([
+      sourceFileSegments,
+      connectorKind,
+      credentialKind,
+    ]);
+    if (identities.has(identity)) {
+      throw new Error(`${label}.${field} contains a duplicate probe`);
+    }
+    identities.add(identity);
+    return Object.freeze({
+      sourceFileSegments,
+      connectorKind,
+      credentialKind,
+    });
+  }));
+}
+
 export function parseLegacyLoreImportProfile(
   value: unknown,
 ): LegacyLoreImportProfile {
@@ -136,10 +241,10 @@ export function parseLegacyLoreImportProfile(
       "formatVersion",
       "checksumIdentity",
       "checksumAlgorithm",
-      "sourceFileSegments",
-      "sourceLocator",
+      "mappingSourceLocator",
+      "captures",
+      "connectorProbes",
       "archiveDirectoryName",
-      "rawEntrySegments",
       "manifestEntrySegments",
     ],
     `${label}.source`,
@@ -188,6 +293,21 @@ export function parseLegacyLoreImportProfile(
     ],
     `${label}.content`,
   );
+  const parsedCaptures = captures(source, "captures", `${label}.source`);
+  const mappingSourceLocator = text(
+    source,
+    "mappingSourceLocator",
+    `${label}.source`,
+  );
+  if (
+    parsedCaptures.filter(
+      (capture) => capture.sourceLocator === mappingSourceLocator,
+    ).length !== 1
+  ) {
+    throw new Error(
+      `${label}.source.mappingSourceLocator must identify one capture`,
+    );
+  }
   return Object.freeze({
     schemaVersion: 1,
     source: Object.freeze({
@@ -196,13 +316,17 @@ export function parseLegacyLoreImportProfile(
       formatVersion: text(source, "formatVersion", `${label}.source`),
       checksumIdentity: text(source, "checksumIdentity", `${label}.source`),
       checksumAlgorithm: text(source, "checksumAlgorithm", `${label}.source`),
-      sourceFileSegments: segments(source, "sourceFileSegments", `${label}.source`),
-      sourceLocator: text(source, "sourceLocator", `${label}.source`),
+      mappingSourceLocator,
+      captures: parsedCaptures,
+      connectorProbes: connectorProbes(
+        source,
+        "connectorProbes",
+        `${label}.source`,
+      ),
       archiveDirectoryName: safeSegment(
         text(source, "archiveDirectoryName", `${label}.source`),
         `${label}.source.archiveDirectoryName`,
       ),
-      rawEntrySegments: segments(source, "rawEntrySegments", `${label}.source`),
       manifestEntrySegments: segments(
         source,
         "manifestEntrySegments",

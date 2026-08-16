@@ -205,6 +205,152 @@ export type Poc3EventBlockRecord =
       string;
   };
 
+export type Poc3FragmentRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "fragment";
+    readonly workId: string;
+    readonly sourceDocumentId: string;
+    readonly sourceAnchorId: string;
+    readonly kindId: string;
+    readonly title: string;
+    readonly pinned: boolean;
+    readonly useCount: number;
+  };
+
+export type Poc3CharacterRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "character";
+    readonly workId: string;
+    readonly name: string;
+    readonly role: string;
+    readonly summary: string;
+    readonly note: string;
+  };
+
+export type Poc3LoreEntryRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "loreEntry";
+    readonly workId: string;
+    readonly title: string;
+    readonly content: string;
+    readonly category: string;
+    readonly aliases: readonly string[];
+    readonly enabled: boolean;
+  };
+
+export type Poc3LoreEntryEvidenceRecord = {
+  readonly kind: "loreEntryEvidence";
+  readonly id: string;
+  readonly workId: string;
+  readonly loreEntryId: string;
+  readonly sourceDocumentId: string;
+  readonly sourceAnchorId: string;
+  readonly createdAt: string;
+};
+
+export type Poc3LoreEntryHistoryRecord = {
+  readonly kind: "loreEntryHistory";
+  readonly id: string;
+  readonly schemaVersion: number;
+  readonly workId: string;
+  readonly loreEntryId: string;
+  readonly entryRevision: number;
+  readonly changeKind: "created" | "updated" | "evidence-added" | "retired";
+  readonly title: string;
+  readonly content: string;
+  readonly category: string;
+  readonly aliases: readonly string[];
+  readonly enabled: boolean;
+  readonly evidenceAnchorIds: readonly string[];
+  readonly changedAt: string;
+};
+
+export type Poc3LoreForeshadowLinkRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "loreForeshadowLink";
+    readonly workId: string;
+    readonly loreEntryId: string;
+    readonly lineId: string;
+    readonly linkedAt: string;
+    readonly unlinkedAt: string | null;
+    readonly unlinkReason:
+      | "user"
+      | "lore-retired"
+      | "foreshadow-retired"
+      | null;
+  };
+
+export type Poc3LoreCandidateRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "loreCandidate";
+    readonly workId: string;
+    readonly sourceDocumentId: string;
+    readonly sourceDocumentRevisionId: string;
+    readonly sourceAnchorId: string;
+    readonly exactText: string;
+    readonly source: "user" | "assistant";
+    readonly certainty: "explicit" | "inferred";
+    readonly proposalJson: string;
+    readonly reason: string;
+    readonly status: "pending" | "approved" | "rejected";
+    readonly approvedLoreEntryId: string | null;
+    readonly reviewedAt: string | null;
+  };
+
+export type Poc3PublishingPartnerRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "publishingPartner";
+    readonly name: string;
+    readonly parentPartnerId: string | null;
+    readonly submissionMethod: string;
+    readonly websiteUrl: string;
+    readonly email: string;
+    readonly genres: readonly string[];
+    readonly requiredLength: string;
+    readonly priority: string;
+    readonly note: string;
+    readonly sourceIds: readonly string[];
+  };
+
+export type Poc3PlotThreadRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "plotThread";
+    readonly workId: string;
+    readonly title: string;
+    readonly stage: string;
+    readonly summary: string;
+    readonly note: string;
+  };
+
+export type Poc3PlotThreadSourceRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "plotThreadSource";
+    readonly workId: string;
+    readonly plotThreadId: string;
+    readonly expectedSourceId: string | null;
+    readonly sourceDocumentId: string;
+    readonly sourceAnchorId: string;
+  };
+
+export type Poc3ForeshadowLineRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "foreshadowLine";
+    readonly workId: string;
+    readonly title: string;
+    readonly note: string;
+  };
+
+export type Poc3ForeshadowPointRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "foreshadowPoint";
+    readonly workId: string;
+    readonly lineId: string;
+    readonly sourceDocumentId: string;
+    readonly sourceAnchorId: string;
+    readonly roleId: string;
+    readonly note: string;
+  };
+
 export type Poc3ResumeCheckpointRecord =
   Poc3LedgerRecordMeta & {
     readonly kind:
@@ -344,6 +490,154 @@ export type Poc3RawPreservedItemRecord = {
   readonly createdAt: string;
 };
 
+export type Poc3SubmissionPackageRecord = {
+  readonly kind: "submissionPackage";
+  readonly id: string;
+  readonly workId: string;
+  readonly partnerId: string;
+  readonly workSnapshotId: string;
+  readonly workTitleSnapshot: string;
+  readonly partnerNameSnapshot: string;
+  readonly manifestHash: string;
+  readonly sealedAt: string;
+};
+
+export type Poc3PublishingSubmissionRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "publishingSubmission";
+    readonly workId: string;
+    readonly partnerId: string;
+    readonly submissionPackageId: string;
+    readonly title: string;
+    readonly status: string;
+    readonly submittedOn: string | null;
+    readonly respondedOn: string | null;
+    readonly result: string;
+    readonly note: string;
+    readonly cardNote: string;
+    readonly sourceIds: readonly string[];
+  };
+
+export type Poc3PublishingContractRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "publishingContract";
+    readonly workId: string;
+    readonly partnerId: string;
+    readonly submissionId: string | null;
+    readonly title: string;
+    readonly workTitleSnapshot: string;
+    readonly partnerNameSnapshot: string;
+    readonly status: string;
+    readonly signedOn: string | null;
+    readonly startsOn: string | null;
+    readonly endsOn: string | null;
+    readonly rightsScope: string;
+    readonly advanceAmount: number | null;
+    readonly currencyCode: string;
+    readonly revenueShareNote: string;
+    readonly note: string;
+    readonly sourceIds: readonly string[];
+  };
+
+export type Poc3PublishingPublicationRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "publishingPublication";
+    readonly workId: string;
+    readonly contractId: string | null;
+    readonly channelPartnerId: string | null;
+    readonly title: string;
+    readonly workTitleSnapshot: string;
+    readonly channelNameSnapshot: string;
+    readonly status: string;
+    readonly format: string;
+    readonly scheduledOn: string | null;
+    readonly startsOn: string | null;
+    readonly endsOn: string | null;
+    readonly publishedUnitCount: number | null;
+    readonly plannedUnitCount: number | null;
+    readonly scheduleNote: string;
+    readonly note: string;
+    readonly sourceIds: readonly string[];
+  };
+
+export type Poc3PublishingSettlementLineItem = {
+  readonly settlementLineItemId: string;
+  readonly label: string;
+  readonly amount: number;
+  readonly note: string;
+};
+
+export type Poc3PublishingSettlementRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "publishingSettlement";
+    readonly workId: string;
+    readonly publicationId: string;
+    readonly title: string;
+    readonly workTitleSnapshot: string;
+    readonly publicationTitleSnapshot: string;
+    readonly periodStartsOn: string | null;
+    readonly periodEndsOn: string | null;
+    readonly issuedOn: string | null;
+    readonly reviewStatus: string;
+    readonly currencyCode: string;
+    readonly reportedAmount: number | null;
+    readonly items: readonly Poc3PublishingSettlementLineItem[];
+    readonly note: string;
+    readonly sourceIds: readonly string[];
+  };
+
+export type Poc3PublishingPaymentRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "publishingPayment";
+    readonly workId: string;
+    readonly settlementId: string | null;
+    readonly workTitleSnapshot: string;
+    readonly settlementTitleSnapshot: string;
+    readonly receivedOn: string | null;
+    readonly confirmedOn: string | null;
+    readonly amount: number;
+    readonly currencyCode: string;
+    readonly matchStatus: string;
+    readonly payerLabel: string;
+    readonly reference: string;
+    readonly note: string;
+    readonly sourceIds: readonly string[];
+  };
+
+export type Poc3PublishingSourceRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "publishingSource";
+    readonly sourceKind: string;
+    readonly label: string;
+    readonly url: string | null;
+    readonly observedAt: string | null;
+    readonly authority: string;
+    readonly importedFields: Readonly<Record<string, string>>;
+  };
+
+export type Poc3PublishingMailCandidateRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "publishingMailCandidate";
+    readonly sourceId: string;
+    readonly sourceAccountId: string;
+    readonly messageId: string;
+    readonly threadId: string;
+    readonly from: string;
+    readonly subject: string;
+    readonly receivedAt: string;
+    readonly snippet: string;
+    readonly bodyFingerprint: string;
+    readonly submissionId: string | null;
+    readonly matchReason: string;
+    readonly proposedStatus: string;
+    readonly proposedResult: string;
+    readonly proposedRespondedOn: string | null;
+    readonly proposedNote: string;
+    readonly classificationConnectionId: string | null;
+    readonly classificationModel: string;
+    readonly reviewStatus: string;
+  };
+
 export type Poc3MigrationDecisionRecord = {
   readonly kind: "migrationDecision";
   readonly id: string;
@@ -372,11 +666,31 @@ export type Poc3LedgerRecord =
   | Poc3RangeGroupRecord
   | Poc3SceneOverrideRecord
   | Poc3EventBlockRecord
+  | Poc3FragmentRecord
+  | Poc3CharacterRecord
+  | Poc3LoreEntryRecord
+  | Poc3LoreEntryEvidenceRecord
+  | Poc3LoreEntryHistoryRecord
+  | Poc3LoreForeshadowLinkRecord
+  | Poc3LoreCandidateRecord
+  | Poc3PublishingPartnerRecord
+  | Poc3PlotThreadRecord
+  | Poc3PlotThreadSourceRecord
+  | Poc3ForeshadowLineRecord
+  | Poc3ForeshadowPointRecord
   | Poc3ResumeCheckpointRecord
   | Poc3WritingSessionRecord
   | Poc3ActivityIntervalRecord
   | Poc3FocusCycleRecord
   | Poc3WorkSnapshotRecord
+  | Poc3SubmissionPackageRecord
+  | Poc3PublishingSubmissionRecord
+  | Poc3PublishingContractRecord
+  | Poc3PublishingPublicationRecord
+  | Poc3PublishingSettlementRecord
+  | Poc3PublishingPaymentRecord
+  | Poc3PublishingSourceRecord
+  | Poc3PublishingMailCandidateRecord
   | Poc3RawPreservedItemRecord
   | Poc3MigrationDecisionRecord
   | Poc3MigrationReceiptRecord;

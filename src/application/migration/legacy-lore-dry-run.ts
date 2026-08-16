@@ -124,11 +124,37 @@ export type LegacyLoreDryRunRawItem = {
   readonly sourceCollection: string;
   readonly sourceIdentity: string;
   readonly sourceOccurrence: number;
+  readonly ownershipRef: string | null;
   readonly serializationIdentity: string;
   readonly checksumIdentity: string;
   readonly checksumValue: string;
   readonly byteLength: number;
   readonly bytes: Uint8Array;
+};
+
+export type LegacyLoreDryRunManuscriptProof = {
+  readonly sourceDocumentId: string;
+  readonly sourceOwnershipRef: string | null;
+  readonly sourceChecksumIdentity: string;
+  readonly sourceChecksumValue: string;
+  readonly sourceByteLength: number;
+  readonly sourceLengthUtf16: number;
+  readonly rawItemId: string;
+  readonly rawChecksumIdentity: string;
+  readonly rawChecksumValue: string;
+  readonly preservation:
+    | "target-revision-checksum-match"
+    | "quarantine-raw-exact";
+  readonly targetDocumentId: string | null;
+  readonly targetRevisionId: string | null;
+  readonly targetChecksumIdentity: string | null;
+  readonly targetChecksumValue: string | null;
+};
+
+export type LegacyLoreSharedLoreFinalization = {
+  readonly status: "blocked-by-schema-decision";
+  readonly globalBookCount: number;
+  readonly globalEntryCount: number;
 };
 
 export type LegacyLoreDryRunPlan = {
@@ -144,6 +170,8 @@ export type LegacyLoreDryRunPlan = {
   readonly resumeCheckpoints: readonly LegacyLoreDryRunResumeCheckpoint[];
   readonly writingSessions: readonly LegacyLoreDryRunWritingSession[];
   readonly rawItems: readonly LegacyLoreDryRunRawItem[];
+  readonly manuscriptProofs: readonly LegacyLoreDryRunManuscriptProof[];
+  readonly sharedLoreFinalization: LegacyLoreSharedLoreFinalization;
   readonly receipts: readonly MigrationItemReceipt[];
   readonly receiptCoverage: LegacyLoreReceiptCoverage;
   readonly inventory: LegacyLoreInventoryReport;
@@ -965,6 +993,25 @@ export function createLegacyLoreDryRunPlan(
     }));
   });
 
+  const globalLoreBookIds = new Set(
+    asArray(root.books).flatMap((book) =>
+      isRecord(book) &&
+      book.scope === "global" &&
+      readNonEmptyString(book.id) !== null
+        ? [readNonEmptyString(book.id) as string]
+        : [],
+    ),
+  );
+  const globalLoreEntryIds = new Set(
+    asArray(root.entries).flatMap((entry) =>
+      isRecord(entry) &&
+      globalLoreBookIds.has(readNonEmptyString(entry.bookId) ?? "") &&
+      readNonEmptyString(entry.id) !== null
+        ? [readNonEmptyString(entry.id) as string]
+        : [],
+    ),
+  );
+
   const rawArrayCollections = Object.freeze([
     "books",
     "entries",
@@ -989,7 +1036,15 @@ export function createLegacyLoreDryRunPlan(
         targetEntityId: null,
         disposition: "raw-only",
         fieldReceipts: rawFieldReceipts(item),
-        issueKinds: ["no-approved-target-contract"],
+        issueKinds: [
+          "no-approved-target-contract",
+          ...(
+            (collection === "books" && globalLoreBookIds.has(sourceIdentity)) ||
+            (collection === "entries" && globalLoreEntryIds.has(sourceIdentity))
+              ? ["shared-lore-canonical-finalization-blocked"]
+              : []
+          ),
+        ],
       }));
     });
     if (value !== undefined && !Array.isArray(value)) {
@@ -1239,6 +1294,53 @@ export function createLegacyLoreDryRunPlan(
       `Migration receipt coverage mismatch: ${receipts.length}/${sourceItems.length}`,
     );
   }
+  const sourceWorkByDocument = new Map<string, string>();
+  for (const document of asArray(library.episodes)) {
+    if (!isRecord(document)) continue;
+    const documentId = readNonEmptyString(document.id);
+    const workId = readNonEmptyString(document.workId);
+    if (documentId !== null && workId !== null) {
+      sourceWorkByDocument.set(documentId, workId);
+    }
+  }
+  const sourceWorkByBook = new Map<string, string | null>();
+  for (const book of asArray(root.books)) {
+    if (!isRecord(book)) continue;
+    const bookId = readNonEmptyString(book.id);
+    if (bookId === null) continue;
+    sourceWorkByBook.set(
+      bookId,
+      book.scope === "global" ? null : readNonEmptyString(book.workId),
+    );
+  }
+  const ownershipRefForSourceItem = (item: SourceItem): string | null => {
+    if (item.sourceCollection === "library.works") {
+      return isRecord(item.value)
+        ? readNonEmptyString(item.value.id)
+        : null;
+    }
+    if (item.sourceCollection === "recentWork") {
+      return item.sourceIdentity;
+    }
+    if (
+      item.sourceCollection === "manuscripts" ||
+      item.sourceCollection === "factTemplatesByEpisode"
+    ) {
+      return sourceWorkByDocument.get(item.sourceIdentity) ?? null;
+    }
+    if (!isRecord(item.value)) {
+      return null;
+    }
+    const directWorkId = readNonEmptyString(item.value.workId);
+    if (directWorkId !== null) {
+      return directWorkId;
+    }
+    if (item.sourceCollection === "entries") {
+      const bookId = readNonEmptyString(item.value.bookId);
+      return bookId === null ? null : sourceWorkByBook.get(bookId) ?? null;
+    }
+    return null;
+  };
   const sourceItemQueues = new Map<string, SourceItem[]>();
   for (const item of sourceItems) {
     const key = JSON.stringify([item.sourceCollection, item.sourceIdentity]);
@@ -1289,6 +1391,7 @@ export function createLegacyLoreDryRunPlan(
       sourceCollection: receipt.sourceCollection,
       sourceIdentity: receipt.sourceIdentity,
       sourceOccurrence,
+      ownershipRef: ownershipRefForSourceItem(sourceItem),
       serializationIdentity: descriptor.serializationIdentity,
       checksumIdentity: descriptor.checksumIdentity,
       checksumValue: descriptor.checksumValue,
@@ -1311,6 +1414,67 @@ export function createLegacyLoreDryRunPlan(
     receiptCount: linkedReceipts.length,
     uncoveredItemCount: 0,
   });
+  const rawManuscriptsByIdentity = new Map(
+    rawItems
+      .filter((item) =>
+        item.sourceCollection === "manuscripts" &&
+        item.sourceOccurrence === 0
+      )
+      .map((item) => [item.sourceIdentity, item]),
+  );
+  const manuscriptProofs: LegacyLoreDryRunManuscriptProof[] = [];
+  for (const [sourceDocumentId, manuscript] of Object.entries(manuscripts).sort(
+    ([left], [right]) => left.localeCompare(right),
+  )) {
+    if (typeof manuscript !== "string") {
+      continue;
+    }
+    const sourceDescriptor = input.describeManuscript(manuscript);
+    if (
+      sourceDescriptor.checksumIdentity.length === 0 ||
+      sourceDescriptor.checksumValue.length === 0 ||
+      sourceDescriptor.byteLength < 0 ||
+      sourceDescriptor.lengthUtf16 !== manuscript.length
+    ) {
+      throw new Error("Manuscript proof descriptor does not match source text");
+    }
+    const rawItem = rawManuscriptsByIdentity.get(sourceDocumentId);
+    if (rawItem === undefined) {
+      throw new Error("Manuscript proof is missing its raw preservation item");
+    }
+    const document = documentsBySourceId.get(sourceDocumentId);
+    if (
+      document !== undefined &&
+      (
+        document.manuscriptChecksumIdentity !==
+          sourceDescriptor.checksumIdentity ||
+        document.manuscriptChecksumValue !== sourceDescriptor.checksumValue ||
+        document.manuscriptByteLength !== sourceDescriptor.byteLength ||
+        document.manuscriptLengthUtf16 !== sourceDescriptor.lengthUtf16
+      )
+    ) {
+      throw new Error("Mapped manuscript checksum differs from source proof");
+    }
+    manuscriptProofs.push(Object.freeze({
+      sourceDocumentId,
+      sourceOwnershipRef: sourceWorkByDocument.get(sourceDocumentId) ?? null,
+      sourceChecksumIdentity: sourceDescriptor.checksumIdentity,
+      sourceChecksumValue: sourceDescriptor.checksumValue,
+      sourceByteLength: sourceDescriptor.byteLength,
+      sourceLengthUtf16: sourceDescriptor.lengthUtf16,
+      rawItemId: rawItem.rawItemId,
+      rawChecksumIdentity: rawItem.checksumIdentity,
+      rawChecksumValue: rawItem.checksumValue,
+      preservation: document === undefined
+        ? "quarantine-raw-exact"
+        : "target-revision-checksum-match",
+      targetDocumentId: document?.documentId ?? null,
+      targetRevisionId: document?.revisionId ?? null,
+      targetChecksumIdentity:
+        document?.manuscriptChecksumIdentity ?? null,
+      targetChecksumValue: document?.manuscriptChecksumValue ?? null,
+    }));
+  }
 
   return Object.freeze({
     mapperVersion: input.mapperVersion,
@@ -1325,6 +1489,12 @@ export function createLegacyLoreDryRunPlan(
     resumeCheckpoints: Object.freeze(resumeCheckpoints),
     writingSessions: Object.freeze(writingSessions),
     rawItems: Object.freeze(rawItems),
+    manuscriptProofs: Object.freeze(manuscriptProofs),
+    sharedLoreFinalization: Object.freeze({
+      status: "blocked-by-schema-decision",
+      globalBookCount: globalLoreBookIds.size,
+      globalEntryCount: globalLoreEntryIds.size,
+    }),
     receipts: Object.freeze(
       linkedReceipts.sort((left, right) =>
         `${left.sourceCollection}:${left.sourceIdentity}`.localeCompare(

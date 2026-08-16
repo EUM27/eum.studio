@@ -3,16 +3,26 @@ import {
   type EntityId,
 } from "../../domain/writing";
 
+export const UNTITLED_DOCUMENT_TITLE = "제목없음";
+
 export type WorkspaceDocumentSummary = {
   readonly documentId: EntityId<"Document">;
   readonly title: string;
   readonly currentRevisionId: EntityId<"DocumentRevision">;
+  readonly folderId: EntityId<"DocumentFolder"> | null;
+};
+
+export type WorkspaceDocumentFolderSummary = {
+  readonly folderId: EntityId<"DocumentFolder">;
+  readonly title: string;
+  readonly parentFolderId: EntityId<"DocumentFolder"> | null;
 };
 
 export type WorkspaceWorkSummary = {
   readonly workId: EntityId<"Work">;
   readonly title: string;
   readonly updatedAt: string;
+  readonly folders: readonly WorkspaceDocumentFolderSummary[];
   readonly documents: readonly WorkspaceDocumentSummary[];
 };
 
@@ -52,6 +62,64 @@ export type CreateDocumentResult = {
   readonly workId: EntityId<"Work">;
   readonly documentId: EntityId<"Document">;
   readonly revisionId: EntityId<"DocumentRevision">;
+};
+
+export type RenameWorkCommand = {
+  readonly schemaVersion: 1;
+  readonly workId: EntityId<"Work">;
+  readonly title: string;
+};
+
+export type RetireWorkCommand = {
+  readonly schemaVersion: 1;
+  readonly workId: EntityId<"Work">;
+};
+
+export type RetireDocumentCommand = {
+  readonly schemaVersion: 1;
+  readonly workId: EntityId<"Work">;
+  readonly documentId: EntityId<"Document">;
+};
+
+export type MoveDocumentCommand = {
+  readonly schemaVersion: 1;
+  readonly workId: EntityId<"Work">;
+  readonly documentId: EntityId<"Document">;
+  readonly direction: "earlier" | "later";
+};
+
+export type CreateDocumentFolderCommand = {
+  readonly schemaVersion: 1;
+  readonly workId: EntityId<"Work">;
+  readonly title: string;
+  readonly parentFolderId: EntityId<"DocumentFolder"> | null;
+};
+
+export type RenameDocumentFolderCommand = {
+  readonly schemaVersion: 1;
+  readonly workId: EntityId<"Work">;
+  readonly folderId: EntityId<"DocumentFolder">;
+  readonly title: string;
+};
+
+export type PlaceDocumentInFolderCommand = {
+  readonly schemaVersion: 1;
+  readonly workId: EntityId<"Work">;
+  readonly documentId: EntityId<"Document">;
+  readonly folderId: EntityId<"DocumentFolder"> | null;
+};
+
+export type RetireDocumentFolderCommand = {
+  readonly schemaVersion: 1;
+  readonly workId: EntityId<"Work">;
+  readonly folderId: EntityId<"DocumentFolder">;
+};
+
+export type RenameDocumentCommand = {
+  readonly schemaVersion: 1;
+  readonly workId: EntityId<"Work">;
+  readonly documentId: EntityId<"Document">;
+  readonly title: string;
 };
 
 export type ActivateWorkspaceLocationCommand = {
@@ -112,6 +180,13 @@ function readNonEmptyTrimmedText(
   return text;
 }
 
+function readDocumentTitle(value: unknown, label: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`${label} must be a string`);
+  }
+  return value.trim() || UNTITLED_DOCUMENT_TITLE;
+}
+
 function readIdentity<TEntity extends string>(
   value: unknown,
   label: string,
@@ -120,6 +195,13 @@ function readIdentity<TEntity extends string>(
     throw new Error(`${label} must be a non-empty string`);
   }
   return entityId<TEntity>(value);
+}
+
+function readNullableIdentity<TEntity extends string>(
+  value: unknown,
+  label: string,
+): EntityId<TEntity> | null {
+  return value === null ? null : readIdentity<TEntity>(value, label);
 }
 
 function readInstant(value: unknown, label: string): string {
@@ -159,7 +241,7 @@ export function parseCreateWorkCommand(
   return Object.freeze({
     schemaVersion: 1,
     title: readNonEmptyTrimmedText(input.title, "CreateWorkCommand.title"),
-    firstDocumentTitle: readNonEmptyTrimmedText(
+    firstDocumentTitle: readDocumentTitle(
       input.firstDocumentTitle,
       "CreateWorkCommand.firstDocumentTitle",
     ),
@@ -190,9 +272,252 @@ export function parseCreateDocumentCommand(
       input.workId,
       "CreateDocumentCommand.workId",
     ),
-    title: readNonEmptyTrimmedText(
+    title: readDocumentTitle(
       input.title,
       "CreateDocumentCommand.title",
+    ),
+  });
+}
+
+export function parseRenameWorkCommand(
+  value: unknown,
+): RenameWorkCommand {
+  const input = readRecord(value, "RenameWorkCommand");
+  assertOnlyFields(
+    input,
+    ["schemaVersion", "workId", "title"],
+    "RenameWorkCommand",
+  );
+  if (input.schemaVersion !== 1) {
+    throw new Error("RenameWorkCommand.schemaVersion must be 1");
+  }
+  return Object.freeze({
+    schemaVersion: 1,
+    workId: readIdentity<"Work">(
+      input.workId,
+      "RenameWorkCommand.workId",
+    ),
+    title: readNonEmptyTrimmedText(
+      input.title,
+      "RenameWorkCommand.title",
+    ),
+  });
+}
+
+export function parseRenameDocumentCommand(
+  value: unknown,
+): RenameDocumentCommand {
+  const input = readRecord(value, "RenameDocumentCommand");
+  assertOnlyFields(
+    input,
+    ["schemaVersion", "workId", "documentId", "title"],
+    "RenameDocumentCommand",
+  );
+  if (input.schemaVersion !== 1) {
+    throw new Error("RenameDocumentCommand.schemaVersion must be 1");
+  }
+  return Object.freeze({
+    schemaVersion: 1,
+    workId: readIdentity<"Work">(
+      input.workId,
+      "RenameDocumentCommand.workId",
+    ),
+    documentId: readIdentity<"Document">(
+      input.documentId,
+      "RenameDocumentCommand.documentId",
+    ),
+    title: readNonEmptyTrimmedText(
+      input.title,
+      "RenameDocumentCommand.title",
+    ),
+  });
+}
+
+export function parseRetireWorkCommand(
+  value: unknown,
+): RetireWorkCommand {
+  const input = readRecord(value, "RetireWorkCommand");
+  assertOnlyFields(
+    input,
+    ["schemaVersion", "workId"],
+    "RetireWorkCommand",
+  );
+  if (input.schemaVersion !== 1) {
+    throw new Error("RetireWorkCommand.schemaVersion must be 1");
+  }
+  return Object.freeze({
+    schemaVersion: 1,
+    workId: readIdentity<"Work">(
+      input.workId,
+      "RetireWorkCommand.workId",
+    ),
+  });
+}
+
+export function parseRetireDocumentCommand(
+  value: unknown,
+): RetireDocumentCommand {
+  const input = readRecord(value, "RetireDocumentCommand");
+  assertOnlyFields(
+    input,
+    ["schemaVersion", "workId", "documentId"],
+    "RetireDocumentCommand",
+  );
+  if (input.schemaVersion !== 1) {
+    throw new Error("RetireDocumentCommand.schemaVersion must be 1");
+  }
+  return Object.freeze({
+    schemaVersion: 1,
+    workId: readIdentity<"Work">(
+      input.workId,
+      "RetireDocumentCommand.workId",
+    ),
+    documentId: readIdentity<"Document">(
+      input.documentId,
+      "RetireDocumentCommand.documentId",
+    ),
+  });
+}
+
+export function parseMoveDocumentCommand(
+  value: unknown,
+): MoveDocumentCommand {
+  const input = readRecord(value, "MoveDocumentCommand");
+  assertOnlyFields(
+    input,
+    ["schemaVersion", "workId", "documentId", "direction"],
+    "MoveDocumentCommand",
+  );
+  if (input.schemaVersion !== 1) {
+    throw new Error("MoveDocumentCommand.schemaVersion must be 1");
+  }
+  if (input.direction !== "earlier" && input.direction !== "later") {
+    throw new Error(
+      "MoveDocumentCommand.direction must be earlier or later",
+    );
+  }
+  return Object.freeze({
+    schemaVersion: 1,
+    workId: readIdentity<"Work">(
+      input.workId,
+      "MoveDocumentCommand.workId",
+    ),
+    documentId: readIdentity<"Document">(
+      input.documentId,
+      "MoveDocumentCommand.documentId",
+    ),
+    direction: input.direction,
+  });
+}
+
+export function parseCreateDocumentFolderCommand(
+  value: unknown,
+): CreateDocumentFolderCommand {
+  const input = readRecord(value, "CreateDocumentFolderCommand");
+  assertOnlyFields(
+    input,
+    ["schemaVersion", "workId", "title", "parentFolderId"],
+    "CreateDocumentFolderCommand",
+  );
+  if (input.schemaVersion !== 1) {
+    throw new Error("CreateDocumentFolderCommand.schemaVersion must be 1");
+  }
+  return Object.freeze({
+    schemaVersion: 1,
+    workId: readIdentity<"Work">(
+      input.workId,
+      "CreateDocumentFolderCommand.workId",
+    ),
+    title: readNonEmptyTrimmedText(
+      input.title,
+      "CreateDocumentFolderCommand.title",
+    ),
+    parentFolderId: readNullableIdentity<"DocumentFolder">(
+      input.parentFolderId,
+      "CreateDocumentFolderCommand.parentFolderId",
+    ),
+  });
+}
+
+export function parseRenameDocumentFolderCommand(
+  value: unknown,
+): RenameDocumentFolderCommand {
+  const input = readRecord(value, "RenameDocumentFolderCommand");
+  assertOnlyFields(
+    input,
+    ["schemaVersion", "workId", "folderId", "title"],
+    "RenameDocumentFolderCommand",
+  );
+  if (input.schemaVersion !== 1) {
+    throw new Error("RenameDocumentFolderCommand.schemaVersion must be 1");
+  }
+  return Object.freeze({
+    schemaVersion: 1,
+    workId: readIdentity<"Work">(
+      input.workId,
+      "RenameDocumentFolderCommand.workId",
+    ),
+    folderId: readIdentity<"DocumentFolder">(
+      input.folderId,
+      "RenameDocumentFolderCommand.folderId",
+    ),
+    title: readNonEmptyTrimmedText(
+      input.title,
+      "RenameDocumentFolderCommand.title",
+    ),
+  });
+}
+
+export function parsePlaceDocumentInFolderCommand(
+  value: unknown,
+): PlaceDocumentInFolderCommand {
+  const input = readRecord(value, "PlaceDocumentInFolderCommand");
+  assertOnlyFields(
+    input,
+    ["schemaVersion", "workId", "documentId", "folderId"],
+    "PlaceDocumentInFolderCommand",
+  );
+  if (input.schemaVersion !== 1) {
+    throw new Error("PlaceDocumentInFolderCommand.schemaVersion must be 1");
+  }
+  return Object.freeze({
+    schemaVersion: 1,
+    workId: readIdentity<"Work">(
+      input.workId,
+      "PlaceDocumentInFolderCommand.workId",
+    ),
+    documentId: readIdentity<"Document">(
+      input.documentId,
+      "PlaceDocumentInFolderCommand.documentId",
+    ),
+    folderId: readNullableIdentity<"DocumentFolder">(
+      input.folderId,
+      "PlaceDocumentInFolderCommand.folderId",
+    ),
+  });
+}
+
+export function parseRetireDocumentFolderCommand(
+  value: unknown,
+): RetireDocumentFolderCommand {
+  const input = readRecord(value, "RetireDocumentFolderCommand");
+  assertOnlyFields(
+    input,
+    ["schemaVersion", "workId", "folderId"],
+    "RetireDocumentFolderCommand",
+  );
+  if (input.schemaVersion !== 1) {
+    throw new Error("RetireDocumentFolderCommand.schemaVersion must be 1");
+  }
+  return Object.freeze({
+    schemaVersion: 1,
+    workId: readIdentity<"Work">(
+      input.workId,
+      "RetireDocumentFolderCommand.workId",
+    ),
+    folderId: readIdentity<"DocumentFolder">(
+      input.folderId,
+      "RetireDocumentFolderCommand.folderId",
     ),
   });
 }
@@ -366,6 +691,7 @@ export function parseWorkspaceCatalogProjection(
     throw new Error("WorkspaceCatalogProjection.works must be an array");
   }
   const workIds = new Set<EntityId<"Work">>();
+  const folderIds = new Set<EntityId<"DocumentFolder">>();
   const documentIds = new Set<EntityId<"Document">>();
   const works = input.works.map((candidate, workIndex) => {
     const work = readRecord(
@@ -374,7 +700,7 @@ export function parseWorkspaceCatalogProjection(
     );
     assertOnlyFields(
       work,
-      ["workId", "title", "updatedAt", "documents"],
+      ["workId", "title", "updatedAt", "folders", "documents"],
       `WorkspaceCatalogProjection.works[${workIndex}]`,
     );
     const workId = readIdentity<"Work">(
@@ -385,9 +711,68 @@ export function parseWorkspaceCatalogProjection(
       throw new Error(`Duplicate workspace work identity: ${workId}`);
     }
     workIds.add(workId);
-    if (!Array.isArray(work.documents) || work.documents.length === 0) {
+    if (!Array.isArray(work.folders)) {
       throw new Error(
-        `WorkspaceCatalogProjection.works[${workIndex}].documents must be non-empty`,
+        `WorkspaceCatalogProjection.works[${workIndex}].folders must be an array`,
+      );
+    }
+    const workFolderIds = new Set<EntityId<"DocumentFolder">>();
+    const folders = work.folders.map((candidate, folderIndex) => {
+      const folder = readRecord(
+        candidate,
+        `WorkspaceCatalogProjection.works[${workIndex}].folders[${folderIndex}]`,
+      );
+      assertOnlyFields(
+        folder,
+        ["folderId", "title", "parentFolderId"],
+        `WorkspaceCatalogProjection.works[${workIndex}].folders[${folderIndex}]`,
+      );
+      const folderId = readIdentity<"DocumentFolder">(
+        folder.folderId,
+        `WorkspaceCatalogProjection.works[${workIndex}].folders[${folderIndex}].folderId`,
+      );
+      if (folderIds.has(folderId)) {
+        throw new Error(`Duplicate workspace folder identity: ${folderId}`);
+      }
+      folderIds.add(folderId);
+      workFolderIds.add(folderId);
+      return Object.freeze({
+        folderId,
+        title: readNonEmptyTrimmedText(
+          folder.title,
+          `WorkspaceCatalogProjection.works[${workIndex}].folders[${folderIndex}].title`,
+        ),
+        parentFolderId: readNullableIdentity<"DocumentFolder">(
+          folder.parentFolderId,
+          `WorkspaceCatalogProjection.works[${workIndex}].folders[${folderIndex}].parentFolderId`,
+        ),
+      });
+    });
+    const foldersById = new Map(
+      folders.map((folder) => [folder.folderId, folder] as const),
+    );
+    for (const folder of folders) {
+      if (
+        folder.parentFolderId !== null &&
+        !workFolderIds.has(folder.parentFolderId)
+      ) {
+        throw new Error(
+          `Workspace folder parent must belong to the same Work: ${folder.folderId}`,
+        );
+      }
+      const visited = new Set<EntityId<"DocumentFolder">>();
+      let current: WorkspaceDocumentFolderSummary | undefined = folder;
+      while (current !== undefined && current.parentFolderId !== null) {
+        if (visited.has(current.folderId)) {
+          throw new Error(`Workspace folder cycle: ${folder.folderId}`);
+        }
+        visited.add(current.folderId);
+        current = foldersById.get(current.parentFolderId);
+      }
+    }
+    if (!Array.isArray(work.documents)) {
+      throw new Error(
+        `WorkspaceCatalogProjection.works[${workIndex}].documents must be an array`,
       );
     }
     const documents = work.documents.map((candidate, documentIndex) => {
@@ -397,7 +782,7 @@ export function parseWorkspaceCatalogProjection(
       );
       assertOnlyFields(
         document,
-        ["documentId", "title", "currentRevisionId"],
+        ["documentId", "title", "currentRevisionId", "folderId"],
         `WorkspaceCatalogProjection.works[${workIndex}].documents[${documentIndex}]`,
       );
       const documentId = readIdentity<"Document">(
@@ -408,6 +793,15 @@ export function parseWorkspaceCatalogProjection(
         throw new Error(`Duplicate workspace document identity: ${documentId}`);
       }
       documentIds.add(documentId);
+      const folderId = readNullableIdentity<"DocumentFolder">(
+        document.folderId,
+        `WorkspaceCatalogProjection.works[${workIndex}].documents[${documentIndex}].folderId`,
+      );
+      if (folderId !== null && !workFolderIds.has(folderId)) {
+        throw new Error(
+          `Workspace Document folder must belong to the same Work: ${documentId}`,
+        );
+      }
       return Object.freeze({
         documentId,
         title: readNonEmptyTrimmedText(
@@ -418,6 +812,7 @@ export function parseWorkspaceCatalogProjection(
           document.currentRevisionId,
           `WorkspaceCatalogProjection.works[${workIndex}].documents[${documentIndex}].currentRevisionId`,
         ),
+        folderId,
       });
     });
     return Object.freeze({
@@ -430,6 +825,7 @@ export function parseWorkspaceCatalogProjection(
         work.updatedAt,
         `WorkspaceCatalogProjection.works[${workIndex}].updatedAt`,
       ),
+      folders: Object.freeze(folders),
       documents: Object.freeze(documents),
     });
   });
@@ -447,23 +843,33 @@ export function parseWorkspaceCatalogProjection(
           input.activeDocumentId,
           "WorkspaceCatalogProjection.activeDocumentId",
         );
-  if ((activeWorkId === null) !== (activeDocumentId === null)) {
-    throw new Error("Workspace catalog active identities must both be null or present");
-  }
-  if (
-    activeWorkId !== null &&
-    (
-      !workIds.has(activeWorkId) ||
-      !works.some(
-        (work) =>
-          work.workId === activeWorkId &&
-          work.documents.some(
-            (document) => document.documentId === activeDocumentId,
-          ),
+  if (works.length === 0) {
+    if (activeWorkId !== null || activeDocumentId !== null) {
+      throw new Error("An empty workspace catalog cannot have active identities");
+    }
+  } else {
+    if (activeWorkId === null) {
+      throw new Error("A non-empty workspace catalog must have an active Work");
+    }
+    const activeWork = works.find((work) => work.workId === activeWorkId);
+    if (activeWork === undefined) {
+      throw new Error("Workspace catalog active Work must be registered");
+    }
+    if (activeDocumentId === null) {
+      if (activeWork.documents.length !== 0) {
+        throw new Error(
+          "Only an empty active Work can have no active Document",
+        );
+      }
+    } else if (
+      !activeWork.documents.some(
+        (document) => document.documentId === activeDocumentId,
       )
-    )
-  ) {
-    throw new Error("Workspace catalog active identities must share one registered Work");
+    ) {
+      throw new Error(
+        "Workspace catalog active identities must share one registered Work",
+      );
+    }
   }
   if (typeof input.canCreateFirstWork !== "boolean") {
     throw new Error("WorkspaceCatalogProjection.canCreateFirstWork must be boolean");

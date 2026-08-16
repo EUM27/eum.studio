@@ -44,6 +44,23 @@ function freezeSnapshot(
   return Object.freeze({ ...snapshot });
 }
 
+function rebindExactConfirmedRevision(
+  stored: StoredDocumentState,
+  document: ManuscriptDocumentSource,
+): StoredDocumentState | null {
+  assertSameWork(stored, document);
+  if (stored.documentRevisionId === document.documentRevisionId) {
+    return stored;
+  }
+  if (stored.state.doc.toString() !== document.initialText) {
+    return null;
+  }
+  return Object.freeze({
+    ...stored,
+    documentRevisionId: document.documentRevisionId,
+  });
+}
+
 export class ManuscriptDocumentStateRegistry {
   readonly #states = new Map<
     EntityId<"Document">,
@@ -72,12 +89,30 @@ export class ManuscriptDocumentStateRegistry {
   materialize(
     document: ManuscriptDocumentSource,
   ): string | null {
+    let stored = this.#states.get(document.documentId);
+    if (stored === undefined) {
+      return null;
+    }
+    const rebound = rebindExactConfirmedRevision(stored, document);
+    if (rebound === null) {
+      throw new Error(`Document revision conflict for ${document.documentId}`);
+    }
+    if (rebound !== stored) {
+      this.#states.set(document.documentId, rebound);
+      stored = rebound;
+    }
+    return stored.state.doc.toString();
+  }
+
+  readState(
+    document: ManuscriptDocumentSource,
+  ): EditorState | null {
     const stored = this.#states.get(document.documentId);
     if (stored === undefined) {
       return null;
     }
     assertSameSource(stored, document);
-    return stored.state.doc.toString();
+    return stored.state;
   }
 
   restore(
@@ -106,12 +141,12 @@ export class ManuscriptDocumentStateRegistry {
     if (stored === undefined) {
       return this.restore(document, createState);
     }
-    assertSameWork(stored, document);
-    if (
-      stored.documentRevisionId ===
-      document.documentRevisionId
-    ) {
-      return freezeSnapshot(stored);
+    const rebound = rebindExactConfirmedRevision(stored, document);
+    if (rebound !== null) {
+      if (rebound !== stored) {
+        this.#states.set(document.documentId, rebound);
+      }
+      return freezeSnapshot(rebound);
     }
 
     const snapshot = freezeSnapshot({

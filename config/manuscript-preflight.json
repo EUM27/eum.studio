@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "defaults": {
+    "trimTrailingWhitespace": true,
+    "tabReplacement": "preserve",
+    "tabWidth": 4,
+    "nonBreakingSpaceReplacement": "space",
+    "lineEnding": "preserve",
+    "limitBlankLines": false,
+    "maxConsecutiveBlankLines": 1,
+    "forbiddenTerms": [],
+    "forbiddenCaseSensitive": false,
+    "regexPattern": "",
+    "regexCaseSensitive": true,
+    "regexMultiline": false
+  },
+  "limits": {
+    "tabWidth": { "min": 1, "max": 16 },
+    "maxConsecutiveBlankLines": { "min": 0, "max": 8 }
+  }
+}

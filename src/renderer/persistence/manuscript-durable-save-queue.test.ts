@@ -4,6 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { ChangeBatch } from "../../application/persistence/change-batch";
 import type { SaveReceipt } from "../../application/persistence/save-change-batch";
+import type {
+  SaveManuscriptFormattingCommand,
+  SaveManuscriptFormattingReceipt,
+} from "../../application/editor/manuscript-formatting";
 import { entityId } from "../../domain/writing";
 import {
   extractManuscriptTransaction,
@@ -153,7 +157,11 @@ function createQueue(input: {
   readonly policy?: ManuscriptBatchingPolicy;
   readonly saveChangeBatch?: (
     batch: ChangeBatch,
+    editorStateJson: string | null,
   ) => Promise<SaveReceipt>;
+  readonly saveFormatting?: (
+    command: SaveManuscriptFormattingCommand,
+  ) => Promise<SaveManuscriptFormattingReceipt>;
 }) {
   const maxTransactionsPerBatch =
     input.policy?.maxTransactionsPerBatch ?? randomInt(2, 8);
@@ -175,6 +183,9 @@ function createQueue(input: {
     documents: input.documents,
     policy,
     saveChangeBatch,
+    ...(input.saveFormatting === undefined
+      ? {}
+      : { saveFormatting: input.saveFormatting }),
     createBatchId: () =>
       entityId<"ChangeBatch">(randomUUID()),
     now: () => new Date().toISOString(),
@@ -193,6 +204,79 @@ function createQueue(input: {
 }
 
 describe("ManuscriptDurableSaveQueue", () => {
+  it("stores the latest editor state with text and sequences later formatting after its revision", async () => {
+    const document = createDocument(0);
+    const textRevisionId = entityId<"DocumentRevision">(randomUUID());
+    const formattingRevisionId = entityId<"DocumentRevision">(randomUUID());
+    const saveChangeBatch = vi.fn(
+      async (batch: ChangeBatch) => ({
+        workId: batch.workId,
+        documentId: batch.documentId,
+        baseRevisionId: batch.baseRevisionId,
+        batchId: batch.batchId,
+        sequence: batch.sequence,
+        revisionId: textRevisionId,
+      }),
+    );
+    const saveFormatting = vi.fn(
+      async (
+        command: SaveManuscriptFormattingCommand,
+      ): Promise<SaveManuscriptFormattingReceipt> => ({
+        schemaVersion: 1,
+        workId: command.workId,
+        documentId: command.documentId,
+        revisionId: formattingRevisionId,
+      }),
+    );
+    const { queue } = createQueue({
+      documents: [document],
+      policy: {
+        maxTransactionsPerBatch: 8,
+        maxDelayMs: 100,
+      },
+      saveChangeBatch,
+      saveFormatting,
+    });
+    const edit = appendTransaction("");
+    const stateAtText = JSON.stringify({ revision: "text" });
+    const stateAtFormatting = JSON.stringify({ revision: "formatting" });
+    queue.record(document.documentId, edit.transaction, {
+      composing: false,
+      editorStateJson: stateAtText,
+    });
+
+    const textSave = queue.recordFormatting(
+      document.documentId,
+      stateAtFormatting,
+    );
+    await textSave;
+
+    expect(saveChangeBatch).toHaveBeenCalledWith(
+      expect.objectContaining({ documentId: document.documentId }),
+      stateAtFormatting,
+    );
+    expect(saveFormatting).not.toHaveBeenCalled();
+    expect(queue.getCurrentRevisionId(document.documentId)).toBe(
+      textRevisionId,
+    );
+
+    const formattingSave = queue.recordFormatting(
+      document.documentId,
+      stateAtFormatting,
+    );
+    await formattingSave;
+    expect(saveFormatting).toHaveBeenCalledWith({
+      schemaVersion: 1,
+      workId: document.workId,
+      documentId: document.documentId,
+      expectedCurrentRevisionId: textRevisionId,
+      editorStateJson: stateAtFormatting,
+    });
+    expect(queue.getCurrentRevisionId(document.documentId)).toBe(
+      formattingRevisionId,
+    );
+  });
+
   it("flushes one composed batch at the caller transaction-count boundary", async () => {
     const document = createDocument();
     const maxTransactionsPerBatch = randomInt(2, 7);

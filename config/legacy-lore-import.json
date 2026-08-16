@@ -1,15 +1,49 @@
 {
   "schemaVersion": 1,
   "source": {
-    "sourceProfileId": "legacy-eum-editor-lore-v1",
+    "sourceProfileId": "legacy-eum-editor-source-v1",
     "formatIdentity": "eum-source-archive",
     "formatVersion": "1",
     "checksumIdentity": "sha256",
     "checksumAlgorithm": "sha256",
-    "sourceFileSegments": ["data", "lorebooks.json"],
-    "sourceLocator": "data/lorebooks.json",
+    "mappingSourceLocator": "data/lorebooks.json",
+    "captures": [
+      {
+        "branchKind": "live-file",
+        "sourceFileSegments": ["data", "lorebooks.json"],
+        "sourceLocator": "data/lorebooks.json",
+        "rawEntrySegments": ["raw", "lorebooks.json"]
+      },
+      {
+        "branchKind": "backup-file",
+        "sourceFileSegments": ["data", "lorebooks.json.bak"],
+        "sourceLocator": "data/lorebooks.json.bak",
+        "rawEntrySegments": ["raw", "lorebooks.json.bak"]
+      }
+    ],
+    "connectorProbes": [
+      {
+        "sourceFileSegments": ["data", ".gmail-token-key"],
+        "connectorKind": "gmail",
+        "credentialKind": "local-token-key"
+      },
+      {
+        "sourceFileSegments": ["data", ".spotify-token-key"],
+        "connectorKind": "spotify",
+        "credentialKind": "local-token-key"
+      },
+      {
+        "sourceFileSegments": ["data", "openai-oauth-auth.json"],
+        "connectorKind": "assistant",
+        "credentialKind": "oauth-token-envelope"
+      },
+      {
+        "sourceFileSegments": ["data", "spotify-auth.json"],
+        "connectorKind": "spotify",
+        "credentialKind": "oauth-token-envelope"
+      }
+    ],
     "archiveDirectoryName": "source-archive",
-    "rawEntrySegments": ["raw", "lorebooks.json"],
     "manifestEntrySegments": ["manifest.json"]
   },
   "rehearsal": {

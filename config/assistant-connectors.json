@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "connectors": [
+    {
+      "connectorKind": "eum-structured-json-v1",
+      "displayName": "사용자 지정 구조화 JSON",
+      "capabilities": [
+        "vocabulary-lookup",
+        "lore-review",
+        "publishing-operations"
+      ],
+      "credentialPolicy": "optional",
+      "runtimeConfig": {
+        "endpoint": "required",
+        "model": "required"
+      }
+    }
+  ]
+}

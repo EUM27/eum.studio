@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { entityId } from "../domain/writing";
 import {
   createWorkspaceRailState,
+  openWorkspaceRail,
   projectWorkspaceRails,
   setWorkspaceRailLayout,
   toggleWorkspaceRail,
@@ -80,5 +81,22 @@ describe("workspace rail state", () => {
       left: { visible: true, reentryVisible: false },
       right: { visible: false, reentryVisible: true },
     });
+  });
+
+  it("opens a requested rail without closing an already visible rail", () => {
+    const workId = entityId<"Work">(randomUUID());
+    let state = createWorkspaceRailState({
+      layout: "wide",
+      initialVisibility: {
+        left: "open",
+        right: "closed",
+      },
+    });
+
+    state = openWorkspaceRail(state, workId, "right");
+    const openedState = state;
+
+    expect(projectWorkspaceRails(state, workId).right.visible).toBe(true);
+    expect(openWorkspaceRail(state, workId, "right")).toBe(openedState);
   });
 });

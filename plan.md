@@ -8,7 +8,7 @@
 
 현재 storage 결정: [POC-3 SQLite·blob·backup 결정](docs/poc-3-storage-decisions.md)
 
-마지막 갱신: 2026-08-07
+마지막 갱신: 2026-08-12
 
 ## 현재 Gate
 
@@ -41,12 +41,113 @@ POC-3 완료: `GO`
 - [x] `오늘`의 이어 쓰기와 사이드바 `작업실`에서 실제 CodeMirror 원고 편집기 열기
 - [x] 화면을 이동해도 편집기를 파괴하지 않아 종료 전 flush·문서별 undo·selection·scroll 상태 계약 유지
 - [x] 기존 typed preload·durable save·recovery·IME·문서 전환·검색 경계를 변경 없이 보존
-- [x] production build와 단위·통합 56개 파일 281개, 실제 Electron E2E 24개 통과
+- [x] production build와 단위·통합 153개 파일 611개(1개 명시적 skip), 실제 Electron E2E 80개 통과
 - [x] 빈 로컬 작업실에서 작품·첫 원고를 생성하고 불변 revision으로 저장한 뒤 같은 저장소를 재실행해 정확한 작품·원고·본문 재개방
+- [x] 원고 화면에서 글꼴·글자 크기·본문 폭과 정확한 선택 범위의 굵게·기울임·밑줄을 편집하고 같은 불변 revision 흐름으로 저장·undo/redo·재실행 복원
+- [x] 현재 작품의 바로 앞 회차 끝 흐름만 원고 시작 위치의 읽기 전용 파생 보기로 표시하고 원고·선택·undo·저장 상태와 분리
+- [x] 첫 회차와 추가 회차 제목을 비워도 application command 경계에서 정확히 `제목없음`으로 생성하고 로컬 저장소 재개방 후 유지
+- [x] 현재 작품과 회차 이름을 소유권 검증된 metadata revision으로 변경하고 원고 revision·본문·문서별 undo/redo를 보존한 채 재실행 복원
+- [x] 작품 삭제는 Work의 `retired_at`만 갱신해 자식 문서·원고·revision을 보존하고 활성·비활성·마지막 작품 이동과 재실행 숨김을 검증
+- [x] 회차 삭제는 Document의 `retired_at`만 갱신해 원고·불변 revision을 보존하고, 인접 회차 이동·빈 작품 재실행 복원·정확한 `제목없음` 회차 재생성을 검증
+- [x] 같은 작품의 인접 회차 순서를 `documents.order_key`에서만 교환하고 원고·불변 revision·문서별 undo/redo·이전 화 흐름·재실행 순서를 보존
+- [x] 작품 소유 회차 폴더를 생성·이름 변경하고 정확한 회차를 폴더 또는 작품 루트에 배치하며, 폴더 soft retirement 뒤 하위 폴더·회차·원고·revision과 재실행 위치를 보존
+- [x] 현재 작품의 열린 회차 탭을 작품별 세션 view로 표시하고 열기·닫기·활성 전환을 문서별 EditorState에 연결하며 재실행 시 저장된 exact active Document 탭만 복원
+- [x] 작품별 원고 점검 설정과 전체 회차·exact selection 진단/미리보기를 연결하고 stale source 확인 뒤 단일 undo 가능한 변경 적용 및 사용자 선택 경로 UTF-8 TXT 내보내기
+- [x] 현재 작품의 exact selection을 명령 순간에만 파편으로 복사해 원문 Anchor와 함께 영속 저장하고 종류·제목·고정·검색·soft retirement·정확한 원문 복귀를 기존 검토 레일에 연결
+- [x] exact selection을 안전한 파편으로 게시한 뒤 stale-checked 단일 transaction으로 원문에서 이동하고, 비어 있는 현재 커서에 파편을 한 번의 undo 가능한 transaction으로 삽입한 뒤 durable 성공 시에만 사용 횟수 기록
+- [x] 작품 소유 복선 라인을 독립 SQLite 원본으로 생성·이름·메모 수정·soft retirement하고 회수 상태를 저장하지 않은 채 기존 검토 레일과 재실행 복원에 연결
+- [x] exact selection을 runtime profile의 배치·강화·회수 복선 지점으로 Anchor와 함께 저장하고, 회수 상태를 지점에서만 파생해 재실행 뒤 정확한 원문 선택 복귀에 연결
+- [x] 작품 소유 인물의 이름·역할·요약·메모를 독립 SQLite 원본과 typed bridge로 생성·조회·수정·soft retirement하고 기존 검토 레일 관리 화면에서 작품 격리·재실행 보존
+- [x] 작품 소유 플롯의 제목·자유 입력 단계·요약·메모를 독립 SQLite 원본과 typed bridge로 생성·조회·수정·soft retirement하고 기존 검토 레일 관리 화면에서 작품 격리·재실행 보존
+- [x] 현재 원고의 exact selection을 플롯 출처 Anchor relation으로 저장·교체하고 재실행 뒤 다른 회차에서도 정확한 원문 범위로 복귀
+- [x] 현재 작품의 회차·인물·플롯·플롯 출처·사건·장면 경계를 저장 사본 없이 순수 파생해 한 화면에서 집계하고 정확한 대상과 원문으로 이동
+- [x] 현재 작품의 WritingSession 원장에서 기간 합계·글자 변화·일별 흐름·연속 기록·회차별 통계를 순수 파생해 기존 메인의 집필 기록 상세에서 한 화면으로 보고 정확한 회차로 이동
+- [x] 현재 작품에서 사용자가 명시한 기간의 WritingSession만 canonical JSON/CSV로 직렬화하고 main 저장 대화상자와 실제 UTF-8 파일 writer를 통해 내보내기
+- [x] 선택한 불변 WorkSnapshot과 현재 작품 회차를 runtime에서 exact text로 비교해 전체·회차별 글자 차이와 같음·변경·추가·삭제 상태만 읽기 전용 화면에 표시
+- [x] Work 소유 FocusCycle 원장 위에 사용자 입력 작업·휴식 시간과 주기, 수동 pause/resume, deadline 완료, 작업/휴식 전환, 자동 전환, 재실행 안전 정지를 음악 없이 연결
+- [x] 메인 한 화면에 활성 작품의 월간 달력·선택 날짜 일정·일일 루틴·D-DAY를 연결하고 작품 소유 SQLite 원장으로 재실행 복원
+- [x] Ctrl/Cmd+K 명령·작품·회차 검색과 키보드 전환, 원고에 자동 삽입되지 않는 작품별 빠른 메모의 exact 저장·재실행 복원
+- [x] runtime profile의 `1회 기준 글자수`를 전역 typed SQLite 설정으로 저장하고 작품별 grapheme 회차 완료 수에서 D-DAY 진척을 파생·즉시 갱신·재실행 복원
+
+최신 제품 화면 검증:
+
+- `npm run check`: 153개 파일·611개 테스트 통과, 1개 명시적 skip, lint·typecheck·production build 통과
+- `npx playwright test tests/e2e/desktop-shell.spec.ts`: 단일 사이드바·원고 서식·IME·정확 선택·종료 저장·복구·재시작·문서 전환·이전화·연속 읽기·일정·기록·복선·설정·투고를 포함한 실제 Electron E2E 80개 전체 통과
+- 보이는 로컬 Electron 런타임에서 빈 작업실의 작품 생성·`제목없음` 첫 회차·한글 원고 입력·글자 수 갱신·`저장됨` 표시·정상 종료를 직접 확인하고 검증용 임시 작업실을 제거
+- 현재 production build에서 exact selection 파편 복사와 이동·커서 삽입·단일 undo/redo·재시작 복원 2개 focused Electron E2E 재통과
+- 현재 production build에서 복선 라인의 작품 격리·이름·메모 수정·재시작 복원·soft retirement와 exact selection 배치·강화·회수·파생 회수 상태·원문 복귀 Electron E2E 2개 통과
+- 파편·복선 tranche 감사: 계약·runtime·UI 70개와 저장 스키마 8개 통과, exact selection 명령 시점 materialize·Work FK·불변 revision·파생 회수 상태 경계를 확인했으며 실제 Electron 4개 흐름을 현재 build에서 각각 통과
+- 현재 production build에서 플롯 출처의 첫 exact selection 연결·다른 회차 선택으로 원자적 교체·full restart 복원·정확한 원문 회차와 범위 복귀 Electron E2E 통과
+- 현재 production Electron에서 인물 이름·자유 입력 역할·요약·작가 메모의 생성·수정, 다른 작품 격리, 재시작 복원, soft retirement 후 재시작 숨김 흐름 통과
+- 현재 production Electron에서 플롯 제목·자유 입력 단계·요약·작가 메모의 생성·수정, 다른 작품 격리, 재시작 복원, soft retirement 후 재시작 숨김 흐름 통과
+- 현재 production Electron에서 회차 2개와 인물·플롯·정확한 플롯 출처·사건·장면 경계를 한 작품 구조 화면에 집계하고 회차·인물·플롯·교차 회차 원문으로 정확히 이동하는 흐름 통과
+- 현재 production Electron에서 기록 시작·원고 저장·기록 종료 뒤 WritingSession 원장으로 세션 수와 글자 변화를 파생하고, 메인 집필 기록 상세의 일별·연속·회차별 화면에서 정확한 회차 원고로 복귀하는 흐름 통과
+- 현재 production Electron에서 숫자 기본값을 만들지 않는 작품별 오늘/이번 주 시간·글자 목표를 저장하고 WritingSession 원장에서 진척을 파생한 뒤 앱 재실행 후 exact Work 설정과 진척을 복원하는 흐름 통과
+- 현재 production Electron에서 두 작품의 세션을 만든 뒤 현재 작품과 사용자가 지정한 날짜의 세션 1개만 JSON/CSV로 내보내고, canonical JSON LF·CSV CRLF와 다른 작품 회차 미포함을 실제 파일 바이트로 확인
+- 현재 production Electron에서 불변 WorkSnapshot의 두 회차와 현재 세 회차를 비교해 같음·변경됨·스냅샷 뒤 추가 상태와 exact 문자 합계를 확인하고, dialog 종료 뒤 현재 원고 불변을 확인
+- 현재 production Electron에서 숫자 기본값 없는 작품별 Pomodoro 설정, 작업 수동 pause/resume, 작업→휴식→다음 작업, 실행 중 종료 뒤 restore pause, 최종 완료, 재실행 뒤 완료와 exact 설정 복원 흐름 통과
+- 현재 production Electron에서 사용자가 고른 기존 폴더와 명시적 browser export JSON을 함께 source archive에 봉인하고 6개 browser 항목의 누락 없는 redacted receipt·보고서 비노출·원본 불변을 검증
+- 현재 production Electron 메인에서 일정·루틴·D-DAY 생성·수정·완료와 재시작 복원을 검증하고 786×538에서 dashboard 가로 overflow가 없음을 확인
+- 현재 production Electron에서 Ctrl+K, 방향키, Enter, NFKC 검색으로 exact Work·Document를 전환하고 작품별 빠른 메모가 재시작 뒤 그대로 복원되며 어느 원고에도 삽입되지 않음을 확인
+- 현재 production Electron에서 `1회 기준 글자수`를 4자에서 2자로 바꾸자 D-DAY 추가 회차 진척이 1/2에서 2/2 목표 달성으로 즉시 재계산되고, 786×538 설정 dialog와 완전 재시작 뒤 설정·진척 복원을 확인
+- 현재 production Electron에서 작품의 첫 회차만 연 뒤 스크롤 경계마다 다음 회차를 작품 순서대로 추가 로딩하고, exact Document revision·UTF-16 줄 시작 위치를 저장해 완전 재시작 뒤 같은 줄로 복원하는 흐름 통과
+- 현재 production Electron에서 같은 이름의 인물·플롯·복선 중복과 역할·단계·메모 충돌을 값 복사 없이 저장하고, 각 검토 당시 revision 참조를 정확한 관리 화면으로 열어 두 원본씩 확인한 뒤 완전 재시작 후 여섯 정규 설정이 그대로 남는 흐름 통과
 
 다음 제품 단위:
 
+- [x] 원고 사전 점검·정리·TXT 내보내기를 전체 원고 또는 사용자가 정확히 선택한 범위에 연결
+- [x] 파편 서랍의 exact selection 복사·작품별 목록·메타데이터·원문 범위 복귀를 연결
+- [x] 파편 이동과 현재 커서 재삽입을 원고 불변 revision·단일 undo·사용 횟수 성공 순서에 연결
+- [x] 복선 라인의 작품별 생성·이름·메모·soft retirement 원본과 typed bridge를 연결
+- [x] 복선을 정확한 선택 원문·출처·배치·강화·회수 계약으로 연결
+- [x] 작품 소유 인물의 이름·역할·요약·메모 원본과 관리 화면을 연결
+- [x] 작품 소유 플롯의 제목·자유 입력 단계·요약·메모 원본과 관리 화면을 연결
+- [x] 현재 원고의 exact selection을 플롯 출처 Anchor로 연결·교체하고 정확한 원문 복귀를 연결
+- [x] 문서·인물·플롯·사건·장면 경계에서 작품 구조 보기를 파생해 한 화면에 연결
+- [x] 작품 소유 별빛의 확정 내용·사용자 분류·별칭·활성 상태·정확한 원고 근거·변경 이력을 독립 원장과 기존 작품 구조 화면에 연결 (공용 별빛 이주 제외)
+- [x] 별빛과 복선을 내용을 복제하지 않는 작품 소유 다대다 연결 원장으로 연결하고 한쪽 retirement가 반대쪽 원본을 변경하지 않음을 검증
+- [x] 회차·정확한 근거 범위가 있는 별빛 Candidate를 승인 전 정규 원본과 분리하고 승인·거절·근거 복귀를 기존 검토 흐름에 연결
+- [x] 확정 별빛의 별칭을 현재 원고에서 파생해 작은 여백 신호·툴팁·고정 검사기로만 표시하고 후보는 원고에 확정 정보처럼 노출하지 않음
+- [x] WritingSession 원장에서 기간·일별·연속·회차별 집필 기록을 파생하고 exact Document 이동을 연결
+- [x] 작품별 nullable 오늘/이번 주 시간·글자 목표를 typed 로컬 설정으로 저장하고 WritingSession 원장 진척과 재실행 복원을 연결
+- [x] 작품의 실제 회차 순서에 조회수를 typed 로컬 설정으로 저장하고 직전 화·1화 대비 연독률을 미입력·0분모 추정 없이 파생해 재실행 복원까지 연결
+- [x] 작품의 회차를 첫 화부터 스크롤로 순차 로딩하고 exact Document revision·줄 시작 읽기 위치를 typed SQLite에 저장해 재실행 복원까지 연결
+- [x] 명시적 기간의 현재 작품 WritingSession을 JSON/CSV로 main 저장 대화상자와 실제 파일 경계에 연결
+- [x] 불변 WorkSnapshot과 현재 Work의 회차별 exact-text 비교를 원고 원문 노출이나 복원 동작 없이 읽기 전용으로 연결
+- [x] Work FocusCycle 원장에 음악 없는 Pomodoro 작업·휴식 설정과 pause/resume/deadline/restart lifecycle을 연결
+- [x] 메인 월간 일정·일일 루틴·D-DAY를 작품 소유 로컬 원장과 재실행 복원에 연결
+- [x] Ctrl/Cmd+K 빠른 전환과 작품별 빠른 메모를 typed SQLite 저장과 실제 앱 키보드 흐름에 연결
+- [x] runtime profile 기반 `1회 기준 글자수`를 typed SQLite 설정과 작품별 회차/D-DAY 진척에 연결
+- [x] 사용자 지시에 따라 기능을 개별 단위로 진행해 provider-neutral 조수 권한·정확 범위 receipt와 작품 내 정확 어휘 검색 Candidate를 typed SQLite 저장·재실행 복원에 연결 (POC-M actual-input GO를 대신하지 않음)
+- [x] 사용자가 직접 선택한 provider-neutral 연결에 사용자 질의와 승인된 exact selection만 전송하고 어휘·유의어·뉘앙스·짧은 용례를 원고 수정 명령 없는 Work Candidate와 value-free connector/context receipt로 저장해 실제 Electron 재실행 복원까지 검증
+- [x] 사용자가 승인한 현재 회차 원고와 현재 작품의 활성 인물·플롯·복선만 provider-neutral 연결에 전송하고 설정 생성·수정 제안과 중복·충돌·분류 메모를 정규 원본 자동 반영 없는 Work Candidate로 저장해 정확한 근거/설정 revision 복귀·재실행 복원까지 실제 Electron에서 검증
+- [x] 작품 소유 인물·플롯·복선의 완전 일치 이름과 동일 이름 안의 명시적 비어 있지 않은 필드 값 차이만 읽는 로컬 설정 검토를 별도 value-free receipt·중복/충돌 기록으로 저장하고 검토 당시 entity/revision을 정확한 관리 화면으로 열어 실제 Electron 재실행 복원까지 검증 (추정·자동 수정·값 복사·외부 전송 없음)
+- [x] 사용자가 직접 이름·endpoint·model을 입력하는 provider-neutral 조수 연결 설정을 Electron `safeStorage` 비밀 경계와 재실행 복원에 연결 (대표 제공자·기본 endpoint·renderer 비밀 노출 없음)
+- [x] 작품별 원고 사전 점검 규칙을 현재 원고의 정확한 선택 범위에만 적용하는 표기 Candidate를 typed SQLite에 저장하고 위치 복귀·재실행 복원·원고 무변경을 실제 Electron에서 검증 (외부 전송 0자)
+- [x] 작품 밖 공유 로컬 투고처 원장을 이름·모 출판사·방식·링크·이메일·장르·분량·우선순위·메모 전체 필드의 생성·수정과 typed SQLite 재실행 복원에 연결하고 실제 Electron에서 검증 (외부 조사·CSV·메일 후보는 별도 개별 단위)
+- [x] 작품·공유 투고처를 연결한 투고 이력을 만들 때 현재 작품의 모든 문서 revision을 불변 SubmissionPackage로 원자적 봉인하고, 상태·회신일·결과·메모만 독립 수정해 이후 원고 수정과 완전 재실행 뒤에도 같은 봉인 hash가 유지됨을 실제 Electron에서 검증
+- [x] Work·공유 거래처·선택적 동일 경계 투고를 연결하는 계약 원장을 계약명·상태·체결/시작/종료일·권리 범위·선급금·통화·수익 배분·메모의 생성·revision 수정·재실행 복원에 연결하고 실제 Electron에서 검증 (고정 상태·통화 기본값 없음)
+- [x] Work 소유 발행·연재 원장을 선택적 동일 Work 계약과 독립 공유 채널에 연결하고 발행 단위 이름·자유 입력 상태/형태·공개/시작/종료일·공개/계획 단위 수·일정 메모·메모의 생성·revision 수정·재실행 복원에 연결해 실제 Electron에서 검증
+- [x] Work 소유 정산서 원장을 동일 Work 발행·연재에 연결하고 정산 기간·발행일·자유 입력 검토 상태·보고 금액·통화·부호 있는 가감 항목·메모의 생성·revision 수정·재실행 복원에 연결해 실제 Electron에서 검증
+- [x] Work 소유 입금 원장을 선택적 동일 Work 정산서에 연결하고 입금/확인일·부호 있는 금액·통화·자유 입력 매칭 상태·입금자·거래 참조·메모의 생성·revision 수정·재실행 복원에 연결하며, 정산 보고액에서 동일 통화 입금만 합산한 미수금과 통화 불일치를 저장 중복 없이 파생해 실제 Electron에서 검증
+- [x] Studio 공유 투고 운영 근거 원장을 종류·표시명·URL·관찰 시각·권위·가져온 원시 필드의 생성 후 원본으로 typed SQLite에 저장하고, 종류·권위를 고정 기본값 없이 자유 입력해 완전 재실행 복원을 실제 Electron에서 검증
+- [x] 사용자가 공유 근거를 투고처·투고·계약·발행·정산·입금 각 항목에 직접 선택해 연결·해제하고 revision 경계와 완전 재실행 복원을 실제 Electron에서 검증 (자동 연결·외부 조사 승격 없음)
+- [x] 사용자가 선택한 투고처 CSV의 열을 직접 연결해 미리보기하고 승인한 준비 행만 투고처 원장에 반영하며, 각 반영 행의 원시 CSV 필드를 불변 공유 근거로 보존하고 완전 재실행 복원을 실제 Electron에서 검증 (자동 열 추정·문제 행 반영 없음)
+- [x] 사용자가 선택한 투고 이력 CSV의 작품·투고처와 기록 열을 직접 연결해 미리보기하고 승인한 준비 행만 반영하며, 승인 순간의 현재 작품 전체 revision을 불변 SubmissionPackage로 봉인하고 exact raw CSV 근거와 완전 재실행 복원을 실제 Electron에서 검증 (관계·날짜 문제 행 반영 없음)
+- [x] 메일 회신은 본문을 저장하지 않는 metadata-only Candidate와 불변 PublishingSource로 기록하고, 사용자가 기존 투고를 명시 연결해 제안을 수정한 뒤 승인 반영 또는 무시하며 SubmissionPackage 불변·완전 재실행 복원을 실제 Electron에서 검증
+- [x] runtime manifest의 읽기 전용 메일 커넥터를 데스크톱 loopback PKCE와 Electron `safeStorage` 토큰 경계에 연결하고, 사용자가 누른 수동 동기화만 등록 투고처 이메일을 조회해 본문 비저장 Candidate로 기록하며 암호화·멱등 수집·완전 재실행 복원·연결 해제를 실제 Electron에서 검증 (자동 투고 연결·AI 분류 없음)
+- [x] 사용자가 지정한 단일 로컬 시각의 메일 자동 확인 일정을 원자적 로컬 파일에 저장하고 앱 실행·계정 연결 중 due 시점에 하루 한 번만 실행하며, 수동·자동 확인의 마지막 성공/실패 상태와 일정 설정을 완전 재실행 뒤 복원하도록 실제 Electron에서 검증 (OS 백그라운드 서비스·임의 재시도·자동 투고 연결 없음)
+- [x] 사용자가 직접 입력한 웹 자료의 URL·확인일·권위·제안값만 현재 투고처와 비교하고 선택한 필드만 불변 PublishingSource 생성·sourceIds 연결과 한 SQLite transaction에서 승인해 미선택 필드 보존·stale rollback·완전 재실행 복원을 실제 Electron에서 검증 (자동 검색·URL 내용 수집 없음)
+- [x] 선택한 provider-neutral 조수 연결에는 사용자 요청과 작품·투고처·투고 운영 메타데이터만 전송하고, 조회는 현재 로컬 원장에서 파생하며 기록은 명시 승인 전 메모리 Candidate로 유지한 뒤 승인 순간 현재 Work revision을 불변 SubmissionPackage와 사용자 진술 근거로 원자 봉인해 완전 재실행 복원을 실제 Electron에서 검증 (원고·설정·복선·인물·비밀값 전송 없음)
 - [ ] POC-M 읽기 전용 source snapshot·100% receipt coverage·원고 checksum·미매핑 raw 보존·멱등 재실행
+- [x] POC-M M0 파일 source를 live JSON·독립 `.bak` snapshot과 credential 존재 metadata로 봉인하고 실제 `D:\eum.editor`에서 전후 checksum 불변을 검증
+- [x] POC-M M1 각 source snapshot의 전체 key inventory와 live·backup 동일/충돌 후보를 자동 승자 없이 report에 기록
+- [x] POC-M M2~M3 source→target·field/raw-only receipt와 실제 관측 원고 checksum·격리·검토 수량을 report에서 대조
+- [x] POC-M M4~M5 멱등 재실행·다른 batch 격리·사용자 결정 보존·취소·POC-3 백업·빈 위치 복원
+- [x] POC-M localStorage·IndexedDB 명시적 export bundle schema·전체 항목 coverage·비밀값 redaction·분기 inventory 계약과 fixture 검증
+- [x] 명시적 browser export JSON 선택을 기존 폴더·새 리허설 위치 선택과 연결하고 file live/.bak·browser 분기를 단일 report와 source archive에 포함
+- [ ] 실제 사용자 제공 browser export bundle을 선택해 POC-M source archive·rehearsal에 포함하고 전후 checksum을 검증
+- 레거시 `통합 백업 내보내기`는 IndexedDB Work·WorkBackup, 회차별 모델 후보, 별빛 조수 대화와 일부 localStorage 원시 항목을 포함하지 않으므로 actual browser export bundle 또는 100% coverage 증거를 대신하지 않는다.
 
 현재 셸은 노션 데이터를 가져오거나 쓰지 않는다. 로컬 첫 작품 생성·durable 저장·재실행 후 exact reopen 폐회로가 실제 Electron에서 통과했으므로 실사용 원고 저장은 `GO`다.
 

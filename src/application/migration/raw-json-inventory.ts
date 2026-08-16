@@ -47,6 +47,182 @@ export type ParsedRawJsonInventory = {
   readonly report: RawJsonInventoryReport;
 };
 
+function inputRecord(
+  value: unknown,
+  label: string,
+): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${label} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function exactFields(
+  input: Record<string, unknown>,
+  fields: readonly string[],
+  label: string,
+): void {
+  const expected = new Set(fields);
+  if (
+    Object.keys(input).length !== expected.size ||
+    Object.keys(input).some((field) => !expected.has(field))
+  ) {
+    throw new Error(`${label} fields do not match the schema`);
+  }
+}
+
+function nonEmptyText(
+  input: Record<string, unknown>,
+  field: string,
+  label: string,
+): string {
+  const value = input[field];
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`${label}.${field} must be a non-empty string`);
+  }
+  return value;
+}
+
+function nonNegativeInteger(
+  input: Record<string, unknown>,
+  field: string,
+  label: string,
+): number {
+  const value = input[field];
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`${label}.${field} must be a non-negative integer`);
+  }
+  return value;
+}
+
+function uniqueTextArray(value: unknown, label: string): readonly string[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`${label} must be an array`);
+  }
+  const values = value.map((entry, index) => {
+    if (typeof entry !== "string" || entry.length === 0) {
+      throw new Error(`${label}[${index}] must be a non-empty string`);
+    }
+    return entry;
+  });
+  if (new Set(values).size !== values.length) {
+    throw new Error(`${label} must not contain duplicates`);
+  }
+  return Object.freeze(values);
+}
+
+export function parseRawJsonInventoryReport(
+  value: unknown,
+): RawJsonInventoryReport {
+  const label = "RawJsonInventoryReport";
+  const input = inputRecord(value, label);
+  exactFields(
+    input,
+    ["entries", "objectFields", "unknownFields", "secretLikePaths"],
+    label,
+  );
+  if (
+    !Array.isArray(input.entries) ||
+    !Array.isArray(input.objectFields) ||
+    !Array.isArray(input.unknownFields)
+  ) {
+    throw new Error(`${label} inventory collections must be arrays`);
+  }
+  const entryPaths = new Set<string>();
+  const entries = Object.freeze(input.entries.map((entry, index) => {
+    const entryLabel = `${label}.entries[${index}]`;
+    const entryInput = inputRecord(entry, entryLabel);
+    exactFields(
+      entryInput,
+      ["path", "observedKinds", "occurrenceCount"],
+      entryLabel,
+    );
+    const path = nonEmptyText(entryInput, "path", entryLabel);
+    if (entryPaths.has(path)) {
+      throw new Error(`${label}.entries contains a duplicate path`);
+    }
+    entryPaths.add(path);
+    if (!Array.isArray(entryInput.observedKinds) || entryInput.observedKinds.length === 0) {
+      throw new Error(`${entryLabel}.observedKinds must be a non-empty array`);
+    }
+    const observedKinds = entryInput.observedKinds.map((kind) => {
+      if (
+        kind !== "array" &&
+        kind !== "boolean" &&
+        kind !== "null" &&
+        kind !== "number" &&
+        kind !== "object" &&
+        kind !== "string"
+      ) {
+        throw new Error(`${entryLabel}.observedKinds contains an unsupported kind`);
+      }
+      return kind;
+    });
+    if (new Set(observedKinds).size !== observedKinds.length) {
+      throw new Error(`${entryLabel}.observedKinds must not contain duplicates`);
+    }
+    return Object.freeze({
+      path,
+      observedKinds: Object.freeze(observedKinds),
+      occurrenceCount: nonNegativeInteger(
+        entryInput,
+        "occurrenceCount",
+        entryLabel,
+      ),
+    });
+  }));
+  const objectPaths = new Set<string>();
+  const objectFields = Object.freeze(input.objectFields.map((entry, index) => {
+    const entryLabel = `${label}.objectFields[${index}]`;
+    const entryInput = inputRecord(entry, entryLabel);
+    exactFields(
+      entryInput,
+      ["objectPath", "occurrenceCount", "fields"],
+      entryLabel,
+    );
+    const objectPath = nonEmptyText(entryInput, "objectPath", entryLabel);
+    if (objectPaths.has(objectPath)) {
+      throw new Error(`${label}.objectFields contains a duplicate path`);
+    }
+    objectPaths.add(objectPath);
+    return Object.freeze({
+      objectPath,
+      occurrenceCount: nonNegativeInteger(
+        entryInput,
+        "occurrenceCount",
+        entryLabel,
+      ),
+      fields: uniqueTextArray(entryInput.fields, `${entryLabel}.fields`),
+    });
+  }));
+  const unknownIdentities = new Set<string>();
+  const unknownFields = Object.freeze(input.unknownFields.map((entry, index) => {
+    const entryLabel = `${label}.unknownFields[${index}]`;
+    const entryInput = inputRecord(entry, entryLabel);
+    exactFields(entryInput, ["objectPath", "field", "disposition"], entryLabel);
+    if (entryInput.disposition !== "raw-only") {
+      throw new Error(`${entryLabel}.disposition must be raw-only`);
+    }
+    const objectPath = nonEmptyText(entryInput, "objectPath", entryLabel);
+    const field = nonEmptyText(entryInput, "field", entryLabel);
+    const identity = JSON.stringify([objectPath, field]);
+    if (unknownIdentities.has(identity)) {
+      throw new Error(`${label}.unknownFields contains a duplicate field`);
+    }
+    unknownIdentities.add(identity);
+    return Object.freeze({ objectPath, field, disposition: "raw-only" as const });
+  }));
+  return Object.freeze({
+    entries,
+    objectFields,
+    unknownFields,
+    secretLikePaths: uniqueTextArray(
+      input.secretLikePaths,
+      `${label}.secretLikePaths`,
+    ),
+  });
+}
+
 type MutableEntry = {
   readonly kinds: Set<RawJsonKind>;
   occurrenceCount: number;

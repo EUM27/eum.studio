@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "workDefaults": {
+    "autoOnEpisodeTransition": false,
+    "autoOnSceneTransition": false,
+    "autoPlayOnPomodoroStart": true,
+    "preciseSelection": false,
+    "transitionPlaybackMode": "restart"
+  },
+  "transitionPlaybackModes": [
+    "restart",
+    "ask"
+  ]
+}

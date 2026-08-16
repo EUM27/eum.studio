@@ -186,4 +186,39 @@ describe("manuscript document state registry", () => {
       ),
     ).toThrow(/ownership/);
   });
+
+  it("preserves editor state when a confirmed durable revision has the exact saved text", () => {
+    const document = createDocument();
+    const registry = new ManuscriptDocumentStateRegistry();
+    const scrollEffect = StateEffect.define<number>();
+    const scrollSnapshot = scrollEffect.of(randomInt(1, 1_000));
+    const insertedText = randomUUID();
+    const savedState = createState(document).update({
+      changes: {
+        from: document.initialText.length,
+        insert: insertedText,
+      },
+    }).state;
+    registry.save(document, {
+      state: savedState,
+      scrollSnapshot,
+    });
+    const confirmedDocument = createDocument({
+      workId: document.workId,
+      documentId: document.documentId,
+      initialText: savedState.doc.toString(),
+    });
+
+    const restored = registry.restoreConfirmedSource(
+      confirmedDocument,
+      createState,
+    );
+
+    expect(restored.state).toBe(savedState);
+    expect(restored.scrollSnapshot).toBe(scrollSnapshot);
+    expect(undoDepth(restored.state)).toBe(1);
+    expect(registry.materialize(confirmedDocument)).toBe(
+      savedState.doc.toString(),
+    );
+  });
 });

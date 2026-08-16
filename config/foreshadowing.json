@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "defaultRoleId": "plant",
+  "payoffRoleId": "payoff",
+  "roles": [
+    {
+      "id": "plant",
+      "label": "배치"
+    },
+    {
+      "id": "reinforcement",
+      "label": "강화"
+    },
+    {
+      "id": "payoff",
+      "label": "회수"
+    }
+  ]
+}

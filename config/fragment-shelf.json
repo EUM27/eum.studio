@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "defaultKindId": "sentence",
+  "kinds": [
+    {
+      "id": "sentence",
+      "label": "문장"
+    },
+    {
+      "id": "idea",
+      "label": "아이디어"
+    }
+  ]
+}

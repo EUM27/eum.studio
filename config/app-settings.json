@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "defaultEpisodeCharacters": {
+    "defaultValue": 4000,
+    "minValue": 100,
+    "maxValue": 100000
+  }
+}
