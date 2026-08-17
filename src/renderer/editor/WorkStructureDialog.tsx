@@ -5,24 +5,23 @@ import type {
   WorkStructureOverviewPlot,
   WorkStructureOverviewPlotSource,
   WorkStructureOverviewProjection,
-  WorkStructureOverviewSceneBoundary,
+  WorkStructureOverviewScene,
 } from "../../application/structure/work-structure-overview";
-
-const sceneOperationLabels: Record<
-  WorkStructureOverviewSceneBoundary["operation"],
-  string
-> = {
-  add: "추가",
-  ignore: "제외",
-  merge: "합치기",
-  split: "나누기",
-};
 
 function integrityLabel(
   integrity: "resolved" | "needsReview" | "broken",
 ): string {
   if (integrity === "resolved") return "위치 확인됨";
   if (integrity === "needsReview") return "위치 검토 필요";
+  return "위치 연결 손상";
+}
+
+function eventSourceStateLabel(
+  state: WorkStructureOverviewEvent["sourceState"],
+): string {
+  if (state === "unlinked") return "원고 미연결";
+  if (state === "resolved") return "위치 확인됨";
+  if (state === "needsReview") return "위치 검토 필요";
   return "위치 연결 손상";
 }
 
@@ -37,9 +36,7 @@ export function WorkStructureDialog(input: {
   readonly onOpenLore: () => void;
   readonly onOpenPlot: (plot: WorkStructureOverviewPlot) => void;
   readonly onOpenPlotSource: (source: WorkStructureOverviewPlotSource) => void;
-  readonly onOpenSceneBoundary: (
-    boundary: WorkStructureOverviewSceneBoundary,
-  ) => void;
+  readonly onOpenScene: (scene: WorkStructureOverviewScene) => void;
   readonly projection: WorkStructureOverviewProjection;
 }) {
   const labels = new Map(
@@ -82,7 +79,7 @@ export function WorkStructureDialog(input: {
             ["플롯", totals.plots, "plots"],
             ["플롯 출처", totals.plotSources, "plot-sources"],
             ["사건", totals.events, "events"],
-            ["장면 경계", totals.sceneBoundaries, "scene-boundaries"],
+            ["장면", totals.scenes, "scenes"],
             ["별빛", input.loreEntryCount, "lore-entries"],
           ] as const).map(([label, value, testId]) => (
             <div data-testid={`structure-total-${testId}`} key={testId}>
@@ -111,7 +108,7 @@ export function WorkStructureDialog(input: {
                     >
                       <strong>{document.label}</strong>
                       <span>
-                        사건 {document.eventCount} · 장면 {document.sceneBoundaryCount} ·
+                      사건 {document.eventCount} · 장면 {document.sceneCount} ·
                         플롯 출처 {document.plotSourceCount}
                       </span>
                     </button>
@@ -235,55 +232,62 @@ export function WorkStructureDialog(input: {
               <p className="work-structure-empty">등록한 사건이 없습니다.</p>
             ) : (
               <ul>
-                {input.projection.events.map((event) => (
+                {input.projection.events.map((event) => {
+                  const source = event.source;
+                  return (
                   <li key={event.eventBlockId}>
                     <button
                       aria-label={`${event.title} 사건 원문 열기`}
                       disabled={
                         input.busy ||
-                        event.integrity !== "resolved" ||
-                        event.range === null
+                        source === null ||
+                        source.integrity !== "resolved" ||
+                        source.range === null
                       }
                       onClick={() => input.onOpenEvent(event)}
                       type="button"
                     >
                       <strong>{event.title}</strong>
                       <span>
-                        {labels.get(event.documentId) ?? "원본 회차"}
-                        {` · ${integrityLabel(event.integrity)}`}
+                        {source === null
+                          ? eventSourceStateLabel(event.sourceState)
+                          : `${labels.get(source.documentId) ?? "원본 회차"} · ${integrityLabel(source.integrity)}`}
                       </span>
                     </button>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
           </section>
 
-          <section aria-label="장면 경계 구조" className="work-structure-panel">
+          <section aria-label="장면 구조" className="work-structure-panel">
             <header>
-              <h3>장면 경계</h3>
-              <span>{totals.sceneBoundaries}</span>
+              <h3>장면</h3>
+              <span>{totals.scenes}</span>
             </header>
-            {input.projection.sceneBoundaries.length === 0 ? (
-              <p className="work-structure-empty">추가한 장면 경계가 없습니다.</p>
+            {input.projection.scenes.length === 0 ? (
+              <p className="work-structure-empty">계산된 장면이 없습니다.</p>
             ) : (
               <ul>
-                {input.projection.sceneBoundaries.map((boundary, index) => {
-                  const label = labels.get(boundary.documentId) ?? "원본 회차";
+                {input.projection.scenes.map((scene) => {
+                  const label = labels.get(scene.documentId) ?? "원본 회차";
                   return (
-                    <li key={`${boundary.sceneOverrideId}:${boundary.anchorId}`}>
+                    <li key={scene.sceneKey}>
                       <button
-                        aria-label={`${label} 장면 경계 ${index + 1} 원문 열기`}
+                        aria-label={`${label} 장면 ${scene.sceneIndex} 원문 열기`}
                         disabled={
                           input.busy ||
-                          boundary.integrity !== "resolved" ||
-                          boundary.range === null
+                          scene.integrity !== "resolved" ||
+                          scene.range === null
                         }
-                        onClick={() => input.onOpenSceneBoundary(boundary)}
+                        onClick={() => input.onOpenScene(scene)}
                         type="button"
                       >
-                        <strong>{`${label} · ${sceneOperationLabels[boundary.operation]}`}</strong>
-                        <span>{integrityLabel(boundary.integrity)}</span>
+                        <strong>{`${label} · 장면 ${scene.sceneIndex}`}</strong>
+                        <span>
+                          사건 {scene.events.length} · {integrityLabel(scene.integrity)}
+                        </span>
                       </button>
                     </li>
                   );

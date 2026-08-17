@@ -103,10 +103,18 @@ import {
   PUBLISHING_MAIL_SCHEDULE_STATUS_CHANNEL,
   PUBLISHING_MAIL_SCHEDULE_SAVE_CHANNEL,
   PLOT_CREATE_CHANNEL,
+  PLOT_CREATE_EVENT_CHANNEL,
+  PLOT_CREATE_FROM_EVENT_CHANNEL,
+  PLOT_EVENT_LINK_LIST_CHANNEL,
+  PLOT_DEFAULT_BOARD_CHANNEL,
+  PLOT_LINK_EVENT_CHANNEL,
   PLOT_LINK_SOURCE_CHANNEL,
   PLOT_LIST_CHANNEL,
+  PLOT_MOVE_PLACEMENT_CHANNEL,
+  PLOT_SET_STORY_TIME_CHANNEL,
   PLOT_RETIRE_CHANNEL,
   PLOT_SOURCE_LIST_CHANNEL,
+  PLOT_UNLINK_EVENT_CHANNEL,
   PLOT_UPDATE_CHANNEL,
   FRAGMENT_CAPTURE_CHANNEL,
   FRAGMENT_LIST_CHANNEL,
@@ -156,10 +164,18 @@ import {
   SCHEDULE_RETIRE_ITEM_CHANNEL,
   SCHEDULE_SET_COMPLETION_CHANNEL,
   SCHEDULE_UPDATE_ITEM_CHANNEL,
+  STRUCTURE_CREATE_ANCHORLESS_EVENT_CHANNEL,
   STRUCTURE_CREATE_EVENT_BLOCK_CHANNEL,
   STRUCTURE_CREATE_SCENE_OVERRIDE_CHANNEL,
+  STRUCTURE_LINK_EVENT_SOURCE_CHANNEL,
   STRUCTURE_LIST_EVENT_BLOCKS_CHANNEL,
+  STRUCTURE_LIST_EVENT_RAIL_CHANNEL,
   STRUCTURE_LIST_SCENE_OVERRIDES_CHANNEL,
+  STRUCTURE_LIST_SCENE_PROJECTION_CHANNEL,
+  STRUCTURE_REPLACE_EVENT_SOURCE_CHANNEL,
+  STRUCTURE_RETIRE_EVENT_SOURCE_CHANNEL,
+  STRUCTURE_SET_SCENE_EVENT_OVERRIDE_CHANNEL,
+  STRUCTURE_UPDATE_SCENE_RULE_SET_CHANNEL,
   VERSION_CREATE_WORK_SNAPSHOT_CHANNEL,
   VERSION_COMPARE_WORK_SNAPSHOT_CHANNEL,
   VERSION_LIST_DOCUMENT_REVISIONS_CHANNEL,
@@ -189,12 +205,21 @@ import {
   type RuntimeInfo,
 } from "../application/contracts/studio-bridge";
 import {
+  parseCreateAnchorlessEventCommand,
   parseCreateEventBlockCommand,
   parseEventBlockListProjection,
+  parseLinkEventSourceCommand,
   parseListEventBlocksCommand,
+  parseReplaceEventSourceCommand,
+  parseRetireEventSourceCommand,
   type EventBlockListProjection,
   type EventBlockProjection,
+  type EventSourceProjection,
 } from "../application/structure/event-block-contract";
+import {
+  parseListEventRailCommand,
+  type EventRailProjection,
+} from "../application/structure/event-rail-projection";
 import {
   parseCreateSceneOverrideCommand,
   parseListSceneOverridesCommand,
@@ -202,6 +227,12 @@ import {
   type SceneOverrideListProjection,
   type SceneOverrideProjection,
 } from "../application/structure/scene-override-contract";
+import {
+  parseListSceneProjectionCommand,
+  parseSetSceneEventOverrideCommand,
+  parseUpdateSceneRuleSetCommand,
+  type SceneProjectionList,
+} from "../application/structure/scene-projection";
 import {
   parseCaptureFragmentCommand,
   parseFragmentListProjection,
@@ -372,6 +403,22 @@ import {
   type PlotThreadListProjection,
   type PlotThreadProjection,
 } from "../application/plots/plot-contract";
+import {
+  parseGetDefaultPlotBoardCommand,
+  parseMovePlotPlacementCommand,
+  parseSetPlotPlacementStoryTimeCommand,
+  type PlotBoardProjection,
+} from "../application/plots/plot-board-contract";
+import {
+  parseCreateEventFromPlotCommand,
+  parseCreatePlotFromEventCommand,
+  parseLinkPlotEventCommand,
+  parseListPlotEventLinksCommand,
+  parsePlotEventLinkListProjection,
+  parseUnlinkPlotEventCommand,
+  type PlotEventLinkListProjection,
+  type PlotEventLinkMutationProjection,
+} from "../application/plots/plot-event-link-contract";
 import {
   parseLinkPlotThreadSourceCommand,
   parseListPlotThreadSourcesCommand,
@@ -697,9 +744,17 @@ type ApplicationRuntime = {
   retireDocumentFolder(value: unknown): Promise<WorkspaceCatalogProjection>;
   captureWorkspaceResume(value: unknown): Promise<ManuscriptResumeCheckpointProjection>;
   createEventBlock(value: unknown): Promise<EventBlockProjection>;
+  createAnchorlessEvent(value: unknown): Promise<EventBlockProjection>;
+  linkEventSource(value: unknown): Promise<EventSourceProjection>;
+  replaceEventSource(value: unknown): Promise<EventSourceProjection>;
+  retireEventSource(value: unknown): Promise<EventSourceProjection>;
   listEventBlocks(value: unknown): Promise<EventBlockListProjection>;
+  listEventRail(value: unknown): Promise<EventRailProjection>;
   createSceneOverride(value: unknown): Promise<SceneOverrideProjection>;
   listSceneOverrides(value: unknown): Promise<SceneOverrideListProjection>;
+  listSceneProjection(value: unknown): Promise<SceneProjectionList>;
+  updateSceneRuleSet(value: unknown): Promise<SceneProjectionList>;
+  setSceneEventOverride(value: unknown): Promise<SceneProjectionList>;
   captureFragment(value: unknown): Promise<FragmentProjection>;
   listFragments(value: unknown): Promise<FragmentListProjection>;
   updateFragment(value: unknown): Promise<FragmentProjection>;
@@ -769,8 +824,16 @@ type ApplicationRuntime = {
   savePublishingMailSchedule(value: unknown): Promise<PublishingMailScheduleProjection>;
   createPlotThread(value: unknown): Promise<PlotThreadProjection>;
   listPlotThreads(value: unknown): Promise<PlotThreadListProjection>;
+  getDefaultPlotBoard(value: unknown): Promise<PlotBoardProjection>;
+  movePlotPlacement(value: unknown): Promise<PlotBoardProjection>;
+  setPlotPlacementStoryTime(value: unknown): Promise<PlotBoardProjection>;
   updatePlotThread(value: unknown): Promise<PlotThreadProjection>;
   retirePlotThread(value: unknown): Promise<PlotThreadProjection>;
+  createPlotFromEvent(value: unknown): Promise<PlotEventLinkMutationProjection>;
+  createEventFromPlot(value: unknown): Promise<PlotEventLinkMutationProjection>;
+  linkPlotEvent(value: unknown): Promise<PlotEventLinkMutationProjection>;
+  unlinkPlotEvent(value: unknown): Promise<PlotEventLinkMutationProjection>;
+  listPlotEventLinks(value: unknown): Promise<PlotEventLinkListProjection>;
   linkPlotThreadSource(value: unknown): Promise<PlotThreadSourceProjection>;
   listPlotThreadSources(value: unknown): Promise<PlotThreadSourceListProjection>;
   createForeshadowLine(value: unknown): Promise<ForeshadowLineProjection>;
@@ -1547,12 +1610,28 @@ async function registerApplicationHandlers(): Promise<void> {
         localRuntime.captureWorkspaceResume(value),
       createEventBlock: (value) =>
         localRuntime.createEventBlock(value),
+      createAnchorlessEvent: (value) =>
+        localRuntime.createAnchorlessEvent(value),
+      linkEventSource: (value) =>
+        localRuntime.linkEventSource(value),
+      replaceEventSource: (value) =>
+        localRuntime.replaceEventSource(value),
+      retireEventSource: (value) =>
+        localRuntime.retireEventSource(value),
       listEventBlocks: (value) =>
         localRuntime.listEventBlocks(value),
+      listEventRail: (value) =>
+        localRuntime.listEventRail(value),
       createSceneOverride: (value) =>
         localRuntime.createSceneOverride(value),
       listSceneOverrides: (value) =>
         localRuntime.listSceneOverrides(value),
+      listSceneProjection: (value) =>
+        localRuntime.listSceneProjection(value),
+      updateSceneRuleSet: (value) =>
+        localRuntime.updateSceneRuleSet(value),
+      setSceneEventOverride: (value) =>
+        localRuntime.setSceneEventOverride(value),
       captureFragment: (value) =>
         localRuntime.captureFragment(value),
       listFragments: (value) =>
@@ -1681,10 +1760,26 @@ async function registerApplicationHandlers(): Promise<void> {
         localRuntime.createPlotThread(value),
       listPlotThreads: (value) =>
         localRuntime.listPlotThreads(value),
+      getDefaultPlotBoard: (value) =>
+        localRuntime.getDefaultPlotBoard(value),
+      movePlotPlacement: (value) =>
+        localRuntime.movePlotPlacement(value),
+      setPlotPlacementStoryTime: (value) =>
+        localRuntime.setPlotPlacementStoryTime(value),
       updatePlotThread: (value) =>
         localRuntime.updatePlotThread(value),
       retirePlotThread: (value) =>
         localRuntime.retirePlotThread(value),
+      createPlotFromEvent: (value) =>
+        localRuntime.createPlotFromEvent(value),
+      createEventFromPlot: (value) =>
+        localRuntime.createEventFromPlot(value),
+      linkPlotEvent: (value) =>
+        localRuntime.linkPlotEvent(value),
+      unlinkPlotEvent: (value) =>
+        localRuntime.unlinkPlotEvent(value),
+      listPlotEventLinks: (value) =>
+        localRuntime.listPlotEventLinks(value),
       linkPlotThreadSource: (value) =>
         localRuntime.linkPlotThreadSource(value),
       listPlotThreadSources: (value) =>
@@ -1987,6 +2082,26 @@ async function registerApplicationHandlers(): Promise<void> {
           "EventBlock creation is unavailable in a configured manuscript runtime",
         );
       },
+      createAnchorlessEvent: async () => {
+        throw new Error(
+          "Anchorless EventBlock creation is unavailable in a configured manuscript runtime",
+        );
+      },
+      linkEventSource: async () => {
+        throw new Error(
+          "EventSource linking is unavailable in a configured manuscript runtime",
+        );
+      },
+      replaceEventSource: async () => {
+        throw new Error(
+          "EventSource replacement is unavailable in a configured manuscript runtime",
+        );
+      },
+      retireEventSource: async () => {
+        throw new Error(
+          "EventSource retirement is unavailable in a configured manuscript runtime",
+        );
+      },
       listEventBlocks: async (value) => {
         const command = parseListEventBlocksCommand(value);
         if (
@@ -2000,7 +2115,14 @@ async function registerApplicationHandlers(): Promise<void> {
           schemaVersion: 1,
           workId: command.workId,
           eventBlocks: [],
+          eventSources: [],
         });
+      },
+      listEventRail: async (value) => {
+        parseListEventRailCommand(value);
+        throw new Error(
+          "Event rail is unavailable in a configured manuscript runtime",
+        );
       },
       createSceneOverride: async () => {
         throw new Error(
@@ -2021,6 +2143,24 @@ async function registerApplicationHandlers(): Promise<void> {
           workId: command.workId,
           sceneOverrides: [],
         });
+      },
+      listSceneProjection: async (value) => {
+        parseListSceneProjectionCommand(value);
+        throw new Error(
+          "Scene projection is unavailable in a configured manuscript runtime",
+        );
+      },
+      updateSceneRuleSet: async (value) => {
+        parseUpdateSceneRuleSetCommand(value);
+        throw new Error(
+          "SceneRuleSet updates are unavailable in a configured manuscript runtime",
+        );
+      },
+      setSceneEventOverride: async (value) => {
+        parseSetSceneEventOverrideCommand(value);
+        throw new Error(
+          "Scene event overrides are unavailable in a configured manuscript runtime",
+        );
       },
       captureFragment: async () => {
         throw new Error(
@@ -2413,6 +2553,24 @@ async function registerApplicationHandlers(): Promise<void> {
           plots: [],
         });
       },
+      getDefaultPlotBoard: async (value) => {
+        parseGetDefaultPlotBoardCommand(value);
+        throw new Error(
+          "Plot boards are unavailable in a configured manuscript runtime",
+        );
+      },
+      movePlotPlacement: async (value) => {
+        parseMovePlotPlacementCommand(value);
+        throw new Error(
+          "Plot placement moves are unavailable in a configured manuscript runtime",
+        );
+      },
+      setPlotPlacementStoryTime: async (value) => {
+        parseSetPlotPlacementStoryTimeCommand(value);
+        throw new Error(
+          "Plot placement story time is unavailable in a configured manuscript runtime",
+        );
+      },
       updatePlotThread: async () => {
         throw new Error(
           "Plot update is unavailable in a configured manuscript runtime",
@@ -2422,6 +2580,37 @@ async function registerApplicationHandlers(): Promise<void> {
         throw new Error(
           "Plot retirement is unavailable in a configured manuscript runtime",
         );
+      },
+      createPlotFromEvent: async () => {
+        throw new Error(
+          "Plot creation from an event is unavailable in a configured manuscript runtime",
+        );
+      },
+      createEventFromPlot: async () => {
+        throw new Error(
+          "Event creation from a plot is unavailable in a configured manuscript runtime",
+        );
+      },
+      linkPlotEvent: async () => {
+        throw new Error(
+          "Plot/event linking is unavailable in a configured manuscript runtime",
+        );
+      },
+      unlinkPlotEvent: async () => {
+        throw new Error(
+          "Plot/event unlinking is unavailable in a configured manuscript runtime",
+        );
+      },
+      listPlotEventLinks: async (value) => {
+        const command = parseListPlotEventLinksCommand(value);
+        if (!workspaceCatalog.works.some((work) => work.workId === command.workId)) {
+          throw new Error(`Unknown Work: ${command.workId}`);
+        }
+        return parsePlotEventLinkListProjection({
+          schemaVersion: 1,
+          workId: command.workId,
+          links: [],
+        });
       },
       linkPlotThreadSource: async () => {
         throw new Error(
@@ -3166,11 +3355,56 @@ async function registerApplicationHandlers(): Promise<void> {
     },
   );
   ipcMain.handle(
+    STRUCTURE_CREATE_ANCHORLESS_EVENT_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.createAnchorlessEvent(
+        parseCreateAnchorlessEventCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    STRUCTURE_LINK_EVENT_SOURCE_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.linkEventSource(
+        parseLinkEventSourceCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    STRUCTURE_REPLACE_EVENT_SOURCE_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.replaceEventSource(
+        parseReplaceEventSourceCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    STRUCTURE_RETIRE_EVENT_SOURCE_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.retireEventSource(
+        parseRetireEventSourceCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
     STRUCTURE_LIST_EVENT_BLOCKS_CHANNEL,
     (event, value: unknown) => {
       assertTrustedRendererSender(event);
       return applicationRuntime.listEventBlocks(
         parseListEventBlocksCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    STRUCTURE_LIST_EVENT_RAIL_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.listEventRail(
+        parseListEventRailCommand(value),
       );
     },
   );
@@ -3189,6 +3423,33 @@ async function registerApplicationHandlers(): Promise<void> {
       assertTrustedRendererSender(event);
       return applicationRuntime.listSceneOverrides(
         parseListSceneOverridesCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    STRUCTURE_LIST_SCENE_PROJECTION_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.listSceneProjection(
+        parseListSceneProjectionCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    STRUCTURE_UPDATE_SCENE_RULE_SET_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.updateSceneRuleSet(
+        parseUpdateSceneRuleSetCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    STRUCTURE_SET_SCENE_EVENT_OVERRIDE_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.setSceneEventOverride(
+        parseSetSceneEventOverrideCommand(value),
       );
     },
   );
@@ -3789,6 +4050,33 @@ async function registerApplicationHandlers(): Promise<void> {
     },
   );
   ipcMain.handle(
+    PLOT_DEFAULT_BOARD_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.getDefaultPlotBoard(
+        parseGetDefaultPlotBoardCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    PLOT_MOVE_PLACEMENT_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.movePlotPlacement(
+        parseMovePlotPlacementCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    PLOT_SET_STORY_TIME_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.setPlotPlacementStoryTime(
+        parseSetPlotPlacementStoryTimeCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
     PLOT_UPDATE_CHANNEL,
     (event, value: unknown) => {
       assertTrustedRendererSender(event);
@@ -3803,6 +4091,51 @@ async function registerApplicationHandlers(): Promise<void> {
       assertTrustedRendererSender(event);
       return applicationRuntime.retirePlotThread(
         parseRetirePlotThreadCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    PLOT_CREATE_FROM_EVENT_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.createPlotFromEvent(
+        parseCreatePlotFromEventCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    PLOT_CREATE_EVENT_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.createEventFromPlot(
+        parseCreateEventFromPlotCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    PLOT_LINK_EVENT_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.linkPlotEvent(
+        parseLinkPlotEventCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    PLOT_UNLINK_EVENT_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.unlinkPlotEvent(
+        parseUnlinkPlotEventCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    PLOT_EVENT_LINK_LIST_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.listPlotEventLinks(
+        parseListPlotEventLinksCommand(value),
       );
     },
   );

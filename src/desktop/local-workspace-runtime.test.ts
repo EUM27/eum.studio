@@ -1915,18 +1915,24 @@ describe("local workspace runtime", () => {
 
       expect(createdEvent).toMatchObject({
         workId: created.workId,
-        documentId: created.documentId,
         title: "첫 사건",
-        exactQuote,
-        integrity: "resolved",
-        range: { from, to },
       });
-      expect(
-        (await runtime.listEventBlocks({
-          schemaVersion: 1,
-          workId: created.workId,
-        })).eventBlocks,
-      ).toContainEqual(createdEvent);
+      const listed = await runtime.listEventBlocks({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(listed.eventBlocks).toContainEqual(createdEvent);
+      expect(listed.eventSources).toHaveLength(1);
+      expect(listed.eventSources[0]).toMatchObject({
+        eventBlockId: createdEvent.eventBlockId,
+        role: "primary",
+        anchors: [{
+          documentId: created.documentId,
+          exactQuote,
+          integrity: "resolved",
+          range: { from, to },
+        }],
+      });
 
       runtime.close();
       runtime = await openLocalWorkspaceRuntime(options);
@@ -1937,11 +1943,525 @@ describe("local workspace runtime", () => {
       expect(reopened.eventBlocks).toHaveLength(1);
       expect(reopened.eventBlocks[0]).toMatchObject({
         eventBlockId: createdEvent.eventBlockId,
-        documentId: created.documentId,
-        exactQuote,
-        integrity: "resolved",
-        range: { from, to },
       });
+      expect(reopened.eventSources[0]).toMatchObject({
+        eventBlockId: createdEvent.eventBlockId,
+        role: "primary",
+        anchors: [{
+          documentId: created.documentId,
+          exactQuote,
+          integrity: "resolved",
+          range: { from, to },
+        }],
+      });
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("migrates a version 1 EventBlock range into one primary EventSource", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-event-source-migration-"),
+    );
+    const options = createOptions(rootDirectoryPath);
+    const profiles = createLocalWorkspaceStorageProfiles(rootDirectoryPath);
+    let runtime = await openLocalWorkspaceRuntime(options);
+
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: randomUUID(),
+        firstDocumentTitle: randomUUID(),
+      });
+      const manuscript = "마이그레이션 전 사건 근거를 정확히 보존한다.";
+      await runtime.saveChangeBatch(
+        parseChangeBatch({
+          schemaVersion: 1,
+          textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+          batchId: randomUUID(),
+          workId: created.workId,
+          documentId: created.documentId,
+          baseRevisionId: created.revisionId,
+          sequence: 0,
+          createdAt: new Date().toISOString(),
+          beforeTextLengthUtf16: 0,
+          afterTextLengthUtf16: manuscript.length,
+          changes: [{
+            fromUtf16: 0,
+            toUtf16: 0,
+            insertedText: manuscript,
+          }],
+        }),
+      );
+      const exactQuote = "사건 근거를 정확히 보존";
+      const from = manuscript.indexOf(exactQuote);
+      const eventBlock = await runtime.createEventBlock({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        selection: { anchor: from, head: from + exactQuote.length },
+        exactQuote,
+        title: "기존 사건",
+        note: "v1 fixture",
+      });
+      runtime.close();
+
+      const legacy = new DatabaseSync(profiles.databasePath);
+      try {
+        legacy.exec("PRAGMA foreign_keys = OFF");
+        legacy.exec(`
+          BEGIN IMMEDIATE;
+
+          CREATE TABLE event_blocks_v1 (
+            id TEXT PRIMARY KEY,
+            schema_version INTEGER NOT NULL,
+            revision INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            retired_at TEXT,
+            work_id TEXT NOT NULL,
+            range_group_id TEXT NOT NULL,
+            parent_event_id TEXT,
+            title TEXT NOT NULL,
+            note TEXT,
+            stage_ref TEXT,
+            order_key TEXT NOT NULL,
+            collapsed INTEGER NOT NULL,
+            relation_ids_json TEXT,
+            UNIQUE (work_id, id),
+            FOREIGN KEY (work_id, range_group_id)
+              REFERENCES range_groups (work_id, id)
+              ON DELETE RESTRICT,
+            FOREIGN KEY (work_id, parent_event_id)
+              REFERENCES event_blocks_v1 (work_id, id)
+              ON DELETE RESTRICT
+              DEFERRABLE INITIALLY DEFERRED
+          ) STRICT;
+
+          INSERT INTO event_blocks_v1 (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            work_id,
+            range_group_id,
+            parent_event_id,
+            title,
+            note,
+            stage_ref,
+            order_key,
+            collapsed,
+            relation_ids_json
+          )
+          SELECT
+            e.id,
+            e.schema_version,
+            e.revision,
+            e.created_at,
+            e.updated_at,
+            e.retired_at,
+            e.work_id,
+            es.range_group_id,
+            e.parent_event_id,
+            e.title,
+            e.note,
+            e.stage_ref,
+            e.order_key,
+            e.collapsed,
+            e.relation_ids_json
+          FROM event_blocks AS e
+          JOIN event_sources AS es
+            ON es.work_id = e.work_id
+            AND es.event_block_id = e.id
+            AND es.role = 'primary'
+            AND es.retired_at IS NULL;
+
+          CREATE TABLE activity_interval_event_blocks_v1 (
+            work_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            activity_interval_id TEXT NOT NULL,
+            event_block_id TEXT NOT NULL,
+            PRIMARY KEY (activity_interval_id, event_block_id),
+            FOREIGN KEY (work_id, session_id, activity_interval_id)
+              REFERENCES activity_intervals (work_id, session_id, id)
+              ON DELETE RESTRICT,
+            FOREIGN KEY (work_id, event_block_id)
+              REFERENCES event_blocks_v1 (work_id, id)
+              ON DELETE RESTRICT
+          ) STRICT;
+
+          INSERT INTO activity_interval_event_blocks_v1
+          SELECT * FROM activity_interval_event_blocks;
+
+          DROP TABLE scene_event_overrides;
+          DROP TABLE scene_rule_sets;
+          DROP TABLE plot_placements;
+          DROP TABLE plot_lanes;
+          DROP TABLE plot_boards;
+          DROP TABLE plot_event_links;
+          DROP TABLE activity_interval_event_blocks;
+          DROP TABLE event_sources;
+          UPDATE event_blocks
+          SET parent_event_id = NULL
+          WHERE parent_event_id IS NOT NULL;
+          DROP TABLE event_blocks;
+          ALTER TABLE event_blocks_v1 RENAME TO event_blocks;
+          ALTER TABLE activity_interval_event_blocks_v1
+            RENAME TO activity_interval_event_blocks;
+
+          UPDATE storage_ledger_identity
+          SET target_schema_version = 1;
+          PRAGMA user_version = 1;
+          COMMIT;
+        `);
+      } finally {
+        legacy.close();
+      }
+
+      runtime = await openLocalWorkspaceRuntime(options);
+      const migrated = await runtime.listEventBlocks({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(migrated.eventBlocks).toHaveLength(1);
+      expect(migrated.eventBlocks[0]).toMatchObject({
+        eventBlockId: eventBlock.eventBlockId,
+        title: "기존 사건",
+      });
+      expect(migrated.eventSources).toHaveLength(1);
+      expect(migrated.eventSources[0]).toMatchObject({
+        eventBlockId: eventBlock.eventBlockId,
+        role: "primary",
+        anchors: [{
+          documentId: created.documentId,
+          exactQuote,
+          integrity: "resolved",
+          range: { from, to: from + exactQuote.length },
+        }],
+      });
+      runtime.close();
+
+      const audit = new DatabaseSync(profiles.databasePath, { readOnly: true });
+      try {
+        expect(audit.prepare("PRAGMA user_version").get()).toEqual({
+          user_version: 5,
+        });
+        expect(
+          audit.prepare(`
+            SELECT target_schema_version AS "targetSchemaVersion"
+            FROM storage_ledger_identity
+          `).get(),
+        ).toEqual({ targetSchemaVersion: 5 });
+        expect(
+          audit.prepare(`
+            SELECT name
+            FROM pragma_table_info('event_blocks')
+            WHERE name = 'range_group_id'
+          `).all(),
+        ).toEqual([]);
+        expect(
+          audit.prepare(`
+            SELECT migration_id AS "migrationId"
+            FROM migration_receipts
+            WHERE migration_id = 'local-workspace-event-source-v1-to-v2'
+          `).get(),
+        ).toEqual({
+          migrationId: "local-workspace-event-source-v1-to-v2",
+        });
+        expect(
+          audit.prepare(`
+            SELECT migration_id AS "migrationId"
+            FROM migration_receipts
+            WHERE migration_id = 'local-workspace-plot-event-link-v2-to-v3'
+          `).get(),
+        ).toEqual({
+          migrationId: "local-workspace-plot-event-link-v2-to-v3",
+        });
+        expect(
+          audit.prepare(`
+            SELECT migration_id AS "migrationId"
+            FROM migration_receipts
+            WHERE migration_id = 'local-workspace-plot-board-v3-to-v4'
+          `).get(),
+        ).toEqual({ migrationId: "local-workspace-plot-board-v3-to-v4" });
+        expect(
+          audit.prepare(`
+            SELECT migration_id AS "migrationId"
+            FROM migration_receipts
+            WHERE migration_id = 'local-workspace-scene-projection-v4-to-v5'
+          `).get(),
+        ).toEqual({
+          migrationId: "local-workspace-scene-projection-v4-to-v5",
+        });
+      } finally {
+        audit.close();
+      }
+      runtime = await openLocalWorkspaceRuntime(options);
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("migrates version 2 plot and event content into the PlotEventLink schema", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-plot-event-link-migration-"),
+    );
+    const options = createOptions(rootDirectoryPath);
+    const profiles = createLocalWorkspaceStorageProfiles(rootDirectoryPath);
+    let runtime = await openLocalWorkspaceRuntime(options);
+
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: randomUUID(),
+        firstDocumentTitle: randomUUID(),
+      });
+      const eventBlock = await runtime.createAnchorlessEvent({
+        schemaVersion: 1,
+        workId: created.workId,
+        title: "이전 사건",
+        note: "v2 사건 내용",
+      });
+      const plotBeat = await runtime.createPlotThread({
+        schemaVersion: 1,
+        workId: created.workId,
+        title: "이전 플롯",
+        stage: "",
+        summary: "v2 플롯 내용",
+        note: "",
+      });
+      runtime.close();
+
+      const versionTwo = new DatabaseSync(profiles.databasePath);
+      try {
+        versionTwo.exec("PRAGMA foreign_keys = OFF");
+        versionTwo.exec(`
+          BEGIN IMMEDIATE;
+          DROP TABLE scene_event_overrides;
+          DROP TABLE scene_rule_sets;
+          DROP TABLE plot_placements;
+          DROP TABLE plot_lanes;
+          DROP TABLE plot_boards;
+          DROP TABLE plot_event_links;
+          UPDATE storage_ledger_identity
+          SET target_schema_version = 2;
+          PRAGMA user_version = 2;
+          COMMIT;
+        `);
+      } finally {
+        versionTwo.close();
+      }
+
+      runtime = await openLocalWorkspaceRuntime(options);
+      expect((await runtime.listEventBlocks({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).eventBlocks).toContainEqual(eventBlock);
+      expect((await runtime.listPlotThreads({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).plots).toContainEqual(plotBeat);
+      expect(await runtime.getDefaultPlotBoard({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).toMatchObject({
+        workId: created.workId,
+        mode: "sequence",
+        lanes: [{
+          kind: "default",
+          placements: [{ plotBeatId: plotBeat.plotThreadId }],
+        }],
+      });
+      expect(await runtime.listPlotEventLinks({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).toMatchObject({ links: [] });
+      runtime.close();
+
+      const audit = new DatabaseSync(profiles.databasePath, { readOnly: true });
+      try {
+        expect(audit.prepare("PRAGMA user_version").get()).toEqual({
+          user_version: 5,
+        });
+        expect(audit.prepare(`
+          SELECT target_schema_version AS "targetSchemaVersion"
+          FROM storage_ledger_identity
+        `).get()).toEqual({ targetSchemaVersion: 5 });
+        expect(audit.prepare(`
+          SELECT migration_id AS "migrationId"
+          FROM migration_receipts
+          WHERE migration_id = 'local-workspace-plot-event-link-v2-to-v3'
+        `).get()).toEqual({
+          migrationId: "local-workspace-plot-event-link-v2-to-v3",
+        });
+        expect(audit.prepare(`
+          SELECT migration_id AS "migrationId"
+          FROM migration_receipts
+          WHERE migration_id = 'local-workspace-plot-board-v3-to-v4'
+        `).get()).toEqual({
+          migrationId: "local-workspace-plot-board-v3-to-v4",
+        });
+        expect(audit.prepare(`
+          SELECT migration_id AS "migrationId"
+          FROM migration_receipts
+          WHERE migration_id = 'local-workspace-scene-projection-v4-to-v5'
+        `).get()).toEqual({
+          migrationId: "local-workspace-scene-projection-v4-to-v5",
+        });
+        expect(audit.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+      } finally {
+        audit.close();
+      }
+      runtime = await openLocalWorkspaceRuntime(options);
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps an anchorless EventBlock while linking, replacing, and retiring its EventSource", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-anchorless-event-runtime-"),
+    );
+    const options = createOptions(rootDirectoryPath);
+    let runtime = await openLocalWorkspaceRuntime(options);
+
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: randomUUID(),
+        firstDocumentTitle: randomUUID(),
+      });
+      const manuscript = "첫 연결 원문 뒤에 둘째 교체 원문이 이어진다.";
+      await runtime.saveChangeBatch(
+        parseChangeBatch({
+          schemaVersion: 1,
+          textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+          batchId: randomUUID(),
+          workId: created.workId,
+          documentId: created.documentId,
+          baseRevisionId: created.revisionId,
+          sequence: 0,
+          createdAt: new Date().toISOString(),
+          beforeTextLengthUtf16: 0,
+          afterTextLengthUtf16: manuscript.length,
+          changes: [{
+            fromUtf16: 0,
+            toUtf16: 0,
+            insertedText: manuscript,
+          }],
+        }),
+      );
+      const eventBlock = await runtime.createAnchorlessEvent({
+        schemaVersion: 1,
+        workId: created.workId,
+        title: "예정 사건",
+        note: "원고보다 먼저 작성",
+      });
+      let projection = await runtime.listEventBlocks({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(projection.eventBlocks).toContainEqual(eventBlock);
+      expect(projection.eventSources).toEqual([]);
+
+      const firstQuote = "첫 연결 원문";
+      const firstFrom = manuscript.indexOf(firstQuote);
+      const linked = await runtime.linkEventSource({
+        schemaVersion: 1,
+        workId: created.workId,
+        eventBlockId: eventBlock.eventBlockId,
+        role: "primary",
+        documentId: created.documentId,
+        selection: {
+          anchor: firstFrom + firstQuote.length,
+          head: firstFrom,
+        },
+        exactQuote: firstQuote,
+      });
+      expect(linked).toMatchObject({
+        eventBlockId: eventBlock.eventBlockId,
+        role: "primary",
+        anchors: [{
+          exactQuote: firstQuote,
+          range: { from: firstFrom, to: firstFrom + firstQuote.length },
+        }],
+      });
+
+      const secondQuote = "둘째 교체 원문";
+      const secondFrom = manuscript.indexOf(secondQuote);
+      const replaced = await runtime.replaceEventSource({
+        schemaVersion: 1,
+        workId: created.workId,
+        eventSourceId: linked.eventSourceId,
+        expectedRevision: linked.revision,
+        documentId: created.documentId,
+        selection: {
+          anchor: secondFrom,
+          head: secondFrom + secondQuote.length,
+        },
+        exactQuote: secondQuote,
+      });
+      expect(replaced.eventSourceId).not.toBe(linked.eventSourceId);
+      expect(replaced).toMatchObject({
+        eventBlockId: eventBlock.eventBlockId,
+        role: "primary",
+        anchors: [{
+          exactQuote: secondQuote,
+          range: { from: secondFrom, to: secondFrom + secondQuote.length },
+        }],
+      });
+      projection = await runtime.listEventBlocks({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(projection.eventSources).toHaveLength(1);
+      expect(projection.eventSources[0]?.eventSourceId).toBe(
+        replaced.eventSourceId,
+      );
+
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      projection = await runtime.listEventBlocks({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(projection.eventBlocks).toContainEqual(eventBlock);
+      expect(projection.eventSources[0]).toMatchObject({
+        eventSourceId: replaced.eventSourceId,
+        anchors: [{ exactQuote: secondQuote }],
+      });
+
+      const retired = await runtime.retireEventSource({
+        schemaVersion: 1,
+        workId: created.workId,
+        eventSourceId: replaced.eventSourceId,
+        expectedRevision: replaced.revision,
+      });
+      expect(retired).toMatchObject({
+        eventSourceId: replaced.eventSourceId,
+        revision: replaced.revision + 1,
+      });
+      expect(retired.retiredAt).not.toBeNull();
+      projection = await runtime.listEventBlocks({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(projection.eventBlocks).toHaveLength(1);
+      expect(projection.eventSources).toEqual([]);
+
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      projection = await runtime.listEventBlocks({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(projection.eventBlocks).toHaveLength(1);
+      expect(projection.eventSources).toEqual([]);
     } finally {
       runtime.close();
       await rm(rootDirectoryPath, { recursive: true, force: true });
@@ -4639,6 +5159,844 @@ describe("local workspace runtime", () => {
     }
   });
 
+  it("creates, reuses, unlinks, and restores Work-owned plot/event links across restart", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-plot-event-link-runtime-"),
+    );
+    const options = createOptions(rootDirectoryPath);
+    let runtime = await openLocalWorkspaceRuntime(options);
+
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: randomUUID(),
+        firstDocumentTitle: randomUUID(),
+      });
+      const manuscript = "첫 사건의 정확한 원문과 플롯에서 만들 둘째 사건 원문";
+      await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: created.workId,
+        documentId: created.documentId,
+        baseRevisionId: created.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: manuscript.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: manuscript }],
+      }));
+
+      const firstQuote = "첫 사건의 정확한 원문";
+      const firstFrom = manuscript.indexOf(firstQuote);
+      const firstEvent = await runtime.createEventBlock({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        selection: {
+          anchor: firstFrom,
+          head: firstFrom + firstQuote.length,
+        },
+        exactQuote: firstQuote,
+        title: "첫 사건",
+        note: "첫 사건 메모",
+      });
+      const fromEvent = await runtime.createPlotFromEvent({
+        schemaVersion: 1,
+        workId: created.workId,
+        eventBlockId: firstEvent.eventBlockId,
+      });
+      expect(fromEvent).toMatchObject({
+        status: "created",
+        plotBeat: { title: "첫 사건", summary: "첫 사건 메모" },
+        eventBlock: { eventBlockId: firstEvent.eventBlockId, title: "첫 사건" },
+        eventSources: [{ anchors: [{ exactQuote: firstQuote }] }],
+        link: {
+          role: "primary",
+          createdFrom: "event-to-plot",
+          titleMatch: "matched",
+        },
+      });
+      const reusedFromEvent = await runtime.createPlotFromEvent({
+        schemaVersion: 1,
+        workId: created.workId,
+        eventBlockId: firstEvent.eventBlockId,
+      });
+      expect(reusedFromEvent).toMatchObject({
+        status: "existing",
+        plotBeat: { plotThreadId: fromEvent.plotBeat.plotThreadId },
+        link: { plotEventLinkId: fromEvent.link.plotEventLinkId },
+      });
+
+      await runtime.updatePlotThread({
+        schemaVersion: 1,
+        workId: created.workId,
+        plotThreadId: fromEvent.plotBeat.plotThreadId,
+        expectedRevision: fromEvent.plotBeat.revision,
+        changes: { title: "독립적으로 바뀐 플롯 제목" },
+      });
+      let links = await runtime.listPlotEventLinks({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(links.links[0]).toMatchObject({
+        plotTitle: "독립적으로 바뀐 플롯 제목",
+        eventTitle: "첫 사건",
+        titleMatch: "mismatched",
+      });
+
+      const supportingEvent = await runtime.createAnchorlessEvent({
+        schemaVersion: 1,
+        workId: created.workId,
+        title: "보조 사건",
+        note: "연결 해제 후에도 남는다",
+      });
+      const supporting = await runtime.linkPlotEvent({
+        schemaVersion: 1,
+        workId: created.workId,
+        plotBeatId: fromEvent.plotBeat.plotThreadId,
+        eventBlockId: supportingEvent.eventBlockId,
+        role: "supporting",
+      });
+      expect(supporting).toMatchObject({
+        status: "created",
+        link: { role: "supporting", createdFrom: "manual-link" },
+      });
+      const reusedSupporting = await runtime.linkPlotEvent({
+        schemaVersion: 1,
+        workId: created.workId,
+        plotBeatId: fromEvent.plotBeat.plotThreadId,
+        eventBlockId: supportingEvent.eventBlockId,
+        role: "supporting",
+      });
+      expect(reusedSupporting).toMatchObject({
+        status: "existing",
+        link: { plotEventLinkId: supporting.link.plotEventLinkId },
+      });
+
+      const unlinked = await runtime.unlinkPlotEvent({
+        schemaVersion: 1,
+        workId: created.workId,
+        plotEventLinkId: supporting.link.plotEventLinkId,
+        expectedRevision: supporting.link.revision,
+      });
+      expect(unlinked).toMatchObject({ status: "retired", link: { revision: 2 } });
+      expect(unlinked.link.retiredAt).not.toBeNull();
+      expect((await runtime.listPlotThreads({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).plots).toContainEqual(expect.objectContaining({
+        plotThreadId: fromEvent.plotBeat.plotThreadId,
+      }));
+      expect((await runtime.listEventBlocks({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).eventBlocks).toContainEqual(supportingEvent);
+
+      const relinked = await runtime.linkPlotEvent({
+        schemaVersion: 1,
+        workId: created.workId,
+        plotBeatId: fromEvent.plotBeat.plotThreadId,
+        eventBlockId: supportingEvent.eventBlockId,
+        role: "supporting",
+      });
+      expect(relinked.link.plotEventLinkId).not.toBe(supporting.link.plotEventLinkId);
+
+      const plannedPlot = await runtime.createPlotThread({
+        schemaVersion: 1,
+        workId: created.workId,
+        title: "예정 플롯",
+        stage: "",
+        summary: "아직 원고 근거 없음",
+        note: "",
+      });
+      const anchorlessFromPlot = await runtime.createEventFromPlot({
+        schemaVersion: 1,
+        workId: created.workId,
+        plotBeatId: plannedPlot.plotThreadId,
+        source: { kind: "anchorless" },
+      });
+      expect(anchorlessFromPlot).toMatchObject({
+        status: "created",
+        eventBlock: { title: "예정 플롯", note: "아직 원고 근거 없음" },
+        eventSources: [],
+        link: { role: "primary", createdFrom: "plot-to-event" },
+      });
+      expect(await runtime.createEventFromPlot({
+        schemaVersion: 1,
+        workId: created.workId,
+        plotBeatId: plannedPlot.plotThreadId,
+        source: { kind: "anchorless" },
+      })).toMatchObject({
+        status: "existing",
+        eventBlock: { eventBlockId: anchorlessFromPlot.eventBlock.eventBlockId },
+      });
+
+      const exactPlot = await runtime.createPlotThread({
+        schemaVersion: 1,
+        workId: created.workId,
+        title: "둘째 사건",
+        stage: "",
+        summary: "선택 근거 포함",
+        note: "",
+      });
+      const secondQuote = "플롯에서 만들 둘째 사건 원문";
+      const secondFrom = manuscript.indexOf(secondQuote);
+      const exactFromPlot = await runtime.createEventFromPlot({
+        schemaVersion: 1,
+        workId: created.workId,
+        plotBeatId: exactPlot.plotThreadId,
+        source: {
+          kind: "exact-selection",
+          documentId: created.documentId,
+          selection: {
+            anchor: secondFrom + secondQuote.length,
+            head: secondFrom,
+          },
+          exactQuote: secondQuote,
+        },
+      });
+      expect(exactFromPlot).toMatchObject({
+        status: "created",
+        eventBlock: { title: "둘째 사건", note: "선택 근거 포함" },
+        eventSources: [{
+          role: "primary",
+          anchors: [{
+            exactQuote: secondQuote,
+            integrity: "resolved",
+            range: { from: secondFrom, to: secondFrom + secondQuote.length },
+          }],
+        }],
+      });
+
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      links = await runtime.listPlotEventLinks({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(links.links).toHaveLength(4);
+      expect(links.links).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          plotEventLinkId: fromEvent.link.plotEventLinkId,
+          titleMatch: "mismatched",
+        }),
+        expect.objectContaining({
+          plotEventLinkId: relinked.link.plotEventLinkId,
+          role: "supporting",
+        }),
+        expect.objectContaining({
+          plotEventLinkId: anchorlessFromPlot.link.plotEventLinkId,
+        }),
+        expect.objectContaining({
+          plotEventLinkId: exactFromPlot.link.plotEventLinkId,
+        }),
+      ]));
+
+      const profiles = createLocalWorkspaceStorageProfiles(rootDirectoryPath);
+      const audit = new DatabaseSync(profiles.databasePath, { readOnly: true });
+      try {
+        expect(audit.prepare(`
+          SELECT
+            SUM(CASE WHEN retired_at IS NULL THEN 1 ELSE 0 END) AS active,
+            SUM(CASE WHEN retired_at IS NOT NULL THEN 1 ELSE 0 END) AS retired
+          FROM plot_event_links
+        `).get()).toEqual({ active: 4, retired: 1 });
+        expect(audit.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+      } finally {
+        audit.close();
+      }
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("moves only a PlotPlacement and preserves exact manuscript and event evidence across restart", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-plot-board-runtime-"),
+    );
+    const options = createOptions(rootDirectoryPath);
+    const profiles = createLocalWorkspaceStorageProfiles(rootDirectoryPath);
+    let runtime = await openLocalWorkspaceRuntime(options);
+
+    const readUnchangedContent = () => {
+      const database = new DatabaseSync(profiles.databasePath, { readOnly: true });
+      try {
+        return Object.freeze({
+          revisions: database.prepare(
+            "SELECT * FROM document_revisions ORDER BY work_id, document_id, id",
+          ).all(),
+          anchors: database.prepare(
+            "SELECT * FROM anchors ORDER BY work_id, document_id, id",
+          ).all(),
+          rangeGroups: database.prepare(
+            "SELECT * FROM range_groups ORDER BY work_id, id",
+          ).all(),
+          eventSources: database.prepare(
+            "SELECT * FROM event_sources ORDER BY work_id, event_block_id, id",
+          ).all(),
+          eventBlocks: database.prepare(
+            "SELECT * FROM event_blocks ORDER BY work_id, id",
+          ).all(),
+          plots: database.prepare(
+            "SELECT * FROM plot_threads ORDER BY work_id, id",
+          ).all(),
+          plotEventLinks: database.prepare(
+            "SELECT * FROM plot_event_links ORDER BY work_id, id",
+          ).all(),
+        });
+      } finally {
+        database.close();
+      }
+    };
+
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: randomUUID(),
+        firstDocumentTitle: randomUUID(),
+      });
+      const manuscript = "첫 장면의 사건 원문 다음에 둘째 장면의 사건 원문이 이어진다.";
+      await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: created.workId,
+        documentId: created.documentId,
+        baseRevisionId: created.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: manuscript.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: manuscript }],
+      }));
+      const createEvent = async (exactQuote: string, title: string) => {
+        const from = manuscript.indexOf(exactQuote);
+        return runtime.createEventBlock({
+          schemaVersion: 1,
+          workId: created.workId,
+          documentId: created.documentId,
+          selection: { anchor: from, head: from + exactQuote.length },
+          exactQuote,
+          title,
+          note: "",
+        });
+      };
+      const firstEvent = await createEvent("첫 장면의 사건 원문", "첫 사건");
+      const secondEvent = await createEvent("둘째 장면의 사건 원문", "둘째 사건");
+      const firstPlot = await runtime.createPlotFromEvent({
+        schemaVersion: 1,
+        workId: created.workId,
+        eventBlockId: firstEvent.eventBlockId,
+      });
+      const secondPlot = await runtime.createPlotFromEvent({
+        schemaVersion: 1,
+        workId: created.workId,
+        eventBlockId: secondEvent.eventBlockId,
+      });
+
+      const boardBefore = await runtime.getDefaultPlotBoard({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(boardBefore.lanes).toHaveLength(1);
+      const laneBefore = boardBefore.lanes[0]!;
+      expect(laneBefore.placements.map((placement) => placement.plotBeatId))
+        .toEqual([
+          firstPlot.plotBeat.plotThreadId,
+          secondPlot.plotBeat.plotThreadId,
+        ]);
+      const firstPlacement = laneBefore.placements[0]!;
+      const secondPlacement = laneBefore.placements[1]!;
+      const contentBefore = readUnchangedContent();
+
+      const boardAfter = await runtime.movePlotPlacement({
+        schemaVersion: 1,
+        workId: created.workId,
+        plotPlacementId: secondPlacement.plotPlacementId,
+        targetBoardId: boardBefore.plotBoardId,
+        targetLaneId: laneBefore.plotLaneId,
+        afterPlacementId: firstPlacement.plotPlacementId,
+        expectedPlacementRevision: secondPlacement.revision,
+        expectedBoardRevision: boardBefore.revision,
+      });
+      expect(boardAfter.revision).toBe(boardBefore.revision + 1);
+      expect(boardAfter.lanes[0]!.placements.map((placement) => placement.plotBeatId))
+        .toEqual([
+          secondPlot.plotBeat.plotThreadId,
+          firstPlot.plotBeat.plotThreadId,
+        ]);
+      expect(readUnchangedContent()).toEqual(contentBefore);
+
+      const audit = new DatabaseSync(profiles.databasePath, { readOnly: true });
+      try {
+        const placementRows = audit.prepare(
+          "SELECT id, revision, order_key AS \"orderKey\" FROM plot_placements WHERE work_id = ? AND retired_at IS NULL ORDER BY id",
+        ).all(created.workId);
+        expect(placementRows.find((row) => row.id === firstPlacement.plotPlacementId))
+          .toEqual({
+            id: firstPlacement.plotPlacementId,
+            revision: firstPlacement.revision,
+            orderKey: firstPlacement.orderKey,
+          });
+        expect(placementRows.find((row) => row.id === secondPlacement.plotPlacementId))
+          .toEqual(expect.objectContaining({
+            id: secondPlacement.plotPlacementId,
+            revision: secondPlacement.revision + 1,
+          }));
+        expect(audit.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+      } finally {
+        audit.close();
+      }
+
+      await runtime.unlinkPlotEvent({
+        schemaVersion: 1,
+        workId: created.workId,
+        plotEventLinkId: secondPlot.link.plotEventLinkId,
+        expectedRevision: secondPlot.link.revision,
+      });
+      expect((await runtime.getDefaultPlotBoard({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).lanes[0]!.placements).toHaveLength(2);
+
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      const reopenedBoard = await runtime.getDefaultPlotBoard({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(reopenedBoard.lanes[0]!.placements.map(
+        (placement) => placement.plotBeatId,
+      )).toEqual([
+        secondPlot.plotBeat.plotThreadId,
+        firstPlot.plotBeat.plotThreadId,
+      ]);
+      const reopenedEvents = await runtime.listEventBlocks({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(reopenedEvents.eventSources.map((source) =>
+        source.anchors[0]?.exactQuote,
+      )).toEqual(expect.arrayContaining([
+        "첫 장면의 사건 원문",
+        "둘째 장면의 사건 원문",
+      ]));
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("stores only unsnapped normalized story time, permits overlap, and preserves plot order across restart", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-plot-story-time-runtime-"),
+    );
+    const options = createOptions(rootDirectoryPath);
+    const profiles = createLocalWorkspaceStorageProfiles(rootDirectoryPath);
+    let runtime = await openLocalWorkspaceRuntime(options);
+
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: randomUUID(),
+        firstDocumentTitle: randomUUID(),
+      });
+      await runtime.createPlotThread({
+        schemaVersion: 1,
+        workId: created.workId,
+        title: "시간 플롯 A",
+        stage: "",
+        summary: "",
+        note: "",
+      });
+      await runtime.createPlotThread({
+        schemaVersion: 1,
+        workId: created.workId,
+        title: "시간 플롯 B",
+        stage: "",
+        summary: "",
+        note: "",
+      });
+      await runtime.createPlotThread({
+        schemaVersion: 1,
+        workId: created.workId,
+        title: "시간 플롯 C",
+        stage: "",
+        summary: "",
+        note: "",
+      });
+
+      const boardBefore = await runtime.getDefaultPlotBoard({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      const placementsBefore = boardBefore.lanes[0]!.placements;
+      const [first, second, third] = placementsBefore;
+      expect(first).toBeDefined();
+      expect(second).toBeDefined();
+      expect(third).toBeDefined();
+      const orderBefore = placementsBefore.map((placement) => ({
+        id: placement.plotPlacementId,
+        orderKey: placement.orderKey,
+      }));
+
+      const firstTime = 37.416666666666664;
+      let board = await runtime.setPlotPlacementStoryTime({
+        schemaVersion: 1,
+        workId: created.workId,
+        plotPlacementId: first!.plotPlacementId,
+        plotBoardId: boardBefore.plotBoardId,
+        storyTime: firstTime,
+        storyTimeEnd: null,
+        expectedPlacementRevision: first!.revision,
+        expectedBoardRevision: boardBefore.revision,
+      });
+      expect(board.revision).toBe(boardBefore.revision + 1);
+      expect(board.lanes[0]!.placements[0]).toMatchObject({
+        plotPlacementId: first!.plotPlacementId,
+        revision: first!.revision + 1,
+        storyTime: firstTime,
+        storyTimeEnd: null,
+      });
+      expect(board.lanes[0]!.placements[1]).toMatchObject({
+        plotPlacementId: second!.plotPlacementId,
+        revision: second!.revision,
+        storyTime: null,
+      });
+
+      board = await runtime.setPlotPlacementStoryTime({
+        schemaVersion: 1,
+        workId: created.workId,
+        plotPlacementId: second!.plotPlacementId,
+        plotBoardId: board.plotBoardId,
+        storyTime: firstTime,
+        storyTimeEnd: null,
+        expectedPlacementRevision: second!.revision,
+        expectedBoardRevision: board.revision,
+      });
+      board = await runtime.setPlotPlacementStoryTime({
+        schemaVersion: 1,
+        workId: created.workId,
+        plotPlacementId: third!.plotPlacementId,
+        plotBoardId: board.plotBoardId,
+        storyTime: 70.125,
+        storyTimeEnd: 92.875,
+        expectedPlacementRevision: third!.revision,
+        expectedBoardRevision: board.revision,
+      });
+      expect(board.lanes[0]!.placements.map((placement) => ({
+        id: placement.plotPlacementId,
+        orderKey: placement.orderKey,
+      }))).toEqual(orderBefore);
+      expect(board.lanes[0]!.placements.map((placement) => placement.storyTime))
+        .toEqual([firstTime, firstTime, 70.125]);
+
+      const boardBeforeConflict = board;
+      await expect(runtime.setPlotPlacementStoryTime({
+        schemaVersion: 1,
+        workId: created.workId,
+        plotPlacementId: first!.plotPlacementId,
+        plotBoardId: board.plotBoardId,
+        storyTime: 88.8125,
+        storyTimeEnd: null,
+        expectedPlacementRevision: first!.revision,
+        expectedBoardRevision: board.revision,
+      })).rejects.toThrow(/PlotPlacement revision conflict/);
+      expect(await runtime.getDefaultPlotBoard({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).toEqual(boardBeforeConflict);
+
+      const audit = new DatabaseSync(profiles.databasePath, { readOnly: true });
+      try {
+        expect(audit.prepare(`
+          SELECT
+            id,
+            order_key AS "orderKey",
+            story_time AS "storyTime",
+            story_time_end AS "storyTimeEnd"
+          FROM plot_placements
+          WHERE work_id = ? AND retired_at IS NULL
+          ORDER BY order_key
+        `).all(created.workId)).toEqual([
+          {
+            id: first!.plotPlacementId,
+            orderKey: first!.orderKey,
+            storyTime: firstTime,
+            storyTimeEnd: null,
+          },
+          {
+            id: second!.plotPlacementId,
+            orderKey: second!.orderKey,
+            storyTime: firstTime,
+            storyTimeEnd: null,
+          },
+          {
+            id: third!.plotPlacementId,
+            orderKey: third!.orderKey,
+            storyTime: 70.125,
+            storyTimeEnd: 92.875,
+          },
+        ]);
+        expect(
+          audit.prepare("PRAGMA table_info(plot_placements)").all()
+            .map((column) => column.name)
+            .filter((name) => /pixel|screen|client/i.test(String(name))),
+        ).toEqual([]);
+      } finally {
+        audit.close();
+      }
+
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      const reopened = await runtime.getDefaultPlotBoard({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(reopened.lanes[0]!.placements.map((placement) => ({
+        id: placement.plotPlacementId,
+        orderKey: placement.orderKey,
+        storyTime: placement.storyTime,
+        storyTimeEnd: placement.storyTimeEnd,
+      }))).toEqual([
+        {
+          id: first!.plotPlacementId,
+          orderKey: first!.orderKey,
+          storyTime: firstTime,
+          storyTimeEnd: null,
+        },
+        {
+          id: second!.plotPlacementId,
+          orderKey: second!.orderKey,
+          storyTime: firstTime,
+          storyTimeEnd: null,
+        },
+        {
+          id: third!.plotPlacementId,
+          orderKey: third!.orderKey,
+          storyTime: 70.125,
+          storyTimeEnd: 92.875,
+        },
+      ]);
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("projects Work-global manuscript order independently from plot placement order", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-event-rail-runtime-"),
+    );
+    const options = createOptions(rootDirectoryPath);
+    let runtime = await openLocalWorkspaceRuntime(options);
+
+    try {
+      const first = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: randomUUID(),
+        firstDocumentTitle: "1화",
+      });
+      const second = await runtime.createDocument({
+        schemaVersion: 1,
+        workId: first.workId,
+        title: "2화",
+      });
+      const firstText = "앞부분 뒤에 첫 원고 사건이 있다.";
+      const secondText = "둘째 원고 사건이 먼저 등장한다.";
+      await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: first.workId,
+        documentId: first.documentId,
+        baseRevisionId: first.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: firstText.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: firstText }],
+      }));
+      await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: first.workId,
+        documentId: second.documentId,
+        baseRevisionId: second.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: secondText.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: secondText }],
+      }));
+      const firstQuote = "첫 원고 사건";
+      const secondQuote = "둘째 원고 사건";
+      const firstEvent = await runtime.createEventBlock({
+        schemaVersion: 1,
+        workId: first.workId,
+        documentId: first.documentId,
+        selection: {
+          anchor: firstText.indexOf(firstQuote),
+          head: firstText.indexOf(firstQuote) + firstQuote.length,
+        },
+        exactQuote: firstQuote,
+        title: "첫 사건",
+        note: "",
+      });
+      const secondEvent = await runtime.createEventBlock({
+        schemaVersion: 1,
+        workId: first.workId,
+        documentId: second.documentId,
+        selection: {
+          anchor: secondText.indexOf(secondQuote),
+          head: secondText.indexOf(secondQuote) + secondQuote.length,
+        },
+        exactQuote: secondQuote,
+        title: "둘째 사건",
+        note: "",
+      });
+      const planned = await runtime.createAnchorlessEvent({
+        schemaVersion: 1,
+        workId: first.workId,
+        title: "원고 미연결 사건",
+        note: "",
+      });
+      await runtime.createPlotFromEvent({
+        schemaVersion: 1,
+        workId: first.workId,
+        eventBlockId: secondEvent.eventBlockId,
+      });
+      await runtime.createPlotFromEvent({
+        schemaVersion: 1,
+        workId: first.workId,
+        eventBlockId: firstEvent.eventBlockId,
+      });
+
+      let rail = await runtime.listEventRail({
+        schemaVersion: 1,
+        workId: first.workId,
+      });
+      expect(rail.documents.map((document) => document.title)).toEqual([
+        "1화",
+        "2화",
+      ]);
+      expect(rail.manuscriptEvents.map(
+        (event) => event.eventBlock.eventBlockId,
+      )).toEqual([firstEvent.eventBlockId, secondEvent.eventBlockId]);
+      expect(rail.manuscriptEvents.map(
+        (event) => event.primaryLocation?.coordinate,
+      )).toEqual([
+        { documentIndex: 0, offset: firstText.indexOf(firstQuote) },
+        { documentIndex: 1, offset: secondText.indexOf(secondQuote) },
+      ]);
+      expect(rail.plotCards.map(
+        (card) => card.events[0]?.eventBlock.eventBlockId,
+      )).toEqual([secondEvent.eventBlockId, firstEvent.eventBlockId]);
+      expect(rail.unplottedEvents.map(
+        (event) => event.eventBlock.eventBlockId,
+      )).toEqual([planned.eventBlockId]);
+
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      rail = await runtime.listEventRail({
+        schemaVersion: 1,
+        workId: first.workId,
+      });
+      expect(rail.plotCards.map(
+        (card) => card.events[0]?.eventBlock.eventBlockId,
+      )).toEqual([secondEvent.eventBlockId, firstEvent.eventBlockId]);
+      expect(rail.manuscriptEvents[0]?.primaryLocation?.exactQuote).toBe(
+        firstQuote,
+      );
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("rebalances a default plot lane only when the configured key length boundary is reached", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-plot-board-rebalance-"),
+    );
+    const baseOptions = createOptions(rootDirectoryPath);
+    const options = {
+      ...baseOptions,
+      defaults: {
+        ...baseOptions.defaults,
+        plotBoard: {
+          ...baseOptions.defaults.plotBoard,
+          orderKeyLengthLimit: 2,
+        },
+      },
+    };
+    let runtime = await openLocalWorkspaceRuntime(options);
+
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: randomUUID(),
+        firstDocumentTitle: randomUUID(),
+      });
+      const plots = [];
+      for (const title of ["첫 플롯", "둘째 플롯", "셋째 플롯"]) {
+        plots.push(await runtime.createPlotThread({
+          schemaVersion: 1,
+          workId: created.workId,
+          title,
+          stage: "",
+          summary: "",
+          note: "",
+        }));
+      }
+      const before = await runtime.getDefaultPlotBoard({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      const lane = before.lanes[0]!;
+      const [first, second, third] = lane.placements;
+      const after = await runtime.movePlotPlacement({
+        schemaVersion: 1,
+        workId: created.workId,
+        plotPlacementId: third!.plotPlacementId,
+        targetBoardId: before.plotBoardId,
+        targetLaneId: lane.plotLaneId,
+        beforePlacementId: first!.plotPlacementId,
+        afterPlacementId: second!.plotPlacementId,
+        expectedPlacementRevision: third!.revision,
+        expectedBoardRevision: before.revision,
+      });
+
+      expect(after.lanes[0]!.placements.map((placement) => placement.plotBeatId))
+        .toEqual([
+          plots[0]!.plotThreadId,
+          plots[2]!.plotThreadId,
+          plots[1]!.plotThreadId,
+        ]);
+      expect(after.lanes[0]!.placements.map((placement) => placement.orderKey))
+        .toEqual(["0/1", "1/1", "2/1"]);
+      expect(after.lanes[0]!.placements.map((placement) => placement.revision))
+        .toEqual([2, 2, 2]);
+
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      expect((await runtime.getDefaultPlotBoard({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).lanes[0]!.placements.map((placement) => placement.plotBeatId))
+        .toEqual([
+          plots[0]!.plotThreadId,
+          plots[2]!.plotThreadId,
+          plots[1]!.plotThreadId,
+        ]);
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
   it("replaces one exact Work-owned plot source and resolves it after restart", async () => {
     const rootDirectoryPath = await mkdtemp(
       path.join(tmpdir(), "eum-studio-plot-source-runtime-"),
@@ -5012,6 +6370,342 @@ describe("local workspace runtime", () => {
       expect(
         runtime.getManuscriptDocumentProfile().documents[0]?.initialText,
       ).toBe(manuscript);
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("persists the final scene projection, override fold, and manual event exceptions across reopen", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-scene-projection-runtime-"),
+    );
+    const options = createOptions(rootDirectoryPath);
+    let runtime = await openLocalWorkspaceRuntime(options);
+
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: randomUUID(),
+        firstDocumentTitle: "첫 회차",
+      });
+      const manuscript = "첫 사건\n***\n둘째 사건";
+      await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: created.workId,
+        documentId: created.documentId,
+        baseRevisionId: created.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: manuscript.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: manuscript }],
+      }));
+      const createEvent = (exactQuote: string, title: string) => {
+        const from = manuscript.indexOf(exactQuote);
+        return runtime.createEventBlock({
+          schemaVersion: 1,
+          workId: created.workId,
+          documentId: created.documentId,
+          selection: { anchor: from, head: from + exactQuote.length },
+          exactQuote,
+          title,
+          note: "",
+        });
+      };
+      const firstEvent = await createEvent("첫 사건", "첫 사건");
+      const secondEvent = await createEvent("둘째 사건", "둘째 사건");
+      const planned = await runtime.createAnchorlessEvent({
+        schemaVersion: 1,
+        workId: created.workId,
+        title: "예정 사건",
+        note: "",
+      });
+
+      const initial = await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(initial.status).toBe("clean");
+      expect(initial.scenes).toHaveLength(2);
+      expect(initial.scenes[0]?.events).toMatchObject([
+        { eventBlockId: firstEvent.eventBlockId, membership: "automatic" },
+      ]);
+      expect(initial.scenes[1]?.events).toMatchObject([
+        { eventBlockId: secondEvent.eventBlockId, membership: "automatic" },
+      ]);
+
+      const separatorFrom = manuscript.indexOf("***");
+      await runtime.createSceneOverride({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        selection: {
+          anchor: separatorFrom,
+          head: separatorFrom + "***\n".length,
+        },
+        exactQuote: "***\n",
+        operation: "merge",
+        note: "앞 장면과 병합",
+      });
+      expect((await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).scenes).toHaveLength(1);
+
+      await runtime.createSceneOverride({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        selection: { anchor: separatorFrom, head: separatorFrom },
+        exactQuote: "",
+        operation: "split",
+        note: "다시 분할",
+      });
+      let projection = await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(projection.scenes).toHaveLength(2);
+      const firstScene = projection.scenes[0]!;
+      const secondScene = projection.scenes[1]!;
+
+      projection = await runtime.setSceneEventOverride({
+        schemaVersion: 1,
+        workId: created.workId,
+        sceneKey: firstScene.sceneKey,
+        eventBlockId: firstEvent.eventBlockId,
+        operation: "exclude",
+        expectedRevision: null,
+      });
+      projection = await runtime.setSceneEventOverride({
+        schemaVersion: 1,
+        workId: created.workId,
+        sceneKey: secondScene.sceneKey,
+        eventBlockId: planned.eventBlockId,
+        operation: "include",
+        expectedRevision: null,
+      });
+      expect(projection.scenes[0]?.events).toEqual([]);
+      expect(projection.scenes[0]?.excludedEvents).toMatchObject([
+        { eventBlockId: firstEvent.eventBlockId },
+      ]);
+      expect(projection.scenes[1]?.events).toMatchObject([
+        { eventBlockId: secondEvent.eventBlockId, membership: "automatic" },
+        { eventBlockId: planned.eventBlockId, membership: "manual" },
+      ]);
+      expect(projection.unassignedEvents).toMatchObject([
+        { eventBlockId: firstEvent.eventBlockId },
+      ]);
+
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      const reopened = await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(reopened.scenes.map((scene) => scene.sceneKey)).toEqual(
+        projection.scenes.map((scene) => scene.sceneKey),
+      );
+      expect(reopened.sceneEventOverrides).toHaveLength(2);
+      expect(reopened.scenes[0]?.excludedEvents).toMatchObject([
+        { eventBlockId: firstEvent.eventBlockId },
+      ]);
+      expect(reopened.scenes[1]?.events).toEqual(projection.scenes[1]?.events);
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("recomputes scenes from a revised Work SceneRuleSet and preserves it across reopen", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-scene-rule-runtime-"),
+    );
+    const options = createOptions(rootDirectoryPath);
+    let runtime = await openLocalWorkspaceRuntime(options);
+
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: randomUUID(),
+        firstDocumentTitle: "규칙 회차",
+      });
+      const manuscript = "하나\n---\n둘";
+      await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: created.workId,
+        documentId: created.documentId,
+        baseRevisionId: created.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: manuscript.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: manuscript }],
+      }));
+      const initial = await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(initial.scenes).toHaveLength(1);
+
+      const revised = await runtime.updateSceneRuleSet({
+        schemaVersion: 1,
+        workId: created.workId,
+        sceneRuleSetId: initial.ruleSet.sceneRuleSetId,
+        expectedRevision: initial.ruleSet.revision,
+        displayName: "대시 구분 규칙",
+        boundaryRules: [
+          {
+            boundaryRuleId: "dash-divider",
+            kind: "line-regexp",
+            pattern: "^\\s*---\\s*$",
+            flags: "u",
+          },
+        ],
+        normalizationPolicy: "preserve",
+        enabled: true,
+      });
+      expect(revised.ruleSet).toMatchObject({
+        revision: initial.ruleSet.revision + 1,
+        displayName: "대시 구분 규칙",
+      });
+      expect(revised.scenes).toHaveLength(2);
+
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      const reopened = await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(reopened.ruleSet).toEqual(revised.ruleSet);
+      expect(reopened.scenes.map((scene) => scene.range)).toEqual(
+        revised.scenes.map((scene) => scene.range),
+      );
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("migrates schema 4 scene inputs without changing EventBlock or SceneOverride content", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-scene-projection-migration-"),
+    );
+    const options = createOptions(rootDirectoryPath);
+    const profiles = createLocalWorkspaceStorageProfiles(rootDirectoryPath);
+    let runtime = await openLocalWorkspaceRuntime(options);
+
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: randomUUID(),
+        firstDocumentTitle: "이주 회차",
+      });
+      const manuscript = "첫 장면\n***\n둘째 장면";
+      await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: created.workId,
+        documentId: created.documentId,
+        baseRevisionId: created.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: manuscript.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: manuscript }],
+      }));
+      const event = await runtime.createEventBlock({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        selection: { anchor: 0, head: "첫 장면".length },
+        exactQuote: "첫 장면",
+        title: "보존 사건",
+        note: "schema 4 입력",
+      });
+      const splitOffset = manuscript.indexOf("둘째") + 2;
+      const sceneOverride = await runtime.createSceneOverride({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        selection: { anchor: splitOffset, head: splitOffset },
+        exactQuote: "",
+        operation: "split",
+        note: "보존할 수동 분할",
+      });
+      runtime.close();
+
+      const versionFour = new DatabaseSync(profiles.databasePath);
+      try {
+        versionFour.exec("PRAGMA foreign_keys = OFF");
+        versionFour.exec(`
+          BEGIN IMMEDIATE;
+          DROP TABLE scene_event_overrides;
+          DROP TABLE scene_rule_sets;
+          UPDATE storage_ledger_identity
+          SET target_schema_version = 4;
+          PRAGMA user_version = 4;
+          COMMIT;
+        `);
+      } finally {
+        versionFour.close();
+      }
+
+      runtime = await openLocalWorkspaceRuntime(options);
+      const migratedEvents = await runtime.listEventBlocks({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(migratedEvents.eventBlocks).toContainEqual(event);
+      const migratedOverrides = await runtime.listSceneOverrides({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(migratedOverrides.sceneOverrides).toContainEqual(sceneOverride);
+      const migratedProjection = await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(migratedProjection).toMatchObject({
+        status: "clean",
+        ruleSet: {
+          revision: sceneOverride.baseRuleSetRevision,
+          boundaryRules: options.defaults.sceneRuleSet.boundaryRules,
+        },
+      });
+      expect(migratedProjection.scenes).toHaveLength(3);
+      expect(migratedProjection.scenes[0]?.events).toMatchObject([
+        { eventBlockId: event.eventBlockId, membership: "automatic" },
+      ]);
+      runtime.close();
+
+      const audit = new DatabaseSync(profiles.databasePath, { readOnly: true });
+      try {
+        expect(audit.prepare("PRAGMA user_version").get()).toEqual({
+          user_version: 5,
+        });
+        expect(audit.prepare(`
+          SELECT target_schema_version AS "targetSchemaVersion"
+          FROM storage_ledger_identity
+        `).get()).toEqual({ targetSchemaVersion: 5 });
+        expect(audit.prepare(`
+          SELECT migration_id AS "migrationId"
+          FROM migration_receipts
+          WHERE migration_id = 'local-workspace-scene-projection-v4-to-v5'
+        `).get()).toEqual({
+          migrationId: "local-workspace-scene-projection-v4-to-v5",
+        });
+        expect(audit.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+      } finally {
+        audit.close();
+      }
+      runtime = await openLocalWorkspaceRuntime(options);
     } finally {
       runtime.close();
       await rm(rootDirectoryPath, { recursive: true, force: true });

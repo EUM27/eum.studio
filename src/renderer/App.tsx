@@ -68,13 +68,21 @@ import {
   type WorkContinuousReadingProgressProjection,
 } from "../application/editor/continuous-reading-progress";
 import type { ManuscriptPersistenceProfile } from "../application/persistence/manuscript-persistence-profile";
-import type {
+import {
   CreateEventBlockCommand,
-  EventBlockProjection,
+  type EventBlockProjection,
+  type EventSourceProjection,
 } from "../application/structure/event-block-contract";
 import type {
-  SceneOverrideProjection,
-} from "../application/structure/scene-override-contract";
+  EventRailProjection,
+  EventRailSourceLocationProjection,
+} from "../application/structure/event-rail-projection";
+import type {
+  SceneEventOverrideOperation,
+  SceneProjection,
+  SceneProjectionList,
+  UpdateSceneRuleSetCommand,
+} from "../application/structure/scene-projection";
 import {
   deriveWorkStructureOverview,
   type WorkStructureOverviewCharacter,
@@ -82,7 +90,7 @@ import {
   type WorkStructureOverviewEvent,
   type WorkStructureOverviewPlot,
   type WorkStructureOverviewPlotSource,
-  type WorkStructureOverviewSceneBoundary,
+  type WorkStructureOverviewScene,
 } from "../application/structure/work-structure-overview";
 import type {
   FragmentProjection,
@@ -98,8 +106,18 @@ import type {
   UpdatePlotThreadCommand,
 } from "../application/plots/plot-contract";
 import type {
+  PlotBoardProjection,
+  PlotPlacementProjection,
+} from "../application/plots/plot-board-contract";
+import type {
   PlotThreadSourceProjection,
 } from "../application/plots/plot-source-contract";
+import type {
+  CreateEventFromPlotSource,
+  PlotEventLinkProjection,
+  PlotEventLinkRole,
+  PlotEventLinkMutationProjection,
+} from "../application/plots/plot-event-link-contract";
 import type {
   LoreEntryEvidenceProjection,
   LoreEntryProjection,
@@ -195,7 +213,14 @@ import {
   PlotManagerDialog,
   type PlotDraft,
   type PlotManagerActionState,
+  type PlotPlacementMoveTarget,
+  type PlotStoryTimeTarget,
 } from "./editor/PlotManagerDialog";
+import {
+  EventRail,
+  type EventRailMode,
+} from "./editor/EventRail";
+import { SceneList } from "./editor/SceneList";
 import {
   LoreManagerDialog,
   type LoreEntryDraft,
@@ -336,6 +361,12 @@ type PendingPlotThreadSource = {
 };
 
 type PendingWorkStructureRange = {
+  readonly workId: ManuscriptDocumentSource["workId"];
+  readonly documentId: ManuscriptDocumentSource["documentId"];
+  readonly range: { readonly from: number; readonly to: number };
+};
+
+type PendingEventRailRange = {
   readonly workId: ManuscriptDocumentSource["workId"];
   readonly documentId: ManuscriptDocumentSource["documentId"];
   readonly range: { readonly from: number; readonly to: number };
@@ -488,15 +519,21 @@ function ManuscriptReviewSummary(input: {
   );
 }
 
-type PendingEventDraft = {
-  readonly workId: CreateEventBlockCommand["workId"];
-  readonly documentId: CreateEventBlockCommand["documentId"];
-  readonly selection: {
-    readonly anchor: number;
-    readonly head: number;
-  };
-  readonly exactQuote: string;
-};
+type PendingEventDraft =
+  | {
+      readonly kind: "selection";
+      readonly workId: CreateEventBlockCommand["workId"];
+      readonly documentId: CreateEventBlockCommand["documentId"];
+      readonly selection: {
+        readonly anchor: number;
+        readonly head: number;
+      };
+      readonly exactQuote: string;
+    }
+  | {
+      readonly kind: "anchorless";
+      readonly workId: CreateEventBlockCommand["workId"];
+    };
 
 function EventBlockDialog(input: {
   readonly draft: PendingEventDraft;
@@ -527,8 +564,12 @@ function EventBlockDialog(input: {
       >
         <header>
           <div>
-            <p className="panel-kicker">EXACT RANGE</p>
-            <h2 id="create-event-heading">사건으로 등록</h2>
+            <p className="panel-kicker">
+              {input.draft.kind === "selection" ? "EXACT RANGE" : "EVENT OUTLINE"}
+            </p>
+            <h2 id="create-event-heading">
+              {input.draft.kind === "selection" ? "사건으로 등록" : "예정 사건 추가"}
+            </h2>
           </div>
           <button
             aria-label="사건 등록 닫기"
@@ -540,10 +581,12 @@ function EventBlockDialog(input: {
             ×
           </button>
         </header>
-        <div className="event-quote-preview">
-          <span>선택 근거</span>
-          <blockquote>{input.draft.exactQuote}</blockquote>
-        </div>
+        {input.draft.kind === "selection" && (
+          <div className="event-quote-preview">
+            <span>선택 근거</span>
+            <blockquote>{input.draft.exactQuote}</blockquote>
+          </div>
+        )}
         <form onSubmit={submit}>
           <label>
             <span>사건 제목</span>
@@ -565,7 +608,9 @@ function EventBlockDialog(input: {
             />
           </label>
           <p className="dialog-description">
-            범위는 원고에서 선택한 위치 그대로 저장됩니다.
+            {input.draft.kind === "selection"
+              ? "범위는 원고에서 선택한 위치 그대로 저장됩니다."
+              : "원고 범위 없이 사건 개요에 저장합니다. 나중에 정확한 선택을 연결할 수 있습니다."}
           </p>
           {input.error !== null && (
             <p className="dialog-error" role="alert">{input.error}</p>
@@ -1183,6 +1228,8 @@ export const App = forwardRef<
     useRef<PendingPlotThreadSource | null>(null);
   const pendingWorkStructureRangeRef =
     useRef<PendingWorkStructureRange | null>(null);
+  const pendingEventRailRangeRef =
+    useRef<PendingEventRailRange | null>(null);
   const pendingLoreEvidenceRef = useRef<PendingLoreEvidence | null>(null);
   const pendingLoreCandidateEvidenceRef =
     useRef<PendingLoreCandidateEvidence | null>(null);
@@ -1249,18 +1296,23 @@ export const App = forwardRef<
   const [eventBlocks, setEventBlocks] = useState<
     readonly EventBlockProjection[]
   >([]);
+  const [eventSources, setEventSources] = useState<
+    readonly EventSourceProjection[]
+  >([]);
+  const [eventRail, setEventRail] = useState<EventRailProjection | null>(null);
+  const [eventRailMode, setEventRailMode] =
+    useState<EventRailMode>("manuscript");
   const [pendingEventDraft, setPendingEventDraft] = useState<
     PendingEventDraft | null
   >(null);
   const [eventActionState, setEventActionState] = useState<
-    "idle" | "creating"
+    "idle" | "creating" | "linking" | "replacing" | "retiring" | "opening"
   >("idle");
   const [eventActionError, setEventActionError] = useState<string | null>(null);
-  const [sceneOverrides, setSceneOverrides] = useState<
-    readonly SceneOverrideProjection[]
-  >([]);
+  const [sceneProjection, setSceneProjection] =
+    useState<SceneProjectionList | null>(null);
   const [sceneActionState, setSceneActionState] = useState<
-    "idle" | "creating"
+    "idle" | "creating" | "updating-rule" | "updating-event"
   >("idle");
   const [sceneActionError, setSceneActionError] = useState<string | null>(null);
   const [workActivity, setWorkActivity] = useState<
@@ -1356,8 +1408,12 @@ export const App = forwardRef<
     string | null
   >(null);
   const [plots, setPlots] = useState<readonly PlotThreadProjection[]>([]);
+  const [plotBoard, setPlotBoard] = useState<PlotBoardProjection | null>(null);
   const [plotSources, setPlotSources] = useState<
     readonly PlotThreadSourceProjection[]
+  >([]);
+  const [plotEventLinks, setPlotEventLinks] = useState<
+    readonly PlotEventLinkProjection[]
   >([]);
   const [plotDialogOpen, setPlotDialogOpen] = useState(false);
   const [selectedPlotThreadId, setSelectedPlotThreadId] = useState<
@@ -1607,6 +1663,27 @@ export const App = forwardRef<
           resumeSummary = undefined;
         }
       }
+      const pendingEventRailRange = pendingEventRailRangeRef.current;
+      if (
+        pendingEventRailRange !== null &&
+        pendingEventRailRange.workId === _document.workId &&
+        pendingEventRailRange.documentId === _document.documentId
+      ) {
+        pendingEventRailRangeRef.current = null;
+        const selected = manuscriptEditorRef.current?.selectDocumentRange(
+          _document,
+          pendingEventRailRange.range,
+        );
+        setEventActionState("idle");
+        if (!selected) {
+          setEventActionError(
+            "사건의 정확한 원고 범위를 선택하지 못했습니다.",
+          );
+        } else {
+          setEventActionError(null);
+          resumeSummary = undefined;
+        }
+      }
       const pendingLoreEvidence = pendingLoreEvidenceRef.current;
       if (
         pendingLoreEvidence !== null &&
@@ -1826,17 +1903,32 @@ export const App = forwardRef<
                 persistenceProfile.batching
                   .maxDelayMs,
             },
-            saveChangeBatch: (batch, editorStateJson) => {
+            saveChangeBatch: async (batch, editorStateJson) => {
               if (editorStateJson === null) {
                 throw new Error(
                   `The editor state is unavailable for ${batch.documentId}`,
                 );
               }
-              return window.eumStudio.editor.saveDocumentChange({
+              const receipt = await window.eumStudio.editor.saveDocumentChange({
                 schemaVersion: 1,
                 batch,
                 editorStateJson,
               });
+              void window.eumStudio.structure.listSceneProjection({
+                schemaVersion: 1,
+                workId: batch.workId,
+              }).then(
+                (projection) => {
+                  setSceneProjection(projection);
+                  setSceneActionError(null);
+                },
+                () => {
+                  setSceneActionError(
+                    "저장된 원고 기준 장면 목록을 갱신하지 못했습니다.",
+                  );
+                },
+              );
+              return receipt;
             },
             saveFormatting: (command) =>
               window.eumStudio.editor.saveFormatting(command),
@@ -2209,19 +2301,11 @@ export const App = forwardRef<
       openDocumentIds.has(document.documentId),
     );
   }, [activeWorkDocuments, openDocumentTabIds]);
-  const activeDocumentEventBlocks =
-    activeDocument === undefined
+  const activeWorkEventBlocks =
+    activeWork === undefined
       ? []
       : eventBlocks.filter(
-          (eventBlock) =>
-            eventBlock.documentId === activeDocument.documentId,
-        );
-  const activeDocumentSceneOverrides =
-    activeDocument === undefined
-      ? []
-      : sceneOverrides.filter(
-          (sceneOverride) =>
-            sceneOverride.documentId === activeDocument.documentId,
+          (eventBlock) => eventBlock.workId === activeWork.workId,
         );
   const railProjection =
     activeDocument === undefined
@@ -2268,6 +2352,13 @@ export const App = forwardRef<
         : plotSources.filter((source) => source.workId === activeWorkId),
     [activeWorkId, plotSources],
   );
+  const activeWorkPlotEventLinks = useMemo(
+    () =>
+      activeWorkId === null
+        ? []
+        : plotEventLinks.filter((link) => link.workId === activeWorkId),
+    [activeWorkId, plotEventLinks],
+  );
   const activeWorkLoreEntries = useMemo(
     () =>
       activeWorkId === null
@@ -2303,9 +2394,13 @@ export const App = forwardRef<
             eventBlocks: eventBlocks.filter(
               (eventBlock) => eventBlock.workId === activeWork.workId,
             ),
-            sceneOverrides: sceneOverrides.filter(
-              (sceneOverride) => sceneOverride.workId === activeWork.workId,
+            eventSources: eventSources.filter(
+              (eventSource) => eventSource.workId === activeWork.workId,
             ),
+            scenes:
+              sceneProjection?.workId === activeWork.workId
+                ? sceneProjection.scenes
+                : [],
           }),
     [
       activeWork,
@@ -2314,7 +2409,8 @@ export const App = forwardRef<
       activeWorkPlotSources,
       activeWorkPlots,
       eventBlocks,
-      sceneOverrides,
+      eventSources,
+      sceneProjection,
     ],
   );
   const activeSelectedPlotThreadId = activeWorkPlots.some(
@@ -3042,44 +3138,53 @@ export const App = forwardRef<
     if (activeWorkId === null) {
       const reset = window.setTimeout(() => {
         setEventBlocks([]);
-        setSceneOverrides([]);
+        setEventSources([]);
+        setEventRail(null);
+        setSceneProjection(null);
+        pendingEventRailRangeRef.current = null;
       }, 0);
       return () => {
         window.clearTimeout(reset);
       };
     }
     let disposed = false;
-    void window.eumStudio.structure.listEventBlocks({
+    void window.eumStudio.structure.listEventRail({
       schemaVersion: 1,
       workId: activeWorkId,
     }).then(
       (projection) => {
         if (!disposed) {
+          setEventRail(projection);
           setEventBlocks(projection.eventBlocks);
+          setEventSources(projection.eventSources);
+          setPlotEventLinks(projection.plotEventLinks);
+          setPlotBoard(projection.board);
           setEventActionError(null);
         }
       },
       () => {
         if (!disposed) {
+          setEventRail(null);
           setEventBlocks([]);
-          setEventActionError("사건 목록을 불러오지 못했습니다.");
+          setEventSources([]);
+          setEventActionError("작품 사건 순서를 불러오지 못했습니다.");
         }
       },
     );
-    void window.eumStudio.structure.listSceneOverrides({
+    void window.eumStudio.structure.listSceneProjection({
       schemaVersion: 1,
       workId: activeWorkId,
     }).then(
       (projection) => {
         if (!disposed) {
-          setSceneOverrides(projection.sceneOverrides);
+          setSceneProjection(projection);
           setSceneActionError(null);
         }
       },
       () => {
         if (!disposed) {
-          setSceneOverrides([]);
-          setSceneActionError("장면 경계 목록을 불러오지 못했습니다.");
+          setSceneProjection(null);
+          setSceneActionError("장면 목록을 불러오지 못했습니다.");
         }
       },
     );
@@ -3092,7 +3197,9 @@ export const App = forwardRef<
     if (activeWorkId === null) {
       const reset = window.setTimeout(() => {
         setPlots([]);
+        setPlotBoard(null);
         setPlotSources([]);
+        setPlotEventLinks([]);
         setSelectedPlotThreadId(null);
         setPlotActionError(null);
         setPlotDialogOpen(false);
@@ -3108,15 +3215,25 @@ export const App = forwardRef<
         schemaVersion: 1,
         workId: activeWorkId,
       }),
+      window.eumStudio.plots.getDefaultBoard({
+        schemaVersion: 1,
+        workId: activeWorkId,
+      }),
       window.eumStudio.plots.listSources({
         schemaVersion: 1,
         workId: activeWorkId,
       }),
+      window.eumStudio.plots.listEventLinks({
+        schemaVersion: 1,
+        workId: activeWorkId,
+      }),
     ]).then(
-      ([plotProjection, sourceProjection]) => {
+      ([plotProjection, boardProjection, sourceProjection, eventLinkProjection]) => {
         if (!disposed) {
           setPlots(plotProjection.plots);
+          setPlotBoard(boardProjection);
           setPlotSources(sourceProjection.sources);
+          setPlotEventLinks(eventLinkProjection.links);
           setSelectedPlotThreadId((current) =>
             current !== null && plotProjection.plots.some(
               (plot) => plot.plotThreadId === current,
@@ -3130,7 +3247,9 @@ export const App = forwardRef<
       () => {
         if (!disposed) {
           setPlots([]);
+          setPlotBoard(null);
           setPlotSources([]);
+          setPlotEventLinks([]);
           setPlotActionError("플롯 목록을 불러오지 못했습니다.");
         }
       },
@@ -3577,9 +3696,9 @@ export const App = forwardRef<
     [pendingManuscriptPreflight],
   );
 
-  const openEventBlockDialog = useCallback(() => {
+  const readCurrentEventSourceSelection = useCallback(() => {
     if (activeDocument === undefined) {
-      return;
+      return null;
     }
     const summary = manuscriptEditorRef.current?.readDocumentState(
       activeDocument,
@@ -3588,21 +3707,21 @@ export const App = forwardRef<
       summary?.selection.ranges[summary.selection.mainIndex];
     if (selection === undefined || selection.empty) {
       setEventActionError("원고에서 사건 범위를 먼저 선택하세요.");
-      return;
+      return null;
     }
     const manuscript =
       manuscriptEditorRef.current?.materializeDocumentText(activeDocument);
     if (manuscript === undefined) {
       setEventActionError("현재 원고 범위를 읽지 못했습니다.");
-      return;
+      return null;
     }
     const exactQuote = manuscript.slice(selection.from, selection.to);
     if (exactQuote.length === 0) {
       setEventActionError("빈 선택 범위는 사건으로 등록할 수 없습니다.");
-      return;
+      return null;
     }
     setEventActionError(null);
-    setPendingEventDraft({
+    return Object.freeze({
       workId: activeDocument.workId,
       documentId: activeDocument.documentId,
       selection: {
@@ -3613,10 +3732,73 @@ export const App = forwardRef<
     });
   }, [activeDocument]);
 
+  const openEventBlockDialog = useCallback(() => {
+    const selection = readCurrentEventSourceSelection();
+    if (selection === null) {
+      return;
+    }
+    setPendingEventDraft({
+      kind: "selection",
+      ...selection,
+    });
+  }, [readCurrentEventSourceSelection]);
+
+  const openAnchorlessEventDialog = useCallback(() => {
+    if (activeWork === undefined) {
+      return;
+    }
+    setEventActionError(null);
+    setPendingEventDraft({
+      kind: "anchorless",
+      workId: activeWork.workId,
+    });
+  }, [activeWork]);
+
+  const refreshSceneProjection = useCallback(
+    async (workId: CreateEventBlockCommand["workId"]) => {
+      const projection = await window.eumStudio.structure.listSceneProjection({
+        schemaVersion: 1,
+        workId,
+      });
+      setSceneProjection(projection);
+      return projection;
+    },
+    [],
+  );
+
+  const refreshEventProjection = useCallback(
+    async (workId: CreateEventBlockCommand["workId"]) => {
+      const [projection] = await Promise.all([
+        window.eumStudio.structure.listEventRail({
+          schemaVersion: 1,
+          workId,
+        }),
+        refreshSceneProjection(workId),
+      ]);
+      setEventRail(projection);
+      setEventBlocks(projection.eventBlocks);
+      setEventSources(projection.eventSources);
+      setPlotEventLinks(projection.plotEventLinks);
+      setPlotBoard(projection.board);
+      return projection;
+    },
+    [refreshSceneProjection],
+  );
+  const refreshEventRailAfterPlotChange = useCallback(
+    async (workId: CreateEventBlockCommand["workId"]) => {
+      try {
+        await refreshEventProjection(workId);
+        setEventActionError(null);
+      } catch {
+        setEventActionError("작품 사건 순서를 새로고침하지 못했습니다.");
+      }
+    },
+    [refreshEventProjection],
+  );
+
   const createEventBlock = useCallback(
     async (input: { readonly title: string; readonly note: string }) => {
       if (
-        activeDocument === undefined ||
         pendingEventDraft === null ||
         eventActionState !== "idle"
       ) {
@@ -3625,52 +3807,155 @@ export const App = forwardRef<
       setEventActionState("creating");
       setEventActionError(null);
       try {
-        await persistDocument(activeDocument);
-        await window.eumStudio.structure.createEventBlock({
-          schemaVersion: 1,
-          ...pendingEventDraft,
-          title: input.title,
-          note: input.note,
-        });
-        const projection = await window.eumStudio.structure.listEventBlocks({
-          schemaVersion: 1,
-          workId: pendingEventDraft.workId,
-        });
-        setEventBlocks(projection.eventBlocks);
+        if (pendingEventDraft.kind === "selection") {
+          if (
+            activeDocument === undefined ||
+            activeDocument.documentId !== pendingEventDraft.documentId
+          ) {
+            throw new Error("The selected manuscript is no longer active");
+          }
+          await persistDocument(activeDocument);
+          await window.eumStudio.structure.createEventBlock({
+            schemaVersion: 1,
+            workId: pendingEventDraft.workId,
+            documentId: pendingEventDraft.documentId,
+            selection: pendingEventDraft.selection,
+            exactQuote: pendingEventDraft.exactQuote,
+            title: input.title,
+            note: input.note,
+          });
+        } else {
+          await window.eumStudio.structure.createAnchorlessEvent({
+            schemaVersion: 1,
+            workId: pendingEventDraft.workId,
+            title: input.title,
+            note: input.note,
+          });
+        }
+        await refreshEventProjection(pendingEventDraft.workId);
         setPendingEventDraft(null);
       } catch {
-        setEventActionError("선택 범위를 사건으로 등록하지 못했습니다.");
+        setEventActionError(
+          pendingEventDraft.kind === "selection"
+            ? "선택 범위를 사건으로 등록하지 못했습니다."
+            : "예정 사건을 추가하지 못했습니다.",
+        );
       } finally {
         setEventActionState("idle");
       }
     },
-    [activeDocument, eventActionState, pendingEventDraft, persistDocument],
+    [
+      activeDocument,
+      eventActionState,
+      pendingEventDraft,
+      persistDocument,
+      refreshEventProjection,
+    ],
   );
 
-  const focusEventBlock = useCallback(
-    (eventBlock: EventBlockProjection) => {
-      if (
-        activeDocument === undefined ||
-        eventBlock.documentId !== activeDocument.documentId ||
-        eventBlock.range === null
-      ) {
-        setEventActionError("이 사건 범위는 현재 원고에서 바로 열 수 없습니다.");
+  const linkEventSource = useCallback(
+    async (eventBlock: EventBlockProjection) => {
+      if (eventActionState !== "idle" || activeDocument === undefined) {
         return;
       }
-      const selected = manuscriptEditorRef.current?.selectDocumentRange(
-        activeDocument,
-        eventBlock.range,
-      );
-      if (!selected) {
-        setEventActionError("사건의 정확한 원고 범위를 선택하지 못했습니다.");
+      const selection = readCurrentEventSourceSelection();
+      if (selection === null) {
         return;
       }
+      setEventActionState("linking");
       setEventActionError(null);
+      try {
+        await persistDocument(activeDocument);
+        await window.eumStudio.structure.linkEventSource({
+          schemaVersion: 1,
+          workId: eventBlock.workId,
+          eventBlockId: eventBlock.eventBlockId,
+          role: "primary",
+          documentId: selection.documentId,
+          selection: selection.selection,
+          exactQuote: selection.exactQuote,
+        });
+        await refreshEventProjection(eventBlock.workId);
+      } catch {
+        setEventActionError("현재 선택을 사건 근거로 연결하지 못했습니다.");
+      } finally {
+        setEventActionState("idle");
+      }
     },
-    [activeDocument],
+    [
+      activeDocument,
+      eventActionState,
+      persistDocument,
+      readCurrentEventSourceSelection,
+      refreshEventProjection,
+    ],
   );
 
-  const createSceneBoundary = useCallback(async () => {
+  const replaceEventSource = useCallback(
+    async (source: EventSourceProjection) => {
+      if (eventActionState !== "idle" || activeDocument === undefined) {
+        return;
+      }
+      const selection = readCurrentEventSourceSelection();
+      if (selection === null) {
+        return;
+      }
+      setEventActionState("replacing");
+      setEventActionError(null);
+      try {
+        await persistDocument(activeDocument);
+        await window.eumStudio.structure.replaceEventSource({
+          schemaVersion: 1,
+          workId: source.workId,
+          eventSourceId: source.eventSourceId,
+          expectedRevision: source.revision,
+          documentId: selection.documentId,
+          selection: selection.selection,
+          exactQuote: selection.exactQuote,
+        });
+        await refreshEventProjection(source.workId);
+      } catch {
+        setEventActionError("현재 선택으로 사건 근거를 교체하지 못했습니다.");
+      } finally {
+        setEventActionState("idle");
+      }
+    },
+    [
+      activeDocument,
+      eventActionState,
+      persistDocument,
+      readCurrentEventSourceSelection,
+      refreshEventProjection,
+    ],
+  );
+
+  const retireEventSource = useCallback(
+    async (source: EventSourceProjection) => {
+      if (eventActionState !== "idle") {
+        return;
+      }
+      setEventActionState("retiring");
+      setEventActionError(null);
+      try {
+        await window.eumStudio.structure.retireEventSource({
+          schemaVersion: 1,
+          workId: source.workId,
+          eventSourceId: source.eventSourceId,
+          expectedRevision: source.revision,
+        });
+        await refreshEventProjection(source.workId);
+      } catch {
+        setEventActionError("사건의 원고 근거를 해제하지 못했습니다.");
+      } finally {
+        setEventActionState("idle");
+      }
+    },
+    [eventActionState, refreshEventProjection],
+  );
+
+  const createSceneBoundary = useCallback(async (
+    operation: "add" | "split" = "add",
+  ) => {
     if (activeDocument === undefined || sceneActionState !== "idle") {
       return;
     }
@@ -3698,45 +3983,160 @@ export const App = forwardRef<
           head: selection.head,
         },
         exactQuote: manuscript.slice(selection.from, selection.to),
-        operation: "add",
+        operation,
         note: "",
       });
-      const projection = await window.eumStudio.structure.listSceneOverrides({
-        schemaVersion: 1,
-        workId: activeDocument.workId,
-      });
-      setSceneOverrides(projection.sceneOverrides);
+      await refreshSceneProjection(activeDocument.workId);
     } catch {
-      setSceneActionError("현재 위치에 장면 경계를 저장하지 못했습니다.");
+      setSceneActionError(
+        operation === "split"
+          ? "현재 위치에서 장면을 분할하지 못했습니다."
+          : "현재 위치에 장면 경계를 저장하지 못했습니다.",
+      );
     } finally {
       setSceneActionState("idle");
     }
-  }, [activeDocument, persistDocument, sceneActionState]);
+  }, [
+    activeDocument,
+    persistDocument,
+    refreshSceneProjection,
+    sceneActionState,
+  ]);
 
-  const focusSceneOverride = useCallback(
-    (sceneOverride: SceneOverrideProjection) => {
-      const boundary = sceneOverride.boundaries[0];
+  const focusScene = useCallback(
+    (scene: SceneProjection) => {
       if (
         activeDocument === undefined ||
-        sceneOverride.documentId !== activeDocument.documentId ||
-        boundary === undefined ||
-        boundary.range === null
+        scene.documentId !== activeDocument.documentId ||
+        scene.integrity !== "resolved" ||
+        scene.range === null
       ) {
-        setSceneActionError("이 장면 경계는 현재 원고에서 바로 열 수 없습니다.");
+        setSceneActionError("이 장면은 현재 원고에서 바로 열 수 없습니다.");
         return;
       }
       const selected = manuscriptEditorRef.current?.selectDocumentRange(
         activeDocument,
-        boundary.range,
+        { from: scene.range.start, to: scene.range.end },
       );
       if (!selected) {
-        setSceneActionError("장면 경계의 정확한 위치로 이동하지 못했습니다.");
+        setSceneActionError("장면의 정확한 범위로 이동하지 못했습니다.");
         return;
       }
       setSceneActionError(null);
     },
     [activeDocument],
   );
+
+  const mergeSceneWithPrevious = useCallback(async (
+    scene: SceneProjection,
+    previousScene: SceneProjection,
+  ) => {
+    if (
+      activeDocument === undefined ||
+      sceneActionState !== "idle" ||
+      scene.documentId !== activeDocument.documentId ||
+      previousScene.documentId !== activeDocument.documentId ||
+      scene.range === null ||
+      previousScene.range === null
+    ) {
+      return;
+    }
+    const manuscript = manuscriptEditorRef.current?.materializeDocumentText(
+      activeDocument,
+    );
+    if (manuscript === undefined) {
+      setSceneActionError("현재 원고의 장면 경계를 읽지 못했습니다.");
+      return;
+    }
+    const from = previousScene.range.end;
+    const to = scene.range.start;
+    setSceneActionState("creating");
+    setSceneActionError(null);
+    try {
+      await persistDocument(activeDocument);
+      await window.eumStudio.structure.createSceneOverride({
+        schemaVersion: 1,
+        workId: activeDocument.workId,
+        documentId: activeDocument.documentId,
+        selection: { anchor: from, head: to },
+        exactQuote: manuscript.slice(from, to),
+        operation: "merge",
+        note: "",
+      });
+      await refreshSceneProjection(activeDocument.workId);
+    } catch {
+      setSceneActionError("앞 장면과 병합하지 못했습니다.");
+    } finally {
+      setSceneActionState("idle");
+    }
+  }, [
+    activeDocument,
+    persistDocument,
+    refreshSceneProjection,
+    sceneActionState,
+  ]);
+
+  const updateSceneRuleSet = useCallback(async (
+    draft: Pick<
+      UpdateSceneRuleSetCommand,
+      "displayName" | "boundaryRules" | "normalizationPolicy" | "enabled"
+    >,
+  ) => {
+    if (
+      sceneProjection === null ||
+      sceneActionState !== "idle"
+    ) {
+      return;
+    }
+    setSceneActionState("updating-rule");
+    setSceneActionError(null);
+    try {
+      const projection = await window.eumStudio.structure.updateSceneRuleSet({
+        schemaVersion: 1,
+        workId: sceneProjection.workId,
+        sceneRuleSetId: sceneProjection.ruleSet.sceneRuleSetId,
+        expectedRevision: sceneProjection.ruleSet.revision,
+        ...draft,
+      });
+      setSceneProjection(projection);
+    } catch {
+      setSceneActionError("장면 규칙을 저장하지 못했습니다.");
+    } finally {
+      setSceneActionState("idle");
+    }
+  }, [sceneActionState, sceneProjection]);
+
+  const setSceneEventOverride = useCallback(async (
+    scene: SceneProjection,
+    eventBlockId: EntityId<"EventBlock">,
+    operation: SceneEventOverrideOperation | null,
+    expectedRevision: number | null,
+  ) => {
+    if (
+      sceneProjection === null ||
+      sceneActionState !== "idle" ||
+      scene.workId !== sceneProjection.workId
+    ) {
+      return;
+    }
+    setSceneActionState("updating-event");
+    setSceneActionError(null);
+    try {
+      const projection = await window.eumStudio.structure.setSceneEventOverride({
+        schemaVersion: 1,
+        workId: scene.workId,
+        sceneKey: scene.sceneKey,
+        eventBlockId,
+        operation,
+        expectedRevision,
+      });
+      setSceneProjection(projection);
+    } catch {
+      setSceneActionError("장면의 사건 소속을 변경하지 못했습니다.");
+    } finally {
+      setSceneActionState("idle");
+    }
+  }, [sceneActionState, sceneProjection]);
   const startWritingSession = useCallback(
     async (
       document: ManuscriptDocumentSource | undefined = activeDocument,
@@ -4613,6 +5013,7 @@ export const App = forwardRef<
         } else {
           await installCreatedDocument(created.documentId, catalog);
         }
+        await refreshSceneProjection(activeWork.workId);
         setNewDocumentTitle("");
         setShowCreateDocument(false);
       } catch (error) {
@@ -4629,6 +5030,7 @@ export const App = forwardRef<
       installRuntimeProjection,
       onCatalogChange,
       persistDocument,
+      refreshSceneProjection,
       runtime,
     ],
   );
@@ -5732,6 +6134,225 @@ export const App = forwardRef<
     },
     [activeWork, characterActionState, characters],
   );
+  const applyPlotEventLinkMutation = useCallback(
+    (mutation: PlotEventLinkMutationProjection) => {
+      setPlots((current) => Object.freeze([
+        mutation.plotBeat,
+        ...current.filter(
+          (plot) => plot.plotThreadId !== mutation.plotBeat.plotThreadId,
+        ),
+      ]));
+      setEventBlocks((current) => Object.freeze([
+        mutation.eventBlock,
+        ...current.filter(
+          (eventBlock) =>
+            eventBlock.eventBlockId !== mutation.eventBlock.eventBlockId,
+        ),
+      ]));
+      setEventSources((current) => Object.freeze([
+        ...mutation.eventSources,
+        ...current.filter(
+          (source) => source.eventBlockId !== mutation.eventBlock.eventBlockId,
+        ),
+      ]));
+      setPlotEventLinks((current) => Object.freeze(
+        mutation.link.retiredAt === null
+          ? [
+              mutation.link,
+              ...current.filter(
+                (link) =>
+                  link.plotEventLinkId !== mutation.link.plotEventLinkId,
+              ),
+            ]
+          : current.filter(
+              (link) => link.plotEventLinkId !== mutation.link.plotEventLinkId,
+            ),
+      ));
+    },
+    [],
+  );
+  const createPlotFromEventBlock = useCallback(
+    async (eventBlock: EventBlockProjection) => {
+      if (
+        activeWork === undefined ||
+        eventBlock.workId !== activeWork.workId ||
+        plotActionState !== "idle"
+      ) {
+        return;
+      }
+      setPlotActionState("creating-from-event");
+      setPlotActionError(null);
+      try {
+        const mutation = await window.eumStudio.plots.createFromEvent({
+          schemaVersion: 1,
+          workId: activeWork.workId,
+          eventBlockId: eventBlock.eventBlockId,
+        });
+        applyPlotEventLinkMutation(mutation);
+        await refreshEventRailAfterPlotChange(activeWork.workId);
+        setSelectedPlotThreadId(mutation.plotBeat.plotThreadId);
+        setPlotDialogOpen(true);
+      } catch {
+        setPlotActionError("사건에서 플롯을 만들거나 연결 플롯을 열지 못했습니다.");
+      } finally {
+        setPlotActionState("idle");
+      }
+    },
+    [
+      activeWork,
+      applyPlotEventLinkMutation,
+      plotActionState,
+      refreshEventRailAfterPlotChange,
+    ],
+  );
+  const createEventFromPlot = useCallback(
+    async (plot: PlotThreadProjection, exactSelection: boolean) => {
+      if (
+        activeWork === undefined ||
+        plot.workId !== activeWork.workId ||
+        plotActionState !== "idle"
+      ) {
+        return;
+      }
+      let source: CreateEventFromPlotSource = { kind: "anchorless" };
+      if (exactSelection) {
+        if (
+          activeDocument === undefined ||
+          activeDocument.workId !== activeWork.workId
+        ) {
+          setPlotActionError("현재 작품 원고에서 사건 범위를 먼저 선택하세요.");
+          return;
+        }
+        const summary = manuscriptEditorRef.current?.readDocumentState(
+          activeDocument,
+        );
+        const selection = summary?.selection.ranges[summary.selection.mainIndex];
+        const manuscript = manuscriptEditorRef.current?.materializeDocumentText(
+          activeDocument,
+        );
+        if (
+          selection === undefined ||
+          selection.empty ||
+          manuscript === undefined
+        ) {
+          setPlotActionError("현재 작품 원고에서 사건 범위를 먼저 선택하세요.");
+          return;
+        }
+        const exactQuote = manuscript.slice(selection.from, selection.to);
+        if (exactQuote.length === 0) {
+          setPlotActionError("빈 원고 범위로는 사건을 만들 수 없습니다.");
+          return;
+        }
+        source = {
+          kind: "exact-selection",
+          documentId: activeDocument.documentId,
+          selection: {
+            anchor: selection.anchor,
+            head: selection.head,
+          },
+          exactQuote,
+        };
+      }
+      setPlotActionState("creating-event");
+      setPlotActionError(null);
+      try {
+        if (exactSelection && activeDocument !== undefined) {
+          await persistDocument(activeDocument);
+        }
+        const mutation = await window.eumStudio.plots.createEvent({
+          schemaVersion: 1,
+          workId: activeWork.workId,
+          plotBeatId: plot.plotThreadId,
+          source,
+        });
+        applyPlotEventLinkMutation(mutation);
+        await refreshEventRailAfterPlotChange(activeWork.workId);
+      } catch {
+        setPlotActionError("플롯에서 사건을 만들지 못했습니다.");
+      } finally {
+        setPlotActionState("idle");
+      }
+    },
+    [
+      activeDocument,
+      activeWork,
+      applyPlotEventLinkMutation,
+      persistDocument,
+      plotActionState,
+      refreshEventRailAfterPlotChange,
+    ],
+  );
+  const linkPlotEvent = useCallback(
+    async (
+      plot: PlotThreadProjection,
+      eventBlockId: EventBlockProjection["eventBlockId"],
+      role: PlotEventLinkRole,
+    ) => {
+      if (
+        activeWork === undefined ||
+        plot.workId !== activeWork.workId ||
+        plotActionState !== "idle"
+      ) {
+        return;
+      }
+      setPlotActionState("linking-event");
+      setPlotActionError(null);
+      try {
+        const mutation = await window.eumStudio.plots.linkEvent({
+          schemaVersion: 1,
+          workId: activeWork.workId,
+          plotBeatId: plot.plotThreadId,
+          eventBlockId,
+          role,
+        });
+        applyPlotEventLinkMutation(mutation);
+        await refreshEventRailAfterPlotChange(activeWork.workId);
+      } catch {
+        setPlotActionError("플롯과 사건을 연결하지 못했습니다.");
+      } finally {
+        setPlotActionState("idle");
+      }
+    },
+    [
+      activeWork,
+      applyPlotEventLinkMutation,
+      plotActionState,
+      refreshEventRailAfterPlotChange,
+    ],
+  );
+  const unlinkPlotEvent = useCallback(
+    async (link: PlotEventLinkProjection) => {
+      if (
+        activeWork === undefined ||
+        link.workId !== activeWork.workId ||
+        plotActionState !== "idle"
+      ) {
+        return;
+      }
+      setPlotActionState("unlinking-event");
+      setPlotActionError(null);
+      try {
+        const mutation = await window.eumStudio.plots.unlinkEvent({
+          schemaVersion: 1,
+          workId: activeWork.workId,
+          plotEventLinkId: link.plotEventLinkId,
+          expectedRevision: link.revision,
+        });
+        applyPlotEventLinkMutation(mutation);
+        await refreshEventRailAfterPlotChange(activeWork.workId);
+      } catch {
+        setPlotActionError("플롯과 사건의 연결을 해제하지 못했습니다.");
+      } finally {
+        setPlotActionState("idle");
+      }
+    },
+    [
+      activeWork,
+      applyPlotEventLinkMutation,
+      plotActionState,
+      refreshEventRailAfterPlotChange,
+    ],
+  );
   const createPlotThread = useCallback(
     async (draft: PlotDraft) => {
       if (activeWork === undefined || plotActionState !== "idle") {
@@ -5751,8 +6372,9 @@ export const App = forwardRef<
             (plot) =>
               plot.workId === created.workId &&
               plot.plotThreadId !== created.plotThreadId,
-          ),
+            ),
         ]));
+        await refreshEventRailAfterPlotChange(activeWork.workId);
         setSelectedPlotThreadId(created.plotThreadId);
       } catch {
         setPlotActionError(
@@ -5762,7 +6384,7 @@ export const App = forwardRef<
         setPlotActionState("idle");
       }
     },
-    [activeWork, plotActionState],
+    [activeWork, plotActionState, refreshEventRailAfterPlotChange],
   );
   const updatePlotThread = useCallback(
     async (
@@ -5793,6 +6415,22 @@ export const App = forwardRef<
               entry.plotThreadId === updated.plotThreadId ? updated : entry,
             ),
         ));
+        setPlotEventLinks((current) => Object.freeze(
+          current.map((link) =>
+            link.workId === updated.workId &&
+            link.plotBeatId === updated.plotThreadId
+              ? {
+                  ...link,
+                  plotTitle: updated.title,
+                  titleMatch:
+                    updated.title === link.eventTitle
+                      ? ("matched" as const)
+                      : ("mismatched" as const),
+                }
+              : link,
+          ),
+        ));
+        await refreshEventRailAfterPlotChange(activeWork.workId);
       } catch {
         setPlotActionError(
           "플롯 정보가 달라졌습니다. 다시 열어 확인하세요.",
@@ -5801,7 +6439,7 @@ export const App = forwardRef<
         setPlotActionState("idle");
       }
     },
-    [activeWork, plotActionState],
+    [activeWork, plotActionState, refreshEventRailAfterPlotChange],
   );
   const retirePlotThread = useCallback(
     async (plot: PlotThreadProjection) => {
@@ -5832,6 +6470,15 @@ export const App = forwardRef<
             (source) => source.plotThreadId !== retired.plotThreadId,
           ),
         ));
+        setPlotEventLinks((current) => Object.freeze(
+          current.map((link) =>
+            link.workId === retired.workId &&
+            link.plotBeatId === retired.plotThreadId
+              ? { ...link, plotRetiredAt: retired.retiredAt }
+              : link,
+          ),
+        ));
+        await refreshEventRailAfterPlotChange(activeWork.workId);
         setSelectedPlotThreadId((current) =>
           current === retired.plotThreadId
             ? (remaining[0]?.plotThreadId ?? null)
@@ -5843,7 +6490,117 @@ export const App = forwardRef<
         setPlotActionState("idle");
       }
     },
-    [activeWork, plotActionState, plots],
+    [activeWork, plotActionState, plots, refreshEventRailAfterPlotChange],
+  );
+  const movePlotPlacement = useCallback(
+    async (
+      placement: PlotPlacementProjection,
+      target: PlotPlacementMoveTarget,
+    ) => {
+      if (
+        activeWork === undefined ||
+        plotBoard === null ||
+        placement.workId !== activeWork.workId ||
+        placement.plotBoardId !== plotBoard.plotBoardId ||
+        plotActionState !== "idle"
+      ) {
+        return;
+      }
+      const placementOnBoard = plotBoard.lanes
+        .flatMap((candidate) => candidate.placements)
+        .find(
+          (candidate) =>
+            candidate.plotPlacementId === placement.plotPlacementId,
+        );
+      const targetLane = plotBoard.lanes.find(
+        (candidate) => candidate.plotLaneId === target.targetLaneId,
+      );
+      if (placementOnBoard === undefined || targetLane === undefined) return;
+      setPlotActionState("moving-placement");
+      setPlotActionError(null);
+      try {
+        const authoritativeBoard = await window.eumStudio.plots.movePlacement({
+          schemaVersion: 1,
+          workId: activeWork.workId,
+          plotPlacementId: placement.plotPlacementId,
+          targetBoardId: plotBoard.plotBoardId,
+          targetLaneId: targetLane.plotLaneId,
+          ...(target.beforePlacementId === undefined
+            ? {}
+            : { beforePlacementId: target.beforePlacementId }),
+          ...(target.afterPlacementId === undefined
+            ? {}
+            : { afterPlacementId: target.afterPlacementId }),
+          expectedPlacementRevision: placement.revision,
+          expectedBoardRevision: plotBoard.revision,
+        });
+        setPlotBoard(authoritativeBoard);
+        setSelectedPlotThreadId(placement.plotBeatId);
+        await refreshEventRailAfterPlotChange(activeWork.workId);
+      } catch {
+        setPlotActionError("플롯 배치 순서가 달라졌습니다. 다시 열어 확인하세요.");
+      } finally {
+        setPlotActionState("idle");
+      }
+    },
+    [
+      activeWork,
+      plotActionState,
+      plotBoard,
+      refreshEventRailAfterPlotChange,
+    ],
+  );
+  const setPlotPlacementStoryTime = useCallback(
+    async (
+      placement: PlotPlacementProjection,
+      target: PlotStoryTimeTarget,
+    ) => {
+      if (
+        activeWork === undefined ||
+        plotBoard === null ||
+        placement.workId !== activeWork.workId ||
+        placement.plotBoardId !== plotBoard.plotBoardId ||
+        plotActionState !== "idle"
+      ) {
+        return;
+      }
+      const placementOnBoard = plotBoard.lanes
+        .flatMap((candidate) => candidate.placements)
+        .find(
+          (candidate) =>
+            candidate.plotPlacementId === placement.plotPlacementId,
+        );
+      if (placementOnBoard === undefined) return;
+      setPlotActionState("setting-story-time");
+      setPlotActionError(null);
+      try {
+        const authoritativeBoard = await window.eumStudio.plots.setStoryTime({
+          schemaVersion: 1,
+          workId: activeWork.workId,
+          plotPlacementId: placement.plotPlacementId,
+          plotBoardId: plotBoard.plotBoardId,
+          storyTime: target.storyTime,
+          storyTimeEnd: target.storyTimeEnd,
+          expectedPlacementRevision: placement.revision,
+          expectedBoardRevision: plotBoard.revision,
+        });
+        setPlotBoard(authoritativeBoard);
+        setSelectedPlotThreadId(placement.plotBeatId);
+        await refreshEventRailAfterPlotChange(activeWork.workId);
+      } catch {
+        setPlotActionError(
+          "플롯 이야기 시간이 달라졌습니다. 다시 열어 확인하세요.",
+        );
+      } finally {
+        setPlotActionState("idle");
+      }
+    },
+    [
+      activeWork,
+      plotActionState,
+      plotBoard,
+      refreshEventRailAfterPlotChange,
+    ],
   );
   const createLoreEntry = useCallback(
     async (draft: LoreEntryDraft) => {
@@ -6631,6 +7388,83 @@ export const App = forwardRef<
       workStructureActionState,
     ],
   );
+  const openEventRailSource = useCallback(
+    async (location: EventRailSourceLocationProjection) => {
+      if (
+        runtime.status !== "ready" ||
+        activeWork === undefined ||
+        eventActionState !== "idle"
+      ) {
+        return;
+      }
+      if (location.integrity !== "resolved" || location.range === null) {
+        setEventActionError(
+          "검토가 필요한 사건은 원문 위치를 추정해서 열지 않습니다.",
+        );
+        return;
+      }
+      const targetDocument = activeWorkDocuments.find(
+        (document) =>
+          document.workId === activeWork.workId &&
+          document.documentId === location.documentId,
+      );
+      if (targetDocument === undefined) {
+        setEventActionError("사건의 원문 회차를 현재 작품에서 찾지 못했습니다.");
+        return;
+      }
+      setEventActionState("opening");
+      setEventActionError(null);
+      if (targetDocument.documentId === activeDocument?.documentId) {
+        const selected = manuscriptEditorRef.current?.selectDocumentRange(
+          targetDocument,
+          location.range,
+        );
+        setEventActionState("idle");
+        if (!selected) {
+          setEventActionError(
+            "사건의 정확한 원고 범위를 선택하지 못했습니다.",
+          );
+        }
+        return;
+      }
+      const currentActiveDocumentId =
+        runtime.activeDocumentId ?? targetDocument.documentId;
+      pendingEventRailRangeRef.current = {
+        workId: activeWork.workId,
+        documentId: targetDocument.documentId,
+        range: location.range,
+      };
+      try {
+        await activateWorkspaceLocation({
+          schemaVersion: 1,
+          workId: activeWork.workId,
+          documentId: targetDocument.documentId,
+        });
+        setDocumentTabSession((current) =>
+          openDocumentTab({
+            session: current,
+            workId: activeWork.workId,
+            orderedDocumentIds: activeWorkDocumentIds,
+            activeDocumentId: currentActiveDocumentId,
+            documentId: targetDocument.documentId,
+          }),
+        );
+      } catch {
+        pendingEventRailRangeRef.current = null;
+        setEventActionState("idle");
+        setEventActionError("사건의 정확한 원문 회차를 열지 못했습니다.");
+      }
+    },
+    [
+      activeDocument?.documentId,
+      activeWork,
+      activeWorkDocumentIds,
+      activeWorkDocuments,
+      activateWorkspaceLocation,
+      eventActionState,
+      runtime,
+    ],
+  );
   const openWorkStructureRange = useCallback(
     async (input: {
       readonly documentId: ManuscriptDocumentSource["documentId"];
@@ -6782,15 +7616,20 @@ export const App = forwardRef<
   );
   const openWorkStructureEvent = useCallback(
     (event: WorkStructureOverviewEvent) => {
-      const currentEvent = eventBlocks.find(
-        (candidate) =>
-          candidate.workId === activeWorkId &&
-          candidate.eventBlockId === event.eventBlockId,
+      const currentSource = event.source === null
+        ? undefined
+        : eventSources.find(
+            (candidate) =>
+              candidate.workId === activeWorkId &&
+              candidate.eventSourceId === event.source?.eventSourceId,
+          );
+      const currentAnchor = currentSource?.anchors.find(
+        (anchor) => anchor.documentId === event.source?.documentId,
       );
       if (
-        currentEvent === undefined ||
-        currentEvent.integrity !== "resolved" ||
-        currentEvent.range === null
+        currentAnchor === undefined ||
+        currentAnchor.integrity !== "resolved" ||
+        currentAnchor.range === null
       ) {
         setWorkStructureActionError(
           "검토가 필요한 사건은 원문 위치를 추정해서 열지 않습니다.",
@@ -6798,39 +7637,29 @@ export const App = forwardRef<
         return;
       }
       void openWorkStructureRange({
-        documentId: currentEvent.documentId,
-        range: currentEvent.range,
+        documentId: currentAnchor.documentId,
+        range: currentAnchor.range,
       });
     },
-    [activeWorkId, eventBlocks, openWorkStructureRange],
+    [activeWorkId, eventSources, openWorkStructureRange],
   );
-  const openWorkStructureSceneBoundary = useCallback(
-    (boundary: WorkStructureOverviewSceneBoundary) => {
-      const currentOverride = sceneOverrides.find(
-        (candidate) =>
-          candidate.workId === activeWorkId &&
-          candidate.sceneOverrideId === boundary.sceneOverrideId,
-      );
-      const currentBoundary = currentOverride?.boundaries.find(
-        (candidate) => candidate.anchorId === boundary.anchorId,
-      );
+  const openWorkStructureScene = useCallback(
+    (scene: WorkStructureOverviewScene) => {
       if (
-        currentOverride === undefined ||
-        currentBoundary === undefined ||
-        currentBoundary.integrity !== "resolved" ||
-        currentBoundary.range === null
+        scene.integrity !== "resolved" ||
+        scene.range === null
       ) {
         setWorkStructureActionError(
-          "검토가 필요한 장면 경계는 원문 위치를 추정해서 열지 않습니다.",
+          "검토가 필요한 장면은 원문 위치를 추정해서 열지 않습니다.",
         );
         return;
       }
       void openWorkStructureRange({
-        documentId: currentOverride.documentId,
-        range: currentBoundary.range,
+        documentId: scene.documentId,
+        range: { from: scene.range.start, to: scene.range.end },
       });
     },
-    [activeWorkId, openWorkStructureRange, sceneOverrides],
+    [openWorkStructureRange],
   );
   const captureForeshadowPoint = useCallback(
     async (lineId: string, roleId: string, note: string) => {
@@ -8044,7 +8873,7 @@ export const App = forwardRef<
                     작품 구조 열기
                   </button>
                   <p>
-                    회차·인물·플롯·사건·장면 경계를 한 화면에서 봅니다.
+                    회차·인물·플롯·사건·장면을 한 화면에서 봅니다.
                   </p>
                 </section>
                   </div>
@@ -8057,6 +8886,14 @@ export const App = forwardRef<
                   onClick={openEventBlockDialog}
                   telemetryStore={telemetryStore}
                 />
+                <button
+                  className="create-event-button"
+                  disabled={eventActionState !== "idle" || activeWork === undefined}
+                  onClick={openAnchorlessEventDialog}
+                  type="button"
+                >
+                  예정 사건 추가
+                </button>
                 {eventActionError !== null && (
                   <p className="event-action-error" role="alert">
                     {eventActionError}
@@ -8079,83 +8916,65 @@ export const App = forwardRef<
                     {sceneActionError}
                   </p>
                 )}
-                <section
-                  aria-label="현재 회차 사건"
-                  className="event-block-list"
-                >
-                  <header>
-                    <h4>사건</h4>
-                    <span>{activeDocumentEventBlocks.length}</span>
-                  </header>
-                  {activeDocumentEventBlocks.length === 0 ? (
-                    <p className="empty-event-list">
-                      등록된 사건이 없습니다.
-                    </p>
-                  ) : (
-                    <ul>
-                      {activeDocumentEventBlocks.map((eventBlock) => (
-                        <li key={eventBlock.eventBlockId}>
-                          <button
-                            disabled={eventBlock.range === null}
-                            onClick={() => focusEventBlock(eventBlock)}
-                            type="button"
-                          >
-                            <strong>{eventBlock.title}</strong>
-                            <span>
-                              {eventBlock.range === null
-                                ? eventBlock.integrity === "needsReview"
-                                  ? "범위 검토 필요"
-                                  : "범위 연결 손상"
-                                : `${eventBlock.range.from}–${eventBlock.range.to}`}
-                            </span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-                <section
-                  aria-label="현재 회차 장면 경계"
-                  className="event-block-list scene-override-list"
-                >
-                  <header>
-                    <h4>장면 경계</h4>
-                    <span>{activeDocumentSceneOverrides.length}</span>
-                  </header>
-                  {activeDocumentSceneOverrides.length === 0 ? (
-                    <p className="empty-event-list">
-                      추가한 장면 경계가 없습니다.
-                    </p>
-                  ) : (
-                    <ul>
-                      {activeDocumentSceneOverrides.map(
-                        (sceneOverride, index) => {
-                          const boundary = sceneOverride.boundaries[0];
-                          return (
-                            <li key={sceneOverride.sceneOverrideId}>
-                              <button
-                                disabled={
-                                  boundary === undefined || boundary.range === null
-                                }
-                                onClick={() => focusSceneOverride(sceneOverride)}
-                                type="button"
-                              >
-                                <strong>{`장면 경계 ${index + 1}`}</strong>
-                                <span>
-                                  {boundary === undefined || boundary.range === null
-                                    ? "위치 검토 필요"
-                                    : boundary.range.from === boundary.range.to
-                                      ? `${boundary.range.from} 위치`
-                                      : `${boundary.range.from}–${boundary.range.to}`}
-                                </span>
-                              </button>
-                            </li>
-                          );
-                        },
-                      )}
-                    </ul>
-                    )}
-                </section>
+                <EventRail
+                  eventBusy={eventActionState !== "idle"}
+                  mode={eventRailMode}
+                  onCreatePlot={(eventBlock) => {
+                    void createPlotFromEventBlock(eventBlock);
+                  }}
+                  onLinkSource={(eventBlock) => {
+                    void linkEventSource(eventBlock);
+                  }}
+                  onModeChange={setEventRailMode}
+                  onMovePlacement={(placement, target) => {
+                    void movePlotPlacement(placement, target);
+                  }}
+                  onOpenSource={(location) => {
+                    void openEventRailSource(location);
+                  }}
+                  onReplaceSource={(source) => {
+                    void replaceEventSource(source);
+                  }}
+                  onRetireSource={(source) => {
+                    void retireEventSource(source);
+                  }}
+                  plotBusy={plotActionState !== "idle"}
+                  projection={
+                    eventRail?.workId === activeWorkId ? eventRail : null
+                  }
+                />
+                <SceneList
+                  activeDocumentId={activeDocument?.documentId ?? null}
+                  busy={sceneActionState !== "idle"}
+                  onMergeWithPrevious={(scene, previousScene) => {
+                    void mergeSceneWithPrevious(scene, previousScene);
+                  }}
+                  onOpenScene={focusScene}
+                  onSetEventOverride={(
+                    scene,
+                    eventBlockId,
+                    operation,
+                    expectedRevision,
+                  ) => {
+                    void setSceneEventOverride(
+                      scene,
+                      eventBlockId,
+                      operation,
+                      expectedRevision,
+                    );
+                  }}
+                  onSplitScene={() => {
+                    void createSceneBoundary("split");
+                  }}
+                  onUpdateRuleSet={(draft) => {
+                    void updateSceneRuleSet(draft);
+                  }}
+                  projection={
+                    sceneProjection?.workId === activeWorkId
+                      ? sceneProjection
+                      : null
+                  }
+                />
                   </div>
                   <div
                     className="review-inspector-section-stack"
@@ -8726,7 +9545,7 @@ export const App = forwardRef<
               onOpenLore={openWorkStructureLore}
               onOpenPlot={openWorkStructurePlot}
               onOpenPlotSource={openWorkStructurePlotSource}
-              onOpenSceneBoundary={openWorkStructureSceneBoundary}
+              onOpenScene={openWorkStructureScene}
               projection={workStructureOverview}
             />
           )}
@@ -8842,11 +9661,17 @@ export const App = forwardRef<
           plotDialogOpen && (
             <PlotManagerDialog
               actionState={plotActionState}
+              board={plotBoard}
+              canCreateEventFromSelection={
+                activeDocument !== undefined && hasManuscriptSelection
+              }
               canLinkSource={
                 activeDocument !== undefined && hasManuscriptSelection
               }
               documentLabels={activeWorkDocumentLabels}
               error={plotActionError}
+              eventBlocks={activeWorkEventBlocks}
+              eventLinks={activeWorkPlotEventLinks}
               onClose={() => {
                 if (plotActionState === "idle") {
                   setPlotDialogOpen(false);
@@ -8856,18 +9681,29 @@ export const App = forwardRef<
               onCreate={(draft) => {
                 void createPlotThread(draft);
               }}
+              onCreateEvent={(plot, exactSelection) => {
+                void createEventFromPlot(plot, exactSelection);
+              }}
+              onLinkEvent={(plot, eventBlockId, role) => {
+                void linkPlotEvent(plot, eventBlockId, role);
+              }}
               onRetire={(plot) => {
                 void retirePlotThread(plot);
               }}
               onLinkSource={(plot) => {
                 void linkPlotThreadSource(plot);
               }}
+              onMovePlacement={movePlotPlacement}
+              onSetStoryTime={setPlotPlacementStoryTime}
               onOpenSource={(source) => {
                 void openPlotThreadSource(source);
               }}
               onSelect={setSelectedPlotThreadId}
               onUpdate={(plot, changes) => {
                 void updatePlotThread(plot, changes);
+              }}
+              onUnlinkEvent={(link) => {
+                void unlinkPlotEvent(link);
               }}
               plots={activeWorkPlots}
               sources={activeWorkPlotSources}

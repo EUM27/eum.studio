@@ -8,7 +8,7 @@
 
 현재 storage 결정: [POC-3 SQLite·blob·backup 결정](docs/poc-3-storage-decisions.md)
 
-마지막 갱신: 2026-08-12
+마지막 갱신: 2026-08-16
 
 ## 현재 Gate
 
@@ -29,11 +29,94 @@ POC-3 완료 증거:
 - 개발 서버 없는 Windows Electron 설치본 main의 revision→checkpoint→backup→restore 폐회로
 - raw timing·p50·p95와 DB·blob·bundle·restore 크기 JSON 측정
 
-다음 Gate: `POC-M — 현행 데이터 이주 rehearsal`
+다음 활성 Gate: `없음 — 사건·플롯·장면 구조 모델 8단계 완료`
+
+병행 보류 Gate: `POC-M — 현행 데이터 이주 rehearsal`
 
 실사용 원고 저장: `GO`
 
 POC-3 완료: `GO`
+
+## 사건·플롯·장면 구조 모델
+
+현재 사용자 승인 기준: [사건·플롯·장면 정규 모델](docs/architecture/plot-event-scene-model.md)
+
+- [x] 1단계 — ADR과 불변식 확정
+- [x] 2단계 — `EventSource` 분리, 기존 사건 backfill, 원고 미연결 사건, source 연결·교체·해제
+- [x] 3단계 — `PlotEventLink`, 양방향 생성, 수동 연결·해제, idempotency, 제목 불일치 projection
+- [x] 4단계 — 작품별 기본 `PlotBoard`·`PlotLane`, `PlotPlacement`, fractional order key, 앞·뒤 이동, 재시작 보존
+- [x] 5단계 — 마우스 drag의 로컬 preview, 삽입선, 취소, drop당 한 command, 충돌 rollback
+- [x] 6단계 — 작품 전역 사건레일과 `원고 순서 / 플롯 순서` 모드
+- [x] 7단계 — 장면 규칙·override fold·사건 범위 중첩을 반영한 최종 `SceneProjection`
+- [x] 8단계 — 앞뒤 순서 이동 완료 뒤 정규화된 `storyTime 0..100` 시간 지도
+
+2단계 현재 상태:
+
+- `EventBlock`에서 원고 범위를 분리한 `EventSource` 계약·SQLite 원장·typed bridge·원고 미연결 사건과 source 연결·교체·해제 UI를 구현했다.
+- 기존 schema v1 사건마다 primary source 하나를 backfill하고 `event_blocks.range_group_id`를 제거하는 v1→v2 migration을 같은 migration transaction·검증 receipt 경계에 연결했다.
+- exact selection 사건 생성 회귀와 원고 미연결→연결→교체→재시작→해제→재시작 runtime 흐름, 실제 v1 DB backfill integration이 통과했다.
+- `npm run lint`와 `npm run build`는 통과했다. 전체 Vitest는 이번 단계 관련 검증을 포함해 633개가 통과했고, 변경하지 않은 `studio-app-shell-layout.test.ts`의 현재 투명 버튼 CSS/흰색 기대값 불일치 1개가 남아 있다.
+- Codex Windows sandbox 안에서는 변경하지 않은 기존 기준 E2E도 GPU process `-1073741515` 뒤 `Target crashed`로 종료됐다. 같은 production build를 sandbox 밖에서 실행해 exact-selection 사건 생성·재시작 원문 복귀와 원고 미연결→연결→교체→재시작→해제→재시작 실제 Electron E2E 2개를 함께 통과했다.
+
+3단계 현재 상태:
+
+- 독립 `EventBlock`·`PlotThread` 사이의 `PlotEventLink` 계약과 작품 소유 foreign key, 활성 pair 중복 금지, 플롯별 활성 primary 사건 1개 제한, revision·soft retirement를 schema v3 원장에 구현했다.
+- 사건→플롯과 플롯→사건 생성은 첫 호출에서만 두 원본과 연결을 만들고 같은 명령은 기존 authoritative projection을 반환한다. exact selection 방향은 `Anchor`·`RangeGroup`·`EventSource`까지 한 transaction에서 만들며, 예정 사건 방향은 원고 범위를 만들지 않는다.
+- 수동 primary/supporting 연결·해제와 재연결, 생성 시점 제목 복사 뒤 독립 수정, 제목 일치·불일치 projection을 typed bridge와 기존 사건 레일·플롯 관리 화면에 연결했다. `PlotBoard`·`PlotLane`·`PlotPlacement`·drag 동작은 추가하지 않았다.
+- v2→v3 migration은 기존 사건·플롯을 바꾸지 않고 빈 연결 원장과 인덱스를 추가하며 checksum·post-verification·foreign key 검증을 통과했다.
+- `npm run lint`와 `npm run build`, Gate 3 집중 계약·bridge·runtime·dialog 129개, POC-3 `PlotEventLink` schema 검증 1개가 통과했다. 전체 일반 Vitest는 161개 파일·638개가 통과하고 1개가 skip됐으며, 변경하지 않은 `studio-app-shell-layout.test.ts`의 투명 버튼 CSS/흰색 기대값 불일치 1개가 그대로 남아 있다.
+- 같은 production build를 sandbox 밖의 실제 Electron에서 실행해 Gate 2 사건 회귀 2개와 사건→플롯 멱등 생성·독립 제목·수동 보조 연결/해제/재연결·예정/정확 범위 플롯→사건 생성·완전 재시작 보존 Gate 3 E2E 1개를 함께 통과했다.
+
+4단계 현재 상태:
+
+- 작품 생성 transaction에 runtime manifest의 표시명을 쓰는 기본 sequence `PlotBoard`·default `PlotLane`을 추가하고, v3→v4 migration 뒤 기존 작품·활성 플롯을 원본 변경 없이 같은 기본 보드에 backfill했다. 한 작품의 같은 보드에는 같은 활성 플롯 배치를 하나만 허용하되 다른 보드의 별도 배치는 막지 않는다.
+- 플롯 내용 원장과 `PlotPlacement` 위치 원장을 분리하고 canonical fractional order key, 실제 이웃 ID·placement/board revision을 받는 상대 위치 이동 command, authoritative board projection을 application·SQLite·main·preload·renderer 경계에 연결했다.
+- 일반 이동은 대상 placement의 정렬 key와 revision, board revision만 바꾼다. runtime manifest의 key 길이 경계에 도달한 경우에만 lane 전체를 한 transaction에서 재균형하며, 성공 경로에서 재균형과 재시작 보존을 직접 검증했다.
+- 플롯 관리 화면에 기본 보드와 접근 가능한 `앞으로 이동`·`뒤로 이동`을 연결했다. Gate 5 범위인 pointer drag·preview·삽입선·auto-scroll·키보드 단축키는 앞당겨 추가하지 않았다.
+- Gate 4 집중 계약·domain·bridge·runtime·dialog 132개와 신규 보드 schema/FK/index 검증 1개, `npm run lint`, `npm run build`가 통과했다. 전체 일반 Vitest는 163개 파일·643개가 통과하고 1개가 skip됐으며, 변경하지 않은 `studio-app-shell-layout.test.ts`의 투명 버튼 CSS/흰색 기대값 불일치 1개가 그대로 남아 있다. 전체 POC-3 schema suite의 신규 보드 검증을 포함한 9개는 통과했고 기존 fixture에 이미 존재하는 `work_covers`·`work_favorites`·`work_music_settings`가 누락된 기대 목록 실패 1개는 이 Gate에서 수정하지 않았다.
+- 같은 production build를 sandbox 밖 실제 Electron에서 실행해 Gate 2 사건 회귀 2개, Gate 3 양방향 사건↔플롯 회귀 1개, `A→B` 배치를 `B→A`로 이동·사건 연결 해제 후 배치 유지·완전 재시작 후 순서와 정확한 원문 선택 복원 Gate 4 E2E 1개를 함께 통과했다.
+
+5단계 현재 상태:
+
+- 플롯 카드의 primary pointer가 6px 이상 움직인 뒤에만 drag를 시작하고, 이동 중에는 renderer의 source preview와 target lane 삽입선만 갱신한다. 카드 위쪽 절반은 앞, 아래쪽 절반은 뒤, 목록 끝은 마지막 위치로 해석하며 pointer move 중 저장 호출은 하지 않는다.
+- 검토 레일의 실제 scroll container 경계에서 requestAnimationFrame 기반 auto-scroll을 수행한다. `Escape`, `pointercancel`, pointer capture 상실은 preview와 삽입선을 지우며 `MovePlotPlacementCommand`를 실행하지 않는다.
+- pointer up은 Gate 4의 실제 이웃 ID·placement/board revision 상대 이동 command를 정확히 한 번 호출한다. 저장 promise가 끝날 때까지 로컬 pending 경계로 두 번째 drag를 막고, revision 충돌 시 authoritative board prop을 유지한 채 preview만 롤백한다.
+- 접근 가능한 `앞으로 이동`·`뒤로 이동`과 `Alt+↑`·`Alt+↓`가 pointer drop과 같은 target 계산 함수와 같은 command를 사용한다. 플롯 내용·원고·사건·schema에는 Gate 5 변경을 추가하지 않았다.
+- Gate 5 target 계산·dialog 검증 3개, `npm run lint`, `npm run build`가 통과했다. 전체 일반 Vitest는 163개 파일·644개가 통과하고 1개가 skip됐으며, 변경하지 않은 `studio-app-shell-layout.test.ts`의 투명 버튼 CSS/흰색 기대값 불일치 1개가 그대로 남아 있다.
+- 같은 production build를 sandbox 밖 실제 Electron에서 실행해 Gate 4 이동 회귀와 Gate 5 실제 drag를 함께 2개 통과했다. Gate 5 E2E는 5px 이동 무저장, 6px 이후 로컬 preview·삽입선, 실제 auto-scroll, `Escape`·`pointercancel` 뒤 board revision 불변, drop 뒤 board revision 정확히 1 증가와 비대상 placement revision 불변, `Alt+↓`, 완전 재시작 순서 보존, 의도적으로 만든 stale revision 충돌의 UI rollback과 DB 무변경을 직접 확인했다.
+
+6단계 현재 상태:
+
+- renderer가 사건·출처·연결·보드를 따로 조합하지 않도록 작품 소유 회차 순서, `EventBlock`·`EventSource`·`PlotEventLink`·기본 `PlotBoard`를 한 번에 반환하는 읽기 전용 `structure.listEventRail` projection을 application·runtime·main·preload·renderer 경계에 연결했다. 저장 schema와 원본 원장은 변경하지 않았다.
+- 원고 순서는 회차 index와 Anchor offset의 작품 전역 좌표로 계산하고, 원고 위치가 없는 예정 사건은 별도 목록으로 유지한다. 플롯 순서는 실제 `PlotPlacement.orderKey` 순서를 사용하며 각 카드에 원고 위치·플롯 위치·차이를 함께 표시한다.
+- 검토 레일에 명시적인 `원고 순서`·`플롯 순서` 모드를 추가했다. 원고 모드에서는 회차명·정확 범위·Anchor integrity와 다른 회차의 정확 원문 이동을 제공하고, 플롯 모드에서는 원고 미연결 사건·보드 밖 사건, 한 transaction의 사건→플롯·연결·배치, 기존 relative placement 이동을 제공한다.
+- Gate 6 projection·bridge·runtime·renderer 집중 4개 파일·133개 검증, `npm run lint`, `npm run build`가 통과했다. 전체 Vitest는 165개 파일·649개가 통과하고 1개가 skip됐으며, 변경하지 않은 `studio-app-shell-layout.test.ts`의 투명 버튼 CSS/흰색 기대값 불일치 1개가 그대로 남아 있다.
+- 같은 production build를 sandbox 밖 실제 Electron에서 실행해 Gate 2~6 사건·플롯 회귀 6개를 4.2분에 통과했다. Gate 6 E2E는 두 회차의 작품 전역 원고 순서와 역방향 플롯 순서, 양쪽 정확 원문 이동, Anchor integrity, 예정 사건의 단일 plotification 결과, 기존 카드 이동 시 board·대상 placement revision만 증가하고 사건·출처·연결은 불변인 점, 완전 재시작 뒤 두 순서와 정확 근거 보존을 확인했다.
+
+7단계 현재 상태:
+
+- runtime manifest가 소유하는 작품별 `SceneRuleSet`의 line-regexp 규칙으로 현재 `DocumentRevision`의 기본 경계를 계산하고, `SceneOverride(add/ignore/merge/split)`를 생성 순서대로 fold해 본문 사본 없는 안정적인 최종 `SceneProjection`을 만든다. 미해결 Anchor·규칙 revision 불일치는 `needsReview`, 겹치는 경계는 `invalid`로 노출한다.
+- `EventSource` 범위와 최종 장면 범위를 중첩해 자동 사건 소속을 계산하고, 자동 계산이 틀린 pair에만 `SceneEventOverride(include/exclude)` revision 원장을 저장한다. 원고 미연결 예정 사건은 미배정으로 남거나 사용자가 특정 장면에 수동 포함할 수 있다.
+- schema 5에 `scene_rule_sets`·`scene_event_overrides`와 활성 pair 유일 인덱스를 추가했다. schema 4→5 migration은 기존 `EventBlock`·`SceneOverride` 논리 checksum을 전후 비교하고, config 기반 rule backfill 뒤 기존 입력과 projection을 그대로 보존한다. schema 1·2 연쇄 migration과 schema 4 실제 이주 3개가 함께 통과했다.
+- 검토 레일의 저장 override 작업 목록을 최종 장면 목록으로 교체하고, 규칙 편집·장면 범위 이동·현재 위치 분할·앞 장면 병합·자동 사건 제외·미배정 사건 포함을 typed bridge의 authoritative projection 응답에 연결했다. 원고 저장·사건 변경·새 회차 생성 뒤에도 같은 작품 projection을 다시 계산한다. 작품 구조 화면도 경계 수가 아니라 최종 장면 수와 사건 소속을 표시한다.
+- Gate 7 집중 계약·runtime·migration·bridge·UI 12개, 신규 SceneProjection schema/FK/index 검증 1개, `npm run lint`, `npm run build`가 통과했다. 전체 일반 Vitest는 168개 파일·661개가 통과하고 1개가 skip됐으며, 변경하지 않은 `studio-app-shell-layout.test.ts`의 투명 버튼 CSS/흰색 기대값 불일치 1개가 그대로 남아 있다. 전체 POC-3 schema suite도 기존 fixture의 `work_covers`·`work_favorites`·`work_music_settings` 누락 1개만 남겨 이 Gate에서 수정하지 않았다.
+- 최신 production build를 sandbox 밖 실제 Electron에서 실행해 config `***` 파싱→사용자 규칙 `---` 전환/복원→병합/분할 fold→자동 사건 소속→예정 사건 수동 포함→자동 사건 수동 제외→완전 재시작 보존→정확 장면 범위 이동 E2E 1개를 통과했다. 새 회차 생성 뒤 작품 구조가 빈 회차 장면까지 포함하는 회귀도 같은 build에서 통과했다. 기존 대형 first-work E2E는 장면 경로 뒤 현재 제품에 없는 수동 `기록 시작` 버튼을 기다리는 오래된 기대에서 멈췄고, 이를 맞추기 위한 제품 변경은 하지 않았다.
+
+8단계 현재 상태:
+
+- `SetPlotPlacementStoryTimeCommand`에 정규화된 `storyTime 0..100`과 nullable `storyTimeEnd` 계약을 추가했다. 끝값은 시작값 이상 100 이하만 허용하고, pixel·screen 좌표를 비롯한 계약 밖 필드는 거부한다.
+- 기존 `plot_placements.story_time`·`story_time_end`에 drop 시점의 정규화 값만 저장한다. 저장 transaction은 대상 placement revision과 board revision만 증가시키며 `order_key`·플롯 원본·원고·사건 원장을 바꾸지 않는다. 소수 좌표와 같은 좌표의 겹침을 허용하고 완전 재시작 뒤 그대로 복원한다.
+- 플롯 관리 화면에 저장된 보드 mode와 독립적인 `순서 보드 / 시간 지도` 보기를 추가했다. 시간 지도는 snap 없는 자유 가로 drag, 저장 전 로컬 preview, 실제 렌더링 카드 폭을 반영한 겹침 적층, 구간 길이 보존을 제공하고 pointer up에서만 typed bridge command를 한 번 실행한다.
+- Gate 8 계약·runtime·bridge·UI 표적 Vitest 9개, `npm run lint`, `npm run build`가 통과했다. 전체 Vitest는 169개 파일 중 168개 파일, 671개 테스트 중 669개가 통과하고 1개가 skip됐으며, 변경하지 않은 `studio-app-shell-layout.test.ts`의 투명 버튼 CSS/흰색 기대값 불일치 1개만 그대로 남아 있다.
+- 최신 production build를 sandbox 밖 실제 Electron에서 실행해 소수 좌표 preview 무저장→세 플롯 drop→근접 겹침 적층→revision·순서 불변 확인→완전 재시작 보존→의도적 stale revision 충돌 rollback→재시작 authoritative 값 보존 Gate 8 E2E를 통과했다. 같은 build에서 Gate 4 순서 이동, Gate 5 drag·취소·키보드·충돌 rollback, Gate 6 원고/플롯 사건 순서 독립성, Gate 8 시간 지도 회귀 4개도 함께 통과했다.
+
+구조 모델 진행 규칙:
+
+- 사건과 플롯은 독립 원본이며 `PlotEventLink`로만 의미 관계를 맺는다.
+- 사건의 원고 범위는 `EventSource` 관계이고, 사건은 원고 범위 없이 존재할 수 있다.
+- 플롯 배치 이동은 원고 revision·anchor·range group·사건 개요 순서를 변경하지 않는다.
+- 장면은 원고와 장면 규칙·override에서 계산한 projection이다.
+- 각 단계의 계약·저장·실제 패키징 데스크톱 경로를 검증한 뒤 다음 단계로 진행한다.
 
 ## 제품 화면 연결
 

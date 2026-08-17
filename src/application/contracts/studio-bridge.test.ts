@@ -92,10 +92,18 @@ import {
   PUBLISHING_MAIL_SCHEDULE_STATUS_CHANNEL,
   PUBLISHING_MAIL_SCHEDULE_SAVE_CHANNEL,
   PLOT_CREATE_CHANNEL,
+  PLOT_CREATE_EVENT_CHANNEL,
+  PLOT_CREATE_FROM_EVENT_CHANNEL,
+  PLOT_DEFAULT_BOARD_CHANNEL,
+  PLOT_EVENT_LINK_LIST_CHANNEL,
+  PLOT_LINK_EVENT_CHANNEL,
   PLOT_LIST_CHANNEL,
+  PLOT_MOVE_PLACEMENT_CHANNEL,
+  PLOT_SET_STORY_TIME_CHANNEL,
   PLOT_LINK_SOURCE_CHANNEL,
   PLOT_RETIRE_CHANNEL,
   PLOT_SOURCE_LIST_CHANNEL,
+  PLOT_UNLINK_EVENT_CHANNEL,
   PLOT_UPDATE_CHANNEL,
   FRAGMENT_CAPTURE_CHANNEL,
   FRAGMENT_LIST_CHANNEL,
@@ -136,10 +144,18 @@ import {
   SCHEDULE_RETIRE_ITEM_CHANNEL,
   SCHEDULE_SET_COMPLETION_CHANNEL,
   SCHEDULE_UPDATE_ITEM_CHANNEL,
+  STRUCTURE_CREATE_ANCHORLESS_EVENT_CHANNEL,
   STRUCTURE_CREATE_EVENT_BLOCK_CHANNEL,
   STRUCTURE_CREATE_SCENE_OVERRIDE_CHANNEL,
+  STRUCTURE_LINK_EVENT_SOURCE_CHANNEL,
   STRUCTURE_LIST_EVENT_BLOCKS_CHANNEL,
+  STRUCTURE_LIST_EVENT_RAIL_CHANNEL,
   STRUCTURE_LIST_SCENE_OVERRIDES_CHANNEL,
+  STRUCTURE_LIST_SCENE_PROJECTION_CHANNEL,
+  STRUCTURE_REPLACE_EVENT_SOURCE_CHANNEL,
+  STRUCTURE_RETIRE_EVENT_SOURCE_CHANNEL,
+  STRUCTURE_SET_SCENE_EVENT_OVERRIDE_CHANNEL,
+  STRUCTURE_UPDATE_SCENE_RULE_SET_CHANNEL,
   VERSION_CREATE_WORK_SNAPSHOT_CHANNEL,
   VERSION_COMPARE_WORK_SNAPSHOT_CHANNEL,
   VERSION_LIST_DOCUMENT_REVISIONS_CHANNEL,
@@ -1585,32 +1601,64 @@ describe("studio bridge contract", () => {
     expect(invoke).toHaveBeenCalledWith(WORKSPACE_RETIRE_DOCUMENT_FOLDER_CHANNEL, retire);
   });
 
-  it("exposes only strict EventBlock create and list commands", async () => {
+  it("exposes strict EventBlock and EventSource commands on narrow channels", async () => {
     const workId = entityId<"Work">(randomUUID());
     const documentId = entityId<"Document">(randomUUID());
+    const now = new Date().toISOString();
     const eventBlock = {
       schemaVersion: 1,
-      eventBlockId: randomUUID(),
-      anchorId: randomUUID(),
+      eventBlockId: entityId<"EventBlock">(randomUUID()),
+      revision: 1,
       workId,
-      documentId,
-      documentRevisionId: randomUUID(),
       title: "첫 사건",
       note: "",
-      exactQuote: "선택한 원문",
-      integrity: "resolved",
-      range: { from: 2, to: 8 },
-      createdAt: new Date().toISOString(),
+      parentEventId: null,
+      outlineOrderKey: "outline-a",
+      createdAt: now,
+      updatedAt: now,
+      retiredAt: null,
     } as const;
-    const invoke = vi.fn(async (channel) =>
-      channel === STRUCTURE_CREATE_EVENT_BLOCK_CHANNEL
-        ? eventBlock
-        : {
-            schemaVersion: 1,
-            workId,
-            eventBlocks: [eventBlock],
-          },
-    );
+    const eventSource = {
+      schemaVersion: 1,
+      eventSourceId: entityId<"EventSource">(randomUUID()),
+      revision: 1,
+      workId,
+      eventBlockId: eventBlock.eventBlockId,
+      rangeGroupId: randomUUID(),
+      role: "primary",
+      anchors: [{
+        anchorId: randomUUID(),
+        documentId,
+        documentRevisionId: randomUUID(),
+        exactQuote: "선택한 원문",
+        integrity: "resolved",
+        range: { from: 2, to: 8 },
+      }],
+      createdAt: now,
+      updatedAt: now,
+      retiredAt: null,
+    } as const;
+    const invoke = vi.fn(async (channel) => {
+      if (
+        channel === STRUCTURE_CREATE_EVENT_BLOCK_CHANNEL ||
+        channel === STRUCTURE_CREATE_ANCHORLESS_EVENT_CHANNEL
+      ) {
+        return eventBlock;
+      }
+      if (
+        channel === STRUCTURE_LINK_EVENT_SOURCE_CHANNEL ||
+        channel === STRUCTURE_REPLACE_EVENT_SOURCE_CHANNEL ||
+        channel === STRUCTURE_RETIRE_EVENT_SOURCE_CHANNEL
+      ) {
+        return eventSource;
+      }
+      return {
+        schemaVersion: 1,
+        workId,
+        eventBlocks: [eventBlock],
+        eventSources: [eventSource],
+      };
+    });
     const bridge = createStudioBridge(invoke);
     const command = {
       schemaVersion: 1,
@@ -1621,24 +1669,201 @@ describe("studio bridge contract", () => {
       title: "첫 사건",
       note: "",
     } as const;
+    const anchorlessCommand = {
+      schemaVersion: 1,
+      workId,
+      title: "예정 사건",
+      note: "",
+    } as const;
+    const linkCommand = {
+      schemaVersion: 1,
+      workId,
+      eventBlockId: eventBlock.eventBlockId,
+      role: "primary",
+      documentId,
+      selection: { anchor: 8, head: 2 },
+      exactQuote: "선택한 원문",
+    } as const;
+    const replaceCommand = {
+      schemaVersion: 1,
+      workId,
+      eventSourceId: eventSource.eventSourceId,
+      expectedRevision: 1,
+      documentId,
+      selection: { anchor: 8, head: 2 },
+      exactQuote: "선택한 원문",
+    } as const;
+    const retireCommand = {
+      schemaVersion: 1,
+      workId,
+      eventSourceId: eventSource.eventSourceId,
+      expectedRevision: 1,
+    } as const;
 
     await expect(
       bridge.structure.createEventBlock(command),
     ).resolves.toEqual(eventBlock);
+    await expect(
+      bridge.structure.createAnchorlessEvent(anchorlessCommand),
+    ).resolves.toEqual(eventBlock);
+    await expect(
+      bridge.structure.linkEventSource(linkCommand),
+    ).resolves.toEqual(eventSource);
+    await expect(
+      bridge.structure.replaceEventSource(replaceCommand),
+    ).resolves.toEqual(eventSource);
+    await expect(
+      bridge.structure.retireEventSource(retireCommand),
+    ).resolves.toEqual(eventSource);
     await expect(
       bridge.structure.listEventBlocks({ schemaVersion: 1, workId }),
     ).resolves.toEqual({
       schemaVersion: 1,
       workId,
       eventBlocks: [eventBlock],
+      eventSources: [eventSource],
     });
     expect(invoke).toHaveBeenCalledWith(
       STRUCTURE_CREATE_EVENT_BLOCK_CHANNEL,
       command,
     );
     expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_CREATE_ANCHORLESS_EVENT_CHANNEL,
+      anchorlessCommand,
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_LINK_EVENT_SOURCE_CHANNEL,
+      linkCommand,
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_REPLACE_EVENT_SOURCE_CHANNEL,
+      replaceCommand,
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_RETIRE_EVENT_SOURCE_CHANNEL,
+      retireCommand,
+    );
+    expect(invoke).toHaveBeenCalledWith(
       STRUCTURE_LIST_EVENT_BLOCKS_CHANNEL,
       { schemaVersion: 1, workId },
+    );
+  });
+
+  it("exposes the authoritative Work-wide event rail on one narrow channel", async () => {
+    const workId = entityId<"Work">(randomUUID());
+    const now = new Date().toISOString();
+    const projection = {
+      schemaVersion: 1,
+      workId,
+      documents: [],
+      eventBlocks: [],
+      eventSources: [],
+      plotEventLinks: [],
+      board: {
+        schemaVersion: 1,
+        plotBoardId: entityId<"PlotBoard">(randomUUID()),
+        revision: 1,
+        workId,
+        title: "기본 플롯 보드",
+        mode: "sequence",
+        createdAt: now,
+        updatedAt: now,
+        lanes: [],
+      },
+      manuscriptEvents: [],
+      unpositionedEvents: [],
+      plotCards: [],
+      unplottedEvents: [],
+    } as const;
+    const invoke = vi.fn().mockResolvedValue(projection);
+    const bridge = createStudioBridge(invoke);
+    const command = { schemaVersion: 1, workId } as const;
+
+    await expect(bridge.structure.listEventRail(command)).resolves.toEqual(
+      projection,
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_LIST_EVENT_RAIL_CHANNEL,
+      command,
+    );
+  });
+
+  it("exposes the final scene projection and its two explicit mutations on narrow channels", async () => {
+    const workId = entityId<"Work">(randomUUID());
+    const sceneRuleSetId = entityId<"SceneRuleSet">(randomUUID());
+    const eventBlockId = entityId<"EventBlock">(randomUUID());
+    const now = new Date().toISOString();
+    const projection = {
+      schemaVersion: 1,
+      workId,
+      status: "clean",
+      ruleSet: {
+        schemaVersion: 1,
+        sceneRuleSetId,
+        revision: 1,
+        workId,
+        displayName: "기본 장면 규칙",
+        boundaryRules: [{
+          boundaryRuleId: "divider",
+          kind: "line-regexp",
+          pattern: "^---$",
+          flags: "u",
+        }],
+        normalizationPolicy: "preserve",
+        enabled: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+      scenes: [],
+      unassignedEvents: [{
+        eventBlockId,
+        title: "예정 사건",
+        sourceState: "unlinked",
+      }],
+      sceneEventOverrides: [],
+    } as const;
+    const invoke = vi.fn().mockResolvedValue(projection);
+    const bridge = createStudioBridge(invoke);
+    const list = { schemaVersion: 1, workId } as const;
+    const update = {
+      schemaVersion: 1,
+      workId,
+      sceneRuleSetId,
+      expectedRevision: 1,
+      displayName: "기본 장면 규칙",
+      boundaryRules: projection.ruleSet.boundaryRules,
+      normalizationPolicy: "preserve",
+      enabled: true,
+    } as const;
+    const setException = {
+      schemaVersion: 1,
+      workId,
+      sceneKey: "scene-key",
+      eventBlockId,
+      operation: "include",
+      expectedRevision: null,
+    } as const;
+
+    await expect(bridge.structure.listSceneProjection(list)).resolves.toEqual(
+      projection,
+    );
+    await expect(bridge.structure.updateSceneRuleSet(update)).resolves.toEqual(
+      projection,
+    );
+    await expect(
+      bridge.structure.setSceneEventOverride(setException),
+    ).resolves.toEqual(projection);
+    expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_LIST_SCENE_PROJECTION_CHANNEL,
+      list,
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_UPDATE_SCENE_RULE_SET_CHANNEL,
+      update,
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_SET_SCENE_EVENT_OVERRIDE_CHANNEL,
+      setException,
     );
   });
 
@@ -3085,6 +3310,193 @@ describe("studio bridge contract", () => {
     });
     expect(invoke).toHaveBeenCalledWith(PLOT_UPDATE_CHANNEL, update);
     expect(invoke).toHaveBeenCalledWith(PLOT_RETIRE_CHANNEL, retire);
+  });
+
+  it("exposes default PlotBoard reads, relative moves, and normalized story time on narrow channels", async () => {
+    const workId = entityId<"Work">(randomUUID());
+    const plotBoardId = entityId<"PlotBoard">(randomUUID());
+    const plotLaneId = entityId<"PlotLane">(randomUUID());
+    const plotPlacementId = entityId<"PlotPlacement">(randomUUID());
+    const now = new Date().toISOString();
+    const board = {
+      schemaVersion: 1,
+      plotBoardId,
+      revision: 1,
+      workId,
+      title: "보드",
+      mode: "sequence",
+      createdAt: now,
+      updatedAt: now,
+      lanes: [{
+        schemaVersion: 1,
+        plotLaneId,
+        revision: 1,
+        workId,
+        plotBoardId,
+        title: "흐름",
+        kind: "default",
+        orderKey: "0/1",
+        createdAt: now,
+        updatedAt: now,
+        placements: [],
+      }],
+    } as const;
+    const moved = { ...board, revision: 2 } as const;
+    const positioned = { ...board, revision: 3 } as const;
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === PLOT_MOVE_PLACEMENT_CHANNEL) return moved;
+      if (channel === PLOT_SET_STORY_TIME_CHANNEL) return positioned;
+      return board;
+    });
+    const bridge = createStudioBridge(invoke);
+    const get = { schemaVersion: 1, workId } as const;
+    const move = {
+      schemaVersion: 1,
+      workId,
+      plotPlacementId,
+      targetBoardId: plotBoardId,
+      targetLaneId: plotLaneId,
+      expectedPlacementRevision: 1,
+      expectedBoardRevision: 1,
+    } as const;
+    const setStoryTime = {
+      schemaVersion: 1,
+      workId,
+      plotPlacementId,
+      plotBoardId,
+      storyTime: 37.416666666666664,
+      storyTimeEnd: null,
+      expectedPlacementRevision: 2,
+      expectedBoardRevision: 2,
+    } as const;
+
+    await expect(bridge.plots.getDefaultBoard(get)).resolves.toEqual(board);
+    await expect(bridge.plots.movePlacement(move)).resolves.toEqual(moved);
+    await expect(bridge.plots.setStoryTime(setStoryTime)).resolves.toEqual(
+      positioned,
+    );
+    expect(invoke).toHaveBeenCalledWith(PLOT_DEFAULT_BOARD_CHANNEL, get);
+    expect(invoke).toHaveBeenCalledWith(PLOT_MOVE_PLACEMENT_CHANNEL, move);
+    expect(invoke).toHaveBeenCalledWith(
+      PLOT_SET_STORY_TIME_CHANNEL,
+      setStoryTime,
+    );
+  });
+
+  it("exposes bidirectional plot/event creation and manual links on narrow channels", async () => {
+    const workId = entityId<"Work">(randomUUID());
+    const plotBeatId = entityId<"PlotThread">(randomUUID());
+    const eventBlockId = entityId<"EventBlock">(randomUUID());
+    const plotEventLinkId = entityId<"PlotEventLink">(randomUUID());
+    const now = new Date().toISOString();
+    const plotBeat = {
+      schemaVersion: 1,
+      plotThreadId: plotBeatId,
+      revision: 1,
+      workId,
+      title: "같은 제목",
+      stage: "",
+      summary: "",
+      note: "",
+      createdAt: now,
+      updatedAt: now,
+      retiredAt: null,
+    } as const;
+    const eventBlock = {
+      schemaVersion: 1,
+      eventBlockId,
+      revision: 1,
+      workId,
+      title: "같은 제목",
+      note: "",
+      parentEventId: null,
+      outlineOrderKey: randomUUID(),
+      createdAt: now,
+      updatedAt: now,
+      retiredAt: null,
+    } as const;
+    const link = {
+      schemaVersion: 1,
+      plotEventLinkId,
+      revision: 1,
+      workId,
+      plotBeatId,
+      eventBlockId,
+      role: "primary",
+      createdFrom: "manual-link",
+      plotTitle: "같은 제목",
+      eventTitle: "같은 제목",
+      titleMatch: "matched",
+      plotRetiredAt: null,
+      eventRetiredAt: null,
+      createdAt: now,
+      updatedAt: now,
+      retiredAt: null,
+    } as const;
+    const mutation = {
+      schemaVersion: 1,
+      status: "created",
+      plotBeat,
+      eventBlock,
+      eventSources: [],
+      link,
+    } as const;
+    const retired = {
+      ...mutation,
+      status: "retired",
+      link: {
+        ...link,
+        revision: 2,
+        updatedAt: now,
+        retiredAt: now,
+      },
+    } as const;
+    const list = { schemaVersion: 1, workId, links: [link] } as const;
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === PLOT_UNLINK_EVENT_CHANNEL) return retired;
+      if (channel === PLOT_EVENT_LINK_LIST_CHANNEL) return list;
+      return mutation;
+    });
+    const bridge = createStudioBridge(invoke);
+    const createFromEvent = { schemaVersion: 1, workId, eventBlockId } as const;
+    const createEvent = {
+      schemaVersion: 1,
+      workId,
+      plotBeatId,
+      source: { kind: "anchorless" },
+    } as const;
+    const linkEvent = {
+      schemaVersion: 1,
+      workId,
+      plotBeatId,
+      eventBlockId,
+      role: "primary",
+    } as const;
+    const unlinkEvent = {
+      schemaVersion: 1,
+      workId,
+      plotEventLinkId,
+      expectedRevision: 1,
+    } as const;
+
+    await expect(bridge.plots.createFromEvent(createFromEvent))
+      .resolves.toEqual(mutation);
+    await expect(bridge.plots.createEvent(createEvent)).resolves.toEqual(mutation);
+    await expect(bridge.plots.linkEvent(linkEvent)).resolves.toEqual(mutation);
+    await expect(bridge.plots.unlinkEvent(unlinkEvent)).resolves.toEqual(retired);
+    await expect(bridge.plots.listEventLinks({ schemaVersion: 1, workId }))
+      .resolves.toEqual(list);
+    expect(invoke).toHaveBeenCalledWith(
+      PLOT_CREATE_FROM_EVENT_CHANNEL,
+      createFromEvent,
+    );
+    expect(invoke).toHaveBeenCalledWith(PLOT_CREATE_EVENT_CHANNEL, createEvent);
+    expect(invoke).toHaveBeenCalledWith(PLOT_LINK_EVENT_CHANNEL, linkEvent);
+    expect(invoke).toHaveBeenCalledWith(PLOT_UNLINK_EVENT_CHANNEL, unlinkEvent);
+    expect(invoke).toHaveBeenCalledWith(PLOT_EVENT_LINK_LIST_CHANNEL, {
+      schemaVersion: 1,
+      workId,
+    });
   });
 
   it("links and lists only exact Work-scoped plot sources on narrow channels", async () => {

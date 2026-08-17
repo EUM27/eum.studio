@@ -1,4 +1,9 @@
 import type { AnchorPolicy } from "../anchors/create-anchor";
+import {
+  parseSceneBoundaryRule,
+  type SceneBoundaryRule,
+  type SceneRuleSetProjection,
+} from "../structure/scene-projection";
 
 export type LocalWorkspaceDefaults = {
   readonly schemaVersion: 1;
@@ -19,6 +24,17 @@ export type LocalWorkspaceDefaults = {
     readonly musicStartPolicy: string;
     readonly completionPolicy: string;
     readonly visibility: string;
+  };
+  readonly sceneRuleSet: {
+    readonly displayName: string;
+    readonly boundaryRules: readonly SceneBoundaryRule[];
+    readonly normalizationPolicy: SceneRuleSetProjection["normalizationPolicy"];
+    readonly enabled: boolean;
+  };
+  readonly plotBoard: {
+    readonly defaultBoardTitle: string;
+    readonly defaultLaneTitle: string;
+    readonly orderKeyLengthLimit: number;
   };
   readonly railPreferencesJson: string;
 };
@@ -62,6 +78,14 @@ function readDuration(value: unknown, label: string): number {
   return value;
 }
 
+function readPositiveInteger(value: unknown, label: string): number {
+  const parsed = readDuration(value, label);
+  if (parsed < 1) {
+    throw new Error(`${label} must be a positive safe integer`);
+  }
+  return parsed;
+}
+
 function readBoolean(value: unknown, label: string): boolean {
   if (typeof value !== "boolean") {
     throw new Error(`${label} must be a boolean`);
@@ -81,6 +105,8 @@ export function parseLocalWorkspaceDefaults(
       "anchorEvidenceChecksumAlgorithm",
       "activityPolicy",
       "focusPolicy",
+      "sceneRuleSet",
+      "plotBoard",
       "railPreferences",
     ],
     "LocalWorkspaceDefaults",
@@ -142,6 +168,37 @@ export function parseLocalWorkspaceDefaults(
       "LocalWorkspaceDefaults.focusPolicy.phaseDefinitions must be an array",
     );
   }
+  const plotBoard = readRecord(
+    input.plotBoard,
+    "LocalWorkspaceDefaults.plotBoard",
+  );
+  const sceneRuleSet = readRecord(
+    input.sceneRuleSet,
+    "LocalWorkspaceDefaults.sceneRuleSet",
+  );
+  assertFields(
+    sceneRuleSet,
+    ["displayName", "boundaryRules", "normalizationPolicy", "enabled"],
+    "LocalWorkspaceDefaults.sceneRuleSet",
+  );
+  if (!Array.isArray(sceneRuleSet.boundaryRules)) {
+    throw new Error(
+      "LocalWorkspaceDefaults.sceneRuleSet.boundaryRules must be an array",
+    );
+  }
+  if (
+    sceneRuleSet.normalizationPolicy !== "preserve" &&
+    sceneRuleSet.normalizationPolicy !== "trim-line-whitespace"
+  ) {
+    throw new Error(
+      "LocalWorkspaceDefaults.sceneRuleSet.normalizationPolicy is invalid",
+    );
+  }
+  assertFields(
+    plotBoard,
+    ["defaultBoardTitle", "defaultLaneTitle", "orderKeyLengthLimit"],
+    "LocalWorkspaceDefaults.plotBoard",
+  );
   const railPreferences = readRecord(
     input.railPreferences,
     "LocalWorkspaceDefaults.railPreferences",
@@ -209,6 +266,39 @@ export function parseLocalWorkspaceDefaults(
       visibility: readString(
         focusPolicy.visibility,
         "LocalWorkspaceDefaults.focusPolicy.visibility",
+      ),
+    }),
+    sceneRuleSet: Object.freeze({
+      displayName: readString(
+        sceneRuleSet.displayName,
+        "LocalWorkspaceDefaults.sceneRuleSet.displayName",
+      ),
+      boundaryRules: Object.freeze(
+        sceneRuleSet.boundaryRules.map((rule, index) =>
+          parseSceneBoundaryRule(
+            rule,
+            `LocalWorkspaceDefaults.sceneRuleSet.boundaryRules[${index}]`,
+          ),
+        ),
+      ),
+      normalizationPolicy: sceneRuleSet.normalizationPolicy,
+      enabled: readBoolean(
+        sceneRuleSet.enabled,
+        "LocalWorkspaceDefaults.sceneRuleSet.enabled",
+      ),
+    }),
+    plotBoard: Object.freeze({
+      defaultBoardTitle: readString(
+        plotBoard.defaultBoardTitle,
+        "LocalWorkspaceDefaults.plotBoard.defaultBoardTitle",
+      ),
+      defaultLaneTitle: readString(
+        plotBoard.defaultLaneTitle,
+        "LocalWorkspaceDefaults.plotBoard.defaultLaneTitle",
+      ),
+      orderKeyLengthLimit: readPositiveInteger(
+        plotBoard.orderKeyLengthLimit,
+        "LocalWorkspaceDefaults.plotBoard.orderKeyLengthLimit",
       ),
     }),
     railPreferencesJson: JSON.stringify(railPreferences),

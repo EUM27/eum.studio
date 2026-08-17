@@ -115,15 +115,31 @@ import {
   type WorkCoversProjection,
 } from "../workspace/work-covers";
 import {
+  parseCreateAnchorlessEventCommand,
   parseCreateEventBlockCommand,
   parseEventBlockListProjection,
   parseEventBlockProjection,
+  parseEventSourceProjection,
+  parseLinkEventSourceCommand,
   parseListEventBlocksCommand,
+  parseReplaceEventSourceCommand,
+  parseRetireEventSourceCommand,
+  type CreateAnchorlessEventCommand,
   type CreateEventBlockCommand,
   type EventBlockListProjection,
   type EventBlockProjection,
+  type EventSourceProjection,
+  type LinkEventSourceCommand,
   type ListEventBlocksCommand,
+  type ReplaceEventSourceCommand,
+  type RetireEventSourceCommand,
 } from "../structure/event-block-contract";
+import {
+  parseEventRailProjection,
+  parseListEventRailCommand,
+  type EventRailProjection,
+  type ListEventRailCommand,
+} from "../structure/event-rail-projection";
 import {
   parseCreateSceneOverrideCommand,
   parseListSceneOverridesCommand,
@@ -134,6 +150,16 @@ import {
   type SceneOverrideListProjection,
   type SceneOverrideProjection,
 } from "../structure/scene-override-contract";
+import {
+  parseListSceneProjectionCommand,
+  parseSceneProjectionList,
+  parseSetSceneEventOverrideCommand,
+  parseUpdateSceneRuleSetCommand,
+  type ListSceneProjectionCommand,
+  type SceneProjectionList,
+  type SetSceneEventOverrideCommand,
+  type UpdateSceneRuleSetCommand,
+} from "../structure/scene-projection";
 import {
   parseCaptureFragmentCommand,
   parseFragmentListProjection,
@@ -402,6 +428,32 @@ import {
   type RetirePlotThreadCommand,
   type UpdatePlotThreadCommand,
 } from "../plots/plot-contract";
+import {
+  parseGetDefaultPlotBoardCommand,
+  parseMovePlotPlacementCommand,
+  parsePlotBoardProjection,
+  parseSetPlotPlacementStoryTimeCommand,
+  type GetDefaultPlotBoardCommand,
+  type MovePlotPlacementCommand,
+  type PlotBoardProjection,
+  type SetPlotPlacementStoryTimeCommand,
+} from "../plots/plot-board-contract";
+import {
+  parseCreateEventFromPlotCommand,
+  parseCreatePlotFromEventCommand,
+  parseLinkPlotEventCommand,
+  parseListPlotEventLinksCommand,
+  parsePlotEventLinkListProjection,
+  parsePlotEventLinkMutationProjection,
+  parseUnlinkPlotEventCommand,
+  type CreateEventFromPlotCommand,
+  type CreatePlotFromEventCommand,
+  type LinkPlotEventCommand,
+  type ListPlotEventLinksCommand,
+  type PlotEventLinkListProjection,
+  type PlotEventLinkMutationProjection,
+  type UnlinkPlotEventCommand,
+} from "../plots/plot-event-link-contract";
 import {
   parseLinkPlotThreadSourceCommand,
   parseListPlotThreadSourcesCommand,
@@ -696,12 +748,28 @@ export const WORKSPACE_CAPTURE_RESUME_CHANNEL =
   "studio:workspace:capture-resume";
 export const STRUCTURE_CREATE_EVENT_BLOCK_CHANNEL =
   "studio:structure:create-event-block";
+export const STRUCTURE_CREATE_ANCHORLESS_EVENT_CHANNEL =
+  "studio:structure:create-anchorless-event";
+export const STRUCTURE_LINK_EVENT_SOURCE_CHANNEL =
+  "studio:structure:link-event-source";
+export const STRUCTURE_REPLACE_EVENT_SOURCE_CHANNEL =
+  "studio:structure:replace-event-source";
+export const STRUCTURE_RETIRE_EVENT_SOURCE_CHANNEL =
+  "studio:structure:retire-event-source";
 export const STRUCTURE_LIST_EVENT_BLOCKS_CHANNEL =
   "studio:structure:list-event-blocks";
+export const STRUCTURE_LIST_EVENT_RAIL_CHANNEL =
+  "studio:structure:list-event-rail";
 export const STRUCTURE_CREATE_SCENE_OVERRIDE_CHANNEL =
   "studio:structure:create-scene-override";
 export const STRUCTURE_LIST_SCENE_OVERRIDES_CHANNEL =
   "studio:structure:list-scene-overrides";
+export const STRUCTURE_LIST_SCENE_PROJECTION_CHANNEL =
+  "studio:structure:list-scene-projection";
+export const STRUCTURE_UPDATE_SCENE_RULE_SET_CHANNEL =
+  "studio:structure:update-scene-rule-set";
+export const STRUCTURE_SET_SCENE_EVENT_OVERRIDE_CHANNEL =
+  "studio:structure:set-scene-event-override";
 export const FRAGMENT_PROFILE_CHANNEL =
   "studio:fragments:get-profile";
 export const FRAGMENT_CAPTURE_CHANNEL =
@@ -828,10 +896,26 @@ export const PLOT_CREATE_CHANNEL =
   "studio:plots:create";
 export const PLOT_LIST_CHANNEL =
   "studio:plots:list";
+export const PLOT_DEFAULT_BOARD_CHANNEL =
+  "studio:plots:get-default-board";
+export const PLOT_MOVE_PLACEMENT_CHANNEL =
+  "studio:plots:move-placement";
+export const PLOT_SET_STORY_TIME_CHANNEL =
+  "studio:plots:set-story-time";
 export const PLOT_UPDATE_CHANNEL =
   "studio:plots:update";
 export const PLOT_RETIRE_CHANNEL =
   "studio:plots:retire";
+export const PLOT_CREATE_FROM_EVENT_CHANNEL =
+  "studio:plots:create-from-event";
+export const PLOT_CREATE_EVENT_CHANNEL =
+  "studio:plots:create-event";
+export const PLOT_LINK_EVENT_CHANNEL =
+  "studio:plots:link-event";
+export const PLOT_UNLINK_EVENT_CHANNEL =
+  "studio:plots:unlink-event";
+export const PLOT_EVENT_LINK_LIST_CHANNEL =
+  "studio:plots:list-event-links";
 export const PLOT_LINK_SOURCE_CHANNEL =
   "studio:plots:link-source";
 export const PLOT_SOURCE_LIST_CHANNEL =
@@ -1040,15 +1124,39 @@ export type StudioBridge = {
     createEventBlock: (
       command: CreateEventBlockCommand,
     ) => Promise<EventBlockProjection>;
+    createAnchorlessEvent: (
+      command: CreateAnchorlessEventCommand,
+    ) => Promise<EventBlockProjection>;
+    linkEventSource: (
+      command: LinkEventSourceCommand,
+    ) => Promise<EventSourceProjection>;
+    replaceEventSource: (
+      command: ReplaceEventSourceCommand,
+    ) => Promise<EventSourceProjection>;
+    retireEventSource: (
+      command: RetireEventSourceCommand,
+    ) => Promise<EventSourceProjection>;
     listEventBlocks: (
       command: ListEventBlocksCommand,
     ) => Promise<EventBlockListProjection>;
+    listEventRail: (
+      command: ListEventRailCommand,
+    ) => Promise<EventRailProjection>;
     createSceneOverride: (
       command: CreateSceneOverrideCommand,
     ) => Promise<SceneOverrideProjection>;
     listSceneOverrides: (
       command: ListSceneOverridesCommand,
     ) => Promise<SceneOverrideListProjection>;
+    listSceneProjection: (
+      command: ListSceneProjectionCommand,
+    ) => Promise<SceneProjectionList>;
+    updateSceneRuleSet: (
+      command: UpdateSceneRuleSetCommand,
+    ) => Promise<SceneProjectionList>;
+    setSceneEventOverride: (
+      command: SetSceneEventOverrideCommand,
+    ) => Promise<SceneProjectionList>;
   };
   fragments: {
     getProfile: () => Promise<FragmentShelfProfile>;
@@ -1276,12 +1384,36 @@ export type StudioBridge = {
     list: (
       command: ListPlotThreadsCommand,
     ) => Promise<PlotThreadListProjection>;
+    getDefaultBoard: (
+      command: GetDefaultPlotBoardCommand,
+    ) => Promise<PlotBoardProjection>;
+    movePlacement: (
+      command: MovePlotPlacementCommand,
+    ) => Promise<PlotBoardProjection>;
+    setStoryTime: (
+      command: SetPlotPlacementStoryTimeCommand,
+    ) => Promise<PlotBoardProjection>;
     update: (
       command: UpdatePlotThreadCommand,
     ) => Promise<PlotThreadProjection>;
     retire: (
       command: RetirePlotThreadCommand,
     ) => Promise<PlotThreadProjection>;
+    createFromEvent: (
+      command: CreatePlotFromEventCommand,
+    ) => Promise<PlotEventLinkMutationProjection>;
+    createEvent: (
+      command: CreateEventFromPlotCommand,
+    ) => Promise<PlotEventLinkMutationProjection>;
+    linkEvent: (
+      command: LinkPlotEventCommand,
+    ) => Promise<PlotEventLinkMutationProjection>;
+    unlinkEvent: (
+      command: UnlinkPlotEventCommand,
+    ) => Promise<PlotEventLinkMutationProjection>;
+    listEventLinks: (
+      command: ListPlotEventLinksCommand,
+    ) => Promise<PlotEventLinkListProjection>;
     linkSource: (
       command: LinkPlotThreadSourceCommand,
     ) => Promise<PlotThreadSourceProjection>;
@@ -1549,9 +1681,17 @@ export type BridgeInvoke = (
     | typeof WORKSPACE_ACTIVATE_LOCATION_CHANNEL
     | typeof WORKSPACE_CAPTURE_RESUME_CHANNEL
     | typeof STRUCTURE_CREATE_EVENT_BLOCK_CHANNEL
+    | typeof STRUCTURE_CREATE_ANCHORLESS_EVENT_CHANNEL
+    | typeof STRUCTURE_LINK_EVENT_SOURCE_CHANNEL
+    | typeof STRUCTURE_REPLACE_EVENT_SOURCE_CHANNEL
+    | typeof STRUCTURE_RETIRE_EVENT_SOURCE_CHANNEL
     | typeof STRUCTURE_LIST_EVENT_BLOCKS_CHANNEL
+    | typeof STRUCTURE_LIST_EVENT_RAIL_CHANNEL
     | typeof STRUCTURE_CREATE_SCENE_OVERRIDE_CHANNEL
     | typeof STRUCTURE_LIST_SCENE_OVERRIDES_CHANNEL
+    | typeof STRUCTURE_LIST_SCENE_PROJECTION_CHANNEL
+    | typeof STRUCTURE_UPDATE_SCENE_RULE_SET_CHANNEL
+    | typeof STRUCTURE_SET_SCENE_EVENT_OVERRIDE_CHANNEL
     | typeof FRAGMENT_PROFILE_CHANNEL
     | typeof FRAGMENT_CAPTURE_CHANNEL
     | typeof FRAGMENT_LIST_CHANNEL
@@ -1615,8 +1755,16 @@ export type BridgeInvoke = (
     | typeof PUBLISHING_MAIL_SCHEDULE_SAVE_CHANNEL
     | typeof PLOT_CREATE_CHANNEL
     | typeof PLOT_LIST_CHANNEL
+    | typeof PLOT_DEFAULT_BOARD_CHANNEL
+    | typeof PLOT_MOVE_PLACEMENT_CHANNEL
+    | typeof PLOT_SET_STORY_TIME_CHANNEL
     | typeof PLOT_UPDATE_CHANNEL
     | typeof PLOT_RETIRE_CHANNEL
+    | typeof PLOT_CREATE_FROM_EVENT_CHANNEL
+    | typeof PLOT_CREATE_EVENT_CHANNEL
+    | typeof PLOT_LINK_EVENT_CHANNEL
+    | typeof PLOT_UNLINK_EVENT_CHANNEL
+    | typeof PLOT_EVENT_LINK_LIST_CHANNEL
     | typeof PLOT_LINK_SOURCE_CHANNEL
     | typeof PLOT_SOURCE_LIST_CHANNEL
     | typeof FORESHADOW_CREATE_LINE_CHANNEL
@@ -1702,9 +1850,17 @@ export type BridgeInvoke = (
     | ActivateWorkspaceLocationCommand
     | CaptureWorkspaceResumeCommand
     | CreateEventBlockCommand
+    | CreateAnchorlessEventCommand
+    | LinkEventSourceCommand
+    | ReplaceEventSourceCommand
+    | RetireEventSourceCommand
     | ListEventBlocksCommand
+    | ListEventRailCommand
     | CreateSceneOverrideCommand
     | ListSceneOverridesCommand
+    | ListSceneProjectionCommand
+    | UpdateSceneRuleSetCommand
+    | SetSceneEventOverrideCommand
     | CaptureFragmentCommand
     | ListFragmentsCommand
     | UpdateFragmentCommand
@@ -1732,6 +1888,11 @@ export type BridgeInvoke = (
     | ListPlotThreadsCommand
     | UpdatePlotThreadCommand
     | RetirePlotThreadCommand
+    | CreatePlotFromEventCommand
+    | CreateEventFromPlotCommand
+    | LinkPlotEventCommand
+    | UnlinkPlotEventCommand
+    | ListPlotEventLinksCommand
     | CreateForeshadowLineCommand
     | ListForeshadowLinesCommand
     | UpdateForeshadowLineCommand
@@ -2146,6 +2307,54 @@ export function createStudioBridge(
           throw new Error("Invalid EventBlock creation result");
         }
       },
+      createAnchorlessEvent: async (input) => {
+        const command = parseCreateAnchorlessEventCommand(input);
+        const value = await invoke(
+          STRUCTURE_CREATE_ANCHORLESS_EVENT_CHANNEL,
+          command,
+        );
+        try {
+          return parseEventBlockProjection(value);
+        } catch {
+          throw new Error("Invalid anchorless EventBlock creation result");
+        }
+      },
+      linkEventSource: async (input) => {
+        const command = parseLinkEventSourceCommand(input);
+        const value = await invoke(
+          STRUCTURE_LINK_EVENT_SOURCE_CHANNEL,
+          command,
+        );
+        try {
+          return parseEventSourceProjection(value);
+        } catch {
+          throw new Error("Invalid EventSource link result");
+        }
+      },
+      replaceEventSource: async (input) => {
+        const command = parseReplaceEventSourceCommand(input);
+        const value = await invoke(
+          STRUCTURE_REPLACE_EVENT_SOURCE_CHANNEL,
+          command,
+        );
+        try {
+          return parseEventSourceProjection(value);
+        } catch {
+          throw new Error("Invalid EventSource replacement result");
+        }
+      },
+      retireEventSource: async (input) => {
+        const command = parseRetireEventSourceCommand(input);
+        const value = await invoke(
+          STRUCTURE_RETIRE_EVENT_SOURCE_CHANNEL,
+          command,
+        );
+        try {
+          return parseEventSourceProjection(value);
+        } catch {
+          throw new Error("Invalid EventSource retirement result");
+        }
+      },
       listEventBlocks: async (input) => {
         const command = parseListEventBlocksCommand(input);
         const value = await invoke(
@@ -2156,6 +2365,18 @@ export function createStudioBridge(
           return parseEventBlockListProjection(value);
         } catch {
           throw new Error("Invalid EventBlock list");
+        }
+      },
+      listEventRail: async (input) => {
+        const command = parseListEventRailCommand(input);
+        const value = await invoke(
+          STRUCTURE_LIST_EVENT_RAIL_CHANNEL,
+          command,
+        );
+        try {
+          return parseEventRailProjection(value);
+        } catch {
+          throw new Error("Invalid event rail projection");
         }
       },
       createSceneOverride: async (input) => {
@@ -2180,6 +2401,42 @@ export function createStudioBridge(
           return parseSceneOverrideListProjection(value);
         } catch {
           throw new Error("Invalid SceneOverride list");
+        }
+      },
+      listSceneProjection: async (input) => {
+        const command = parseListSceneProjectionCommand(input);
+        const value = await invoke(
+          STRUCTURE_LIST_SCENE_PROJECTION_CHANNEL,
+          command,
+        );
+        try {
+          return parseSceneProjectionList(value);
+        } catch {
+          throw new Error("Invalid SceneProjection list");
+        }
+      },
+      updateSceneRuleSet: async (input) => {
+        const command = parseUpdateSceneRuleSetCommand(input);
+        const value = await invoke(
+          STRUCTURE_UPDATE_SCENE_RULE_SET_CHANNEL,
+          command,
+        );
+        try {
+          return parseSceneProjectionList(value);
+        } catch {
+          throw new Error("Invalid SceneProjection list");
+        }
+      },
+      setSceneEventOverride: async (input) => {
+        const command = parseSetSceneEventOverrideCommand(input);
+        const value = await invoke(
+          STRUCTURE_SET_SCENE_EVENT_OVERRIDE_CHANNEL,
+          command,
+        );
+        try {
+          return parseSceneProjectionList(value);
+        } catch {
+          throw new Error("Invalid SceneProjection list");
         }
       },
     },
@@ -2788,6 +3045,33 @@ export function createStudioBridge(
           throw new Error("Invalid plot list");
         }
       },
+      getDefaultBoard: async (input) => {
+        const command = parseGetDefaultPlotBoardCommand(input);
+        const value = await invoke(PLOT_DEFAULT_BOARD_CHANNEL, command);
+        try {
+          return parsePlotBoardProjection(value);
+        } catch {
+          throw new Error("Invalid default plot board");
+        }
+      },
+      movePlacement: async (input) => {
+        const command = parseMovePlotPlacementCommand(input);
+        const value = await invoke(PLOT_MOVE_PLACEMENT_CHANNEL, command);
+        try {
+          return parsePlotBoardProjection(value);
+        } catch {
+          throw new Error("Invalid plot placement move result");
+        }
+      },
+      setStoryTime: async (input) => {
+        const command = parseSetPlotPlacementStoryTimeCommand(input);
+        const value = await invoke(PLOT_SET_STORY_TIME_CHANNEL, command);
+        try {
+          return parsePlotBoardProjection(value);
+        } catch {
+          throw new Error("Invalid plot placement story-time result");
+        }
+      },
       update: async (input) => {
         const command = parseUpdatePlotThreadCommand(input);
         const value = await invoke(PLOT_UPDATE_CHANNEL, command);
@@ -2804,6 +3088,51 @@ export function createStudioBridge(
           return parsePlotThreadProjection(value);
         } catch {
           throw new Error("Invalid plot retirement result");
+        }
+      },
+      createFromEvent: async (input) => {
+        const command = parseCreatePlotFromEventCommand(input);
+        const value = await invoke(PLOT_CREATE_FROM_EVENT_CHANNEL, command);
+        try {
+          return parsePlotEventLinkMutationProjection(value);
+        } catch {
+          throw new Error("Invalid plot creation from event result");
+        }
+      },
+      createEvent: async (input) => {
+        const command = parseCreateEventFromPlotCommand(input);
+        const value = await invoke(PLOT_CREATE_EVENT_CHANNEL, command);
+        try {
+          return parsePlotEventLinkMutationProjection(value);
+        } catch {
+          throw new Error("Invalid event creation from plot result");
+        }
+      },
+      linkEvent: async (input) => {
+        const command = parseLinkPlotEventCommand(input);
+        const value = await invoke(PLOT_LINK_EVENT_CHANNEL, command);
+        try {
+          return parsePlotEventLinkMutationProjection(value);
+        } catch {
+          throw new Error("Invalid plot/event link result");
+        }
+      },
+      unlinkEvent: async (input) => {
+        const command = parseUnlinkPlotEventCommand(input);
+        const value = await invoke(PLOT_UNLINK_EVENT_CHANNEL, command);
+        try {
+          return parsePlotEventLinkMutationProjection(value);
+        } catch {
+          throw new Error("Invalid plot/event unlink result");
+        }
+      },
+      listEventLinks: async (input) => {
+        const command = parseListPlotEventLinksCommand(input);
+        const value = await invoke(PLOT_EVENT_LINK_LIST_CHANNEL, command);
+        try {
+          return parsePlotEventLinkListProjection(value);
+        } catch {
+          throw new Error("Invalid plot/event link list");
         }
       },
       linkSource: async (input) => {

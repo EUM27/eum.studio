@@ -179,6 +179,27 @@ CREATE TABLE IF NOT EXISTS focus_policies (
     DEFERRABLE INITIALLY DEFERRED
 ) STRICT;
 
+CREATE TABLE IF NOT EXISTS scene_rule_sets (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  boundary_rules_json TEXT NOT NULL,
+  normalization_policy TEXT NOT NULL CHECK (
+    normalization_policy IN ('preserve', 'trim-line-whitespace')
+  ),
+  enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
 CREATE TABLE IF NOT EXISTS work_settings (
   id TEXT PRIMARY KEY,
   work_id TEXT NOT NULL UNIQUE,
@@ -888,6 +909,27 @@ CREATE TABLE IF NOT EXISTS scene_override_anchors (
     ON DELETE RESTRICT
 ) STRICT;
 
+CREATE TABLE IF NOT EXISTS scene_event_overrides (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  scene_key TEXT NOT NULL,
+  event_block_id TEXT NOT NULL,
+  operation TEXT NOT NULL CHECK (operation IN ('include', 'exclude')),
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id, event_block_id)
+    REFERENCES event_blocks (work_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS scene_event_overrides_active_pair_idx
+  ON scene_event_overrides (work_id, scene_key, event_block_id)
+  WHERE retired_at IS NULL;
+
 CREATE TABLE IF NOT EXISTS range_groups (
   id TEXT PRIMARY KEY,
   schema_version INTEGER NOT NULL,
@@ -931,7 +973,6 @@ CREATE TABLE IF NOT EXISTS event_blocks (
   updated_at TEXT NOT NULL,
   retired_at TEXT,
   work_id TEXT NOT NULL,
-  range_group_id TEXT NOT NULL,
   parent_event_id TEXT,
   title TEXT NOT NULL,
   note TEXT,
@@ -940,14 +981,34 @@ CREATE TABLE IF NOT EXISTS event_blocks (
   collapsed INTEGER NOT NULL,
   relation_ids_json TEXT,
   UNIQUE (work_id, id),
-  FOREIGN KEY (work_id, range_group_id)
-    REFERENCES range_groups (work_id, id)
-    ON DELETE RESTRICT,
   FOREIGN KEY (work_id, parent_event_id)
     REFERENCES event_blocks (work_id, id)
     ON DELETE RESTRICT
     DEFERRABLE INITIALLY DEFERRED
 ) STRICT;
+
+CREATE TABLE IF NOT EXISTS event_sources (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  event_block_id TEXT NOT NULL,
+  range_group_id TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('primary', 'supporting')),
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id, event_block_id)
+    REFERENCES event_blocks (work_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, range_group_id)
+    REFERENCES range_groups (work_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS event_sources_event_block_active_idx
+  ON event_sources (work_id, event_block_id, retired_at);
 
 CREATE TABLE IF NOT EXISTS fragments (
   id TEXT PRIMARY KEY,
@@ -1164,6 +1225,117 @@ CREATE TABLE IF NOT EXISTS plot_threads (
     ON DELETE RESTRICT
     DEFERRABLE INITIALLY DEFERRED
 ) STRICT;
+
+CREATE TABLE IF NOT EXISTS plot_boards (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  work_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  mode TEXT NOT NULL CHECK (mode IN ('sequence', 'time-map')),
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS plot_lanes (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  work_id TEXT NOT NULL,
+  plot_board_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (
+    kind IN ('default', 'main', 'subplot', 'stage', 'custom')
+  ),
+  order_key TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  UNIQUE (work_id, plot_board_id, id),
+  FOREIGN KEY (work_id, plot_board_id)
+    REFERENCES plot_boards (work_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS plot_lanes_default_idx
+  ON plot_lanes (work_id, plot_board_id)
+  WHERE kind = 'default';
+
+CREATE TABLE IF NOT EXISTS plot_placements (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  plot_board_id TEXT NOT NULL,
+  plot_lane_id TEXT NOT NULL,
+  plot_thread_id TEXT NOT NULL,
+  order_key TEXT NOT NULL,
+  story_time REAL,
+  story_time_end REAL,
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id, plot_board_id)
+    REFERENCES plot_boards (work_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, plot_board_id, plot_lane_id)
+    REFERENCES plot_lanes (work_id, plot_board_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, plot_thread_id)
+    REFERENCES plot_threads (work_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS plot_placements_active_plot_idx
+  ON plot_placements (work_id, plot_board_id, plot_thread_id)
+  WHERE retired_at IS NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS plot_placements_active_order_idx
+  ON plot_placements (work_id, plot_board_id, plot_lane_id, order_key)
+  WHERE retired_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS plot_placements_lane_active_idx
+  ON plot_placements (work_id, plot_board_id, plot_lane_id, retired_at);
+
+CREATE TABLE IF NOT EXISTS plot_event_links (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  plot_thread_id TEXT NOT NULL,
+  event_block_id TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('primary', 'supporting')),
+  created_from TEXT NOT NULL CHECK (
+    created_from IN ('event-to-plot', 'plot-to-event', 'manual-link')
+  ),
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id, plot_thread_id)
+    REFERENCES plot_threads (work_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, event_block_id)
+    REFERENCES event_blocks (work_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS plot_event_links_active_pair_idx
+  ON plot_event_links (work_id, plot_thread_id, event_block_id)
+  WHERE retired_at IS NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS plot_event_links_active_primary_idx
+  ON plot_event_links (work_id, plot_thread_id)
+  WHERE retired_at IS NULL AND role = 'primary';
+
+CREATE INDEX IF NOT EXISTS plot_event_links_event_active_idx
+  ON plot_event_links (work_id, event_block_id, retired_at);
 
 CREATE TABLE IF NOT EXISTS plot_thread_sources (
   id TEXT PRIMARY KEY,
@@ -2295,6 +2467,71 @@ function writeLedgerRecord(
         ],
       );
       return;
+    case "sceneRuleSet":
+      runStatement(
+        database,
+        `
+          INSERT INTO scene_rule_sets (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            work_id,
+            display_name,
+            boundary_rules_json,
+            normalization_policy,
+            enabled
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.workId,
+          record.displayName,
+          record.boundaryRulesJson,
+          record.normalizationPolicy,
+          booleanInteger(record.enabled),
+        ],
+      );
+      return;
+    case "sceneRuleSetUpdate":
+      {
+        const update = database.prepare(`
+          UPDATE scene_rule_sets
+          SET
+            revision = revision + 1,
+            updated_at = ?,
+            display_name = ?,
+            boundary_rules_json = ?,
+            normalization_policy = ?,
+            enabled = ?
+          WHERE
+            id = ?
+            AND work_id = ?
+            AND revision = ?
+            AND retired_at IS NULL
+        `).run(
+          record.updatedAt,
+          record.displayName,
+          record.boundaryRulesJson,
+          record.normalizationPolicy,
+          booleanInteger(record.enabled),
+          record.id,
+          record.workId,
+          record.expectedRevision,
+        ) as { readonly changes: number | bigint };
+        if (Number(update.changes) !== 1) {
+          throw new Error(`SceneRuleSet revision conflict: ${record.id}`);
+        }
+      }
+      return;
     case "workSettings":
       runStatement(
         database,
@@ -2751,6 +2988,63 @@ function writeLedgerRecord(
         );
       });
       return;
+    case "sceneEventOverride":
+      runStatement(
+        database,
+        `
+          INSERT INTO scene_event_overrides (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            work_id,
+            scene_key,
+            event_block_id,
+            operation
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.workId,
+          record.sceneKey,
+          record.eventBlockId,
+          record.operation,
+        ],
+      );
+      return;
+    case "sceneEventOverrideRetirement":
+      {
+        const retirement = database.prepare(`
+          UPDATE scene_event_overrides
+          SET
+            revision = revision + 1,
+            updated_at = ?,
+            retired_at = ?
+          WHERE
+            id = ?
+            AND work_id = ?
+            AND revision = ?
+            AND retired_at IS NULL
+        `).run(
+          record.retiredAt,
+          record.retiredAt,
+          record.id,
+          record.workId,
+          record.expectedRevision,
+        ) as { readonly changes: number | bigint };
+        if (Number(retirement.changes) !== 1) {
+          throw new Error(`SceneEventOverride revision conflict: ${record.id}`);
+        }
+      }
+      return;
     case "eventBlock":
       runStatement(
         database,
@@ -2763,7 +3057,6 @@ function writeLedgerRecord(
             updated_at,
             retired_at,
             work_id,
-            range_group_id,
             parent_event_id,
             title,
             note,
@@ -2773,7 +3066,7 @@ function writeLedgerRecord(
             relation_ids_json
           )
           VALUES (
-            ?, ?, ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?, ?, ?
           )
         `,
@@ -2787,7 +3080,6 @@ function writeLedgerRecord(
             record.retiredAt,
           ),
           record.workId,
-          record.rangeGroupId,
           nullable(
             record.parentEventId,
           ),
@@ -2798,7 +3090,7 @@ function writeLedgerRecord(
           nullable(
             record.stageRef,
           ),
-          record.orderKey,
+          record.outlineOrderKey,
           booleanInteger(
             record.collapsed,
           ),
@@ -2807,6 +3099,105 @@ function writeLedgerRecord(
           ),
         ],
       );
+      return;
+    case "eventSource":
+      {
+        const hasReplacement = record.replacesEventSourceId !== undefined;
+        const hasExpectedRevision =
+          record.expectedReplacedRevision !== undefined;
+        if (hasReplacement !== hasExpectedRevision) {
+          throw new Error(
+            "EventSource replacement identity and revision must be supplied together",
+          );
+        }
+        if (
+          record.replacesEventSourceId !== undefined &&
+          record.expectedReplacedRevision !== undefined
+        ) {
+          const replacement = database.prepare(`
+            UPDATE event_sources
+            SET
+              revision = revision + 1,
+              updated_at = ?,
+              retired_at = ?
+            WHERE
+              id = ?
+              AND work_id = ?
+              AND event_block_id = ?
+              AND role = ?
+              AND revision = ?
+              AND retired_at IS NULL
+          `).run(
+            record.createdAt,
+            record.createdAt,
+            record.replacesEventSourceId,
+            record.workId,
+            record.eventBlockId,
+            record.role,
+            record.expectedReplacedRevision,
+          ) as { readonly changes: number | bigint };
+          if (Number(replacement.changes) !== 1) {
+            throw new Error(
+              `EventSource revision conflict: ${record.replacesEventSourceId}`,
+            );
+          }
+        }
+      }
+      runStatement(
+        database,
+        `
+          INSERT INTO event_sources (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            work_id,
+            event_block_id,
+            range_group_id,
+            role
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.workId,
+          record.eventBlockId,
+          record.rangeGroupId,
+          record.role,
+        ],
+      );
+      return;
+    case "eventSourceRetirement":
+      {
+        const retirement = database.prepare(`
+          UPDATE event_sources
+          SET
+            revision = revision + 1,
+            updated_at = ?,
+            retired_at = ?
+          WHERE
+            id = ?
+            AND work_id = ?
+            AND revision = ?
+            AND retired_at IS NULL
+        `).run(
+          record.retiredAt,
+          record.retiredAt,
+          record.id,
+          record.workId,
+          record.expectedRevision,
+        ) as { readonly changes: number | bigint };
+        if (Number(retirement.changes) !== 1) {
+          throw new Error(`EventSource revision conflict: ${record.id}`);
+        }
+      }
       return;
     case "fragment":
       runStatement(
@@ -3137,6 +3528,329 @@ function writeLedgerRecord(
           record.note,
         ],
       );
+      return;
+    case "plotBoard":
+      runStatement(
+        database,
+        `
+          INSERT INTO plot_boards (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            work_id,
+            title,
+            mode
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          record.workId,
+          record.title,
+          record.mode,
+        ],
+      );
+      return;
+    case "plotLane":
+      runStatement(
+        database,
+        `
+          INSERT INTO plot_lanes (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            work_id,
+            plot_board_id,
+            title,
+            kind,
+            order_key
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          record.workId,
+          record.plotBoardId,
+          record.title,
+          record.laneKind,
+          record.orderKey,
+        ],
+      );
+      return;
+    case "plotPlacement":
+      runStatement(
+        database,
+        `
+          INSERT INTO plot_placements (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            work_id,
+            plot_board_id,
+            plot_lane_id,
+            plot_thread_id,
+            order_key,
+            story_time,
+            story_time_end
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.workId,
+          record.plotBoardId,
+          record.plotLaneId,
+          record.plotThreadId,
+          record.orderKey,
+          nullable(record.storyTime),
+          nullable(record.storyTimeEnd),
+        ],
+      );
+      return;
+    case "plotBoardTouch":
+      {
+        const touched = database.prepare(`
+          UPDATE plot_boards
+          SET revision = revision + 1, updated_at = ?
+          WHERE id = ? AND work_id = ? AND revision = ?
+        `).run(
+          record.updatedAt,
+          record.id,
+          record.workId,
+          record.expectedRevision,
+        ) as { readonly changes: number | bigint };
+        if (Number(touched.changes) !== 1) {
+          throw new Error(`PlotBoard revision conflict: ${record.id}`);
+        }
+      }
+      return;
+    case "plotPlacementMove":
+      {
+        const moved = database.prepare(`
+          UPDATE plot_placements
+          SET
+            revision = revision + 1,
+            updated_at = ?,
+            plot_board_id = ?,
+            plot_lane_id = ?,
+            order_key = ?
+          WHERE
+            id = ?
+            AND work_id = ?
+            AND revision = ?
+            AND retired_at IS NULL
+        `).run(
+          record.updatedAt,
+          record.plotBoardId,
+          record.plotLaneId,
+          record.orderKey,
+          record.id,
+          record.workId,
+          record.expectedRevision,
+        ) as { readonly changes: number | bigint };
+        if (Number(moved.changes) !== 1) {
+          throw new Error(`PlotPlacement revision conflict: ${record.id}`);
+        }
+        const touched = database.prepare(`
+          UPDATE plot_boards
+          SET revision = revision + 1, updated_at = ?
+          WHERE id = ? AND work_id = ? AND revision = ?
+        `).run(
+          record.updatedAt,
+          record.plotBoardId,
+          record.workId,
+          record.expectedBoardRevision,
+        ) as { readonly changes: number | bigint };
+        if (Number(touched.changes) !== 1) {
+          throw new Error(`PlotBoard revision conflict: ${record.plotBoardId}`);
+        }
+      }
+      return;
+    case "plotPlacementStoryTime":
+      {
+        const positioned = database.prepare(`
+          UPDATE plot_placements
+          SET
+            revision = revision + 1,
+            updated_at = ?,
+            story_time = ?,
+            story_time_end = ?
+          WHERE
+            id = ?
+            AND work_id = ?
+            AND plot_board_id = ?
+            AND revision = ?
+            AND retired_at IS NULL
+        `).run(
+          record.updatedAt,
+          record.storyTime,
+          record.storyTimeEnd,
+          record.id,
+          record.workId,
+          record.plotBoardId,
+          record.expectedRevision,
+        ) as { readonly changes: number | bigint };
+        if (Number(positioned.changes) !== 1) {
+          throw new Error(`PlotPlacement revision conflict: ${record.id}`);
+        }
+        const touched = database.prepare(`
+          UPDATE plot_boards
+          SET revision = revision + 1, updated_at = ?
+          WHERE id = ? AND work_id = ? AND revision = ?
+        `).run(
+          record.updatedAt,
+          record.plotBoardId,
+          record.workId,
+          record.expectedBoardRevision,
+        ) as { readonly changes: number | bigint };
+        if (Number(touched.changes) !== 1) {
+          throw new Error(`PlotBoard revision conflict: ${record.plotBoardId}`);
+        }
+      }
+      return;
+    case "plotPlacementRebalance":
+      {
+        const moveToTemporaryKey = database.prepare(`
+          UPDATE plot_placements
+          SET order_key = ?
+          WHERE
+            id = ?
+            AND work_id = ?
+            AND revision = ?
+            AND retired_at IS NULL
+        `);
+        for (const placement of record.placements) {
+          const staged = moveToTemporaryKey.run(
+            `__rebalance__${placement.id}`,
+            placement.id,
+            record.workId,
+            placement.expectedRevision,
+          ) as { readonly changes: number | bigint };
+          if (Number(staged.changes) !== 1) {
+            throw new Error(`PlotPlacement revision conflict: ${placement.id}`);
+          }
+        }
+        const publishOrderKey = database.prepare(`
+          UPDATE plot_placements
+          SET
+            revision = revision + 1,
+            updated_at = ?,
+            plot_board_id = ?,
+            plot_lane_id = ?,
+            order_key = ?
+          WHERE
+            id = ?
+            AND work_id = ?
+            AND revision = ?
+            AND retired_at IS NULL
+        `);
+        for (const placement of record.placements) {
+          const published = publishOrderKey.run(
+            record.updatedAt,
+            record.plotBoardId,
+            placement.plotLaneId,
+            placement.orderKey,
+            placement.id,
+            record.workId,
+            placement.expectedRevision,
+          ) as { readonly changes: number | bigint };
+          if (Number(published.changes) !== 1) {
+            throw new Error(`PlotPlacement revision conflict: ${placement.id}`);
+          }
+        }
+        const touched = database.prepare(`
+          UPDATE plot_boards
+          SET revision = revision + 1, updated_at = ?
+          WHERE id = ? AND work_id = ? AND revision = ?
+        `).run(
+          record.updatedAt,
+          record.plotBoardId,
+          record.workId,
+          record.expectedBoardRevision,
+        ) as { readonly changes: number | bigint };
+        if (Number(touched.changes) !== 1) {
+          throw new Error(`PlotBoard revision conflict: ${record.plotBoardId}`);
+        }
+      }
+      return;
+    case "plotEventLink":
+      runStatement(
+        database,
+        `
+          INSERT INTO plot_event_links (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            work_id,
+            plot_thread_id,
+            event_block_id,
+            role,
+            created_from
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.workId,
+          record.plotThreadId,
+          record.eventBlockId,
+          record.role,
+          record.createdFrom,
+        ],
+      );
+      return;
+    case "plotEventLinkRetirement":
+      {
+        const retirement = database.prepare(`
+          UPDATE plot_event_links
+          SET
+            revision = revision + 1,
+            updated_at = ?,
+            retired_at = ?
+          WHERE
+            id = ?
+            AND work_id = ?
+            AND revision = ?
+            AND retired_at IS NULL
+        `).run(
+          record.retiredAt,
+          record.retiredAt,
+          record.id,
+          record.workId,
+          record.expectedRevision,
+        ) as { readonly changes: number | bigint };
+        if (Number(retirement.changes) !== 1) {
+          throw new Error(`PlotEventLink revision conflict: ${record.id}`);
+        }
+      }
       return;
     case "plotThreadSource":
       {

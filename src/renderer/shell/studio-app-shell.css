@@ -1393,6 +1393,377 @@ textarea {
   line-height: 1.5;
 }
 
+.studio-app-shell .workspace-rail-right .event-rail > header > div {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.studio-app-shell .workspace-rail-right .event-rail > header small {
+  color: var(--eum-text-faint);
+  font-size: 9px;
+}
+
+.studio-app-shell .workspace-rail-right .event-rail-mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 8px;
+  padding: 3px;
+  border-radius: 7px;
+  background: var(--eum-panel);
+}
+
+.studio-app-shell .workspace-rail-right .event-rail-mode-switch button {
+  min-width: 0;
+  padding: 5px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--eum-text-faint);
+  background: transparent;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.studio-app-shell
+  .workspace-rail-right
+  .event-rail-mode-switch
+  button[aria-pressed="true"] {
+  border-color: var(--eum-accent-border);
+  color: var(--eum-accent-strong);
+  background: #ffffff;
+  font-weight: 700;
+}
+
+.studio-app-shell .workspace-rail-right .event-rail-list {
+  display: grid;
+  gap: 7px;
+  margin: 9px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.studio-app-shell .workspace-rail-right .event-rail-list > li {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  padding: 7px;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+.studio-app-shell
+  .workspace-rail-right
+  .event-rail-list
+  .event-rail-source-button {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 2px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--eum-text);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.studio-app-shell
+  .workspace-rail-right
+  .event-rail-list
+  .event-rail-source-button:hover:not(:disabled) {
+  color: var(--eum-accent-strong);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .workspace-rail-right .event-rail .work-structure-row-actions,
+.studio-app-shell .workspace-rail-right .event-rail-move-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.studio-app-shell
+  .workspace-rail-right
+  .event-rail
+  .work-structure-row-actions
+  button,
+.studio-app-shell .workspace-rail-right .event-rail-move-actions button {
+  width: auto;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--eum-line);
+  border-radius: 5px;
+  color: var(--eum-text-muted);
+  background: var(--eum-panel);
+  font: inherit;
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.studio-app-shell .workspace-rail-right .event-rail-plot-heading {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.studio-app-shell .workspace-rail-right .event-rail-plot-heading strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.studio-app-shell .workspace-rail-right .event-rail-card-events {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.studio-app-shell .workspace-rail-right .event-rail-card-events > li {
+  padding-top: 5px;
+  border-top: 1px solid var(--eum-line);
+}
+
+.studio-app-shell .workspace-rail-right .event-rail-unplotted {
+  margin-top: 11px;
+  padding-top: 9px;
+  border-top: 1px dashed var(--eum-line);
+}
+
+.studio-app-shell .workspace-rail-right .event-rail-unplotted h5 {
+  margin: 0;
+  color: var(--eum-text-muted);
+  font-size: 10px;
+}
+
+.studio-app-shell .workspace-rail-right .scene-list > header > div {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.studio-app-shell .workspace-rail-right .scene-list > header small {
+  color: var(--eum-text-faint);
+  font-size: 9px;
+}
+
+.studio-app-shell .workspace-rail-right .scene-rule-settings {
+  margin-top: 8px;
+  padding: 7px 8px;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  background: var(--eum-panel);
+}
+
+.studio-app-shell .workspace-rail-right .scene-rule-settings > summary,
+.studio-app-shell .workspace-rail-right .scene-unassigned-events > summary {
+  color: var(--eum-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.studio-app-shell .workspace-rail-right .scene-rule-settings form {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.studio-app-shell .workspace-rail-right .scene-rule-settings label,
+.studio-app-shell .workspace-rail-right .scene-rule-settings legend {
+  color: var(--eum-text-faint);
+  font-size: 9px;
+}
+
+.studio-app-shell .workspace-rail-right .scene-rule-settings input,
+.studio-app-shell .workspace-rail-right .scene-rule-settings select {
+  min-width: 0;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid var(--eum-line-strong);
+  border-radius: 6px;
+  outline: 0;
+  color: var(--eum-text);
+  background: #ffffff;
+  font: inherit;
+  font-size: 10px;
+}
+
+.studio-app-shell .workspace-rail-right .scene-rule-settings input:focus,
+.studio-app-shell .workspace-rail-right .scene-rule-settings select:focus {
+  border-color: var(--eum-accent);
+  box-shadow: 0 0 0 2px rgb(136 117 164 / 12%);
+}
+
+.studio-app-shell .workspace-rail-right .scene-rule-enabled {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.studio-app-shell .workspace-rail-right .scene-rule-enabled input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+.studio-app-shell .workspace-rail-right .scene-rule-list {
+  display: grid;
+  gap: 6px;
+}
+
+.studio-app-shell .workspace-rail-right .scene-rule-list fieldset {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 46px;
+  gap: 4px 6px;
+  margin: 0;
+  padding: 6px;
+  border: 1px solid var(--eum-line);
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.studio-app-shell .workspace-rail-right .scene-rule-list fieldset label,
+.studio-app-shell .workspace-rail-right .scene-rule-list fieldset input:first-of-type {
+  grid-column: 1 / -1;
+}
+
+.studio-app-shell .workspace-rail-right .scene-rule-list fieldset button,
+.studio-app-shell .workspace-rail-right .scene-rule-actions button,
+.studio-app-shell .workspace-rail-right .scene-list-actions button,
+.studio-app-shell .workspace-rail-right .scene-event-membership button {
+  width: auto;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--eum-line);
+  border-radius: 5px;
+  color: var(--eum-text-muted);
+  background: var(--eum-panel);
+  font: inherit;
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.studio-app-shell .workspace-rail-right .scene-rule-list fieldset button {
+  align-self: end;
+}
+
+.studio-app-shell .workspace-rail-right .scene-rule-actions,
+.studio-app-shell .workspace-rail-right .scene-list-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.studio-app-shell .workspace-rail-right .scene-list-items {
+  display: grid;
+  gap: 8px;
+  margin: 9px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.studio-app-shell .workspace-rail-right .scene-list-card {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+  padding: 7px;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+.studio-app-shell
+  .workspace-rail-right
+  .scene-list-card
+  > .scene-list-open-button {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 2px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--eum-text);
+  background: transparent;
+  text-align: left;
+}
+
+.studio-app-shell .workspace-rail-right .scene-event-membership {
+  display: grid;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--eum-line);
+}
+
+.studio-app-shell .workspace-rail-right .scene-event-membership h5,
+.studio-app-shell .workspace-rail-right .scene-event-membership h6,
+.studio-app-shell .workspace-rail-right .scene-unassigned-summary h5 {
+  margin: 0;
+  color: var(--eum-text-muted);
+  font-size: 9px;
+}
+
+.studio-app-shell .workspace-rail-right .scene-event-membership p {
+  margin: 0;
+  color: var(--eum-text-faint);
+  font-size: 9px;
+}
+
+.studio-app-shell .workspace-rail-right .scene-event-membership ul,
+.studio-app-shell .workspace-rail-right .scene-unassigned-summary ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.studio-app-shell .workspace-rail-right .scene-event-membership li,
+.studio-app-shell .workspace-rail-right .scene-unassigned-summary li {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.studio-app-shell .workspace-rail-right .scene-event-membership li > span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.studio-app-shell .workspace-rail-right .scene-event-membership small,
+.studio-app-shell .workspace-rail-right .scene-unassigned-summary small {
+  color: var(--eum-text-faint);
+  font-size: 8px;
+}
+
+.studio-app-shell .workspace-rail-right .scene-excluded-events,
+.studio-app-shell .workspace-rail-right .scene-unassigned-events,
+.studio-app-shell .workspace-rail-right .scene-unassigned-summary {
+  display: grid;
+  gap: 5px;
+  margin-top: 5px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--eum-line);
+}
+
 .studio-app-shell .workspace-rail-right .version-refresh-button {
   padding: 3px 6px;
   border: 0;
@@ -3465,6 +3836,338 @@ textarea {
   display: grid;
   gap: 8px;
 }
+
+.plot-board-panel {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.8rem;
+  padding: 0.75rem;
+  border: 1px solid #ded7e7;
+  border-radius: 0.75rem;
+  background: #faf7fc;
+}
+
+.plot-board-panel > header {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.plot-board-header {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.55rem;
+}
+
+.plot-board-header > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.plot-board-view-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.2rem;
+  padding: 0.18rem;
+  border: 1px solid #d8cede;
+  border-radius: 0.55rem;
+  background: #f3edf7;
+}
+
+.plot-board-view-switch button {
+  min-height: 1.75rem;
+  padding: 0 0.45rem;
+  border: 0;
+  border-radius: 0.4rem;
+  color: #71637d;
+  background: transparent;
+  font: inherit;
+  font-size: 0.6rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.plot-board-view-switch button[aria-pressed="true"] {
+  color: #51465e;
+  background: #fffefa;
+  box-shadow: 0 1px 0.2rem rgb(83 65 98 / 14%);
+}
+
+.plot-board-panel > header span,
+.plot-board-lane > h3,
+.plot-board-lane > p {
+  color: #746c7d;
+  font-size: 0.65rem;
+}
+
+.plot-board-panel > header strong {
+  color: #51465e;
+  font-size: 0.78rem;
+}
+
+.plot-board-lane {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.plot-board-lane > h3,
+.plot-board-lane > p {
+  margin: 0;
+}
+
+.plot-board-lane > ol {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plot-board-lane > ol > li {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.5rem;
+  border: 1px solid #ddd3e7;
+  border-radius: 0.6rem;
+  background: #fffefa;
+}
+
+.plot-board-card-select {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0;
+  border: 0;
+  color: #51465e;
+  background: transparent;
+  text-align: left;
+  touch-action: none;
+  cursor: grab;
+}
+
+.plot-board-panel[data-drag-active="true"],
+.plot-board-panel[data-drag-active="true"] .plot-board-card-select {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.plot-board-lane > ol > li.is-drag-preview-source {
+  border-style: dashed;
+  opacity: 0.45;
+}
+
+.plot-board-lane > ol > li.plot-board-insertion-line {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-top: 3px solid #8d72a8;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: 0 0 0.45rem rgb(112 83 139 / 24%);
+  pointer-events: none;
+}
+
+.plot-board-card-select span {
+  color: #81768c;
+  font-size: 0.62rem;
+}
+
+.plot-board-card-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+}
+
+.plot-board-card-actions button {
+  min-height: 1.9rem;
+  padding: 0 0.4rem;
+  border: 1px solid #d4c8df;
+  border-radius: 0.5rem;
+  color: #645571;
+  background: #f8f4fb;
+  font: inherit;
+  font-size: 0.61rem;
+  cursor: pointer;
+}
+
+.plot-board-card-actions button:disabled,
+.plot-board-card-select:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.plot-story-time-lane {
+  min-width: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.plot-story-time-lane > h3,
+.plot-story-time-unassigned > p {
+  margin: 0;
+  color: #746c7d;
+  font-size: 0.65rem;
+}
+
+.plot-story-time-track {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #d9cfe3;
+  border-radius: 0.65rem;
+  background:
+    linear-gradient(90deg, rgb(141 114 168 / 5%), transparent 42%, rgb(141 114 168 / 5%)),
+    #fffefa;
+}
+
+.plot-story-time-axis {
+  position: absolute;
+  top: 1.15rem;
+  right: 0.55rem;
+  left: 0.55rem;
+  height: 2px;
+  border-radius: 999px;
+  background: #b9a8c8;
+  pointer-events: none;
+}
+
+.plot-story-time-axis-start,
+.plot-story-time-axis-end {
+  position: absolute;
+  top: 0.25rem;
+  color: #81768c;
+  font-size: 0.58rem;
+  pointer-events: none;
+}
+
+.plot-story-time-axis-start {
+  left: 0.45rem;
+}
+
+.plot-story-time-axis-end {
+  right: 0.45rem;
+}
+
+.plot-story-time-card {
+  position: absolute;
+  z-index: 2;
+  width: min(8rem, calc(100% - 0.5rem));
+  min-height: 2.8rem;
+  display: grid;
+  gap: 0.12rem;
+  padding: 0.42rem 0.5rem;
+  transform: translateX(-50%);
+  border: 1px solid #d8cce2;
+  border-radius: 0.55rem;
+  color: #51465e;
+  background: #fffefa;
+  box-shadow: 0 0.2rem 0.45rem rgb(83 65 98 / 12%);
+  font: inherit;
+  text-align: left;
+  touch-action: none;
+  cursor: grab;
+}
+
+.plot-story-time-card-measure {
+  position: absolute;
+  display: block;
+  width: min(8rem, calc(100% - 0.5rem));
+  height: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.plot-story-time-card.is-start {
+  transform: translateX(0);
+}
+
+.plot-story-time-card.is-end {
+  transform: translateX(-100%);
+}
+
+.plot-story-time-card strong,
+.plot-story-time-card span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plot-story-time-card strong {
+  font-size: 0.67rem;
+}
+
+.plot-story-time-card span {
+  color: #81768c;
+  font-size: 0.58rem;
+}
+
+.plot-story-time-card[data-story-time-preview="true"] {
+  border-style: dashed;
+  border-color: #8d72a8;
+  box-shadow: 0 0 0.55rem rgb(112 83 139 / 25%);
+}
+
+.plot-story-time-range {
+  position: absolute;
+  z-index: 1;
+  height: 0.25rem;
+  border-radius: 999px;
+  background: #a68bbb;
+  pointer-events: none;
+}
+
+.plot-story-time-unassigned {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.5rem;
+  border: 1px dashed #d2c6dc;
+  border-radius: 0.6rem;
+  background: rgb(255 254 250 / 65%);
+}
+
+.plot-story-time-unassigned > ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plot-story-time-unassigned > ul > li > button {
+  min-height: 1.8rem;
+  padding: 0 0.5rem;
+  border: 1px solid #d8cce2;
+  border-radius: 0.45rem;
+  color: #645571;
+  background: #fffefa;
+  font: inherit;
+  font-size: 0.61rem;
+  touch-action: none;
+  cursor: grab;
+}
+
+.plot-story-time-unassigned
+  button[data-story-time-drag-source="true"] {
+  border-style: dashed;
+  opacity: 0.45;
+}
+
+.plot-board-panel[data-board-view="time-map"][data-drag-active="true"],
+.plot-board-panel[data-board-view="time-map"][data-drag-active="true"]
+  .plot-story-time-card,
+.plot-board-panel[data-board-view="time-map"][data-drag-active="true"]
+  .plot-story-time-unassigned button {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.plot-story-time-card:disabled,
+.plot-story-time-unassigned button:disabled,
+.plot-board-view-switch button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
 
 @media (max-width: 860px) {
   .studio-app-shell .dialog-backdrop {

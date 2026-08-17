@@ -182,6 +182,8 @@ function createRuntimeLedgerGraph(
         randomUUID();
       const eventBlockId =
         randomUUID();
+      const eventSourceId =
+        randomUUID();
       const checkpointId =
         randomUUID();
       const sessionId =
@@ -365,12 +367,20 @@ function createRuntimeLedgerGraph(
             ...meta(),
             id: eventBlockId,
             workId,
-            rangeGroupId,
             title: randomUUID(),
-            orderKey:
+            outlineOrderKey:
               randomUUID(),
             collapsed:
               revision() % 2 === 0,
+          },
+          {
+            kind: "eventSource",
+            ...meta(),
+            id: eventSourceId,
+            workId,
+            eventBlockId,
+            rangeGroupId,
+            role: "primary",
           },
           {
             kind:
@@ -540,8 +550,8 @@ function ledgerRecordOfKind<
         return candidate.id ===
           identity;
       }
-      return candidate.blobRef ===
-        identity;
+      return "blobRef" in candidate &&
+        candidate.blobRef === identity;
     },
   );
   if (
@@ -877,6 +887,162 @@ describe(
               force: true,
             },
           );
+        }
+      },
+    );
+
+    it(
+      "creates PlotEventLink ownership foreign keys and active uniqueness indexes",
+      async () => {
+        const fixture = await readFixtureManifest();
+        const temporaryRoot = await mkdtemp(
+          join(tmpdir(), randomUUID()),
+        );
+        const profile = parsePoc3StorageOpenProfile({
+          databasePath: join(temporaryRoot, `${randomUUID()}.sqlite`),
+          checksumIdentity: randomUUID(),
+          requestedSettings: fixture.requestedSettings,
+          targetSchemaVersion: fixture.targetSchemaVersion,
+        });
+
+        try {
+          const service = await openNodeSqliteLedger(profile);
+          try {
+            const loaded = loadAuditSqlite();
+            const database = new loaded.DatabaseSync(profile.databasePath);
+            try {
+              expect(database.prepare(`
+                SELECT name
+                FROM sqlite_master
+                WHERE type = 'table' AND name = 'plot_event_links'
+              `).all()).toEqual([{ name: "plot_event_links" }]);
+              expect(database.prepare(`
+                SELECT name
+                FROM pragma_index_list('plot_event_links')
+                WHERE name IN (
+                  'plot_event_links_active_pair_idx',
+                  'plot_event_links_active_primary_idx',
+                  'plot_event_links_event_active_idx'
+                )
+                ORDER BY name ASC
+              `).all()).toEqual([
+                { name: "plot_event_links_active_pair_idx" },
+                { name: "plot_event_links_active_primary_idx" },
+                { name: "plot_event_links_event_active_idx" },
+              ]);
+              expect(database.prepare(`
+                SELECT COUNT(DISTINCT id) AS count
+                FROM pragma_foreign_key_list('plot_event_links')
+              `).all()).toEqual([{ count: 2 }]);
+            } finally {
+              database.close();
+            }
+          } finally {
+            service.close();
+          }
+        } finally {
+          await rm(temporaryRoot, { recursive: true, force: true });
+        }
+      },
+    );
+
+    it(
+      "creates PlotBoard lane and placement ownership indexes",
+      async () => {
+        const fixture = await readFixtureManifest();
+        const temporaryRoot = await mkdtemp(join(tmpdir(), randomUUID()));
+        const profile = parsePoc3StorageOpenProfile({
+          databasePath: join(temporaryRoot, randomUUID() + ".sqlite"),
+          checksumIdentity: randomUUID(),
+          requestedSettings: fixture.requestedSettings,
+          targetSchemaVersion: fixture.targetSchemaVersion,
+        });
+
+        try {
+          const service = await openNodeSqliteLedger(profile);
+          try {
+            const loaded = loadAuditSqlite();
+            const database = new loaded.DatabaseSync(profile.databasePath);
+            try {
+              expect(database.prepare(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('plot_boards', 'plot_lanes', 'plot_placements') ORDER BY name",
+              ).all()).toEqual([
+                { name: "plot_boards" },
+                { name: "plot_lanes" },
+                { name: "plot_placements" },
+              ]);
+              expect(database.prepare(
+                "SELECT name FROM sqlite_master WHERE type = 'index' AND name IN ('plot_lanes_default_idx', 'plot_placements_active_plot_idx', 'plot_placements_active_order_idx', 'plot_placements_lane_active_idx') ORDER BY name",
+              ).all()).toEqual([
+                { name: "plot_lanes_default_idx" },
+                { name: "plot_placements_active_order_idx" },
+                { name: "plot_placements_active_plot_idx" },
+                { name: "plot_placements_lane_active_idx" },
+              ]);
+              expect(database.prepare(
+                "SELECT COUNT(DISTINCT id) AS count FROM pragma_foreign_key_list('plot_boards')",
+              ).all()).toEqual([{ count: 1 }]);
+              expect(database.prepare(
+                "SELECT COUNT(DISTINCT id) AS count FROM pragma_foreign_key_list('plot_lanes')",
+              ).all()).toEqual([{ count: 1 }]);
+              expect(database.prepare(
+                "SELECT COUNT(DISTINCT id) AS count FROM pragma_foreign_key_list('plot_placements')",
+              ).all()).toEqual([{ count: 3 }]);
+            } finally {
+              database.close();
+            }
+          } finally {
+            service.close();
+          }
+        } finally {
+          await rm(temporaryRoot, { recursive: true, force: true });
+        }
+      },
+    );
+
+    it(
+      "creates SceneProjection rule and manual event exception ownership indexes",
+      async () => {
+        const fixture = await readFixtureManifest();
+        const temporaryRoot = await mkdtemp(join(tmpdir(), randomUUID()));
+        const profile = parsePoc3StorageOpenProfile({
+          databasePath: join(temporaryRoot, randomUUID() + ".sqlite"),
+          checksumIdentity: randomUUID(),
+          requestedSettings: fixture.requestedSettings,
+          targetSchemaVersion: fixture.targetSchemaVersion,
+        });
+
+        try {
+          const service = await openNodeSqliteLedger(profile);
+          try {
+            const loaded = loadAuditSqlite();
+            const database = new loaded.DatabaseSync(profile.databasePath);
+            try {
+              expect(database.prepare(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('scene_rule_sets', 'scene_event_overrides') ORDER BY name",
+              ).all()).toEqual([
+                { name: "scene_event_overrides" },
+                { name: "scene_rule_sets" },
+              ]);
+              expect(database.prepare(
+                "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'scene_event_overrides_active_pair_idx'",
+              ).all()).toEqual([
+                { name: "scene_event_overrides_active_pair_idx" },
+              ]);
+              expect(database.prepare(
+                "SELECT COUNT(DISTINCT id) AS count FROM pragma_foreign_key_list('scene_rule_sets')",
+              ).all()).toEqual([{ count: 1 }]);
+              expect(database.prepare(
+                "SELECT COUNT(DISTINCT id) AS count FROM pragma_foreign_key_list('scene_event_overrides')",
+              ).all()).toEqual([{ count: 1 }]);
+            } finally {
+              database.close();
+            }
+          } finally {
+            service.close();
+          }
+        } finally {
+          await rm(temporaryRoot, { recursive: true, force: true });
         }
       },
     );

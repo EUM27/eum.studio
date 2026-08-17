@@ -81,6 +81,28 @@ export type Poc3WorkSettingsRecord = {
   readonly revision: number;
 };
 
+export type Poc3SceneRuleSetRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "sceneRuleSet";
+    readonly workId: string;
+    readonly displayName: string;
+    readonly boundaryRulesJson: string;
+    readonly normalizationPolicy: string;
+    readonly enabled: boolean;
+  };
+
+export type Poc3SceneRuleSetUpdateRecord = {
+  readonly kind: "sceneRuleSetUpdate";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly displayName: string;
+  readonly boundaryRulesJson: string;
+  readonly normalizationPolicy: string;
+  readonly enabled: boolean;
+  readonly updatedAt: string;
+};
+
 export type Poc3DocumentFolderRecord =
   Poc3LedgerRecordMeta & {
     readonly kind:
@@ -190,20 +212,55 @@ export type Poc3SceneOverrideRecord =
     readonly note?: string;
   };
 
+export type Poc3SceneEventOverrideRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "sceneEventOverride";
+    readonly workId: string;
+    readonly sceneKey: string;
+    readonly eventBlockId: string;
+    readonly operation: "include" | "exclude";
+  };
+
+export type Poc3SceneEventOverrideRetirementRecord = {
+  readonly kind: "sceneEventOverrideRetirement";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly retiredAt: string;
+};
+
 export type Poc3EventBlockRecord =
   Poc3LedgerRecordMeta & {
     readonly kind: "eventBlock";
     readonly workId: string;
-    readonly rangeGroupId: string;
     readonly parentEventId?: string;
     readonly title: string;
     readonly note?: string;
     readonly stageRef?: string;
-    readonly orderKey: string;
+    readonly outlineOrderKey: string;
     readonly collapsed: boolean;
     readonly relationIdsJson?:
       string;
   };
+
+export type Poc3EventSourceRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "eventSource";
+    readonly workId: string;
+    readonly eventBlockId: string;
+    readonly rangeGroupId: string;
+    readonly role: "primary" | "supporting";
+    readonly replacesEventSourceId?: string;
+    readonly expectedReplacedRevision?: number;
+  };
+
+export type Poc3EventSourceRetirementRecord = {
+  readonly kind: "eventSourceRetirement";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly retiredAt: string;
+};
 
 export type Poc3FragmentRecord =
   Poc3LedgerRecordMeta & {
@@ -321,6 +378,108 @@ export type Poc3PlotThreadRecord =
     readonly summary: string;
     readonly note: string;
   };
+
+export type Poc3PlotBoardRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "plotBoard";
+    readonly workId: string;
+    readonly title: string;
+    readonly mode: "sequence" | "time-map";
+  };
+
+export type Poc3PlotLaneRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "plotLane";
+    readonly workId: string;
+    readonly plotBoardId: string;
+    readonly title: string;
+    readonly laneKind:
+      | "default"
+      | "main"
+      | "subplot"
+      | "stage"
+      | "custom";
+    readonly orderKey: string;
+  };
+
+export type Poc3PlotPlacementRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "plotPlacement";
+    readonly workId: string;
+    readonly plotBoardId: string;
+    readonly plotLaneId: string;
+    readonly plotThreadId: string;
+    readonly orderKey: string;
+    readonly storyTime?: number;
+    readonly storyTimeEnd?: number;
+  };
+
+export type Poc3PlotBoardTouchRecord = {
+  readonly kind: "plotBoardTouch";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly updatedAt: string;
+};
+
+export type Poc3PlotPlacementMoveRecord = {
+  readonly kind: "plotPlacementMove";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly plotBoardId: string;
+  readonly plotLaneId: string;
+  readonly orderKey: string;
+  readonly expectedBoardRevision: number;
+  readonly updatedAt: string;
+};
+
+export type Poc3PlotPlacementStoryTimeRecord = {
+  readonly kind: "plotPlacementStoryTime";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly plotBoardId: string;
+  readonly storyTime: number;
+  readonly storyTimeEnd: number | null;
+  readonly expectedBoardRevision: number;
+  readonly updatedAt: string;
+};
+
+export type Poc3PlotPlacementRebalanceRecord = {
+  readonly kind: "plotPlacementRebalance";
+  readonly workId: string;
+  readonly plotBoardId: string;
+  readonly expectedBoardRevision: number;
+  readonly updatedAt: string;
+  readonly placements: readonly {
+    readonly id: string;
+    readonly expectedRevision: number;
+    readonly plotLaneId: string;
+    readonly orderKey: string;
+  }[];
+};
+
+export type Poc3PlotEventLinkRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "plotEventLink";
+    readonly workId: string;
+    readonly plotThreadId: string;
+    readonly eventBlockId: string;
+    readonly role: "primary" | "supporting";
+    readonly createdFrom:
+      | "event-to-plot"
+      | "plot-to-event"
+      | "manual-link";
+  };
+
+export type Poc3PlotEventLinkRetirementRecord = {
+  readonly kind: "plotEventLinkRetirement";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly retiredAt: string;
+};
 
 export type Poc3PlotThreadSourceRecord =
   Poc3LedgerRecordMeta & {
@@ -657,6 +816,8 @@ export type Poc3LedgerRecord =
   | Poc3ActivityPolicyRecord
   | Poc3FocusPolicyRecord
   | Poc3WorkSettingsRecord
+  | Poc3SceneRuleSetRecord
+  | Poc3SceneRuleSetUpdateRecord
   | Poc3DocumentFolderRecord
   | Poc3DocumentRecord
   | Poc3BlobManifestRecord
@@ -665,7 +826,11 @@ export type Poc3LedgerRecord =
   | Poc3AnchorRecord
   | Poc3RangeGroupRecord
   | Poc3SceneOverrideRecord
+  | Poc3SceneEventOverrideRecord
+  | Poc3SceneEventOverrideRetirementRecord
   | Poc3EventBlockRecord
+  | Poc3EventSourceRecord
+  | Poc3EventSourceRetirementRecord
   | Poc3FragmentRecord
   | Poc3CharacterRecord
   | Poc3LoreEntryRecord
@@ -675,6 +840,15 @@ export type Poc3LedgerRecord =
   | Poc3LoreCandidateRecord
   | Poc3PublishingPartnerRecord
   | Poc3PlotThreadRecord
+  | Poc3PlotBoardRecord
+  | Poc3PlotLaneRecord
+  | Poc3PlotPlacementRecord
+  | Poc3PlotBoardTouchRecord
+  | Poc3PlotPlacementMoveRecord
+  | Poc3PlotPlacementStoryTimeRecord
+  | Poc3PlotPlacementRebalanceRecord
+  | Poc3PlotEventLinkRecord
+  | Poc3PlotEventLinkRetirementRecord
   | Poc3PlotThreadSourceRecord
   | Poc3ForeshadowLineRecord
   | Poc3ForeshadowPointRecord

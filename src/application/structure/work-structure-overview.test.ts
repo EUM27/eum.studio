@@ -5,8 +5,11 @@ import type { CharacterProjection } from "../characters/character-contract";
 import type { ManuscriptDocumentSource } from "../editor/manuscript-document-profile";
 import type { PlotThreadProjection } from "../plots/plot-contract";
 import type { PlotThreadSourceProjection } from "../plots/plot-source-contract";
-import type { EventBlockProjection } from "./event-block-contract";
-import type { SceneOverrideProjection } from "./scene-override-contract";
+import type {
+  EventBlockProjection,
+  EventSourceProjection,
+} from "./event-block-contract";
+import type { SceneProjection } from "./scene-projection";
 import { deriveWorkStructureOverview } from "./work-structure-overview";
 
 const workId = entityId<"Work">("work-a");
@@ -79,43 +82,64 @@ const source: PlotThreadSourceProjection = {
 const event: EventBlockProjection = {
   schemaVersion: 1,
   eventBlockId: entityId<"EventBlock">("event-a"),
-  anchorId: entityId<"Anchor">("anchor-event"),
+  revision: 1,
   workId,
-  documentId: documentA,
-  documentRevisionId: revisionA,
   title: "기록 발견",
   note: "",
-  exactQuote: "낡은 기록을 발견했다.",
-  integrity: "resolved",
-  range: { from: 5, to: 18 },
+  parentEventId: null,
+  outlineOrderKey: "outline-a",
   createdAt: now,
+  updatedAt: now,
+  retiredAt: null,
 };
 
-const scene: SceneOverrideProjection = {
+const eventSource: EventSourceProjection = {
   schemaVersion: 1,
-  sceneOverrideId: entityId<"SceneOverride">("scene-a"),
+  eventSourceId: entityId<"EventSource">("event-source-a"),
+  revision: 1,
+  workId,
+  eventBlockId: event.eventBlockId,
+  rangeGroupId: entityId<"RangeGroup">("range-group-a"),
+  role: "primary",
+  anchors: [{
+    anchorId: entityId<"Anchor">("anchor-event"),
+    documentId: documentA,
+    documentRevisionId: revisionA,
+    exactQuote: "낡은 기록을 발견했다.",
+    integrity: "resolved",
+    range: { from: 5, to: 18 },
+  }],
+  createdAt: now,
+  updatedAt: now,
+  retiredAt: null,
+};
+
+const scene: SceneProjection = {
+  schemaVersion: 1,
+  sceneKey: "scene-a",
   workId,
   documentId: documentB,
-  operation: "split",
-  baseRuleSetRevision: 1,
-  note: "",
-  boundaries: [
-    {
-      anchorId: entityId<"Anchor">("anchor-scene-a"),
-      documentRevisionId: revisionB,
-      exactQuote: "",
-      integrity: "resolved",
-      range: { from: 4, to: 4 },
-    },
-    {
-      anchorId: entityId<"Anchor">("anchor-scene-b"),
-      documentRevisionId: revisionB,
-      exactQuote: "장면 전환",
-      integrity: "needsReview",
-      range: null,
-    },
-  ],
-  createdAt: now,
+  documentRevisionId: revisionB,
+  documentTitle: "2화",
+  documentIndex: 1,
+  sceneIndex: 1,
+  startAnchorId: entityId<"Anchor">("anchor-scene-a"),
+  endAnchorId: entityId<"Anchor">("anchor-scene-b"),
+  range: { start: 0, end: 4 },
+  integrity: "resolved",
+  source: "rule",
+  events: [],
+  excludedEvents: [],
+};
+const secondScene: SceneProjection = {
+  ...scene,
+  sceneKey: "scene-b",
+  sceneIndex: 2,
+  startAnchorId: entityId<"Anchor">("anchor-scene-b"),
+  endAnchorId: null,
+  range: { start: 4, end: 12 },
+  integrity: "needsReview",
+  source: "override",
 };
 
 describe("work structure overview", () => {
@@ -128,7 +152,8 @@ describe("work structure overview", () => {
       plots: [plot],
       plotSources: [source],
       eventBlocks: [event],
-      sceneOverrides: [scene],
+      eventSources: [eventSource],
+      scenes: [scene, secondScene],
     });
 
     expect(projection.totals).toEqual({
@@ -137,21 +162,21 @@ describe("work structure overview", () => {
       plots: 1,
       plotSources: 1,
       events: 1,
-      sceneBoundaries: 2,
+      scenes: 2,
     });
     expect(projection.documents).toEqual([
       expect.objectContaining({
         documentId: documentA,
         label: "1화",
         eventCount: 1,
-        sceneBoundaryCount: 0,
+        sceneCount: 0,
         plotSourceCount: 0,
       }),
       expect.objectContaining({
         documentId: documentB,
         label: "2화",
         eventCount: 0,
-        sceneBoundaryCount: 2,
+        sceneCount: 2,
         plotSourceCount: 1,
       }),
     ]);
@@ -170,10 +195,13 @@ describe("work structure overview", () => {
     });
     expect(projection.events[0]).toMatchObject({
       eventBlockId: event.eventBlockId,
-      documentId: documentA,
-      range: { from: 5, to: 18 },
+      sourceState: "resolved",
+      source: {
+        documentId: documentA,
+        range: { from: 5, to: 18 },
+      },
     });
-    expect(projection.sceneBoundaries).toHaveLength(2);
+    expect(projection.scenes).toHaveLength(2);
     expect(projection).not.toHaveProperty("music");
     expect(projection).not.toHaveProperty("lore");
   });
@@ -187,7 +215,8 @@ describe("work structure overview", () => {
       plots: [plot],
       plotSources: [source],
       eventBlocks: [event],
-      sceneOverrides: [scene],
+      eventSources: [eventSource],
+      scenes: [scene, secondScene],
     })).toThrow("characters[0] is outside Work work-a");
 
     expect(() => deriveWorkStructureOverview({
@@ -201,7 +230,8 @@ describe("work structure overview", () => {
         sourceDocumentId: entityId<"Document">("missing"),
       }],
       eventBlocks: [event],
-      sceneOverrides: [scene],
+      eventSources: [eventSource],
+      scenes: [scene, secondScene],
     })).toThrow("references unknown Document missing");
 
     expect(() => deriveWorkStructureOverview({
@@ -212,7 +242,8 @@ describe("work structure overview", () => {
       plots: [plot],
       plotSources: [source, { ...source, sourceId: entityId<"PlotThreadSource">("source-b") }],
       eventBlocks: [event],
-      sceneOverrides: [scene],
+      eventSources: [eventSource],
+      scenes: [scene, secondScene],
     })).toThrow("has more than one active source");
   });
 });

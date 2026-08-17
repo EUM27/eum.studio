@@ -304,15 +304,31 @@ import {
   type WorkMusicSettingsProjection,
 } from "../application/music/work-music-settings";
 import {
+  parseCreateAnchorlessEventCommand,
   parseCreateEventBlockCommand,
   parseEventBlockListProjection,
   parseEventBlockProjection,
+  parseEventSourceProjection,
+  parseLinkEventSourceCommand,
   parseListEventBlocksCommand,
+  parseReplaceEventSourceCommand,
+  parseRetireEventSourceCommand,
+  type CreateAnchorlessEventCommand,
   type CreateEventBlockCommand,
   type EventBlockListProjection,
   type EventBlockProjection,
+  type EventSourceProjection,
+  type LinkEventSourceCommand,
   type ListEventBlocksCommand,
+  type ReplaceEventSourceCommand,
+  type RetireEventSourceCommand,
 } from "../application/structure/event-block-contract";
+import {
+  deriveEventRailProjection,
+  parseListEventRailCommand,
+  type EventRailProjection,
+  type ListEventRailCommand,
+} from "../application/structure/event-rail-projection";
 import {
   parseCreateSceneOverrideCommand,
   parseListSceneOverridesCommand,
@@ -323,6 +339,20 @@ import {
   type SceneOverrideListProjection,
   type SceneOverrideProjection,
 } from "../application/structure/scene-override-contract";
+import {
+  deriveSceneProjection,
+  parseListSceneProjectionCommand,
+  parseSceneEventOverrideProjection,
+  parseSceneRuleSetProjection,
+  parseSetSceneEventOverrideCommand,
+  parseUpdateSceneRuleSetCommand,
+  type ListSceneProjectionCommand,
+  type SceneEventOverrideProjection,
+  type SceneProjectionList,
+  type SceneRuleSetProjection,
+  type SetSceneEventOverrideCommand,
+  type UpdateSceneRuleSetCommand,
+} from "../application/structure/scene-projection";
 import {
   parseCaptureFragmentCommand,
   parseFragmentListProjection,
@@ -563,6 +593,35 @@ import {
   type UpdatePlotThreadCommand,
 } from "../application/plots/plot-contract";
 import {
+  parseGetDefaultPlotBoardCommand,
+  parseMovePlotPlacementCommand,
+  parsePlotBoardProjection,
+  parseSetPlotPlacementStoryTimeCommand,
+  type GetDefaultPlotBoardCommand,
+  type MovePlotPlacementCommand,
+  type PlotBoardProjection,
+  type PlotLaneKind,
+  type SetPlotPlacementStoryTimeCommand,
+} from "../application/plots/plot-board-contract";
+import {
+  parseCreateEventFromPlotCommand,
+  parseCreatePlotFromEventCommand,
+  parseLinkPlotEventCommand,
+  parseListPlotEventLinksCommand,
+  parsePlotEventLinkListProjection,
+  parsePlotEventLinkMutationProjection,
+  parsePlotEventLinkProjection,
+  parseUnlinkPlotEventCommand,
+  type CreateEventFromPlotCommand,
+  type CreatePlotFromEventCommand,
+  type LinkPlotEventCommand,
+  type ListPlotEventLinksCommand,
+  type PlotEventLinkListProjection,
+  type PlotEventLinkMutationProjection,
+  type PlotEventLinkProjection,
+  type UnlinkPlotEventCommand,
+} from "../application/plots/plot-event-link-contract";
+import {
   parseLinkPlotThreadSourceCommand,
   parseListPlotThreadSourcesCommand,
   parsePlotThreadSourceListProjection,
@@ -655,6 +714,11 @@ import type {
   Poc3LedgerRecord,
 } from "../domain/poc-3-storage-ledger";
 import {
+  compareFractionalOrderKeys,
+  createOrderKeyBetween,
+  createRebalancedOrderKeys,
+} from "../domain/fractional-order-key";
+import {
   createWritingCatalog,
   entityId,
   type Anchor,
@@ -684,6 +748,18 @@ import {
   createLocalWorkspaceBackupService,
   type LocalWorkspaceBackupService,
 } from "./local-workspace-backup-service";
+import {
+  migrateLocalWorkspaceEventSourcesIfNeeded,
+} from "./local-workspace-event-source-migration";
+import {
+  migrateLocalWorkspacePlotEventLinksIfNeeded,
+} from "./local-workspace-plot-event-link-migration";
+import {
+  migrateLocalWorkspacePlotBoardsIfNeeded,
+} from "./local-workspace-plot-board-migration";
+import {
+  migrateLocalWorkspaceSceneProjectionIfNeeded,
+} from "./local-workspace-scene-projection-migration";
 
 type NodeSqliteStatement = {
   all(
@@ -770,13 +846,34 @@ type AcceptedBatch = {
 
 type StoredEventBlockRow = {
   readonly eventBlockId: EntityId<"EventBlock">;
-  readonly anchorId: EntityId<"Anchor">;
+  readonly revision: number;
   readonly workId: EntityId<"Work">;
-  readonly documentId: EntityId<"Document">;
   readonly title: string;
   readonly note: string;
-  readonly exactQuote: string;
+  readonly parentEventId: EntityId<"EventBlock"> | null;
+  readonly outlineOrderKey: string;
   readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly retiredAt: string | null;
+};
+
+type StoredEventSourceAnchorRow = {
+  readonly anchorId: EntityId<"Anchor">;
+  readonly documentId: EntityId<"Document">;
+  readonly exactQuote: string;
+};
+
+type StoredEventSourceRow = {
+  readonly eventSourceId: EntityId<"EventSource">;
+  readonly revision: number;
+  readonly workId: EntityId<"Work">;
+  readonly eventBlockId: EntityId<"EventBlock">;
+  readonly rangeGroupId: EntityId<"RangeGroup">;
+  readonly role: "primary" | "supporting";
+  readonly anchors: readonly StoredEventSourceAnchorRow[];
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly retiredAt: string | null;
 };
 
 type StoredSceneOverrideRow = {
@@ -790,6 +887,29 @@ type StoredSceneOverrideRow = {
   readonly exactQuote: string;
   readonly orderIndex: number;
   readonly createdAt: string;
+};
+
+type StoredSceneRuleSetRow = {
+  readonly sceneRuleSetId: EntityId<"SceneRuleSet">;
+  readonly revision: number;
+  readonly workId: EntityId<"Work">;
+  readonly displayName: string;
+  readonly boundaryRulesJson: string;
+  readonly normalizationPolicy: SceneRuleSetProjection["normalizationPolicy"];
+  readonly enabled: boolean;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+};
+
+type StoredSceneEventOverrideRow = {
+  readonly sceneEventOverrideId: EntityId<"SceneEventOverride">;
+  readonly revision: number;
+  readonly workId: EntityId<"Work">;
+  readonly sceneKey: string;
+  readonly eventBlockId: EntityId<"EventBlock">;
+  readonly operation: SceneEventOverrideProjection["operation"];
+  readonly createdAt: string;
+  readonly updatedAt: string;
 };
 
 type StoredFragmentRow = {
@@ -970,6 +1090,71 @@ type StoredPlotThreadRow = {
   readonly retiredAt: string | null;
 };
 
+type StoredPlotEventLinkRow = {
+  readonly plotEventLinkId: EntityId<"PlotEventLink">;
+  readonly revision: number;
+  readonly workId: EntityId<"Work">;
+  readonly plotBeatId: EntityId<"PlotThread">;
+  readonly eventBlockId: EntityId<"EventBlock">;
+  readonly role: "primary" | "supporting";
+  readonly createdFrom:
+    | "event-to-plot"
+    | "plot-to-event"
+    | "manual-link";
+  readonly plotTitle: string;
+  readonly eventTitle: string;
+  readonly plotRetiredAt: string | null;
+  readonly eventRetiredAt: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly retiredAt: string | null;
+};
+
+type StoredPlotBoardRow = {
+  readonly plotBoardId: EntityId<"PlotBoard">;
+  readonly revision: number;
+  readonly workId: EntityId<"Work">;
+  readonly title: string;
+  readonly mode: "sequence" | "time-map";
+  readonly createdAt: string;
+  readonly updatedAt: string;
+};
+
+type StoredPlotLaneRow = {
+  readonly plotLaneId: EntityId<"PlotLane">;
+  readonly revision: number;
+  readonly workId: EntityId<"Work">;
+  readonly plotBoardId: EntityId<"PlotBoard">;
+  readonly title: string;
+  readonly kind: PlotLaneKind;
+  readonly orderKey: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+};
+
+type StoredPlotPlacementRow = {
+  readonly plotPlacementId: EntityId<"PlotPlacement">;
+  readonly revision: number;
+  readonly workId: EntityId<"Work">;
+  readonly plotBoardId: EntityId<"PlotBoard">;
+  readonly plotLaneId: EntityId<"PlotLane">;
+  readonly plotBeatId: EntityId<"PlotThread">;
+  readonly orderKey: string;
+  readonly storyTime: number | null;
+  readonly storyTimeEnd: number | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly retiredAt: string | null;
+  readonly plotTitle: string;
+  readonly plotStage: string;
+  readonly plotSummary: string;
+  readonly plotNote: string;
+  readonly plotCreatedAt: string;
+  readonly plotUpdatedAt: string;
+  readonly plotRetiredAt: string | null;
+  readonly plotRevision: number;
+};
+
 type StoredPlotThreadSourceRow = {
   readonly sourceId: EntityId<"PlotThreadSource">;
   readonly revision: number;
@@ -1090,9 +1275,17 @@ export type LocalWorkspaceRuntime =
       value: unknown,
     ): Promise<ManuscriptResumeCheckpointProjection>;
     createEventBlock(value: unknown): Promise<EventBlockProjection>;
+    createAnchorlessEvent(value: unknown): Promise<EventBlockProjection>;
+    linkEventSource(value: unknown): Promise<EventSourceProjection>;
+    replaceEventSource(value: unknown): Promise<EventSourceProjection>;
+    retireEventSource(value: unknown): Promise<EventSourceProjection>;
     listEventBlocks(value: unknown): Promise<EventBlockListProjection>;
+    listEventRail(value: unknown): Promise<EventRailProjection>;
     createSceneOverride(value: unknown): Promise<SceneOverrideProjection>;
     listSceneOverrides(value: unknown): Promise<SceneOverrideListProjection>;
+    listSceneProjection(value: unknown): Promise<SceneProjectionList>;
+    updateSceneRuleSet(value: unknown): Promise<SceneProjectionList>;
+    setSceneEventOverride(value: unknown): Promise<SceneProjectionList>;
     captureFragment(value: unknown): Promise<FragmentProjection>;
     listFragments(value: unknown): Promise<FragmentListProjection>;
     updateFragment(value: unknown): Promise<FragmentProjection>;
@@ -1174,8 +1367,16 @@ export type LocalWorkspaceRuntime =
     ): Promise<PublishingMailCandidateReviewResult>;
     createPlotThread(value: unknown): Promise<PlotThreadProjection>;
     listPlotThreads(value: unknown): Promise<PlotThreadListProjection>;
+    getDefaultPlotBoard(value: unknown): Promise<PlotBoardProjection>;
+    movePlotPlacement(value: unknown): Promise<PlotBoardProjection>;
+    setPlotPlacementStoryTime(value: unknown): Promise<PlotBoardProjection>;
     updatePlotThread(value: unknown): Promise<PlotThreadProjection>;
     retirePlotThread(value: unknown): Promise<PlotThreadProjection>;
+    createPlotFromEvent(value: unknown): Promise<PlotEventLinkMutationProjection>;
+    createEventFromPlot(value: unknown): Promise<PlotEventLinkMutationProjection>;
+    linkPlotEvent(value: unknown): Promise<PlotEventLinkMutationProjection>;
+    unlinkPlotEvent(value: unknown): Promise<PlotEventLinkMutationProjection>;
+    listPlotEventLinks(value: unknown): Promise<PlotEventLinkListProjection>;
     linkPlotThreadSource(value: unknown): Promise<PlotThreadSourceProjection>;
     listPlotThreadSources(
       value: unknown,
@@ -1330,7 +1531,7 @@ export type LocalWorkspaceRuntimeOptions = {
   readonly backupProfile: LocalWorkspaceBackupProfile;
 };
 
-export const LOCAL_WORKSPACE_LEDGER_SCHEMA_VERSION = 1;
+export const LOCAL_WORKSPACE_LEDGER_SCHEMA_VERSION = 5;
 export const LOCAL_WORKSPACE_LEDGER_CHECKSUM_IDENTITY =
   "eum-studio-ledger-sha256-v1";
 export const LOCAL_WORKSPACE_MANUSCRIPT_CODEC_IDENTITY =
@@ -1412,28 +1613,74 @@ ORDER BY updated_at DESC, order_key DESC
 const EVENT_BLOCK_ROWS_SQL = `
 SELECT
   e.id AS "eventBlockId",
-  a.id AS "anchorId",
+  e.revision AS "revision",
   e.work_id AS "workId",
-  a.document_id AS "documentId",
   e.title AS "title",
   COALESCE(e.note, '') AS "note",
-  a.exact_quote AS "exactQuote",
-  e.created_at AS "createdAt"
+  e.parent_event_id AS "parentEventId",
+  e.order_key AS "outlineOrderKey",
+  e.created_at AS "createdAt",
+  e.updated_at AS "updatedAt",
+  e.retired_at AS "retiredAt"
 FROM event_blocks AS e
-JOIN range_groups AS rg
-  ON rg.work_id = e.work_id
-  AND rg.id = e.range_group_id
-JOIN range_group_anchors AS rga
-  ON rga.work_id = rg.work_id
-  AND rga.range_group_id = rg.id
-  AND rga.order_index = 0
-JOIN anchors AS a
-  ON a.work_id = rga.work_id
-  AND a.id = rga.anchor_id
 WHERE
   e.work_id = ?
   AND e.retired_at IS NULL
 ORDER BY e.order_key ASC
+`;
+
+const EVENT_BLOCK_ROW_BY_ID_SQL = `
+SELECT
+  e.id AS "eventBlockId",
+  e.revision AS "revision",
+  e.work_id AS "workId",
+  e.title AS "title",
+  COALESCE(e.note, '') AS "note",
+  e.parent_event_id AS "parentEventId",
+  e.order_key AS "outlineOrderKey",
+  e.created_at AS "createdAt",
+  e.updated_at AS "updatedAt",
+  e.retired_at AS "retiredAt"
+FROM event_blocks AS e
+WHERE e.work_id = ? AND e.id = ?
+`;
+
+const EVENT_SOURCE_ROWS_SQL = `
+SELECT
+  es.id AS "eventSourceId",
+  es.revision AS "revision",
+  es.work_id AS "workId",
+  es.event_block_id AS "eventBlockId",
+  es.range_group_id AS "rangeGroupId",
+  es.role AS "role",
+  es.created_at AS "createdAt",
+  es.updated_at AS "updatedAt",
+  es.retired_at AS "retiredAt",
+  rga.order_index AS "anchorOrderIndex",
+  a.id AS "anchorId",
+  a.document_id AS "documentId",
+  a.exact_quote AS "exactQuote"
+FROM event_sources AS es
+JOIN event_blocks AS e
+  ON e.work_id = es.work_id
+  AND e.id = es.event_block_id
+  AND e.retired_at IS NULL
+JOIN range_groups AS rg
+  ON rg.work_id = es.work_id
+  AND rg.id = es.range_group_id
+LEFT JOIN range_group_anchors AS rga
+  ON rga.work_id = rg.work_id
+  AND rga.range_group_id = rg.id
+LEFT JOIN anchors AS a
+  ON a.work_id = rga.work_id
+  AND a.id = rga.anchor_id
+WHERE
+  es.work_id = ?
+  AND es.retired_at IS NULL
+ORDER BY
+  es.created_at ASC,
+  es.id ASC,
+  rga.order_index ASC
 `;
 
 const SCENE_OVERRIDE_ROWS_SQL = `
@@ -1461,6 +1708,45 @@ WHERE
   so.work_id = ?
   AND so.retired_at IS NULL
 ORDER BY so.created_at ASC, so.id ASC, soa.order_index ASC
+`;
+
+const SCENE_RULE_SET_ROW_BY_WORK_SQL = `
+SELECT
+  srs.id AS "sceneRuleSetId",
+  srs.revision AS "revision",
+  srs.work_id AS "workId",
+  srs.display_name AS "displayName",
+  srs.boundary_rules_json AS "boundaryRulesJson",
+  srs.normalization_policy AS "normalizationPolicy",
+  srs.enabled AS "enabled",
+  srs.created_at AS "createdAt",
+  srs.updated_at AS "updatedAt"
+FROM works AS w
+JOIN work_settings AS ws
+  ON ws.work_id = w.id
+  AND ws.id = w.settings_id
+JOIN scene_rule_sets AS srs
+  ON srs.work_id = ws.work_id
+  AND srs.id = ws.scene_rule_set_id
+WHERE
+  w.id = ?
+  AND w.retired_at IS NULL
+  AND srs.retired_at IS NULL
+`;
+
+const SCENE_EVENT_OVERRIDE_ROWS_SQL = `
+SELECT
+  seo.id AS "sceneEventOverrideId",
+  seo.revision AS "revision",
+  seo.work_id AS "workId",
+  seo.scene_key AS "sceneKey",
+  seo.event_block_id AS "eventBlockId",
+  seo.operation AS "operation",
+  seo.created_at AS "createdAt",
+  seo.updated_at AS "updatedAt"
+FROM scene_event_overrides AS seo
+WHERE seo.work_id = ? AND seo.retired_at IS NULL
+ORDER BY seo.created_at ASC, seo.id ASC
 `;
 
 const ACTIVE_FRAGMENT_ROWS_SQL = `
@@ -2023,6 +2309,111 @@ FROM plot_threads
 WHERE work_id = ? AND id = ?
 `;
 
+const DEFAULT_PLOT_BOARD_ROWS_SQL = `
+SELECT
+  id AS "plotBoardId",
+  revision AS "revision",
+  work_id AS "workId",
+  title AS "title",
+  mode AS "mode",
+  created_at AS "createdAt",
+  updated_at AS "updatedAt"
+FROM plot_boards
+WHERE work_id = ? AND mode = 'sequence'
+ORDER BY created_at ASC, id ASC
+`;
+
+const PLOT_LANE_ROWS_SQL = `
+SELECT
+  id AS "plotLaneId",
+  revision AS "revision",
+  work_id AS "workId",
+  plot_board_id AS "plotBoardId",
+  title AS "title",
+  kind AS "kind",
+  order_key AS "orderKey",
+  created_at AS "createdAt",
+  updated_at AS "updatedAt"
+FROM plot_lanes
+WHERE work_id = ? AND plot_board_id = ?
+`;
+
+const PLOT_PLACEMENT_SELECT_SQL = `
+SELECT
+  placement.id AS "plotPlacementId",
+  placement.revision AS "revision",
+  placement.work_id AS "workId",
+  placement.plot_board_id AS "plotBoardId",
+  placement.plot_lane_id AS "plotLaneId",
+  placement.plot_thread_id AS "plotBeatId",
+  placement.order_key AS "orderKey",
+  placement.story_time AS "storyTime",
+  placement.story_time_end AS "storyTimeEnd",
+  placement.created_at AS "createdAt",
+  placement.updated_at AS "updatedAt",
+  placement.retired_at AS "retiredAt",
+  plot.title AS "plotTitle",
+  plot.stage AS "plotStage",
+  plot.summary AS "plotSummary",
+  plot.note AS "plotNote",
+  plot.created_at AS "plotCreatedAt",
+  plot.updated_at AS "plotUpdatedAt",
+  plot.retired_at AS "plotRetiredAt",
+  plot.revision AS "plotRevision"
+FROM plot_placements AS placement
+JOIN plot_threads AS plot
+  ON plot.work_id = placement.work_id
+  AND plot.id = placement.plot_thread_id
+`;
+
+const ACTIVE_PLOT_PLACEMENT_ROWS_SQL = `
+${PLOT_PLACEMENT_SELECT_SQL}
+WHERE placement.work_id = ?
+  AND placement.plot_board_id = ?
+  AND placement.retired_at IS NULL
+`;
+
+const PLOT_PLACEMENT_ROW_BY_ID_SQL = `
+${PLOT_PLACEMENT_SELECT_SQL}
+WHERE placement.work_id = ? AND placement.id = ?
+`;
+
+const PLOT_EVENT_LINK_SELECT_SQL = `
+SELECT
+  link.id AS "plotEventLinkId",
+  link.revision AS "revision",
+  link.work_id AS "workId",
+  link.plot_thread_id AS "plotBeatId",
+  link.event_block_id AS "eventBlockId",
+  link.role AS "role",
+  link.created_from AS "createdFrom",
+  plot.title AS "plotTitle",
+  event.title AS "eventTitle",
+  plot.retired_at AS "plotRetiredAt",
+  event.retired_at AS "eventRetiredAt",
+  link.created_at AS "createdAt",
+  link.updated_at AS "updatedAt",
+  link.retired_at AS "retiredAt"
+FROM plot_event_links AS link
+JOIN plot_threads AS plot
+  ON plot.work_id = link.work_id
+  AND plot.id = link.plot_thread_id
+JOIN event_blocks AS event
+  ON event.work_id = link.work_id
+  AND event.id = link.event_block_id
+`;
+
+const ACTIVE_PLOT_EVENT_LINK_ROWS_SQL = `
+${PLOT_EVENT_LINK_SELECT_SQL}
+WHERE link.work_id = ? AND link.retired_at IS NULL
+ORDER BY link.created_at ASC, link.id ASC
+`;
+
+const PLOT_EVENT_LINK_ROW_BY_ID_SQL = `
+${PLOT_EVENT_LINK_SELECT_SQL}
+WHERE link.work_id = ? AND link.id = ?
+`;
+
 const ACTIVE_PLOT_THREAD_SOURCE_ROWS_SQL = `
 SELECT
   pts.id AS "sourceId",
@@ -2148,11 +2539,14 @@ WHERE fp.work_id = ? AND fp.id = ?
 `;
 
 const WORK_SCENE_RULE_REVISION_SQL = `
-SELECT ws.revision AS "baseRuleSetRevision"
+SELECT srs.revision AS "baseRuleSetRevision"
 FROM works AS w
 JOIN work_settings AS ws
   ON ws.work_id = w.id
   AND ws.id = w.settings_id
+JOIN scene_rule_sets AS srs
+  ON srs.work_id = ws.work_id
+  AND srs.id = ws.scene_rule_set_id
 WHERE w.id = ? AND w.retired_at IS NULL
 `;
 
@@ -2283,6 +2677,14 @@ WHERE work_id = ? AND retired_at IS NULL
 UNION ALL
 SELECT 'EventBlock', id, revision
 FROM event_blocks
+WHERE work_id = ? AND retired_at IS NULL
+UNION ALL
+SELECT 'EventSource', id, revision
+FROM event_sources
+WHERE work_id = ? AND retired_at IS NULL
+UNION ALL
+SELECT 'PlotEventLink', id, revision
+FROM plot_event_links
 WHERE work_id = ? AND retired_at IS NULL
 UNION ALL
 SELECT 'RangeGroup', id, revision
@@ -2616,6 +3018,8 @@ function createInitialRecords(input: {
   readonly activityPolicyId: string;
   readonly focusPolicyId: string;
   readonly sceneRuleSetId: string;
+  readonly plotBoardId: string;
+  readonly plotLaneId: string;
   readonly documentId: string;
   readonly manuscriptId: string;
   readonly revisionId: string;
@@ -2652,6 +3056,24 @@ function createInitialRecords(input: {
       settingsId: input.settingsId,
     },
     {
+      kind: "plotBoard",
+      ...meta,
+      id: input.plotBoardId,
+      workId: input.workId,
+      title: input.defaults.plotBoard.defaultBoardTitle,
+      mode: "sequence",
+    },
+    {
+      kind: "plotLane",
+      ...meta,
+      id: input.plotLaneId,
+      workId: input.workId,
+      plotBoardId: input.plotBoardId,
+      title: input.defaults.plotBoard.defaultLaneTitle,
+      laneKind: "default",
+      orderKey: "0/1",
+    },
+    {
       kind: "activityPolicy",
       ...meta,
       id: input.activityPolicyId,
@@ -2664,6 +3086,18 @@ function createInitialRecords(input: {
       id: input.focusPolicyId,
       workId: input.workId,
       ...input.defaults.focusPolicy,
+    },
+    {
+      kind: "sceneRuleSet",
+      ...meta,
+      id: input.sceneRuleSetId,
+      workId: input.workId,
+      displayName: input.defaults.sceneRuleSet.displayName,
+      boundaryRulesJson: JSON.stringify(
+        input.defaults.sceneRuleSet.boundaryRules,
+      ),
+      normalizationPolicy: input.defaults.sceneRuleSet.normalizationPolicy,
+      enabled: input.defaults.sceneRuleSet.enabled,
     },
     {
       kind: "workSettings",
@@ -3198,11 +3632,75 @@ class DefaultLocalWorkspaceRuntime
     return execution;
   }
 
+  createAnchorlessEvent(value: unknown): Promise<EventBlockProjection> {
+    this.#assertOpen();
+    const command = parseCreateAnchorlessEventCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#createAnchorlessEventSerially(command);
+    });
+    this.#createPending = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    return execution;
+  }
+
+  linkEventSource(value: unknown): Promise<EventSourceProjection> {
+    this.#assertOpen();
+    const command = parseLinkEventSourceCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#linkEventSourceSerially(command);
+    });
+    this.#createPending = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    return execution;
+  }
+
+  replaceEventSource(value: unknown): Promise<EventSourceProjection> {
+    this.#assertOpen();
+    const command = parseReplaceEventSourceCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#replaceEventSourceSerially(command);
+    });
+    this.#createPending = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    return execution;
+  }
+
+  retireEventSource(value: unknown): Promise<EventSourceProjection> {
+    this.#assertOpen();
+    const command = parseRetireEventSourceCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#retireEventSourceSerially(command);
+    });
+    this.#createPending = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    return execution;
+  }
+
   listEventBlocks(value: unknown): Promise<EventBlockListProjection> {
     this.#assertOpen();
     const command = parseListEventBlocksCommand(value);
     return Promise.all([this.#createPending, this.#savePending]).then(() =>
       this.#listEventBlocksSerially(command),
+    );
+  }
+
+  listEventRail(value: unknown): Promise<EventRailProjection> {
+    this.#assertOpen();
+    const command = parseListEventRailCommand(value);
+    return Promise.all([this.#createPending, this.#savePending]).then(() =>
+      this.#listEventRailSerially(command),
     );
   }
 
@@ -3226,6 +3724,42 @@ class DefaultLocalWorkspaceRuntime
     return Promise.all([this.#createPending, this.#savePending]).then(() =>
       this.#listSceneOverridesSerially(command),
     );
+  }
+
+  listSceneProjection(value: unknown): Promise<SceneProjectionList> {
+    this.#assertOpen();
+    const command = parseListSceneProjectionCommand(value);
+    return Promise.all([this.#createPending, this.#savePending]).then(() =>
+      this.#listSceneProjectionSerially(command),
+    );
+  }
+
+  updateSceneRuleSet(value: unknown): Promise<SceneProjectionList> {
+    this.#assertOpen();
+    const command = parseUpdateSceneRuleSetCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#updateSceneRuleSetSerially(command);
+    });
+    this.#createPending = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    return execution;
+  }
+
+  setSceneEventOverride(value: unknown): Promise<SceneProjectionList> {
+    this.#assertOpen();
+    const command = parseSetSceneEventOverrideCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#setSceneEventOverrideSerially(command);
+    });
+    this.#createPending = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    return execution;
   }
 
   captureFragment(value: unknown): Promise<FragmentProjection> {
@@ -3943,6 +4477,36 @@ class DefaultLocalWorkspaceRuntime
     );
   }
 
+  getDefaultPlotBoard(value: unknown): Promise<PlotBoardProjection> {
+    this.#assertOpen();
+    const command = parseGetDefaultPlotBoardCommand(value);
+    return Promise.all([this.#createPending, this.#savePending]).then(() =>
+      this.#getDefaultPlotBoardSerially(command),
+    );
+  }
+
+  movePlotPlacement(value: unknown): Promise<PlotBoardProjection> {
+    this.#assertOpen();
+    const command = parseMovePlotPlacementCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#movePlotPlacementSerially(command);
+    });
+    this.#createPending = execution.then(() => undefined, () => undefined);
+    return execution;
+  }
+
+  setPlotPlacementStoryTime(value: unknown): Promise<PlotBoardProjection> {
+    this.#assertOpen();
+    const command = parseSetPlotPlacementStoryTimeCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#setPlotPlacementStoryTimeSerially(command);
+    });
+    this.#createPending = execution.then(() => undefined, () => undefined);
+    return execution;
+  }
+
   updatePlotThread(value: unknown): Promise<PlotThreadProjection> {
     this.#assertOpen();
     const command = parseUpdatePlotThreadCommand(value);
@@ -3969,6 +4533,58 @@ class DefaultLocalWorkspaceRuntime
       () => undefined,
     );
     return execution;
+  }
+
+  createPlotFromEvent(value: unknown): Promise<PlotEventLinkMutationProjection> {
+    this.#assertOpen();
+    const command = parseCreatePlotFromEventCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#createPlotFromEventSerially(command);
+    });
+    this.#createPending = execution.then(() => undefined, () => undefined);
+    return execution;
+  }
+
+  createEventFromPlot(value: unknown): Promise<PlotEventLinkMutationProjection> {
+    this.#assertOpen();
+    const command = parseCreateEventFromPlotCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#createEventFromPlotSerially(command);
+    });
+    this.#createPending = execution.then(() => undefined, () => undefined);
+    return execution;
+  }
+
+  linkPlotEvent(value: unknown): Promise<PlotEventLinkMutationProjection> {
+    this.#assertOpen();
+    const command = parseLinkPlotEventCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#linkPlotEventSerially(command);
+    });
+    this.#createPending = execution.then(() => undefined, () => undefined);
+    return execution;
+  }
+
+  unlinkPlotEvent(value: unknown): Promise<PlotEventLinkMutationProjection> {
+    this.#assertOpen();
+    const command = parseUnlinkPlotEventCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#unlinkPlotEventSerially(command);
+    });
+    this.#createPending = execution.then(() => undefined, () => undefined);
+    return execution;
+  }
+
+  listPlotEventLinks(value: unknown): Promise<PlotEventLinkListProjection> {
+    this.#assertOpen();
+    const command = parseListPlotEventLinksCommand(value);
+    return Promise.all([this.#createPending, this.#savePending]).then(() =>
+      this.#listPlotEventLinksSerially(command),
+    );
   }
 
   linkPlotThreadSource(value: unknown): Promise<PlotThreadSourceProjection> {
@@ -7778,7 +8394,14 @@ class DefaultLocalWorkspaceRuntime
       }));
     const structureRevisionRefs = this.#database
       .prepare(WORK_STRUCTURE_REVISION_ROWS_SQL)
-      .all(command.workId, command.workId, command.workId, command.workId)
+      .all(
+        command.workId,
+        command.workId,
+        command.workId,
+        command.workId,
+        command.workId,
+        command.workId,
+      )
       .map((row, index) => {
         const label = `Work structure revision rows[${index}]`;
         return {
@@ -8619,6 +9242,247 @@ class DefaultLocalWorkspaceRuntime
   async #createEventBlockSerially(
     command: CreateEventBlockCommand,
   ): Promise<EventBlockProjection> {
+    const createdAt = new Date().toISOString();
+    const eventBlockId = entityId<"EventBlock">(randomUUID());
+    const eventSourceId = entityId<"EventSource">(randomUUID());
+    const sourceRange = await this.#prepareEventSourceRange(
+      command,
+      eventBlockId,
+      createdAt,
+    );
+    const meta = createRecordMeta(createdAt);
+    await this.#ledger.transaction(async (transaction: StorageTransaction) => {
+      transaction.write(
+        createAnchorLedgerRecord(command.workId, sourceRange.anchor),
+      );
+      transaction.write({
+        kind: "rangeGroup",
+        ...meta,
+        id: sourceRange.rangeGroupId,
+        workId: command.workId,
+        orderedAnchorIds: [sourceRange.anchorId],
+      });
+      transaction.write({
+        kind: "eventBlock",
+        ...meta,
+        id: eventBlockId,
+        workId: command.workId,
+        title: command.title,
+        ...(command.note.length === 0 ? {} : { note: command.note }),
+        outlineOrderKey: JSON.stringify([createdAt, eventBlockId]),
+        collapsed: false,
+      });
+      transaction.write({
+        kind: "eventSource",
+        ...meta,
+        id: eventSourceId,
+        workId: command.workId,
+        eventBlockId,
+        rangeGroupId: sourceRange.rangeGroupId,
+        role: "primary",
+      });
+    });
+    const projection = await this.#listEventBlocksSerially({
+      schemaVersion: 1,
+      workId: command.workId,
+    });
+    const created = projection.eventBlocks.find(
+      (eventBlock) => eventBlock.eventBlockId === eventBlockId,
+    );
+    if (created === undefined) {
+      throw new Error(`Stored EventBlock is missing: ${eventBlockId}`);
+    }
+    return created;
+  }
+
+  async #createAnchorlessEventSerially(
+    command: CreateAnchorlessEventCommand,
+  ): Promise<EventBlockProjection> {
+    if (!this.#catalog.works.some((work) => work.workId === command.workId)) {
+      throw new Error(`Unknown Work: ${command.workId}`);
+    }
+    const createdAt = new Date().toISOString();
+    const eventBlockId = entityId<"EventBlock">(randomUUID());
+    const meta = createRecordMeta(createdAt);
+    await this.#ledger.transaction(async (transaction: StorageTransaction) => {
+      transaction.write({
+        kind: "eventBlock",
+        ...meta,
+        id: eventBlockId,
+        workId: command.workId,
+        title: command.title,
+        ...(command.note.length === 0 ? {} : { note: command.note }),
+        outlineOrderKey: JSON.stringify([createdAt, eventBlockId]),
+        collapsed: false,
+      });
+    });
+    const projection = await this.#listEventBlocksSerially({
+      schemaVersion: 1,
+      workId: command.workId,
+    });
+    const created = projection.eventBlocks.find(
+      (eventBlock) => eventBlock.eventBlockId === eventBlockId,
+    );
+    if (created === undefined) {
+      throw new Error(`Stored EventBlock is missing: ${eventBlockId}`);
+    }
+    return created;
+  }
+
+  async #linkEventSourceSerially(
+    command: LinkEventSourceCommand,
+  ): Promise<EventSourceProjection> {
+    const eventBlock = readStoredEventBlockRows(
+      this.#database,
+      command.workId,
+    ).find((candidate) => candidate.eventBlockId === command.eventBlockId);
+    if (eventBlock === undefined) {
+      throw new Error(`Unknown EventBlock: ${command.eventBlockId}`);
+    }
+    const createdAt = new Date().toISOString();
+    const eventSourceId = entityId<"EventSource">(randomUUID());
+    const sourceRange = await this.#prepareEventSourceRange(
+      command,
+      eventSourceId,
+      createdAt,
+    );
+    const meta = createRecordMeta(createdAt);
+    await this.#ledger.transaction(async (transaction: StorageTransaction) => {
+      transaction.write(
+        createAnchorLedgerRecord(command.workId, sourceRange.anchor),
+      );
+      transaction.write({
+        kind: "rangeGroup",
+        ...meta,
+        id: sourceRange.rangeGroupId,
+        workId: command.workId,
+        orderedAnchorIds: [sourceRange.anchorId],
+      });
+      transaction.write({
+        kind: "eventSource",
+        ...meta,
+        id: eventSourceId,
+        workId: command.workId,
+        eventBlockId: command.eventBlockId,
+        rangeGroupId: sourceRange.rangeGroupId,
+        role: command.role,
+      });
+    });
+    const projection = await this.#listEventBlocksSerially({
+      schemaVersion: 1,
+      workId: command.workId,
+    });
+    const created = projection.eventSources.find(
+      (source) => source.eventSourceId === eventSourceId,
+    );
+    if (created === undefined) {
+      throw new Error(`Stored EventSource is missing: ${eventSourceId}`);
+    }
+    return created;
+  }
+
+  async #replaceEventSourceSerially(
+    command: ReplaceEventSourceCommand,
+  ): Promise<EventSourceProjection> {
+    const current = readStoredEventSourceRows(
+      this.#database,
+      command.workId,
+    ).find((source) => source.eventSourceId === command.eventSourceId);
+    if (
+      current === undefined ||
+      current.revision !== command.expectedRevision
+    ) {
+      throw new Error(`EventSource revision conflict: ${command.eventSourceId}`);
+    }
+    const createdAt = new Date().toISOString();
+    const eventSourceId = entityId<"EventSource">(randomUUID());
+    const sourceRange = await this.#prepareEventSourceRange(
+      command,
+      eventSourceId,
+      createdAt,
+    );
+    const meta = createRecordMeta(createdAt);
+    await this.#ledger.transaction(async (transaction: StorageTransaction) => {
+      transaction.write(
+        createAnchorLedgerRecord(command.workId, sourceRange.anchor),
+      );
+      transaction.write({
+        kind: "rangeGroup",
+        ...meta,
+        id: sourceRange.rangeGroupId,
+        workId: command.workId,
+        orderedAnchorIds: [sourceRange.anchorId],
+      });
+      transaction.write({
+        kind: "eventSource",
+        ...meta,
+        id: eventSourceId,
+        workId: command.workId,
+        eventBlockId: current.eventBlockId,
+        rangeGroupId: sourceRange.rangeGroupId,
+        role: current.role,
+        replacesEventSourceId: current.eventSourceId,
+        expectedReplacedRevision: command.expectedRevision,
+      });
+    });
+    const projection = await this.#listEventBlocksSerially({
+      schemaVersion: 1,
+      workId: command.workId,
+    });
+    const created = projection.eventSources.find(
+      (source) => source.eventSourceId === eventSourceId,
+    );
+    if (created === undefined) {
+      throw new Error(`Stored EventSource is missing: ${eventSourceId}`);
+    }
+    return created;
+  }
+
+  async #retireEventSourceSerially(
+    command: RetireEventSourceCommand,
+  ): Promise<EventSourceProjection> {
+    const current = readStoredEventSourceRows(
+      this.#database,
+      command.workId,
+    ).find((source) => source.eventSourceId === command.eventSourceId);
+    if (
+      current === undefined ||
+      current.revision !== command.expectedRevision
+    ) {
+      throw new Error(`EventSource revision conflict: ${command.eventSourceId}`);
+    }
+    const currentProjection = await this.#projectEventSourceRow(current);
+    const retiredAt = new Date().toISOString();
+    await this.#ledger.transaction(async (transaction: StorageTransaction) => {
+      transaction.write({
+        kind: "eventSourceRetirement",
+        id: command.eventSourceId,
+        workId: command.workId,
+        expectedRevision: command.expectedRevision,
+        retiredAt,
+      });
+    });
+    return parseEventSourceProjection({
+      ...currentProjection,
+      revision: currentProjection.revision + 1,
+      updatedAt: retiredAt,
+      retiredAt,
+    });
+  }
+
+  async #prepareEventSourceRange(
+    command: {
+      readonly workId: EntityId<"Work">;
+      readonly documentId: EntityId<"Document">;
+      readonly selection: {
+        readonly anchor: number;
+        readonly head: number;
+      };
+      readonly exactQuote: string;
+    },
+    commandRef: EntityId<"EventBlock"> | EntityId<"EventSource">,
+    createdAt: string,
+  ) {
     const target = this.#documentTargets.get(command.documentId);
     if (target === undefined || target.workId !== command.workId) {
       throw new Error(
@@ -8628,21 +9492,20 @@ class DefaultLocalWorkspaceRuntime
     const from = Math.min(command.selection.anchor, command.selection.head);
     const to = Math.max(command.selection.anchor, command.selection.head);
     if (to > target.text.length) {
-      throw new Error("EventBlock selection is outside the current manuscript");
+      throw new Error("EventSource selection is outside the current manuscript");
     }
     if (target.text.slice(from, to) !== command.exactQuote) {
       throw new Error(
-        "EventBlock selected quote does not match the current durable revision",
+        "EventSource selected quote does not match the current durable revision",
       );
     }
-    const storedRows = readStoredDocumentRows(this.#database);
-    const catalog = createCatalogFromStoredRows(storedRows);
+    const catalog = createCatalogFromStoredRows(
+      readStoredDocumentRows(this.#database),
+    );
     const work = catalog.getWork(command.workId);
     if (work === null) {
       throw new Error(`Unknown Work: ${command.workId}`);
     }
-    const createdAt = new Date().toISOString();
-    const eventBlockId = entityId<"EventBlock">(randomUUID());
     const rangeGroupId = entityId<"RangeGroup">(randomUUID());
     const anchorId = entityId<"Anchor">(randomUUID());
     const anchor = await new CreateAnchor({
@@ -8665,42 +9528,10 @@ class DefaultLocalWorkspaceRuntime
       startOffset: from,
       endOffset: to,
       policy: this.#options.defaults.anchorPolicy,
-      commandRef: eventBlockId,
+      commandRef,
       actorRef: work.studioId,
     });
-    const meta = createRecordMeta(createdAt);
-    await this.#ledger.transaction(async (transaction: StorageTransaction) => {
-      transaction.write(createAnchorLedgerRecord(command.workId, anchor));
-      transaction.write({
-        kind: "rangeGroup",
-        ...meta,
-        id: rangeGroupId,
-        workId: command.workId,
-        orderedAnchorIds: [anchorId],
-      });
-      transaction.write({
-        kind: "eventBlock",
-        ...meta,
-        id: eventBlockId,
-        workId: command.workId,
-        rangeGroupId,
-        title: command.title,
-        ...(command.note.length === 0 ? {} : { note: command.note }),
-        orderKey: JSON.stringify([createdAt, eventBlockId]),
-        collapsed: false,
-      });
-    });
-    const projection = await this.#listEventBlocksSerially({
-      schemaVersion: 1,
-      workId: command.workId,
-    });
-    const created = projection.eventBlocks.find(
-      (eventBlock) => eventBlock.eventBlockId === eventBlockId,
-    );
-    if (created === undefined) {
-      throw new Error(`Stored EventBlock is missing: ${eventBlockId}`);
-    }
-    return created;
+    return Object.freeze({ rangeGroupId, anchorId, anchor });
   }
 
   async #listEventBlocksSerially(
@@ -8710,6 +9541,37 @@ class DefaultLocalWorkspaceRuntime
       throw new Error(`Unknown Work: ${command.workId}`);
     }
     const rows = readStoredEventBlockRows(this.#database, command.workId);
+    const eventBlocks = Object.freeze(
+      rows.map((row) => parseEventBlockProjection({
+        schemaVersion: 1,
+        eventBlockId: row.eventBlockId,
+        revision: row.revision,
+        workId: row.workId,
+        title: row.title,
+        note: row.note,
+        parentEventId: row.parentEventId,
+        outlineOrderKey: row.outlineOrderKey,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+        retiredAt: row.retiredAt,
+      })),
+    );
+    const eventSources = await Promise.all(
+      readStoredEventSourceRows(this.#database, command.workId).map((row) =>
+        this.#projectEventSourceRow(row),
+      ),
+    );
+    return parseEventBlockListProjection({
+      schemaVersion: 1,
+      workId: command.workId,
+      eventBlocks,
+      eventSources,
+    });
+  }
+
+  async #projectEventSourceRow(
+    row: StoredEventSourceRow,
+  ): Promise<EventSourceProjection> {
     const catalog = createCatalogFromStoredRows(
       readStoredDocumentRows(this.#database),
     );
@@ -8721,51 +9583,87 @@ class DefaultLocalWorkspaceRuntime
         this.#options.defaults.anchorEvidenceChecksumAlgorithm,
       ),
     });
-    const eventBlocks = await Promise.all(
-      rows.map(async (row) => {
-        const target = this.#documentTargets.get(row.documentId);
-        if (target === undefined || target.workId !== row.workId) {
-          throw new Error(
-            `EventBlock document is outside its Work: ${row.eventBlockId}`,
-          );
-        }
-        const resolution = await resolver.execute({
-          workId: row.workId,
-          anchorId: row.anchorId,
-          targetRevisionId: target.currentRevisionId,
-        });
-        const integrity =
+    const anchors = await Promise.all(row.anchors.map(async (anchor) => {
+      const target = this.#documentTargets.get(anchor.documentId);
+      if (target === undefined || target.workId !== row.workId) {
+        throw new Error(
+          `EventSource document is outside its Work: ${row.eventSourceId}`,
+        );
+      }
+      const resolution = await resolver.execute({
+        workId: row.workId,
+        anchorId: anchor.anchorId,
+        targetRevisionId: target.currentRevisionId,
+      });
+      const integrity =
+        resolution.status === "resolved"
+          ? "resolved"
+          : resolution.status === "needsReview"
+            ? "needsReview"
+            : "broken";
+      return {
+        anchorId: anchor.anchorId,
+        documentId: anchor.documentId,
+        documentRevisionId: target.currentRevisionId,
+        exactQuote: anchor.exactQuote,
+        integrity,
+        range:
           resolution.status === "resolved"
-            ? "resolved"
-            : resolution.status === "needsReview"
-              ? "needsReview"
-              : "broken";
-        return parseEventBlockProjection({
-          schemaVersion: 1,
-          eventBlockId: row.eventBlockId,
-          anchorId: row.anchorId,
-          workId: row.workId,
-          documentId: row.documentId,
-          documentRevisionId: target.currentRevisionId,
-          title: row.title,
-          note: row.note,
-          exactQuote: row.exactQuote,
-          integrity,
-          range:
-            resolution.status === "resolved"
-              ? {
-                  from: resolution.range.startOffset,
-                  to: resolution.range.endOffset,
-                }
-              : null,
-          createdAt: row.createdAt,
-        });
-      }),
+            ? {
+                from: resolution.range.startOffset,
+                to: resolution.range.endOffset,
+              }
+            : null,
+      };
+    }));
+    return parseEventSourceProjection({
+      schemaVersion: 1,
+      eventSourceId: row.eventSourceId,
+      revision: row.revision,
+      workId: row.workId,
+      eventBlockId: row.eventBlockId,
+      rangeGroupId: row.rangeGroupId,
+      role: row.role,
+      anchors,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      retiredAt: row.retiredAt,
+    });
+  }
+
+  async #listEventRailSerially(
+    command: ListEventRailCommand,
+  ): Promise<EventRailProjection> {
+    const work = this.#catalog.works.find(
+      (candidate) => candidate.workId === command.workId,
     );
-    return parseEventBlockListProjection({
+    if (work === undefined) {
+      throw new Error(`Unknown Work: ${command.workId}`);
+    }
+    const events = await this.#listEventBlocksSerially({
       schemaVersion: 1,
       workId: command.workId,
-      eventBlocks,
+    });
+    const links = this.#listPlotEventLinksSerially({
+      schemaVersion: 1,
+      workId: command.workId,
+    });
+    return deriveEventRailProjection({
+      workId: command.workId,
+      documents: work.documents.map((document, documentIndex) =>
+        Object.freeze({
+          documentId: document.documentId,
+          title: document.title,
+          documentIndex,
+        }),
+      ),
+      eventBlocks: events.eventBlocks,
+      eventSources: events.eventSources,
+      plotEventLinks: links.links,
+      board: this.#getDefaultPlotBoardSerially({
+        schemaVersion: 1,
+        workId: command.workId,
+      }),
     });
   }
 
@@ -8946,6 +9844,184 @@ class DefaultLocalWorkspaceRuntime
       schemaVersion: 1,
       workId: command.workId,
       sceneOverrides,
+    });
+  }
+
+  #projectSceneRuleSetRow(
+    row: StoredSceneRuleSetRow,
+  ): SceneRuleSetProjection {
+    let boundaryRules: unknown;
+    try {
+      boundaryRules = JSON.parse(row.boundaryRulesJson);
+    } catch {
+      throw new Error(`SceneRuleSet rules are not valid JSON: ${row.sceneRuleSetId}`);
+    }
+    return parseSceneRuleSetProjection({
+      schemaVersion: 1,
+      sceneRuleSetId: row.sceneRuleSetId,
+      revision: row.revision,
+      workId: row.workId,
+      displayName: row.displayName,
+      boundaryRules,
+      normalizationPolicy: row.normalizationPolicy,
+      enabled: row.enabled,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    });
+  }
+
+  #projectSceneEventOverrideRows(
+    rows: readonly StoredSceneEventOverrideRow[],
+  ): readonly SceneEventOverrideProjection[] {
+    return Object.freeze(rows.map((row) =>
+      parseSceneEventOverrideProjection({
+        schemaVersion: 1,
+        ...row,
+      })));
+  }
+
+  async #listSceneProjectionSerially(
+    command: ListSceneProjectionCommand,
+  ): Promise<SceneProjectionList> {
+    const work = this.#catalog.works.find(
+      (candidate) => candidate.workId === command.workId,
+    );
+    if (work === undefined) {
+      throw new Error(`Unknown Work: ${command.workId}`);
+    }
+    const documents = work.documents.map((document, documentIndex) => {
+      const target = this.#documentTargets.get(document.documentId);
+      if (target === undefined || target.workId !== command.workId) {
+        throw new Error(
+          `Scene projection document is unavailable: ${document.documentId}`,
+        );
+      }
+      return Object.freeze({
+        workId: command.workId,
+        documentId: document.documentId,
+        documentRevisionId: target.currentRevisionId,
+        title: document.title,
+        documentIndex,
+        text: target.text,
+      });
+    });
+    const [events, overrides] = await Promise.all([
+      this.#listEventBlocksSerially({
+        schemaVersion: 1,
+        workId: command.workId,
+      }),
+      this.#listSceneOverridesSerially({
+        schemaVersion: 1,
+        workId: command.workId,
+      }),
+    ]);
+    return deriveSceneProjection({
+      workId: command.workId,
+      ruleSet: this.#projectSceneRuleSetRow(
+        readStoredSceneRuleSetRow(this.#database, command.workId),
+      ),
+      documents,
+      sceneOverrides: overrides.sceneOverrides,
+      eventBlocks: events.eventBlocks,
+      eventSources: events.eventSources,
+      sceneEventOverrides: this.#projectSceneEventOverrideRows(
+        readStoredSceneEventOverrideRows(this.#database, command.workId),
+      ),
+    });
+  }
+
+  async #updateSceneRuleSetSerially(
+    command: UpdateSceneRuleSetCommand,
+  ): Promise<SceneProjectionList> {
+    const current = readStoredSceneRuleSetRow(this.#database, command.workId);
+    if (
+      current.sceneRuleSetId !== command.sceneRuleSetId ||
+      current.revision !== command.expectedRevision
+    ) {
+      throw new Error(`SceneRuleSet revision conflict: ${command.sceneRuleSetId}`);
+    }
+    const updatedAt = new Date().toISOString();
+    await this.#ledger.transaction(async (transaction: StorageTransaction) => {
+      transaction.write({
+        kind: "sceneRuleSetUpdate",
+        id: command.sceneRuleSetId,
+        workId: command.workId,
+        expectedRevision: command.expectedRevision,
+        displayName: command.displayName,
+        boundaryRulesJson: JSON.stringify(command.boundaryRules),
+        normalizationPolicy: command.normalizationPolicy,
+        enabled: command.enabled,
+        updatedAt,
+      });
+    });
+    return this.#listSceneProjectionSerially({
+      schemaVersion: 1,
+      workId: command.workId,
+    });
+  }
+
+  async #setSceneEventOverrideSerially(
+    command: SetSceneEventOverrideCommand,
+  ): Promise<SceneProjectionList> {
+    const projection = await this.#listSceneProjectionSerially({
+      schemaVersion: 1,
+      workId: command.workId,
+    });
+    if (!projection.scenes.some((scene) => scene.sceneKey === command.sceneKey)) {
+      throw new Error(`Unknown SceneProjection: ${command.sceneKey}`);
+    }
+    const eventBlock = readStoredEventBlockRowById(
+      this.#database,
+      command.workId,
+      command.eventBlockId,
+    );
+    if (eventBlock === null || eventBlock.retiredAt !== null) {
+      throw new Error(
+        `Work/event boundary violation: ${command.workId}/${command.eventBlockId}`,
+      );
+    }
+    const current = readStoredSceneEventOverrideRows(
+      this.#database,
+      command.workId,
+    ).find(
+      (candidate) =>
+        candidate.sceneKey === command.sceneKey &&
+        candidate.eventBlockId === command.eventBlockId,
+    );
+    if ((current?.revision ?? null) !== command.expectedRevision) {
+      throw new Error(
+        `SceneEventOverride revision conflict: ${command.sceneKey}/${command.eventBlockId}`,
+      );
+    }
+    if (current?.operation === command.operation) return projection;
+    if (current === undefined && command.operation === null) return projection;
+
+    const changedAt = new Date().toISOString();
+    await this.#ledger.transaction(async (transaction: StorageTransaction) => {
+      if (current !== undefined) {
+        transaction.write({
+          kind: "sceneEventOverrideRetirement",
+          id: current.sceneEventOverrideId,
+          workId: command.workId,
+          expectedRevision: current.revision,
+          retiredAt: changedAt,
+        });
+      }
+      if (command.operation !== null) {
+        transaction.write({
+          kind: "sceneEventOverride",
+          ...createRecordMeta(changedAt),
+          id: entityId<"SceneEventOverride">(randomUUID()),
+          workId: command.workId,
+          sceneKey: command.sceneKey,
+          eventBlockId: command.eventBlockId,
+          operation: command.operation,
+        });
+      }
+    });
+    return this.#listSceneProjectionSerially({
+      schemaVersion: 1,
+      workId: command.workId,
     });
   }
 
@@ -10698,7 +11774,14 @@ class DefaultLocalWorkspaceRuntime
       }));
     const structureRevisionRefs = this.#database
       .prepare(WORK_STRUCTURE_REVISION_ROWS_SQL)
-      .all(command.workId, command.workId, command.workId, command.workId)
+      .all(
+        command.workId,
+        command.workId,
+        command.workId,
+        command.workId,
+        command.workId,
+        command.workId,
+      )
       .map((row, index) => {
         const label = `Submission Work structure revision rows[${index}]`;
         return {
@@ -11726,7 +12809,14 @@ class DefaultLocalWorkspaceRuntime
       }));
     const structureRevisionRefs = this.#database
       .prepare(WORK_STRUCTURE_REVISION_ROWS_SQL)
-      .all(candidate.workId, candidate.workId, candidate.workId, candidate.workId)
+      .all(
+        candidate.workId,
+        candidate.workId,
+        candidate.workId,
+        candidate.workId,
+        candidate.workId,
+        candidate.workId,
+      )
       .map((row, index) => {
         const label = `Publishing assistant Work structure revision rows[${index}]`;
         return {
@@ -12154,7 +13244,14 @@ class DefaultLocalWorkspaceRuntime
         }));
       const structureRevisionRefs = this.#database
         .prepare(WORK_STRUCTURE_REVISION_ROWS_SQL)
-        .all(row.workId, row.workId, row.workId, row.workId)
+        .all(
+          row.workId,
+          row.workId,
+          row.workId,
+          row.workId,
+          row.workId,
+          row.workId,
+        )
         .map((entry, index) => {
           const label = `CSV submission Work structure revision rows[${index}]`;
           return {
@@ -12559,6 +13656,300 @@ class DefaultLocalWorkspaceRuntime
     });
   }
 
+  #readDefaultPlotBoardContext(workId: EntityId<"Work">): Readonly<{
+    board: StoredPlotBoardRow;
+    lanes: readonly StoredPlotLaneRow[];
+    defaultLane: StoredPlotLaneRow;
+    placements: readonly StoredPlotPlacementRow[];
+  }> {
+    const board = readStoredDefaultPlotBoardRow(this.#database, workId);
+    const lanes = readStoredPlotLaneRows(
+      this.#database,
+      workId,
+      board.plotBoardId,
+    );
+    const defaultLanes = lanes.filter((lane) => lane.kind === "default");
+    if (defaultLanes.length !== 1) {
+      throw new Error(
+        `Default PlotBoard must have exactly one default PlotLane: ${board.plotBoardId}`,
+      );
+    }
+    return Object.freeze({
+      board,
+      lanes,
+      defaultLane: defaultLanes[0] as StoredPlotLaneRow,
+      placements: readStoredActivePlotPlacementRows(
+        this.#database,
+        workId,
+        board.plotBoardId,
+      ),
+    });
+  }
+
+  #projectDefaultPlotBoard(workId: EntityId<"Work">): PlotBoardProjection {
+    const context = this.#readDefaultPlotBoardContext(workId);
+    return parsePlotBoardProjection({
+      schemaVersion: 1,
+      ...context.board,
+      lanes: context.lanes.map((lane) => ({
+        schemaVersion: 1,
+        ...lane,
+        placements: context.placements
+          .filter((placement) => placement.plotLaneId === lane.plotLaneId)
+          .sort((left, right) =>
+            compareFractionalOrderKeys(left.orderKey, right.orderKey) ||
+            left.plotPlacementId.localeCompare(right.plotPlacementId))
+          .map((placement) => ({
+            schemaVersion: 1,
+            plotPlacementId: placement.plotPlacementId,
+            revision: placement.revision,
+            workId: placement.workId,
+            plotBoardId: placement.plotBoardId,
+            plotLaneId: placement.plotLaneId,
+            plotBeatId: placement.plotBeatId,
+            orderKey: placement.orderKey,
+            storyTime: placement.storyTime,
+            storyTimeEnd: placement.storyTimeEnd,
+            createdAt: placement.createdAt,
+            updatedAt: placement.updatedAt,
+            retiredAt: placement.retiredAt,
+            plotBeat: {
+              schemaVersion: 1,
+              plotThreadId: placement.plotBeatId,
+              revision: placement.plotRevision,
+              workId: placement.workId,
+              title: placement.plotTitle,
+              stage: placement.plotStage,
+              summary: placement.plotSummary,
+              note: placement.plotNote,
+              createdAt: placement.plotCreatedAt,
+              updatedAt: placement.plotUpdatedAt,
+              retiredAt: placement.plotRetiredAt,
+            },
+          })),
+      })),
+    });
+  }
+
+  #getDefaultPlotBoardSerially(
+    command: GetDefaultPlotBoardCommand,
+  ): PlotBoardProjection {
+    if (!this.#catalog.works.some((work) => work.workId === command.workId)) {
+      throw new Error(`Unknown Work: ${command.workId}`);
+    }
+    return this.#projectDefaultPlotBoard(command.workId);
+  }
+
+  #prepareDefaultPlotPlacement(workId: EntityId<"Work">): Readonly<{
+    plotPlacementId: EntityId<"PlotPlacement">;
+    plotBoardId: EntityId<"PlotBoard">;
+    plotLaneId: EntityId<"PlotLane">;
+    orderKey: string;
+    expectedBoardRevision: number;
+  }> {
+    const context = this.#readDefaultPlotBoardContext(workId);
+    const lanePlacements = context.placements
+      .filter((placement) => placement.plotLaneId === context.defaultLane.plotLaneId)
+      .sort((left, right) =>
+        compareFractionalOrderKeys(left.orderKey, right.orderKey) ||
+        left.plotPlacementId.localeCompare(right.plotPlacementId));
+    const last = lanePlacements.at(-1) ?? null;
+    return Object.freeze({
+      plotPlacementId: entityId<"PlotPlacement">(randomUUID()),
+      plotBoardId: context.board.plotBoardId,
+      plotLaneId: context.defaultLane.plotLaneId,
+      orderKey: createOrderKeyBetween(last?.orderKey ?? null, null),
+      expectedBoardRevision: context.board.revision,
+    });
+  }
+
+  async #movePlotPlacementSerially(
+    command: MovePlotPlacementCommand,
+  ): Promise<PlotBoardProjection> {
+    if (!this.#catalog.works.some((work) => work.workId === command.workId)) {
+      throw new Error(`Unknown Work: ${command.workId}`);
+    }
+    const current = readStoredPlotPlacementRowById(
+      this.#database,
+      command.workId,
+      command.plotPlacementId,
+    );
+    if (current === null || current.retiredAt !== null) {
+      throw new Error(`Unknown active PlotPlacement: ${command.plotPlacementId}`);
+    }
+    if (current.revision !== command.expectedPlacementRevision) {
+      throw new Error(`PlotPlacement revision conflict: ${command.plotPlacementId}`);
+    }
+    if (
+      command.beforePlacementId === command.plotPlacementId ||
+      command.afterPlacementId === command.plotPlacementId
+    ) {
+      throw new Error("PlotPlacement cannot be its own move neighbor");
+    }
+
+    const context = this.#readDefaultPlotBoardContext(command.workId);
+    if (context.board.plotBoardId !== command.targetBoardId) {
+      throw new Error(
+        `Work/PlotBoard boundary violation: ${command.workId}/${command.targetBoardId}`,
+      );
+    }
+    if (context.board.revision !== command.expectedBoardRevision) {
+      throw new Error(`PlotBoard revision conflict: ${command.targetBoardId}`);
+    }
+    if (!context.lanes.some((lane) => lane.plotLaneId === command.targetLaneId)) {
+      throw new Error(
+        `PlotBoard/PlotLane boundary violation: ${command.targetBoardId}/${command.targetLaneId}`,
+      );
+    }
+
+    const targetPlacements = context.placements
+      .filter((placement) =>
+        placement.plotLaneId === command.targetLaneId &&
+        placement.plotPlacementId !== command.plotPlacementId)
+      .sort((left, right) =>
+        compareFractionalOrderKeys(left.orderKey, right.orderKey) ||
+        left.plotPlacementId.localeCompare(right.plotPlacementId));
+    const beforeIndex = command.beforePlacementId === undefined
+      ? -1
+      : targetPlacements.findIndex(
+          (placement) => placement.plotPlacementId === command.beforePlacementId,
+        );
+    const afterIndex = command.afterPlacementId === undefined
+      ? -1
+      : targetPlacements.findIndex(
+          (placement) => placement.plotPlacementId === command.afterPlacementId,
+        );
+    if (command.beforePlacementId !== undefined && beforeIndex < 0) {
+      throw new Error(`Move predecessor is outside the target lane: ${command.beforePlacementId}`);
+    }
+    if (command.afterPlacementId !== undefined && afterIndex < 0) {
+      throw new Error(`Move successor is outside the target lane: ${command.afterPlacementId}`);
+    }
+    if (
+      command.beforePlacementId !== undefined &&
+      command.afterPlacementId !== undefined &&
+      beforeIndex + 1 !== afterIndex
+    ) {
+      throw new Error("Move neighbors are not adjacent in the target lane");
+    }
+    if (
+      command.beforePlacementId !== undefined &&
+      command.afterPlacementId === undefined &&
+      beforeIndex !== targetPlacements.length - 1
+    ) {
+      throw new Error("Move predecessor is not the final target-lane placement");
+    }
+    if (
+      command.beforePlacementId === undefined &&
+      command.afterPlacementId !== undefined &&
+      afterIndex !== 0
+    ) {
+      throw new Error("Move successor is not the first target-lane placement");
+    }
+    if (
+      command.beforePlacementId === undefined &&
+      command.afterPlacementId === undefined &&
+      targetPlacements.length !== 0
+    ) {
+      throw new Error("Move without neighbors requires an empty target lane");
+    }
+
+    const previous = beforeIndex < 0 ? null : targetPlacements[beforeIndex] ?? null;
+    const next = afterIndex < 0 ? null : targetPlacements[afterIndex] ?? null;
+    const orderKey = createOrderKeyBetween(
+      previous?.orderKey ?? null,
+      next?.orderKey ?? null,
+    );
+    const updatedAt = new Date().toISOString();
+    if (orderKey.length <= this.#options.defaults.plotBoard.orderKeyLengthLimit) {
+      await this.#ledger.transaction(async (transaction: StorageTransaction) => {
+        transaction.write({
+          kind: "plotPlacementMove",
+          id: current.plotPlacementId,
+          workId: command.workId,
+          expectedRevision: command.expectedPlacementRevision,
+          plotBoardId: command.targetBoardId,
+          plotLaneId: command.targetLaneId,
+          orderKey,
+          expectedBoardRevision: command.expectedBoardRevision,
+          updatedAt,
+        });
+      });
+    } else {
+      const insertIndex = command.beforePlacementId === undefined
+        ? 0
+        : beforeIndex + 1;
+      const ordered = [...targetPlacements];
+      ordered.splice(insertIndex, 0, current);
+      const rebalancedKeys = createRebalancedOrderKeys(ordered.length);
+      await this.#ledger.transaction(async (transaction: StorageTransaction) => {
+        transaction.write({
+          kind: "plotPlacementRebalance",
+          workId: command.workId,
+          plotBoardId: command.targetBoardId,
+          expectedBoardRevision: command.expectedBoardRevision,
+          updatedAt,
+          placements: ordered.map((placement, index) => ({
+            id: placement.plotPlacementId,
+            expectedRevision: placement.revision,
+            plotLaneId: command.targetLaneId,
+            orderKey: rebalancedKeys[index] as string,
+          })),
+        });
+      });
+    }
+    return this.#projectDefaultPlotBoard(command.workId);
+  }
+
+  async #setPlotPlacementStoryTimeSerially(
+    command: SetPlotPlacementStoryTimeCommand,
+  ): Promise<PlotBoardProjection> {
+    if (!this.#catalog.works.some((work) => work.workId === command.workId)) {
+      throw new Error(`Unknown Work: ${command.workId}`);
+    }
+    const current = readStoredPlotPlacementRowById(
+      this.#database,
+      command.workId,
+      command.plotPlacementId,
+    );
+    if (current === null || current.retiredAt !== null) {
+      throw new Error(`Unknown active PlotPlacement: ${command.plotPlacementId}`);
+    }
+    if (current.plotBoardId !== command.plotBoardId) {
+      throw new Error(
+        `PlotPlacement/PlotBoard boundary violation: ${command.plotPlacementId}/${command.plotBoardId}`,
+      );
+    }
+    if (current.revision !== command.expectedPlacementRevision) {
+      throw new Error(`PlotPlacement revision conflict: ${command.plotPlacementId}`);
+    }
+    const context = this.#readDefaultPlotBoardContext(command.workId);
+    if (context.board.plotBoardId !== command.plotBoardId) {
+      throw new Error(
+        `Work/PlotBoard boundary violation: ${command.workId}/${command.plotBoardId}`,
+      );
+    }
+    if (context.board.revision !== command.expectedBoardRevision) {
+      throw new Error(`PlotBoard revision conflict: ${command.plotBoardId}`);
+    }
+
+    const updatedAt = new Date().toISOString();
+    await this.#ledger.transaction(async (transaction: StorageTransaction) => {
+      transaction.write({
+        kind: "plotPlacementStoryTime",
+        id: current.plotPlacementId,
+        workId: command.workId,
+        expectedRevision: command.expectedPlacementRevision,
+        plotBoardId: command.plotBoardId,
+        storyTime: command.storyTime,
+        storyTimeEnd: command.storyTimeEnd,
+        expectedBoardRevision: command.expectedBoardRevision,
+        updatedAt,
+      });
+    });
+    return this.#projectDefaultPlotBoard(command.workId);
+  }
+
   async #createPlotThreadSerially(
     command: CreatePlotThreadCommand,
   ): Promise<PlotThreadProjection> {
@@ -12567,6 +13958,7 @@ class DefaultLocalWorkspaceRuntime
     }
     const createdAt = new Date().toISOString();
     const plotThreadId = entityId<"PlotThread">(randomUUID());
+    const placement = this.#prepareDefaultPlotPlacement(command.workId);
     await this.#ledger.transaction(async (transaction: StorageTransaction) => {
       transaction.write({
         kind: "plotThread",
@@ -12577,6 +13969,23 @@ class DefaultLocalWorkspaceRuntime
         stage: command.stage,
         summary: command.summary,
         note: command.note,
+      });
+      transaction.write({
+        kind: "plotPlacement",
+        ...createRecordMeta(createdAt),
+        id: placement.plotPlacementId,
+        workId: command.workId,
+        plotBoardId: placement.plotBoardId,
+        plotLaneId: placement.plotLaneId,
+        plotThreadId,
+        orderKey: placement.orderKey,
+      });
+      transaction.write({
+        kind: "plotBoardTouch",
+        id: placement.plotBoardId,
+        workId: command.workId,
+        expectedRevision: placement.expectedBoardRevision,
+        updatedAt: createdAt,
       });
     });
     const stored = readStoredPlotThreadRowById(
@@ -12718,6 +14127,374 @@ class DefaultLocalWorkspaceRuntime
       throw new Error(`Retired plot is missing: ${command.plotThreadId}`);
     }
     return parsePlotThreadProjection({ schemaVersion: 1, ...stored });
+  }
+
+  #projectPlotEventLinkRow(
+    row: StoredPlotEventLinkRow,
+  ): PlotEventLinkProjection {
+    return parsePlotEventLinkProjection({
+      schemaVersion: 1,
+      ...row,
+      titleMatch: row.plotTitle === row.eventTitle ? "matched" : "mismatched",
+    });
+  }
+
+  async #projectPlotEventLinkMutation(
+    row: StoredPlotEventLinkRow,
+    status: "created" | "existing" | "retired",
+  ): Promise<PlotEventLinkMutationProjection> {
+    const plotBeat = readStoredPlotThreadRowById(
+      this.#database,
+      row.workId,
+      row.plotBeatId,
+    );
+    const eventBlock = readStoredEventBlockRowById(
+      this.#database,
+      row.workId,
+      row.eventBlockId,
+    );
+    if (plotBeat === null || eventBlock === null) {
+      throw new Error(`PlotEventLink counterpart is missing: ${row.plotEventLinkId}`);
+    }
+    const eventSources = await Promise.all(
+      readStoredEventSourceRows(this.#database, row.workId)
+        .filter((source) => source.eventBlockId === row.eventBlockId)
+        .map((source) => this.#projectEventSourceRow(source)),
+    );
+    return parsePlotEventLinkMutationProjection({
+      schemaVersion: 1,
+      status,
+      plotBeat: parsePlotThreadProjection({ schemaVersion: 1, ...plotBeat }),
+      eventBlock: parseEventBlockProjection({
+        schemaVersion: 1,
+        eventBlockId: eventBlock.eventBlockId,
+        revision: eventBlock.revision,
+        workId: eventBlock.workId,
+        title: eventBlock.title,
+        note: eventBlock.note,
+        parentEventId: eventBlock.parentEventId,
+        outlineOrderKey: eventBlock.outlineOrderKey,
+        createdAt: eventBlock.createdAt,
+        updatedAt: eventBlock.updatedAt,
+        retiredAt: eventBlock.retiredAt,
+      }),
+      eventSources,
+      link: this.#projectPlotEventLinkRow(row),
+    });
+  }
+
+  #listPlotEventLinksSerially(
+    command: ListPlotEventLinksCommand,
+  ): PlotEventLinkListProjection {
+    if (!this.#catalog.works.some((work) => work.workId === command.workId)) {
+      throw new Error(`Unknown Work: ${command.workId}`);
+    }
+    return parsePlotEventLinkListProjection({
+      schemaVersion: 1,
+      workId: command.workId,
+      links: readStoredPlotEventLinkRows(this.#database, command.workId).map(
+        (row) => this.#projectPlotEventLinkRow(row),
+      ),
+    });
+  }
+
+  async #createPlotFromEventSerially(
+    command: CreatePlotFromEventCommand,
+  ): Promise<PlotEventLinkMutationProjection> {
+    const eventBlock = readStoredEventBlockRowById(
+      this.#database,
+      command.workId,
+      command.eventBlockId,
+    );
+    if (eventBlock === null) {
+      throw new Error(
+        `Work/event boundary violation: ${command.workId}/${command.eventBlockId}`,
+      );
+    }
+    if (eventBlock.retiredAt !== null) {
+      throw new Error(`EventBlock is retired: ${command.eventBlockId}`);
+    }
+    const activeLinks = readStoredPlotEventLinkRows(
+      this.#database,
+      command.workId,
+    );
+    const existing = activeLinks.find(
+      (link) =>
+        link.eventBlockId === command.eventBlockId &&
+        link.role === "primary" &&
+        link.plotRetiredAt === null,
+    );
+    if (existing !== undefined) {
+      return this.#projectPlotEventLinkMutation(existing, "existing");
+    }
+
+    const createdAt = new Date().toISOString();
+    const plotBeatId = entityId<"PlotThread">(randomUUID());
+    const plotEventLinkId = entityId<"PlotEventLink">(randomUUID());
+    const placement = this.#prepareDefaultPlotPlacement(command.workId);
+    const meta = createRecordMeta(createdAt);
+    await this.#ledger.transaction(async (transaction: StorageTransaction) => {
+      transaction.write({
+        kind: "plotThread",
+        ...meta,
+        id: plotBeatId,
+        workId: command.workId,
+        title: eventBlock.title,
+        stage: "",
+        summary: eventBlock.note,
+        note: "",
+      });
+      transaction.write({
+        kind: "plotEventLink",
+        ...meta,
+        id: plotEventLinkId,
+        workId: command.workId,
+        plotThreadId: plotBeatId,
+        eventBlockId: command.eventBlockId,
+        role: "primary",
+        createdFrom: "event-to-plot",
+      });
+      transaction.write({
+        kind: "plotPlacement",
+        ...meta,
+        id: placement.plotPlacementId,
+        workId: command.workId,
+        plotBoardId: placement.plotBoardId,
+        plotLaneId: placement.plotLaneId,
+        plotThreadId: plotBeatId,
+        orderKey: placement.orderKey,
+      });
+      transaction.write({
+        kind: "plotBoardTouch",
+        id: placement.plotBoardId,
+        workId: command.workId,
+        expectedRevision: placement.expectedBoardRevision,
+        updatedAt: createdAt,
+      });
+    });
+    const stored = readStoredPlotEventLinkRowById(
+      this.#database,
+      command.workId,
+      plotEventLinkId,
+    );
+    if (stored === null) {
+      throw new Error(`Stored PlotEventLink is missing: ${plotEventLinkId}`);
+    }
+    return this.#projectPlotEventLinkMutation(stored, "created");
+  }
+
+  async #createEventFromPlotSerially(
+    command: CreateEventFromPlotCommand,
+  ): Promise<PlotEventLinkMutationProjection> {
+    const plotBeat = readStoredPlotThreadRowById(
+      this.#database,
+      command.workId,
+      command.plotBeatId,
+    );
+    if (plotBeat === null) {
+      throw new Error(
+        `Work/plot boundary violation: ${command.workId}/${command.plotBeatId}`,
+      );
+    }
+    if (plotBeat.retiredAt !== null) {
+      throw new Error(`Plot is retired: ${command.plotBeatId}`);
+    }
+    const activeLinks = readStoredPlotEventLinkRows(
+      this.#database,
+      command.workId,
+    );
+    const existing = activeLinks.find(
+      (link) =>
+        link.plotBeatId === command.plotBeatId && link.role === "primary",
+    );
+    if (existing !== undefined) {
+      return this.#projectPlotEventLinkMutation(existing, "existing");
+    }
+
+    const createdAt = new Date().toISOString();
+    const eventBlockId = entityId<"EventBlock">(randomUUID());
+    const plotEventLinkId = entityId<"PlotEventLink">(randomUUID());
+    const eventSourceId = command.source.kind === "exact-selection"
+      ? entityId<"EventSource">(randomUUID())
+      : null;
+    const sourceRange = command.source.kind === "exact-selection"
+      ? await this.#prepareEventSourceRange(
+          {
+            workId: command.workId,
+            documentId: command.source.documentId,
+            selection: command.source.selection,
+            exactQuote: command.source.exactQuote,
+          },
+          eventBlockId,
+          createdAt,
+        )
+      : null;
+    const meta = createRecordMeta(createdAt);
+    await this.#ledger.transaction(async (transaction: StorageTransaction) => {
+      if (sourceRange !== null && eventSourceId !== null) {
+        transaction.write(
+          createAnchorLedgerRecord(command.workId, sourceRange.anchor),
+        );
+        transaction.write({
+          kind: "rangeGroup",
+          ...meta,
+          id: sourceRange.rangeGroupId,
+          workId: command.workId,
+          orderedAnchorIds: [sourceRange.anchorId],
+        });
+      }
+      transaction.write({
+        kind: "eventBlock",
+        ...meta,
+        id: eventBlockId,
+        workId: command.workId,
+        title: plotBeat.title,
+        ...(plotBeat.summary.length === 0 ? {} : { note: plotBeat.summary }),
+        outlineOrderKey: JSON.stringify([createdAt, eventBlockId]),
+        collapsed: false,
+      });
+      if (sourceRange !== null && eventSourceId !== null) {
+        transaction.write({
+          kind: "eventSource",
+          ...meta,
+          id: eventSourceId,
+          workId: command.workId,
+          eventBlockId,
+          rangeGroupId: sourceRange.rangeGroupId,
+          role: "primary",
+        });
+      }
+      transaction.write({
+        kind: "plotEventLink",
+        ...meta,
+        id: plotEventLinkId,
+        workId: command.workId,
+        plotThreadId: command.plotBeatId,
+        eventBlockId,
+        role: "primary",
+        createdFrom: "plot-to-event",
+      });
+    });
+    const stored = readStoredPlotEventLinkRowById(
+      this.#database,
+      command.workId,
+      plotEventLinkId,
+    );
+    if (stored === null) {
+      throw new Error(`Stored PlotEventLink is missing: ${plotEventLinkId}`);
+    }
+    return this.#projectPlotEventLinkMutation(stored, "created");
+  }
+
+  async #linkPlotEventSerially(
+    command: LinkPlotEventCommand,
+  ): Promise<PlotEventLinkMutationProjection> {
+    const plotBeat = readStoredPlotThreadRowById(
+      this.#database,
+      command.workId,
+      command.plotBeatId,
+    );
+    if (plotBeat === null) {
+      throw new Error(
+        `Work/plot boundary violation: ${command.workId}/${command.plotBeatId}`,
+      );
+    }
+    if (plotBeat.retiredAt !== null) {
+      throw new Error(`Plot is retired: ${command.plotBeatId}`);
+    }
+    const eventBlock = readStoredEventBlockRowById(
+      this.#database,
+      command.workId,
+      command.eventBlockId,
+    );
+    if (eventBlock === null) {
+      throw new Error(
+        `Work/event boundary violation: ${command.workId}/${command.eventBlockId}`,
+      );
+    }
+    if (eventBlock.retiredAt !== null) {
+      throw new Error(`EventBlock is retired: ${command.eventBlockId}`);
+    }
+    const activeLinks = readStoredPlotEventLinkRows(
+      this.#database,
+      command.workId,
+    );
+    const existing = activeLinks.find(
+      (link) =>
+        link.plotBeatId === command.plotBeatId &&
+        link.eventBlockId === command.eventBlockId,
+    );
+    if (existing !== undefined) {
+      return this.#projectPlotEventLinkMutation(existing, "existing");
+    }
+    if (
+      command.role === "primary" &&
+      activeLinks.some(
+        (link) => link.plotBeatId === command.plotBeatId && link.role === "primary",
+      )
+    ) {
+      throw new Error(`Plot already has a primary EventBlock: ${command.plotBeatId}`);
+    }
+
+    const createdAt = new Date().toISOString();
+    const plotEventLinkId = entityId<"PlotEventLink">(randomUUID());
+    await this.#ledger.transaction(async (transaction: StorageTransaction) => {
+      transaction.write({
+        kind: "plotEventLink",
+        ...createRecordMeta(createdAt),
+        id: plotEventLinkId,
+        workId: command.workId,
+        plotThreadId: command.plotBeatId,
+        eventBlockId: command.eventBlockId,
+        role: command.role,
+        createdFrom: "manual-link",
+      });
+    });
+    const stored = readStoredPlotEventLinkRowById(
+      this.#database,
+      command.workId,
+      plotEventLinkId,
+    );
+    if (stored === null) {
+      throw new Error(`Stored PlotEventLink is missing: ${plotEventLinkId}`);
+    }
+    return this.#projectPlotEventLinkMutation(stored, "created");
+  }
+
+  async #unlinkPlotEventSerially(
+    command: UnlinkPlotEventCommand,
+  ): Promise<PlotEventLinkMutationProjection> {
+    const current = readStoredPlotEventLinkRowById(
+      this.#database,
+      command.workId,
+      command.plotEventLinkId,
+    );
+    if (
+      current === null ||
+      current.retiredAt !== null ||
+      current.revision !== command.expectedRevision
+    ) {
+      throw new Error(`PlotEventLink revision conflict: ${command.plotEventLinkId}`);
+    }
+    const retiredAt = new Date().toISOString();
+    await this.#ledger.transaction(async (transaction: StorageTransaction) => {
+      transaction.write({
+        kind: "plotEventLinkRetirement",
+        id: command.plotEventLinkId,
+        workId: command.workId,
+        expectedRevision: command.expectedRevision,
+        retiredAt,
+      });
+    });
+    const retired = readStoredPlotEventLinkRowById(
+      this.#database,
+      command.workId,
+      command.plotEventLinkId,
+    );
+    if (retired === null) {
+      throw new Error(`Retired PlotEventLink is missing: ${command.plotEventLinkId}`);
+    }
+    return this.#projectPlotEventLinkMutation(retired, "retired");
   }
 
   async #projectPlotThreadSourceRows(
@@ -14406,6 +16183,8 @@ class DefaultLocalWorkspaceRuntime
     const activityPolicyId = randomUUID();
     const focusPolicyId = randomUUID();
     const sceneRuleSetId = randomUUID();
+    const plotBoardId = randomUUID();
+    const plotLaneId = randomUUID();
     const documentId = randomUUID();
     const manuscriptId = randomUUID();
     const revisionId = randomUUID();
@@ -14442,6 +16221,8 @@ class DefaultLocalWorkspaceRuntime
       activityPolicyId,
       focusPolicyId,
       sceneRuleSetId,
+      plotBoardId,
+      plotLaneId,
       documentId,
       manuscriptId,
       revisionId,
@@ -14681,6 +16462,44 @@ function readStoredWorkRows(
   );
 }
 
+function parseStoredEventBlockRow(
+  row: Record<string, unknown>,
+  label: string,
+): StoredEventBlockRow {
+  const note = row.note;
+  if (typeof note !== "string") {
+    throw new Error(`${label}.note must be a string`);
+  }
+  const parentEventId = readNullableString(
+    row,
+    "parentEventId",
+    label,
+  );
+  return Object.freeze({
+    eventBlockId: entityId<"EventBlock">(
+      readRequiredString(row, "eventBlockId", label),
+    ),
+    revision: readRequiredInteger(row, "revision", label),
+    workId: entityId<"Work">(
+      readRequiredString(row, "workId", label),
+    ),
+    title: readRequiredString(row, "title", label),
+    note,
+    parentEventId:
+      parentEventId === null
+        ? null
+        : entityId<"EventBlock">(parentEventId),
+    outlineOrderKey: readRequiredString(
+      row,
+      "outlineOrderKey",
+      label,
+    ),
+    createdAt: readRequiredString(row, "createdAt", label),
+    updatedAt: readRequiredString(row, "updatedAt", label),
+    retiredAt: readNullableString(row, "retiredAt", label),
+  });
+}
+
 function readStoredEventBlockRows(
   database: NodeSqliteDatabase,
   workId: EntityId<"Work">,
@@ -14689,31 +16508,111 @@ function readStoredEventBlockRows(
     database
       .prepare(EVENT_BLOCK_ROWS_SQL)
       .all(workId)
-      .map((row, index) => {
-        const label = `EventBlock rows[${index}]`;
-        const note = row.note;
-        if (typeof note !== "string") {
-          throw new Error(`${label}.note must be a string`);
-        }
-        return Object.freeze({
-          eventBlockId: entityId<"EventBlock">(
-            readRequiredString(row, "eventBlockId", label),
-          ),
-          anchorId: entityId<"Anchor">(
-            readRequiredString(row, "anchorId", label),
-          ),
+      .map((row, index) => parseStoredEventBlockRow(
+        row,
+        `EventBlock rows[${index}]`,
+      )),
+  );
+}
+
+function readStoredEventBlockRowById(
+  database: NodeSqliteDatabase,
+  workId: EntityId<"Work">,
+  eventBlockId: EntityId<"EventBlock">,
+): StoredEventBlockRow | null {
+  const rows = database.prepare(EVENT_BLOCK_ROW_BY_ID_SQL).all(
+    workId,
+    eventBlockId,
+  );
+  if (rows.length === 0) return null;
+  if (rows.length !== 1) {
+    throw new Error(`EventBlock lookup returned duplicate rows: ${eventBlockId}`);
+  }
+  return parseStoredEventBlockRow(rows[0] ?? {}, "EventBlock lookup");
+}
+
+function readStoredEventSourceRows(
+  database: NodeSqliteDatabase,
+  workId: EntityId<"Work">,
+): readonly StoredEventSourceRow[] {
+  const grouped = new Map<
+    EntityId<"EventSource">,
+    {
+      readonly eventSourceId: EntityId<"EventSource">;
+      readonly revision: number;
+      readonly workId: EntityId<"Work">;
+      readonly eventBlockId: EntityId<"EventBlock">;
+      readonly rangeGroupId: EntityId<"RangeGroup">;
+      readonly role: "primary" | "supporting";
+      readonly anchors: StoredEventSourceAnchorRow[];
+      readonly createdAt: string;
+      readonly updatedAt: string;
+      readonly retiredAt: string | null;
+    }
+  >();
+  database
+    .prepare(EVENT_SOURCE_ROWS_SQL)
+    .all(workId)
+    .forEach((row, index) => {
+      const label = `EventSource rows[${index}]`;
+      const eventSourceId = entityId<"EventSource">(
+        readRequiredString(row, "eventSourceId", label),
+      );
+      const role = readRequiredString(row, "role", label);
+      if (role !== "primary" && role !== "supporting") {
+        throw new Error(`${label}.role is invalid`);
+      }
+      let source = grouped.get(eventSourceId);
+      if (source === undefined) {
+        source = {
+          eventSourceId,
+          revision: readRequiredInteger(row, "revision", label),
           workId: entityId<"Work">(
             readRequiredString(row, "workId", label),
           ),
-          documentId: entityId<"Document">(
-            readRequiredString(row, "documentId", label),
+          eventBlockId: entityId<"EventBlock">(
+            readRequiredString(row, "eventBlockId", label),
           ),
-          title: readRequiredString(row, "title", label),
-          note,
-          exactQuote: readRequiredString(row, "exactQuote", label),
+          rangeGroupId: entityId<"RangeGroup">(
+            readRequiredString(row, "rangeGroupId", label),
+          ),
+          role,
+          anchors: [],
           createdAt: readRequiredString(row, "createdAt", label),
-        });
-      }),
+          updatedAt: readRequiredString(row, "updatedAt", label),
+          retiredAt: readNullableString(row, "retiredAt", label),
+        };
+        grouped.set(eventSourceId, source);
+      }
+      const anchorId = readNullableString(row, "anchorId", label);
+      const documentId = readNullableString(row, "documentId", label);
+      const exactQuote = row.exactQuote;
+      const orderIndex = readNullableInteger(row, "anchorOrderIndex", label);
+      if (anchorId === null) {
+        if (documentId !== null || exactQuote !== null || orderIndex !== null) {
+          throw new Error(`${label} contains a partial EventSource anchor`);
+        }
+        return;
+      }
+      if (
+        documentId === null ||
+        typeof exactQuote !== "string" ||
+        exactQuote.length === 0 ||
+        orderIndex === null
+      ) {
+        throw new Error(`${label} contains an invalid EventSource anchor`);
+      }
+      source.anchors.push(Object.freeze({
+        anchorId: entityId<"Anchor">(anchorId),
+        documentId: entityId<"Document">(documentId),
+        exactQuote,
+      }));
+    });
+  return Object.freeze(
+    [...grouped.values()].map((source) => Object.freeze({
+      ...source,
+      anchors: Object.freeze([...source.anchors]),
+    })),
   );
 }
 
@@ -16237,6 +18136,240 @@ function readStoredPlotThreadRowById(
   return parseStoredPlotThreadRow(rows[0] ?? {}, "Plot lookup");
 }
 
+function parseStoredPlotBoardRow(
+  row: Record<string, unknown>,
+  label: string,
+): StoredPlotBoardRow {
+  const revision = readRequiredInteger(row, "revision", label);
+  if (revision < 1) throw new Error(`${label}.revision must be at least 1`);
+  const mode = readRequiredString(row, "mode", label);
+  if (mode !== "sequence" && mode !== "time-map") {
+    throw new Error(`${label}.mode is invalid`);
+  }
+  return Object.freeze({
+    plotBoardId: entityId<"PlotBoard">(
+      readRequiredString(row, "plotBoardId", label),
+    ),
+    revision,
+    workId: entityId<"Work">(readRequiredString(row, "workId", label)),
+    title: readRequiredString(row, "title", label),
+    mode,
+    createdAt: readRequiredString(row, "createdAt", label),
+    updatedAt: readRequiredString(row, "updatedAt", label),
+  });
+}
+
+function readStoredDefaultPlotBoardRow(
+  database: NodeSqliteDatabase,
+  workId: EntityId<"Work">,
+): StoredPlotBoardRow {
+  const rows = database.prepare(DEFAULT_PLOT_BOARD_ROWS_SQL).all(workId);
+  if (rows.length !== 1) {
+    throw new Error(
+      `Work must have exactly one default sequence PlotBoard: ${workId}`,
+    );
+  }
+  return parseStoredPlotBoardRow(rows[0] ?? {}, "Default PlotBoard lookup");
+}
+
+function parseStoredPlotLaneRow(
+  row: Record<string, unknown>,
+  label: string,
+): StoredPlotLaneRow {
+  const revision = readRequiredInteger(row, "revision", label);
+  if (revision < 1) throw new Error(`${label}.revision must be at least 1`);
+  const kind = readRequiredString(row, "kind", label);
+  if (
+    kind !== "default" &&
+    kind !== "main" &&
+    kind !== "subplot" &&
+    kind !== "stage" &&
+    kind !== "custom"
+  ) {
+    throw new Error(`${label}.kind is invalid`);
+  }
+  return Object.freeze({
+    plotLaneId: entityId<"PlotLane">(
+      readRequiredString(row, "plotLaneId", label),
+    ),
+    revision,
+    workId: entityId<"Work">(readRequiredString(row, "workId", label)),
+    plotBoardId: entityId<"PlotBoard">(
+      readRequiredString(row, "plotBoardId", label),
+    ),
+    title: readRequiredString(row, "title", label),
+    kind,
+    orderKey: readRequiredString(row, "orderKey", label),
+    createdAt: readRequiredString(row, "createdAt", label),
+    updatedAt: readRequiredString(row, "updatedAt", label),
+  });
+}
+
+function readStoredPlotLaneRows(
+  database: NodeSqliteDatabase,
+  workId: EntityId<"Work">,
+  plotBoardId: EntityId<"PlotBoard">,
+): readonly StoredPlotLaneRow[] {
+  return Object.freeze(
+    database.prepare(PLOT_LANE_ROWS_SQL).all(workId, plotBoardId)
+      .map((row, index) => parseStoredPlotLaneRow(row, `PlotLane rows[${index}]`))
+      .sort((left, right) =>
+        compareFractionalOrderKeys(left.orderKey, right.orderKey) ||
+        left.plotLaneId.localeCompare(right.plotLaneId)),
+  );
+}
+
+function readNullableFiniteNumber(
+  row: Record<string, unknown>,
+  field: string,
+  label: string,
+): number | null {
+  const value = row[field];
+  if (value === null) return null;
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`${label}.${field} must be null or a finite number`);
+  }
+  return value;
+}
+
+function parseStoredPlotPlacementRow(
+  row: Record<string, unknown>,
+  label: string,
+): StoredPlotPlacementRow {
+  const revision = readRequiredInteger(row, "revision", label);
+  const plotRevision = readRequiredInteger(row, "plotRevision", label);
+  if (revision < 1 || plotRevision < 1) {
+    throw new Error(`${label} revisions must be at least 1`);
+  }
+  return Object.freeze({
+    plotPlacementId: entityId<"PlotPlacement">(
+      readRequiredString(row, "plotPlacementId", label),
+    ),
+    revision,
+    workId: entityId<"Work">(readRequiredString(row, "workId", label)),
+    plotBoardId: entityId<"PlotBoard">(
+      readRequiredString(row, "plotBoardId", label),
+    ),
+    plotLaneId: entityId<"PlotLane">(
+      readRequiredString(row, "plotLaneId", label),
+    ),
+    plotBeatId: entityId<"PlotThread">(
+      readRequiredString(row, "plotBeatId", label),
+    ),
+    orderKey: readRequiredString(row, "orderKey", label),
+    storyTime: readNullableFiniteNumber(row, "storyTime", label),
+    storyTimeEnd: readNullableFiniteNumber(row, "storyTimeEnd", label),
+    createdAt: readRequiredString(row, "createdAt", label),
+    updatedAt: readRequiredString(row, "updatedAt", label),
+    retiredAt: readNullableString(row, "retiredAt", label),
+    plotTitle: readRequiredString(row, "plotTitle", label),
+    plotStage: readString(row, "plotStage", label),
+    plotSummary: readString(row, "plotSummary", label),
+    plotNote: readString(row, "plotNote", label),
+    plotCreatedAt: readRequiredString(row, "plotCreatedAt", label),
+    plotUpdatedAt: readRequiredString(row, "plotUpdatedAt", label),
+    plotRetiredAt: readNullableString(row, "plotRetiredAt", label),
+    plotRevision,
+  });
+}
+
+function readStoredActivePlotPlacementRows(
+  database: NodeSqliteDatabase,
+  workId: EntityId<"Work">,
+  plotBoardId: EntityId<"PlotBoard">,
+): readonly StoredPlotPlacementRow[] {
+  return Object.freeze(
+    database.prepare(ACTIVE_PLOT_PLACEMENT_ROWS_SQL).all(workId, plotBoardId)
+      .map((row, index) =>
+        parseStoredPlotPlacementRow(row, `PlotPlacement rows[${index}]`)),
+  );
+}
+
+function readStoredPlotPlacementRowById(
+  database: NodeSqliteDatabase,
+  workId: EntityId<"Work">,
+  plotPlacementId: EntityId<"PlotPlacement">,
+): StoredPlotPlacementRow | null {
+  const rows = database.prepare(PLOT_PLACEMENT_ROW_BY_ID_SQL).all(
+    workId,
+    plotPlacementId,
+  );
+  if (rows.length === 0) return null;
+  if (rows.length !== 1) {
+    throw new Error(`PlotPlacement lookup returned duplicate rows: ${plotPlacementId}`);
+  }
+  return parseStoredPlotPlacementRow(rows[0] ?? {}, "PlotPlacement lookup");
+}
+
+function parseStoredPlotEventLinkRow(
+  row: Record<string, unknown>,
+  label: string,
+): StoredPlotEventLinkRow {
+  const role = readRequiredString(row, "role", label);
+  if (role !== "primary" && role !== "supporting") {
+    throw new Error(`${label}.role is invalid`);
+  }
+  const createdFrom = readRequiredString(row, "createdFrom", label);
+  if (
+    createdFrom !== "event-to-plot" &&
+    createdFrom !== "plot-to-event" &&
+    createdFrom !== "manual-link"
+  ) {
+    throw new Error(`${label}.createdFrom is invalid`);
+  }
+  return Object.freeze({
+    plotEventLinkId: entityId<"PlotEventLink">(
+      readRequiredString(row, "plotEventLinkId", label),
+    ),
+    revision: readRequiredInteger(row, "revision", label),
+    workId: entityId<"Work">(readRequiredString(row, "workId", label)),
+    plotBeatId: entityId<"PlotThread">(
+      readRequiredString(row, "plotBeatId", label),
+    ),
+    eventBlockId: entityId<"EventBlock">(
+      readRequiredString(row, "eventBlockId", label),
+    ),
+    role,
+    createdFrom,
+    plotTitle: readRequiredString(row, "plotTitle", label),
+    eventTitle: readRequiredString(row, "eventTitle", label),
+    plotRetiredAt: readNullableString(row, "plotRetiredAt", label),
+    eventRetiredAt: readNullableString(row, "eventRetiredAt", label),
+    createdAt: readRequiredString(row, "createdAt", label),
+    updatedAt: readRequiredString(row, "updatedAt", label),
+    retiredAt: readNullableString(row, "retiredAt", label),
+  });
+}
+
+function readStoredPlotEventLinkRows(
+  database: NodeSqliteDatabase,
+  workId: EntityId<"Work">,
+): readonly StoredPlotEventLinkRow[] {
+  return Object.freeze(
+    database.prepare(ACTIVE_PLOT_EVENT_LINK_ROWS_SQL).all(workId)
+      .map((row, index) => parseStoredPlotEventLinkRow(
+        row,
+        `PlotEventLink rows[${index}]`,
+      )),
+  );
+}
+
+function readStoredPlotEventLinkRowById(
+  database: NodeSqliteDatabase,
+  workId: EntityId<"Work">,
+  plotEventLinkId: EntityId<"PlotEventLink">,
+): StoredPlotEventLinkRow | null {
+  const rows = database.prepare(PLOT_EVENT_LINK_ROW_BY_ID_SQL).all(
+    workId,
+    plotEventLinkId,
+  );
+  if (rows.length === 0) return null;
+  if (rows.length !== 1) {
+    throw new Error(`PlotEventLink lookup returned duplicate rows: ${plotEventLinkId}`);
+  }
+  return parseStoredPlotEventLinkRow(rows[0] ?? {}, "PlotEventLink lookup");
+}
+
 function parseStoredPlotThreadSourceRow(
   row: Record<string, unknown>,
   label: string,
@@ -16483,6 +18616,78 @@ function readStoredSceneOverrideRows(
           exactQuote,
           orderIndex,
           createdAt: readRequiredString(row, "createdAt", label),
+        });
+      }),
+  );
+}
+
+function readStoredSceneRuleSetRow(
+  database: NodeSqliteDatabase,
+  workId: EntityId<"Work">,
+): StoredSceneRuleSetRow {
+  const rows = database.prepare(SCENE_RULE_SET_ROW_BY_WORK_SQL).all(workId);
+  if (rows.length !== 1) {
+    throw new Error(`Work must have exactly one active SceneRuleSet: ${workId}`);
+  }
+  const row = rows[0] ?? {};
+  const label = "SceneRuleSet row";
+  const normalizationPolicy = readRequiredString(
+    row,
+    "normalizationPolicy",
+    label,
+  );
+  if (
+    normalizationPolicy !== "preserve" &&
+    normalizationPolicy !== "trim-line-whitespace"
+  ) {
+    throw new Error(`${label}.normalizationPolicy is invalid`);
+  }
+  const enabled = readRequiredInteger(row, "enabled", label);
+  if (enabled !== 0 && enabled !== 1) {
+    throw new Error(`${label}.enabled must be 0 or 1`);
+  }
+  return Object.freeze({
+    sceneRuleSetId: entityId<"SceneRuleSet">(
+      readRequiredString(row, "sceneRuleSetId", label),
+    ),
+    revision: readRequiredInteger(row, "revision", label),
+    workId: entityId<"Work">(readRequiredString(row, "workId", label)),
+    displayName: readRequiredString(row, "displayName", label),
+    boundaryRulesJson: readRequiredString(row, "boundaryRulesJson", label),
+    normalizationPolicy,
+    enabled: enabled === 1,
+    createdAt: readRequiredString(row, "createdAt", label),
+    updatedAt: readRequiredString(row, "updatedAt", label),
+  });
+}
+
+function readStoredSceneEventOverrideRows(
+  database: NodeSqliteDatabase,
+  workId: EntityId<"Work">,
+): readonly StoredSceneEventOverrideRow[] {
+  return Object.freeze(
+    database.prepare(SCENE_EVENT_OVERRIDE_ROWS_SQL).all(workId)
+      .map((row, index) => {
+        const label = `SceneEventOverride rows[${index}]`;
+        const operation = readRequiredString(row, "operation", label);
+        if (operation !== "include" && operation !== "exclude") {
+          throw new Error(`${label}.operation is invalid`);
+        }
+        return Object.freeze({
+          sceneEventOverrideId: entityId<"SceneEventOverride">(
+            readRequiredString(row, "sceneEventOverrideId", label),
+          ),
+          revision: readRequiredInteger(row, "revision", label),
+          workId: entityId<"Work">(
+            readRequiredString(row, "workId", label),
+          ),
+          sceneKey: readRequiredString(row, "sceneKey", label),
+          eventBlockId: entityId<"EventBlock">(
+            readRequiredString(row, "eventBlockId", label),
+          ),
+          operation,
+          createdAt: readRequiredString(row, "createdAt", label),
+          updatedAt: readRequiredString(row, "updatedAt", label),
         });
       }),
   );
@@ -17459,6 +19664,179 @@ async function loadWorkspaceState(
   });
 }
 
+async function ensureSceneRuleSetState(input: Readonly<{
+  database: NodeSqliteDatabase;
+  ledger: Awaited<ReturnType<typeof openNodeSqliteLedger>>;
+  defaults: LocalWorkspaceDefaults;
+}>): Promise<void> {
+  const missingRows = input.database.prepare(`
+    SELECT
+      ws.work_id AS "workId",
+      ws.scene_rule_set_id AS "sceneRuleSetId"
+    FROM work_settings AS ws
+    LEFT JOIN scene_rule_sets AS srs
+      ON srs.work_id = ws.work_id
+      AND srs.id = ws.scene_rule_set_id
+      AND srs.retired_at IS NULL
+    WHERE srs.id IS NULL
+    ORDER BY ws.work_id ASC
+  `).all();
+  if (missingRows.length === 0) return;
+  const now = new Date().toISOString();
+  await input.ledger.transaction(async (transaction: StorageTransaction) => {
+    missingRows.forEach((row, index) => {
+      const label = `Missing SceneRuleSet rows[${index}]`;
+      transaction.write({
+        kind: "sceneRuleSet",
+        ...createRecordMeta(now),
+        id: readRequiredString(row, "sceneRuleSetId", label),
+        workId: readRequiredString(row, "workId", label),
+        displayName: input.defaults.sceneRuleSet.displayName,
+        boundaryRulesJson: JSON.stringify(
+          input.defaults.sceneRuleSet.boundaryRules,
+        ),
+        normalizationPolicy: input.defaults.sceneRuleSet.normalizationPolicy,
+        enabled: input.defaults.sceneRuleSet.enabled,
+      });
+    });
+  });
+}
+
+async function ensureDefaultPlotBoardState(input: Readonly<{
+  database: NodeSqliteDatabase;
+  ledger: Awaited<ReturnType<typeof openNodeSqliteLedger>>;
+  defaults: LocalWorkspaceDefaults;
+}>): Promise<void> {
+  const workRows = input.database.prepare(`
+    SELECT id AS "workId"
+    FROM works
+    ORDER BY created_at ASC, id ASC
+  `).all();
+  for (const [workIndex, workRow] of workRows.entries()) {
+    const workId = entityId<"Work">(
+      readRequiredString(workRow, "workId", `Work rows[${workIndex}]`),
+    );
+    const boardRows = input.database.prepare(DEFAULT_PLOT_BOARD_ROWS_SQL).all(workId);
+    if (boardRows.length > 1) {
+      throw new Error(`Work has more than one default sequence PlotBoard: ${workId}`);
+    }
+
+    const now = new Date().toISOString();
+    const board = boardRows.length === 0
+      ? Object.freeze({
+          plotBoardId: entityId<"PlotBoard">(randomUUID()),
+          revision: 1,
+          workId,
+          title: input.defaults.plotBoard.defaultBoardTitle,
+          mode: "sequence" as const,
+          createdAt: now,
+          updatedAt: now,
+        })
+      : parseStoredPlotBoardRow(boardRows[0] ?? {}, "Default PlotBoard bootstrap");
+    const existingLanes = boardRows.length === 0
+      ? []
+      : [...readStoredPlotLaneRows(input.database, workId, board.plotBoardId)];
+    const defaultLanes = existingLanes.filter((lane) => lane.kind === "default");
+    if (boardRows.length !== 0 && defaultLanes.length !== 1) {
+      throw new Error(
+        `Default PlotBoard must have exactly one default PlotLane: ${board.plotBoardId}`,
+      );
+    }
+    const defaultLane = defaultLanes[0] ?? Object.freeze({
+      plotLaneId: entityId<"PlotLane">(randomUUID()),
+      revision: 1,
+      workId,
+      plotBoardId: board.plotBoardId,
+      title: input.defaults.plotBoard.defaultLaneTitle,
+      kind: "default" as const,
+      orderKey: "0/1",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const existingPlacements = boardRows.length === 0
+      ? []
+      : readStoredActivePlotPlacementRows(
+          input.database,
+          workId,
+          board.plotBoardId,
+        ).filter((placement) => placement.plotLaneId === defaultLane.plotLaneId)
+          .sort((left, right) =>
+            compareFractionalOrderKeys(left.orderKey, right.orderKey) ||
+            left.plotPlacementId.localeCompare(right.plotPlacementId));
+    const missingPlotRows = input.database.prepare(`
+      SELECT plot.id AS "plotThreadId"
+      FROM plot_threads AS plot
+      WHERE
+        plot.work_id = ?
+        AND plot.retired_at IS NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM plot_placements AS placement
+          WHERE
+            placement.work_id = plot.work_id
+            AND placement.plot_thread_id = plot.id
+        )
+      ORDER BY plot.created_at ASC, plot.id ASC
+    `).all(workId);
+    const placementRecords: Poc3LedgerRecord[] = [];
+    let previousKey = existingPlacements.at(-1)?.orderKey ?? null;
+    for (const [plotIndex, plotRow] of missingPlotRows.entries()) {
+      const plotThreadId = readRequiredString(
+        plotRow,
+        "plotThreadId",
+        `Unplaced plot rows[${plotIndex}]`,
+      );
+      const orderKey = createOrderKeyBetween(previousKey, null);
+      placementRecords.push({
+        kind: "plotPlacement",
+        ...createRecordMeta(now),
+        id: randomUUID(),
+        workId,
+        plotBoardId: board.plotBoardId,
+        plotLaneId: defaultLane.plotLaneId,
+        plotThreadId,
+        orderKey,
+      });
+      previousKey = orderKey;
+    }
+    if (boardRows.length !== 0 && placementRecords.length === 0) continue;
+
+    await input.ledger.transaction(async (transaction: StorageTransaction) => {
+      if (boardRows.length === 0) {
+        transaction.write({
+          kind: "plotBoard",
+          ...createRecordMeta(now),
+          id: board.plotBoardId,
+          workId,
+          title: board.title,
+          mode: board.mode,
+        });
+        transaction.write({
+          kind: "plotLane",
+          ...createRecordMeta(now),
+          id: defaultLane.plotLaneId,
+          workId,
+          plotBoardId: board.plotBoardId,
+          title: defaultLane.title,
+          laneKind: defaultLane.kind,
+          orderKey: defaultLane.orderKey,
+        });
+      }
+      for (const record of placementRecords) transaction.write(record);
+      if (placementRecords.length > 0) {
+        transaction.write({
+          kind: "plotBoardTouch",
+          id: board.plotBoardId,
+          workId,
+          expectedRevision: board.revision,
+          updatedAt: now,
+        });
+      }
+    });
+  }
+}
+
 export async function openLocalWorkspaceRuntime(
   options: LocalWorkspaceRuntimeOptions,
 ): Promise<LocalWorkspaceRuntime> {
@@ -17469,6 +19847,13 @@ export async function openLocalWorkspaceRuntime(
   const profiles = createLocalWorkspaceStorageProfiles(
     options.rootDirectoryPath,
   );
+  await migrateLocalWorkspaceEventSourcesIfNeeded({
+    ...profiles.ledgerProfile,
+    targetSchemaVersion: 2,
+  });
+  await migrateLocalWorkspacePlotEventLinksIfNeeded(profiles.ledgerProfile);
+  await migrateLocalWorkspacePlotBoardsIfNeeded(profiles.ledgerProfile);
+  await migrateLocalWorkspaceSceneProjectionIfNeeded(profiles.ledgerProfile);
   const ledger = await openNodeSqliteLedger(profiles.ledgerProfile);
   const blobStore = await createNodeImmutableBlobStore(
     profiles.blobStoreProfile,
@@ -17477,6 +19862,16 @@ export async function openLocalWorkspaceRuntime(
   const database = new DatabaseSync(profiles.databasePath);
   try {
     database.exec("PRAGMA foreign_keys = ON");
+    await ensureSceneRuleSetState({
+      database,
+      ledger,
+      defaults: options.defaults,
+    });
+    await ensureDefaultPlotBoardState({
+      database,
+      ledger,
+      defaults: options.defaults,
+    });
     restoreRunningPomodoroCycles(database, Date.now());
     const blobProfile = createLocalWorkspaceRevisionBlobProfile((blobRef) => {
       const rows = database

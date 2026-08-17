@@ -2307,6 +2307,7 @@ test("creates the first local Work and reopens its saved manuscript after restar
     await page
       .getByRole("button", { name: "검토 레일 열기", exact: true })
       .click();
+    await page.getByRole("tab", { name: "버전", exact: true }).click();
     const snapshotRegion = page.getByRole("region", { name: "작품 스냅샷" });
     await snapshotRegion.getByLabel("작품 스냅샷 이름").fill(snapshotLabel);
     await snapshotRegion
@@ -2364,6 +2365,8 @@ test("creates the first local Work and reopens its saved manuscript after restar
       .click();
     await expectEditorText(manuscript, manuscriptText);
     await expect(snapshotRegion.getByText(snapshotLabel, { exact: true })).toBeVisible();
+    await openReviewRail(page);
+    await page.getByRole("tab", { name: "회차", exact: true }).click();
     await manuscript.press("Control+A");
     await page
       .getByRole("button", { name: "사건으로 등록", exact: true })
@@ -2387,9 +2390,10 @@ test("creates the first local Work and reopens its saved manuscript after restar
       .click();
     await expect(
       page
-        .getByRole("region", { name: "현재 회차 장면 경계" })
-        .getByRole("button", { name: /장면 경계 1/ }),
+        .getByRole("region", { name: "현재 회차 장면" })
+        .getByRole("button", { name: /장면 2/ }),
     ).toBeVisible();
+    await page.getByRole("tab", { name: "작품", exact: true }).click();
     await page.getByRole("button", { name: "기록 시작", exact: true }).click();
     await expect(page.getByTestId("writing-session-timer")).toBeVisible();
     await page.getByRole("button", { name: "집중 시작", exact: true }).click();
@@ -2422,6 +2426,7 @@ test("creates the first local Work and reopens its saved manuscript after restar
     await expect(
       restartedPage.getByTestId("manuscript-title"),
     ).toHaveText(documentTitle);
+    await restartedPage.getByRole("tab", { name: "버전", exact: true }).click();
     await expect(
       restartedPage
         .getByRole("region", { name: "작품 스냅샷" })
@@ -2436,6 +2441,7 @@ test("creates the first local Work and reopens its saved manuscript after restar
         .getByTestId("pomodoro-timer")
         .getByRole("button", { name: "재개", exact: true }),
     ).toBeVisible();
+    await restartedPage.getByRole("tab", { name: "회차", exact: true }).click();
     await restartedPage
       .getByRole("region", { name: "현재 회차 사건" })
       .getByRole("button", { name: new RegExp(eventTitle) })
@@ -2449,8 +2455,8 @@ test("creates the first local Work and reopens its saved manuscript after restar
       )
       .toEqual({ anchor: 0, head: manuscriptText.length });
     await restartedPage
-      .getByRole("region", { name: "현재 회차 장면 경계" })
-      .getByRole("button", { name: /장면 경계 1/ })
+      .getByRole("region", { name: "현재 회차 장면" })
+      .getByRole("button", { name: /장면 2/ })
       .click();
     await expect
       .poll(() =>
@@ -4207,6 +4213,7 @@ test("derives one Work structure overview and navigates its exact sources", asyn
       .getByRole("button", { name: "작품 만들기", exact: true })
       .click();
     await openReviewRail(page);
+    await page.getByRole("tab", { name: "작품", exact: true }).click();
 
     let manuscript = page.getByRole("textbox", { name: "원고" });
     const firstDocumentId = await readActiveDocumentId(page);
@@ -4241,6 +4248,7 @@ test("derives one Work structure overview and navigates its exact sources", asyn
       .getByRole("button", { name: "플롯 관리 닫기", exact: true })
       .click();
 
+    await page.getByRole("tab", { name: "회차", exact: true }).click();
     await page
       .getByRole("button", { name: "사건으로 등록", exact: true })
       .click();
@@ -4254,6 +4262,7 @@ test("derives one Work structure overview and navigates its exact sources", asyn
       .getByRole("button", { name: "장면 경계 추가", exact: true })
       .click();
 
+    await page.getByRole("tab", { name: "작품", exact: true }).click();
     await page
       .getByRole("button", { name: "인물 관리 열기", exact: true })
       .click();
@@ -4286,7 +4295,7 @@ test("derives one Work structure overview and navigates its exact sources", asyn
       ["structure-total-plots", "1"],
       ["structure-total-plot-sources", "1"],
       ["structure-total-events", "1"],
-      ["structure-total-scene-boundaries", "1"],
+      ["structure-total-scenes", "3"],
     ] as const) {
       await expect(structureDialog.getByTestId(testId).locator("strong"))
         .toHaveText(count);
@@ -12258,6 +12267,1892 @@ test("connects mail, runs the persisted app-open schedule, manually syncs, and r
   } finally {
     await electronApp.close().catch(() => undefined);
     await new Promise<void>((resolve) => server.close(() => resolve()));
+    await removeVerifiedTemporaryDirectory(directory);
+  }
+});
+
+test("keeps an anchorless event while its exact source is linked, replaced, retired, and restarted", async () => {
+  test.setTimeout(120_000);
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "eum-studio-event-source-e2e-"),
+  );
+  const workTitle = `사건 근거 작품-${randomUUID().slice(0, 8)}`;
+  const documentTitle = `사건 근거 회차-${randomUUID().slice(0, 8)}`;
+  const eventTitle = `예정 사건-${randomUUID().slice(0, 8)}`;
+  const prefix = "도입부 ";
+  const firstQuote = `첫 근거 ${randomUUID().slice(0, 8)}`;
+  const middle = " 사이 문장 ";
+  const secondQuote = `교체 근거 ${randomUUID().slice(0, 8)}`;
+  const manuscriptText = `${prefix}${firstQuote}${middle}${secondQuote} 마무리`;
+  const firstFrom = prefix.length;
+  const secondFrom = prefix.length + firstQuote.length + middle.length;
+  const runtimeEnvironment = {
+    ...process.env,
+    EUM_STUDIO_TEST_EPHEMERAL_WORKSPACE: "0",
+    EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH: directory,
+    EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+  };
+  const electronArguments = [
+    ".",
+    `--user-data-dir=${path.join(directory, "electron-user-data")}`,
+  ];
+  let electronApp = await electron.launch({
+    args: electronArguments,
+    cwd: process.cwd(),
+    env: runtimeEnvironment,
+  });
+
+  const selectExactRange = async (
+    manuscript: Locator,
+    from: number,
+    text: string,
+  ) => {
+    await manuscript.click();
+    await manuscript.press("Control+Home");
+    for (let index = 0; index < from; index += 1) {
+      await manuscript.press("ArrowRight");
+    }
+    for (let index = 0; index < text.length; index += 1) {
+      await manuscript.press("Shift+ArrowRight");
+    }
+    await expect.poll(() =>
+      manuscript.evaluate(() => globalThis.getSelection()?.toString() ?? ""),
+    ).toBe(text);
+  };
+
+  try {
+    let page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.getByRole("button", { name: "작품 만들기", exact: true }).click();
+    const createWorkDialog = page.getByRole("dialog", { name: "새 작품 만들기" });
+    await createWorkDialog.getByLabel("작품 제목").fill(workTitle);
+    await createWorkDialog.getByLabel("첫 회차 제목").fill(documentTitle);
+    await createWorkDialog
+      .getByRole("button", { name: "작품 만들기", exact: true })
+      .click();
+    await openReviewRail(page);
+    let manuscript = page.getByRole("textbox", { name: "원고" });
+    await manuscript.pressSequentially(manuscriptText);
+    await expect(page.getByTestId("save-state")).toHaveText("저장됨");
+
+    await page
+      .getByRole("button", { name: "예정 사건 추가", exact: true })
+      .click();
+    const eventDialog = page.getByRole("dialog", { name: "예정 사건 추가" });
+    await eventDialog.getByLabel("사건 제목").fill(eventTitle);
+    await eventDialog.getByLabel("사건 메모").fill("원고 연결 전 사건");
+    await eventDialog.getByRole("button", { name: "등록", exact: true }).click();
+
+    let eventRegion = page.getByRole("region", { name: "현재 회차 사건" });
+    let eventRow = eventRegion.locator("li").filter({ hasText: eventTitle });
+    await expect(eventRow).toContainText("원고 미연결");
+    await selectExactRange(manuscript, firstFrom, firstQuote);
+    await eventRow
+      .getByRole("button", { name: "현재 선택 연결", exact: true })
+      .click();
+    await expect(eventRow).toContainText(`${firstFrom}–${firstFrom + firstQuote.length}`);
+
+    const linkedProjection = await page.evaluate(async () => {
+      const catalog = await window.eumStudio.workspace.getCatalog();
+      if (catalog.activeWorkId === null) {
+        throw new Error("Expected an active Work");
+      }
+      return window.eumStudio.structure.listEventBlocks({
+        schemaVersion: 1,
+        workId: catalog.activeWorkId,
+      });
+    });
+    expect(linkedProjection.eventBlocks).toHaveLength(1);
+    expect(linkedProjection.eventSources).toHaveLength(1);
+    expect(linkedProjection.eventSources[0]?.anchors[0]?.exactQuote).toBe(firstQuote);
+    const linkedSourceId = linkedProjection.eventSources[0]!.eventSourceId;
+
+    await selectExactRange(manuscript, secondFrom, secondQuote);
+    await eventRow
+      .getByRole("button", { name: "현재 선택으로 교체", exact: true })
+      .click();
+    await expect(eventRow).toContainText(
+      `${secondFrom}–${secondFrom + secondQuote.length}`,
+    );
+    const replacedProjection = await page.evaluate(async () => {
+      const catalog = await window.eumStudio.workspace.getCatalog();
+      if (catalog.activeWorkId === null) {
+        throw new Error("Expected an active Work");
+      }
+      return window.eumStudio.structure.listEventBlocks({
+        schemaVersion: 1,
+        workId: catalog.activeWorkId,
+      });
+    });
+    expect(replacedProjection.eventSources).toHaveLength(1);
+    expect(replacedProjection.eventSources[0]?.eventSourceId).not.toBe(linkedSourceId);
+    expect(replacedProjection.eventSources[0]?.anchors[0]?.exactQuote).toBe(secondQuote);
+
+    await electronApp.close();
+    electronApp = await electron.launch({
+      args: electronArguments,
+      cwd: process.cwd(),
+      env: runtimeEnvironment,
+    });
+    page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(page.getByText(workTitle, { exact: true }).first()).toBeVisible();
+    await continueFromMain(page);
+    await openReviewRail(page);
+    manuscript = page.getByRole("textbox", { name: "원고" });
+    eventRegion = page.getByRole("region", { name: "현재 회차 사건" });
+    eventRow = eventRegion.locator("li").filter({ hasText: eventTitle });
+    await eventRow.getByRole("button", { name: new RegExp(eventTitle) }).click();
+    await expect.poll(() =>
+      manuscript.evaluate(() => globalThis.getSelection()?.toString() ?? ""),
+    ).toBe(secondQuote);
+
+    await eventRow
+      .getByRole("button", { name: "원고 근거 해제", exact: true })
+      .click();
+    await expect(eventRow).toContainText("원고 미연결");
+    const retiredProjection = await page.evaluate(async () => {
+      const catalog = await window.eumStudio.workspace.getCatalog();
+      if (catalog.activeWorkId === null) {
+        throw new Error("Expected an active Work");
+      }
+      return window.eumStudio.structure.listEventBlocks({
+        schemaVersion: 1,
+        workId: catalog.activeWorkId,
+      });
+    });
+    expect(retiredProjection.eventBlocks).toHaveLength(1);
+    expect(retiredProjection.eventSources).toEqual([]);
+
+    await electronApp.close();
+    electronApp = await electron.launch({
+      args: electronArguments,
+      cwd: process.cwd(),
+      env: runtimeEnvironment,
+    });
+    page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(page.getByText(workTitle, { exact: true }).first()).toBeVisible();
+    await continueFromMain(page);
+    await openReviewRail(page);
+    eventRow = page
+      .getByRole("region", { name: "현재 회차 사건" })
+      .locator("li")
+      .filter({ hasText: eventTitle });
+    await expect(eventRow).toContainText("원고 미연결");
+  } finally {
+    await electronApp.close().catch(() => undefined);
+    await removeVerifiedTemporaryDirectory(directory);
+  }
+});
+
+test("keeps exact-selection event creation after the EventSource split", async () => {
+  test.setTimeout(90_000);
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "eum-studio-exact-event-source-e2e-"),
+  );
+  const workTitle = `선택 사건 작품-${randomUUID().slice(0, 8)}`;
+  const documentTitle = `선택 사건 회차-${randomUUID().slice(0, 8)}`;
+  const eventTitle = `선택 사건-${randomUUID().slice(0, 8)}`;
+  const prefix = "앞 문장 ";
+  const exactQuote = `정확한 사건 근거 ${randomUUID().slice(0, 8)}`;
+  const manuscriptText = `${prefix}${exactQuote} 뒤 문장`;
+  const electronArguments = [
+    ".",
+    `--user-data-dir=${path.join(directory, "electron-user-data")}`,
+  ];
+  const runtimeEnvironment = {
+    ...process.env,
+    EUM_STUDIO_TEST_EPHEMERAL_WORKSPACE: "0",
+    EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH: directory,
+    EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+  };
+  let electronApp = await electron.launch({
+    args: electronArguments,
+    cwd: process.cwd(),
+    env: runtimeEnvironment,
+  });
+
+  try {
+    let page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.getByRole("button", { name: "작품 만들기", exact: true }).click();
+    const createWorkDialog = page.getByRole("dialog", { name: "새 작품 만들기" });
+    await createWorkDialog.getByLabel("작품 제목").fill(workTitle);
+    await createWorkDialog.getByLabel("첫 회차 제목").fill(documentTitle);
+    await createWorkDialog
+      .getByRole("button", { name: "작품 만들기", exact: true })
+      .click();
+    await openReviewRail(page);
+    let manuscript = page.getByRole("textbox", { name: "원고" });
+    await manuscript.pressSequentially(manuscriptText);
+    await expect(page.getByTestId("save-state")).toHaveText("저장됨");
+    await manuscript.press("Control+Home");
+    for (let index = 0; index < prefix.length; index += 1) {
+      await manuscript.press("ArrowRight");
+    }
+    for (let index = 0; index < exactQuote.length; index += 1) {
+      await manuscript.press("Shift+ArrowRight");
+    }
+    await expect.poll(() =>
+      manuscript.evaluate(() => globalThis.getSelection()?.toString() ?? ""),
+    ).toBe(exactQuote);
+
+    await page
+      .getByRole("button", { name: "사건으로 등록", exact: true })
+      .click();
+    const eventDialog = page.getByRole("dialog", { name: "사건으로 등록" });
+    await eventDialog.getByLabel("사건 제목").fill(eventTitle);
+    await eventDialog.getByLabel("사건 메모").fill("선택 생성 회귀");
+    await eventDialog.getByRole("button", { name: "등록", exact: true }).click();
+
+    const projection = await page.evaluate(async () => {
+      const catalog = await window.eumStudio.workspace.getCatalog();
+      if (catalog.activeWorkId === null) {
+        throw new Error("Expected an active Work");
+      }
+      return window.eumStudio.structure.listEventBlocks({
+        schemaVersion: 1,
+        workId: catalog.activeWorkId,
+      });
+    });
+    const eventBlock = projection.eventBlocks.find(
+      (candidate) => candidate.title === eventTitle,
+    );
+    expect(eventBlock).toBeDefined();
+    expect(eventBlock).not.toHaveProperty("rangeGroupId");
+    const source = projection.eventSources.find(
+      (candidate) => candidate.eventBlockId === eventBlock?.eventBlockId,
+    );
+    expect(source?.role).toBe("primary");
+    expect(source?.anchors[0]?.exactQuote).toBe(exactQuote);
+
+    await electronApp.close();
+    electronApp = await electron.launch({
+      args: electronArguments,
+      cwd: process.cwd(),
+      env: runtimeEnvironment,
+    });
+    page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(page.getByText(workTitle, { exact: true }).first()).toBeVisible();
+    await continueFromMain(page);
+    await openReviewRail(page);
+    manuscript = page.getByRole("textbox", { name: "원고" });
+    await page
+      .getByRole("region", { name: "현재 회차 사건" })
+      .getByRole("button", { name: new RegExp(eventTitle) })
+      .click();
+    await expect.poll(() =>
+      manuscript.evaluate(() => globalThis.getSelection()?.toString() ?? ""),
+    ).toBe(exactQuote);
+  } finally {
+    await electronApp.close().catch(() => undefined);
+    await removeVerifiedTemporaryDirectory(directory);
+  }
+});
+
+test("keeps bidirectional plot/event links, independent titles, unlinking, and restart", async () => {
+  test.setTimeout(150_000);
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "eum-studio-plot-event-link-e2e-"),
+  );
+  const suffix = randomUUID().slice(0, 8);
+  const workTitle = `플롯 사건 작품-${suffix}`;
+  const documentTitle = `플롯 사건 회차-${suffix}`;
+  const eventTitle = `첫 사건-${suffix}`;
+  const changedPlotTitle = `독립 플롯-${suffix}`;
+  const supportingEventTitle = `보조 사건-${suffix}`;
+  const plannedPlotTitle = `예정 플롯-${suffix}`;
+  const exactPlotTitle = `선택 플롯-${suffix}`;
+  const prefix = "도입 ";
+  const firstQuote = `첫 사건 근거 ${suffix}`;
+  const middle = " 사이 ";
+  const secondQuote = `플롯 생성 근거 ${suffix}`;
+  const manuscriptText = `${prefix}${firstQuote}${middle}${secondQuote} 마무리`;
+  const firstFrom = prefix.length;
+  const secondFrom = prefix.length + firstQuote.length + middle.length;
+  const electronArguments = [
+    ".",
+    `--user-data-dir=${path.join(directory, "electron-user-data")}`,
+  ];
+  const runtimeEnvironment = {
+    ...process.env,
+    EUM_STUDIO_TEST_EPHEMERAL_WORKSPACE: "0",
+    EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH: directory,
+    EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+  };
+  let electronApp = await electron.launch({
+    args: electronArguments,
+    cwd: process.cwd(),
+    env: runtimeEnvironment,
+  });
+
+  try {
+    let page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.getByRole("button", { name: "작품 만들기", exact: true }).click();
+    const createWorkDialog = page.getByRole("dialog", { name: "새 작품 만들기" });
+    await createWorkDialog.getByLabel("작품 제목").fill(workTitle);
+    await createWorkDialog.getByLabel("첫 회차 제목").fill(documentTitle);
+    await createWorkDialog
+      .getByRole("button", { name: "작품 만들기", exact: true })
+      .click();
+    await openReviewRail(page);
+    let manuscript = page.getByRole("textbox", { name: "원고" });
+    await manuscript.pressSequentially(manuscriptText);
+    await expect(page.getByTestId("save-state")).toHaveText("저장됨");
+
+    const selectRange = async (from: number, text: string) => {
+      await manuscript.click();
+      await manuscript.press("Control+Home");
+      for (let index = 0; index < from; index += 1) {
+        await manuscript.press("ArrowRight");
+      }
+      for (let index = 0; index < text.length; index += 1) {
+        await manuscript.press("Shift+ArrowRight");
+      }
+      await expect.poll(() =>
+        manuscript.evaluate(() => globalThis.getSelection()?.toString() ?? ""),
+      ).toBe(text);
+    };
+
+    await selectRange(firstFrom, firstQuote);
+    await page
+      .getByRole("button", { name: "사건으로 등록", exact: true })
+      .click();
+    let eventDialog = page.getByRole("dialog", { name: "사건으로 등록" });
+    await eventDialog.getByLabel("사건 제목").fill(eventTitle);
+    await eventDialog.getByLabel("사건 메모").fill("플롯으로 복사할 사건 메모");
+    await eventDialog.getByRole("button", { name: "등록", exact: true }).click();
+
+    let eventRegion = page.getByRole("region", { name: "현재 회차 사건" });
+    let eventRow = eventRegion.locator("li").filter({ hasText: eventTitle });
+    await eventRow
+      .getByRole("button", { name: "플롯으로 만들기", exact: true })
+      .click();
+    let plotDialog = page.getByRole("dialog", { name: "플롯 관리" });
+    await expect(plotDialog.getByLabel("플롯 제목")).toHaveValue(eventTitle);
+    let linkRegion = plotDialog.getByRole("region", { name: "플롯 연결 사건" });
+    await expect(linkRegion).toContainText(eventTitle);
+    await plotDialog
+      .getByRole("button", { name: "플롯 관리 닫기", exact: true })
+      .click();
+
+    eventRow = eventRegion.locator("li").filter({ hasText: eventTitle });
+    await expect(
+      eventRow.getByRole("button", { name: "연결 플롯 열기", exact: true }),
+    ).toBeVisible();
+    await eventRow
+      .getByRole("button", { name: "연결 플롯 열기", exact: true })
+      .click();
+    plotDialog = page.getByRole("dialog", { name: "플롯 관리" });
+    const afterReuse = await page.evaluate(async () => {
+      const catalog = await window.eumStudio.workspace.getCatalog();
+      if (catalog.activeWorkId === null) throw new Error("Expected an active Work");
+      const [plots, links] = await Promise.all([
+        window.eumStudio.plots.list({
+          schemaVersion: 1,
+          workId: catalog.activeWorkId,
+        }),
+        window.eumStudio.plots.listEventLinks({
+          schemaVersion: 1,
+          workId: catalog.activeWorkId,
+        }),
+      ]);
+      return { plots: plots.plots, links: links.links };
+    });
+    expect(afterReuse.plots).toHaveLength(1);
+    expect(afterReuse.links).toHaveLength(1);
+
+    await plotDialog.getByLabel("플롯 제목").fill(changedPlotTitle);
+    await plotDialog
+      .getByRole("button", { name: "변경 저장", exact: true })
+      .click();
+    linkRegion = plotDialog.getByRole("region", { name: "플롯 연결 사건" });
+    await expect(linkRegion.getByText("제목이 서로 다름", { exact: true }))
+      .toBeVisible();
+    await expect(linkRegion).toContainText(eventTitle);
+    await plotDialog
+      .getByRole("button", { name: "플롯 관리 닫기", exact: true })
+      .click();
+
+    await page
+      .getByRole("button", { name: "예정 사건 추가", exact: true })
+      .click();
+    eventDialog = page.getByRole("dialog", { name: "예정 사건 추가" });
+    await eventDialog.getByLabel("사건 제목").fill(supportingEventTitle);
+    await eventDialog.getByRole("button", { name: "등록", exact: true }).click();
+    await expect(eventDialog).toBeHidden();
+    eventRow = eventRegion.locator("li").filter({ hasText: eventTitle });
+    await eventRow
+      .getByRole("button", { name: "연결 플롯 열기", exact: true })
+      .click();
+    plotDialog = page.getByRole("dialog", { name: "플롯 관리" });
+    await plotDialog.getByLabel("연결할 사건").selectOption({
+      label: supportingEventTitle,
+    });
+    await plotDialog.getByLabel("사건 연결 역할").selectOption("supporting");
+    await plotDialog
+      .getByRole("button", { name: "사건 연결", exact: true })
+      .click();
+    linkRegion = plotDialog.getByRole("region", { name: "플롯 연결 사건" });
+    let supportingLinkRow = linkRegion.locator("li").filter({
+      hasText: supportingEventTitle,
+    });
+    await expect(supportingLinkRow).toContainText("보조 사건");
+    await supportingLinkRow
+      .getByRole("button", { name: "연결 해제", exact: true })
+      .click();
+    await expect(supportingLinkRow).toHaveCount(0);
+    await plotDialog
+      .getByRole("button", { name: "플롯 관리 닫기", exact: true })
+      .click();
+    await expect(
+      eventRegion.locator("li").filter({ hasText: supportingEventTitle }),
+    ).toBeVisible();
+
+    eventRow = eventRegion.locator("li").filter({ hasText: eventTitle });
+    await eventRow
+      .getByRole("button", { name: "연결 플롯 열기", exact: true })
+      .click();
+    plotDialog = page.getByRole("dialog", { name: "플롯 관리" });
+    await plotDialog.getByLabel("연결할 사건").selectOption({
+      label: supportingEventTitle,
+    });
+    await plotDialog.getByLabel("사건 연결 역할").selectOption("supporting");
+    await plotDialog
+      .getByRole("button", { name: "사건 연결", exact: true })
+      .click();
+    linkRegion = plotDialog.getByRole("region", { name: "플롯 연결 사건" });
+    supportingLinkRow = linkRegion.locator("li").filter({
+      hasText: supportingEventTitle,
+    });
+    await expect(supportingLinkRow).toBeVisible();
+
+    await plotDialog.getByRole("button", { name: "새 플롯", exact: true }).click();
+    await plotDialog.getByLabel("플롯 제목").fill(plannedPlotTitle);
+    await plotDialog.getByLabel("플롯 요약").fill("예정 사건 메모");
+    await plotDialog
+      .getByRole("button", { name: "플롯 만들기", exact: true })
+      .click();
+    await plotDialog
+      .getByRole("button", { name: "예정 사건 만들기", exact: true })
+      .click();
+    linkRegion = plotDialog.getByRole("region", { name: "플롯 연결 사건" });
+    await expect(linkRegion).toContainText(plannedPlotTitle);
+    await plotDialog
+      .getByRole("button", { name: "플롯 관리 닫기", exact: true })
+      .click();
+
+    await selectRange(secondFrom, secondQuote);
+    eventRow = eventRegion.locator("li").filter({ hasText: eventTitle });
+    await eventRow
+      .getByRole("button", { name: "연결 플롯 열기", exact: true })
+      .click();
+    plotDialog = page.getByRole("dialog", { name: "플롯 관리" });
+    await plotDialog.getByRole("button", { name: "새 플롯", exact: true }).click();
+    await plotDialog.getByLabel("플롯 제목").fill(exactPlotTitle);
+    await plotDialog
+      .getByRole("button", { name: "플롯 만들기", exact: true })
+      .click();
+    await plotDialog
+      .getByRole("button", { name: "현재 선택으로 사건 만들기", exact: true })
+      .click();
+    const beforeRestart = await page.evaluate(async () => {
+      const catalog = await window.eumStudio.workspace.getCatalog();
+      if (catalog.activeWorkId === null) throw new Error("Expected an active Work");
+      const [events, links] = await Promise.all([
+        window.eumStudio.structure.listEventBlocks({
+          schemaVersion: 1,
+          workId: catalog.activeWorkId,
+        }),
+        window.eumStudio.plots.listEventLinks({
+          schemaVersion: 1,
+          workId: catalog.activeWorkId,
+        }),
+      ]);
+      return { events, links: links.links };
+    });
+    expect(beforeRestart.links).toHaveLength(4);
+    expect(beforeRestart.events.eventBlocks.find(
+      (event) => event.title === eventTitle,
+    )?.title).toBe(eventTitle);
+    const exactEvent = beforeRestart.events.eventBlocks.find(
+      (event) => event.title === exactPlotTitle,
+    );
+    expect(beforeRestart.events.eventSources.find(
+      (source) => source.eventBlockId === exactEvent?.eventBlockId,
+    )?.anchors[0]?.exactQuote).toBe(secondQuote);
+
+    await electronApp.close();
+    electronApp = await electron.launch({
+      args: electronArguments,
+      cwd: process.cwd(),
+      env: runtimeEnvironment,
+    });
+    page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(page.getByText(workTitle, { exact: true }).first()).toBeVisible();
+    await continueFromMain(page);
+    await openReviewRail(page);
+    manuscript = page.getByRole("textbox", { name: "원고" });
+    eventRegion = page.getByRole("region", { name: "현재 회차 사건" });
+    eventRow = eventRegion.locator("li").filter({ hasText: eventTitle });
+    await eventRow
+      .getByRole("button", { name: "연결 플롯 열기", exact: true })
+      .click();
+    plotDialog = page.getByRole("dialog", { name: "플롯 관리" });
+    await expect(plotDialog.getByLabel("플롯 제목")).toHaveValue(changedPlotTitle);
+    const restartedPrimaryLinkRow = plotDialog
+      .getByRole("region", { name: "플롯 연결 사건" })
+      .locator("li")
+      .filter({ hasText: eventTitle });
+    await expect(
+      restartedPrimaryLinkRow.getByText("제목이 서로 다름", { exact: true }),
+    ).toBeVisible();
+    const restartedLinks = await page.evaluate(async () => {
+      const catalog = await window.eumStudio.workspace.getCatalog();
+      if (catalog.activeWorkId === null) throw new Error("Expected an active Work");
+      return window.eumStudio.plots.listEventLinks({
+        schemaVersion: 1,
+        workId: catalog.activeWorkId,
+      });
+    });
+    expect(restartedLinks.links).toHaveLength(4);
+  } finally {
+    await electronApp.close().catch(() => undefined);
+    await removeVerifiedTemporaryDirectory(directory);
+  }
+});
+
+test("moves default plot board placements without moving exact manuscript evidence and keeps the order after restart", async () => {
+  test.setTimeout(150_000);
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "eum-studio-plot-board-e2e-"),
+  );
+  const suffix = randomUUID().slice(0, 8);
+  const workTitle = "플롯 보드 작품-" + suffix;
+  const documentTitle = "플롯 보드 회차-" + suffix;
+  const firstEventTitle = "첫 보드 사건-" + suffix;
+  const secondEventTitle = "둘째 보드 사건-" + suffix;
+  const prefix = "도입 ";
+  const firstQuote = "첫 보드 근거 " + suffix;
+  const middle = " 사이 ";
+  const secondQuote = "둘째 보드 근거 " + suffix;
+  const manuscriptText = prefix + firstQuote + middle + secondQuote + " 마무리";
+  const firstFrom = prefix.length;
+  const secondFrom = prefix.length + firstQuote.length + middle.length;
+  const electronArguments = [
+    ".",
+    "--user-data-dir=" + path.join(directory, "electron-user-data"),
+  ];
+  const runtimeEnvironment = {
+    ...process.env,
+    EUM_STUDIO_TEST_EPHEMERAL_WORKSPACE: "0",
+    EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH: directory,
+    EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+  };
+  let electronApp = await electron.launch({
+    args: electronArguments,
+    cwd: process.cwd(),
+    env: runtimeEnvironment,
+  });
+
+  const selectExactRange = async (
+    manuscript: Locator,
+    from: number,
+    text: string,
+  ) => {
+    await manuscript.click();
+    await manuscript.press("Control+Home");
+    for (let index = 0; index < from; index += 1) {
+      await manuscript.press("ArrowRight");
+    }
+    for (let index = 0; index < text.length; index += 1) {
+      await manuscript.press("Shift+ArrowRight");
+    }
+    await expect.poll(() =>
+      manuscript.evaluate(() => globalThis.getSelection()?.toString() ?? ""),
+    ).toBe(text);
+  };
+  const createSelectedEvent = async (
+    page: Page,
+    manuscript: Locator,
+    from: number,
+    quote: string,
+    title: string,
+  ) => {
+    await selectExactRange(manuscript, from, quote);
+    await page
+      .getByRole("button", { name: "사건으로 등록", exact: true })
+      .click();
+    const eventDialog = page.getByRole("dialog", { name: "사건으로 등록" });
+    await eventDialog.getByLabel("사건 제목").fill(title);
+    await eventDialog.getByRole("button", { name: "등록", exact: true }).click();
+    await expect(eventDialog).toBeHidden();
+  };
+
+  try {
+    let page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.getByRole("button", { name: "작품 만들기", exact: true }).click();
+    const createWorkDialog = page.getByRole("dialog", { name: "새 작품 만들기" });
+    await createWorkDialog.getByLabel("작품 제목").fill(workTitle);
+    await createWorkDialog.getByLabel("첫 회차 제목").fill(documentTitle);
+    await createWorkDialog
+      .getByRole("button", { name: "작품 만들기", exact: true })
+      .click();
+    await openReviewRail(page);
+    let manuscript = page.getByRole("textbox", { name: "원고" });
+    await manuscript.pressSequentially(manuscriptText);
+    await expect(page.getByTestId("save-state")).toHaveText("저장됨");
+
+    await createSelectedEvent(
+      page,
+      manuscript,
+      firstFrom,
+      firstQuote,
+      firstEventTitle,
+    );
+    await createSelectedEvent(
+      page,
+      manuscript,
+      secondFrom,
+      secondQuote,
+      secondEventTitle,
+    );
+
+    let eventRegion = page.getByRole("region", { name: "현재 회차 사건" });
+    let firstEventRow = eventRegion.locator("li").filter({ hasText: firstEventTitle });
+    let secondEventRow = eventRegion.locator("li").filter({ hasText: secondEventTitle });
+    await firstEventRow
+      .getByRole("button", { name: "플롯으로 만들기", exact: true })
+      .click();
+    let plotDialog = page.getByRole("dialog", { name: "플롯 관리" });
+    await plotDialog
+      .getByRole("button", { name: "플롯 관리 닫기", exact: true })
+      .click();
+    await secondEventRow
+      .getByRole("button", { name: "플롯으로 만들기", exact: true })
+      .click();
+    plotDialog = page.getByRole("dialog", { name: "플롯 관리" });
+    let boardRegion = plotDialog.getByRole("region", { name: "플롯 보드" });
+    let boardCards = boardRegion.locator(".plot-board-lane > ol > li");
+    await expect(boardCards).toHaveCount(2);
+    await expect(boardCards.nth(0)).toContainText(firstEventTitle);
+    await expect(boardCards.nth(1)).toContainText(secondEventTitle);
+
+    await boardCards.nth(1)
+      .getByRole("button", { name: "앞으로 이동", exact: true })
+      .click();
+    await expect(boardCards.nth(0)).toContainText(secondEventTitle);
+    await expect(boardCards.nth(1)).toContainText(firstEventTitle);
+    const linkRegion = plotDialog.getByRole("region", { name: "플롯 연결 사건" });
+    await linkRegion
+      .getByRole("button", { name: "연결 해제", exact: true })
+      .click();
+    await expect(linkRegion).toContainText("이 플롯에 연결된 사건이 없습니다.");
+    await expect(boardCards).toHaveCount(2);
+    await plotDialog
+      .getByRole("button", { name: "플롯 관리 닫기", exact: true })
+      .click();
+
+    await electronApp.close();
+    electronApp = await electron.launch({
+      args: electronArguments,
+      cwd: process.cwd(),
+      env: runtimeEnvironment,
+    });
+    page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(page.getByText(workTitle, { exact: true }).first()).toBeVisible();
+    await continueFromMain(page);
+    await openReviewRail(page);
+    manuscript = page.getByRole("textbox", { name: "원고" });
+    eventRegion = page.getByRole("region", { name: "현재 회차 사건" });
+    firstEventRow = eventRegion.locator("li").filter({ hasText: firstEventTitle });
+    secondEventRow = eventRegion.locator("li").filter({ hasText: secondEventTitle });
+    await firstEventRow
+      .getByRole("button", { name: "연결 플롯 열기", exact: true })
+      .click();
+    plotDialog = page.getByRole("dialog", { name: "플롯 관리" });
+    boardRegion = plotDialog.getByRole("region", { name: "플롯 보드" });
+    boardCards = boardRegion.locator(".plot-board-lane > ol > li");
+    await expect(boardCards).toHaveCount(2);
+    await expect(boardCards.nth(0)).toContainText(secondEventTitle);
+    await expect(boardCards.nth(1)).toContainText(firstEventTitle);
+    await plotDialog
+      .getByRole("button", { name: "플롯 관리 닫기", exact: true })
+      .click();
+
+    await firstEventRow.getByRole("button", { name: new RegExp(firstEventTitle) }).click();
+    await expect.poll(() =>
+      manuscript.evaluate(() => globalThis.getSelection()?.toString() ?? ""),
+    ).toBe(firstQuote);
+    await expect(
+      secondEventRow.getByRole("button", { name: "플롯으로 만들기", exact: true }),
+    ).toBeVisible();
+  } finally {
+    await electronApp.close().catch(() => undefined);
+    await removeVerifiedTemporaryDirectory(directory);
+  }
+});
+
+test("drags plot placements with local preview, cancellation, keyboard movement, and conflict rollback", async () => {
+  test.setTimeout(180_000);
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "eum-studio-plot-drag-e2e-"),
+  );
+  const suffix = randomUUID().slice(0, 8);
+  const workTitle = `플롯 드래그 작품-${suffix}`;
+  const documentTitle = `플롯 드래그 회차-${suffix}`;
+  const plotTitles = [
+    `첫 드래그 플롯-${suffix}`,
+    `둘째 드래그 플롯-${suffix}`,
+    `셋째 드래그 플롯-${suffix}`,
+    `넷째 드래그 플롯-${suffix}`,
+    `다섯째 드래그 플롯-${suffix}`,
+    `여섯째 드래그 플롯-${suffix}`,
+    `일곱째 드래그 플롯-${suffix}`,
+  ] as const;
+  const electronArguments = [
+    ".",
+    `--user-data-dir=${path.join(directory, "electron-user-data")}`,
+  ];
+  const runtimeEnvironment = {
+    ...process.env,
+    EUM_STUDIO_TEST_EPHEMERAL_WORKSPACE: "0",
+    EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH: directory,
+    EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+  };
+  let electronApp = await electron.launch({
+    args: electronArguments,
+    cwd: process.cwd(),
+    env: runtimeEnvironment,
+  });
+
+  const readBoard = async (page: Page) => page.evaluate(async () => {
+    const catalog = await window.eumStudio.workspace.getCatalog();
+    if (catalog.activeWorkId === null) throw new Error("Expected an active Work");
+    return window.eumStudio.plots.getDefaultBoard({
+      schemaVersion: 1,
+      workId: catalog.activeWorkId,
+    });
+  });
+  const pointerPosition = async (
+    locator: Locator,
+    verticalFraction = 0.5,
+  ) => {
+    const bounds = await locator.boundingBox();
+    if (bounds === null) throw new Error("Expected a visible plot card");
+    return {
+      x: bounds.x + bounds.width / 2,
+      y: bounds.y + bounds.height * verticalFraction,
+    };
+  };
+
+  try {
+    let page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.getByRole("button", { name: "작품 만들기", exact: true }).click();
+    const createWorkDialog = page.getByRole("dialog", { name: "새 작품 만들기" });
+    await createWorkDialog.getByLabel("작품 제목").fill(workTitle);
+    await createWorkDialog.getByLabel("첫 회차 제목").fill(documentTitle);
+    await createWorkDialog
+      .getByRole("button", { name: "작품 만들기", exact: true })
+      .click();
+    await openReviewRail(page);
+    await page.getByRole("tab", { name: "작품", exact: true }).click();
+    await page
+      .getByRole("button", { name: "플롯 관리 열기", exact: true })
+      .click();
+    let plotDialog = page.getByRole("dialog", { name: "플롯 관리" });
+
+    for (const [index, title] of plotTitles.entries()) {
+      if (index > 0) {
+        await plotDialog
+          .getByRole("button", { name: "새 플롯", exact: true })
+          .click();
+      }
+      await plotDialog.getByLabel("플롯 제목").fill(title);
+      await plotDialog
+        .getByRole("button", { name: "플롯 만들기", exact: true })
+        .click();
+      await expect(plotDialog.getByLabel("플롯 제목")).toHaveValue(title);
+    }
+
+    let boardRegion = plotDialog.getByRole("region", { name: "플롯 보드" });
+    let boardCards = boardRegion.locator("[data-plot-placement-id]");
+    let boardCardTitles = boardCards.locator(".plot-board-card-select strong");
+    await expect(boardCardTitles).toHaveText(plotTitles);
+    const plotList = plotDialog.getByRole("region", { name: "플롯 목록" });
+    await plotList.evaluate((element) => {
+      element.scrollTop = 0;
+    });
+
+    const boardBeforeThreshold = await readBoard(page);
+    let sourceSelect = boardCards.nth(2).locator(".plot-board-card-select");
+    let sourcePoint = await pointerPosition(sourceSelect);
+    await page.mouse.move(sourcePoint.x, sourcePoint.y);
+    await page.mouse.down();
+    await page.mouse.move(sourcePoint.x + 5, sourcePoint.y);
+    await expect(boardRegion.locator("[data-plot-insertion-line]")).toHaveCount(0);
+    await page.mouse.up();
+    const boardAfterThreshold = await readBoard(page);
+    expect(boardAfterThreshold.revision).toBe(boardBeforeThreshold.revision);
+    expect(boardAfterThreshold.lanes[0]?.placements.map(
+      (placement) => placement.plotBeat.title,
+    )).toEqual(plotTitles);
+
+    await plotList.evaluate((element) => {
+      element.scrollTop = 0;
+    });
+    sourceSelect = boardCards.nth(0).locator(".plot-board-card-select");
+    sourcePoint = await pointerPosition(sourceSelect);
+    const listBounds = await plotList.boundingBox();
+    if (listBounds === null) throw new Error("Expected the plot list to be visible");
+    await page.mouse.move(sourcePoint.x, sourcePoint.y);
+    await page.mouse.down();
+    await page.mouse.move(
+      sourcePoint.x,
+      listBounds.y + listBounds.height - 5,
+      { steps: 4 },
+    );
+    await expect(boardRegion).toHaveAttribute("data-drag-active", "true");
+    await expect(boardRegion.locator("[data-plot-insertion-line]")).toHaveCount(1);
+    await expect.poll(() =>
+      plotList.evaluate((element) => element.scrollTop),
+    ).toBeGreaterThan(0);
+    await page.keyboard.press("Escape");
+    await expect(boardRegion).toHaveAttribute("data-drag-active", "false");
+    await expect(boardRegion.locator("[data-plot-insertion-line]")).toHaveCount(0);
+    await page.mouse.up();
+    const boardAfterEscape = await readBoard(page);
+    expect(boardAfterEscape.revision).toBe(boardBeforeThreshold.revision);
+
+    await plotList.evaluate((element) => {
+      element.scrollTop = 0;
+    });
+    sourceSelect = boardCards.nth(2).locator(".plot-board-card-select");
+    sourcePoint = await pointerPosition(sourceSelect);
+    let targetSelect = boardCards.nth(0).locator(".plot-board-card-select");
+    let targetPoint = await pointerPosition(targetSelect, 0.25);
+    await page.mouse.move(sourcePoint.x, sourcePoint.y);
+    await page.mouse.down();
+    await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 4 });
+    await expect(boardRegion.locator("[data-plot-insertion-line]")).toHaveCount(1);
+    await sourceSelect.dispatchEvent("pointercancel", {
+      bubbles: true,
+      pointerId: 1,
+    });
+    await expect(boardRegion).toHaveAttribute("data-drag-active", "false");
+    await page.mouse.up();
+    const boardAfterPointerCancel = await readBoard(page);
+    expect(boardAfterPointerCancel.revision).toBe(boardBeforeThreshold.revision);
+
+    sourceSelect = boardCards.nth(2).locator(".plot-board-card-select");
+    sourcePoint = await pointerPosition(sourceSelect);
+    targetSelect = boardCards.nth(0).locator(".plot-board-card-select");
+    targetPoint = await pointerPosition(targetSelect, 0.25);
+    const boardBeforeDrop = await readBoard(page);
+    const movedBeforeDrop = boardBeforeDrop.lanes[0]?.placements.find(
+      (placement) => placement.plotBeat.title === plotTitles[2],
+    );
+    await page.mouse.move(sourcePoint.x, sourcePoint.y);
+    await page.mouse.down();
+    await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 4 });
+    await expect(boardRegion).toHaveAttribute("data-drag-active", "true");
+    await expect(sourceSelect.locator("xpath=..")).toHaveClass(
+      /is-drag-preview-source/u,
+    );
+    await expect(boardRegion.locator("[data-plot-insertion-line]")).toHaveCount(1);
+    await page.mouse.up();
+    const expectedAfterDrop = [
+      plotTitles[2],
+      plotTitles[0],
+      plotTitles[1],
+      ...plotTitles.slice(3),
+    ];
+    await expect(boardCardTitles).toHaveText(expectedAfterDrop);
+    const boardAfterDrop = await readBoard(page);
+    const movedAfterDrop = boardAfterDrop.lanes[0]?.placements.find(
+      (placement) => placement.plotBeat.title === plotTitles[2],
+    );
+    expect(boardAfterDrop.revision).toBe(boardBeforeDrop.revision + 1);
+    expect(movedAfterDrop?.revision).toBe((movedBeforeDrop?.revision ?? 0) + 1);
+    for (const placement of boardBeforeDrop.lanes[0]?.placements ?? []) {
+      if (placement.plotBeat.title === plotTitles[2]) continue;
+      expect(boardAfterDrop.lanes[0]?.placements.find(
+        (candidate) => candidate.plotPlacementId === placement.plotPlacementId,
+      )?.revision).toBe(placement.revision);
+    }
+
+    const firstPlotCard = boardCards.filter({ hasText: plotTitles[0] });
+    const boardBeforeKeyboard = await readBoard(page);
+    await firstPlotCard.locator(".plot-board-card-select").press("Alt+ArrowDown");
+    const expectedAfterKeyboard = [
+      plotTitles[2],
+      plotTitles[1],
+      plotTitles[0],
+      ...plotTitles.slice(3),
+    ];
+    await expect(boardCardTitles).toHaveText(expectedAfterKeyboard);
+    const boardAfterKeyboard = await readBoard(page);
+    expect(boardAfterKeyboard.revision).toBe(boardBeforeKeyboard.revision + 1);
+
+    await electronApp.close();
+    electronApp = await electron.launch({
+      args: electronArguments,
+      cwd: process.cwd(),
+      env: runtimeEnvironment,
+    });
+    page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(page.getByText(workTitle, { exact: true }).first()).toBeVisible();
+    await continueFromMain(page);
+    await openReviewRail(page);
+    await page.getByRole("tab", { name: "작품", exact: true }).click();
+    await page
+      .getByRole("button", { name: "플롯 관리 열기", exact: true })
+      .click();
+    plotDialog = page.getByRole("dialog", { name: "플롯 관리" });
+    boardRegion = plotDialog.getByRole("region", { name: "플롯 보드" });
+    boardCards = boardRegion.locator("[data-plot-placement-id]");
+    boardCardTitles = boardCards.locator(".plot-board-card-select strong");
+    await expect(boardCardTitles).toHaveText(expectedAfterKeyboard);
+
+    const staleBoard = await readBoard(page);
+    const staleLane = staleBoard.lanes[0];
+    if (staleLane === undefined) throw new Error("Expected a default plot lane");
+    const externallyMoved = staleLane.placements.find(
+      (placement) => placement.plotBeat.title === plotTitles[0],
+    );
+    const staleFirst = staleLane.placements[0];
+    if (externallyMoved === undefined || staleFirst === undefined) {
+      throw new Error("Expected plot placements for the conflict fixture");
+    }
+    const authoritativeAfterExternalMove = await page.evaluate(
+      async ({
+        workId,
+        boardId,
+        laneId,
+        placementId,
+        afterPlacementId,
+        placementRevision,
+        boardRevision,
+      }) => window.eumStudio.plots.movePlacement({
+        schemaVersion: 1,
+        workId,
+        plotPlacementId: placementId,
+        targetBoardId: boardId,
+        targetLaneId: laneId,
+        afterPlacementId,
+        expectedPlacementRevision: placementRevision,
+        expectedBoardRevision: boardRevision,
+      }),
+      {
+        workId: staleBoard.workId,
+        boardId: staleBoard.plotBoardId,
+        laneId: staleLane.plotLaneId,
+        placementId: externallyMoved.plotPlacementId,
+        afterPlacementId: staleFirst.plotPlacementId,
+        placementRevision: externallyMoved.revision,
+        boardRevision: staleBoard.revision,
+      },
+    );
+    expect(authoritativeAfterExternalMove.lanes[0]?.placements.map(
+      (placement) => placement.plotBeat.title,
+    )).toEqual([
+      plotTitles[0],
+      plotTitles[2],
+      plotTitles[1],
+      ...plotTitles.slice(3),
+    ]);
+    await expect(boardCardTitles).toHaveText(expectedAfterKeyboard);
+
+    sourceSelect = boardCards.nth(0).locator(".plot-board-card-select");
+    sourcePoint = await pointerPosition(sourceSelect);
+    targetSelect = boardCards.nth(1).locator(".plot-board-card-select");
+    targetPoint = await pointerPosition(targetSelect, 0.75);
+    await page.mouse.move(sourcePoint.x, sourcePoint.y);
+    await page.mouse.down();
+    await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 4 });
+    await expect(boardRegion.locator("[data-plot-insertion-line]")).toHaveCount(1);
+    await page.mouse.up();
+    await expect(plotDialog.getByRole("alert")).toHaveText(
+      "플롯 배치 순서가 달라졌습니다. 다시 열어 확인하세요.",
+    );
+    await expect(boardRegion).toHaveAttribute("data-drag-active", "false");
+    await expect(boardRegion.locator("[data-plot-insertion-line]")).toHaveCount(0);
+    await expect(boardCardTitles).toHaveText(expectedAfterKeyboard);
+    const boardAfterConflict = await readBoard(page);
+    expect(boardAfterConflict.revision).toBe(authoritativeAfterExternalMove.revision);
+    expect(boardAfterConflict.lanes[0]?.placements.map(
+      (placement) => placement.plotBeat.title,
+    )).toEqual(
+      authoritativeAfterExternalMove.lanes[0]?.placements.map(
+        (placement) => placement.plotBeat.title,
+      ),
+    );
+  } finally {
+    await electronApp.close().catch(() => undefined);
+    await removeVerifiedTemporaryDirectory(directory);
+  }
+});
+
+test("places overlapping plots on an unsnapped normalized story-time map and preserves them across restart", async () => {
+  test.setTimeout(180_000);
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "eum-studio-plot-story-time-e2e-"),
+  );
+  const suffix = randomUUID().slice(0, 8);
+  const workTitle = `시간 지도 작품-${suffix}`;
+  const documentTitle = `시간 지도 회차-${suffix}`;
+  const plotTitles = [
+    `첫 시간 플롯-${suffix}`,
+    `둘째 시간 플롯-${suffix}`,
+    `셋째 시간 플롯-${suffix}`,
+  ] as const;
+  const electronArguments = [
+    ".",
+    `--user-data-dir=${path.join(directory, "electron-user-data")}`,
+  ];
+  const runtimeEnvironment = {
+    ...process.env,
+    EUM_STUDIO_TEST_EPHEMERAL_WORKSPACE: "0",
+    EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH: directory,
+    EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+  };
+  let electronApp = await electron.launch({
+    args: electronArguments,
+    cwd: process.cwd(),
+    env: runtimeEnvironment,
+  });
+
+  const readBoard = async (page: Page) => page.evaluate(async () => {
+    const catalog = await window.eumStudio.workspace.getCatalog();
+    if (catalog.activeWorkId === null) throw new Error("Expected an active Work");
+    return window.eumStudio.plots.getDefaultBoard({
+      schemaVersion: 1,
+      workId: catalog.activeWorkId,
+    });
+  });
+  const dragToFraction = async (
+    page: Page,
+    source: Locator,
+    track: Locator,
+    fraction: number,
+  ) => {
+    const sourceBounds = await source.boundingBox();
+    const trackBounds = await track.boundingBox();
+    if (sourceBounds === null || trackBounds === null) {
+      throw new Error("Expected visible story-time drag surfaces");
+    }
+    const sourcePoint = {
+      x: sourceBounds.x + sourceBounds.width / 2,
+      y: sourceBounds.y + sourceBounds.height / 2,
+    };
+    const targetPoint = {
+      x: trackBounds.x + trackBounds.width * fraction,
+      y: trackBounds.y + Math.min(trackBounds.height / 2, 48),
+    };
+    await page.mouse.move(sourcePoint.x, sourcePoint.y);
+    await page.mouse.down();
+    await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 4 });
+  };
+
+  try {
+    let page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.getByRole("button", { name: "작품 만들기", exact: true }).click();
+    const createWorkDialog = page.getByRole("dialog", { name: "새 작품 만들기" });
+    await createWorkDialog.getByLabel("작품 제목").fill(workTitle);
+    await createWorkDialog.getByLabel("첫 회차 제목").fill(documentTitle);
+    await createWorkDialog
+      .getByRole("button", { name: "작품 만들기", exact: true })
+      .click();
+    await openReviewRail(page);
+    await page.getByRole("tab", { name: "작품", exact: true }).click();
+    await page
+      .getByRole("button", { name: "플롯 관리 열기", exact: true })
+      .click();
+    let plotDialog = page.getByRole("dialog", { name: "플롯 관리" });
+
+    for (const [index, title] of plotTitles.entries()) {
+      if (index > 0) {
+        await plotDialog
+          .getByRole("button", { name: "새 플롯", exact: true })
+          .click();
+      }
+      await plotDialog.getByLabel("플롯 제목").fill(title);
+      await plotDialog
+        .getByRole("button", { name: "플롯 만들기", exact: true })
+        .click();
+      await expect(plotDialog.getByLabel("플롯 제목")).toHaveValue(title);
+    }
+
+    let boardRegion = plotDialog.getByRole("region", { name: "플롯 보드" });
+    const boardBefore = await readBoard(page);
+    const orderBefore = boardBefore.lanes[0]!.placements.map((placement) => ({
+      id: placement.plotPlacementId,
+      orderKey: placement.orderKey,
+      revision: placement.revision,
+    }));
+    await boardRegion
+      .getByRole("button", { name: "시간 지도", exact: true })
+      .click();
+    await expect(boardRegion).toHaveAttribute("data-board-view", "time-map");
+    let track = boardRegion.locator('[data-story-time-track="true"]');
+    await expect(track).toBeVisible();
+    await expect
+      .poll(async () =>
+        Number(await track.getAttribute("data-story-time-point-footprint")),
+      )
+      .toBeGreaterThan(0);
+    await expect(
+      boardRegion.locator('[data-story-time-unassigned="true"]'),
+    ).toHaveCount(3);
+
+    const firstUnassigned = boardRegion
+      .locator('[data-story-time-unassigned="true"]')
+      .filter({ hasText: plotTitles[0] });
+    await dragToFraction(page, firstUnassigned, track, 0.37416666666666665);
+    const firstPreview = boardRegion.locator(
+      '[data-story-time-preview="true"]',
+    );
+    await expect(firstPreview).toHaveCount(1);
+    const firstPreviewValue = Number(
+      await firstPreview.getAttribute("data-story-time"),
+    );
+    expect(firstPreviewValue).toBeGreaterThan(37);
+    expect(firstPreviewValue).toBeLessThan(38);
+    expect(Number.isInteger(firstPreviewValue)).toBe(false);
+    const boardDuringFirstDrag = await readBoard(page);
+    expect(boardDuringFirstDrag.revision).toBe(boardBefore.revision);
+    expect(boardDuringFirstDrag.lanes[0]!.placements[0]!.storyTime).toBeNull();
+    await page.mouse.up();
+    await expect.poll(async () =>
+      (await readBoard(page)).lanes[0]!.placements[0]!.storyTime,
+    ).toBe(firstPreviewValue);
+
+    const firstBoardAfterDrop = await readBoard(page);
+    expect(firstBoardAfterDrop.revision).toBe(boardBefore.revision + 1);
+    expect(firstBoardAfterDrop.lanes[0]!.placements[0]!.revision).toBe(
+      orderBefore[0]!.revision + 1,
+    );
+    expect(firstBoardAfterDrop.lanes[0]!.placements[1]!.revision).toBe(
+      orderBefore[1]!.revision,
+    );
+
+    const secondUnassigned = boardRegion
+      .locator('[data-story-time-unassigned="true"]')
+      .filter({ hasText: plotTitles[1] });
+    await expect(secondUnassigned).toBeEnabled();
+    await dragToFraction(page, secondUnassigned, track, 0.37416666666666665);
+    const secondPreview = boardRegion.locator(
+      '[data-story-time-preview="true"]',
+    );
+    await expect(secondPreview).toHaveCount(1);
+    const secondPreviewValue = Number(
+      await secondPreview.getAttribute("data-story-time"),
+    );
+    expect(Number.isInteger(secondPreviewValue)).toBe(false);
+    await page.mouse.up();
+    await expect.poll(async () =>
+      (await readBoard(page)).lanes[0]!.placements[1]!.storyTime,
+    ).toBe(secondPreviewValue);
+    await expect(
+      boardRegion.locator('[data-story-time-stack-level="0"]'),
+    ).toHaveCount(1);
+    await expect(
+      boardRegion.locator('[data-story-time-stack-level="1"]'),
+    ).toHaveCount(1);
+
+    const thirdUnassigned = boardRegion
+      .locator('[data-story-time-unassigned="true"]')
+      .filter({ hasText: plotTitles[2] });
+    await expect(thirdUnassigned).toBeEnabled();
+    await dragToFraction(page, thirdUnassigned, track, 0.73125);
+    const thirdPreview = boardRegion.locator(
+      '[data-story-time-preview="true"]',
+    );
+    await expect(thirdPreview).toHaveCount(1);
+    const thirdPreviewValue = Number(
+      await thirdPreview.getAttribute("data-story-time"),
+    );
+    expect(Number.isInteger(thirdPreviewValue)).toBe(false);
+    await page.mouse.up();
+    await expect.poll(async () =>
+      (await readBoard(page)).lanes[0]!.placements[2]!.storyTime,
+    ).toBe(thirdPreviewValue);
+
+    const boardAfterDrops = await readBoard(page);
+    expect(boardAfterDrops.revision).toBe(boardBefore.revision + 3);
+    expect(boardAfterDrops.lanes[0]!.placements.map((placement) => ({
+      id: placement.plotPlacementId,
+      orderKey: placement.orderKey,
+    }))).toEqual(orderBefore.map(({ id, orderKey }) => ({ id, orderKey })));
+    expect(boardAfterDrops.lanes[0]!.placements.map(
+      (placement) => placement.storyTime,
+    )).toEqual([firstPreviewValue, secondPreviewValue, thirdPreviewValue]);
+
+    await electronApp.close();
+    electronApp = await electron.launch({
+      args: electronArguments,
+      cwd: process.cwd(),
+      env: runtimeEnvironment,
+    });
+    page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(page.getByText(workTitle, { exact: true }).first()).toBeVisible();
+    await continueFromMain(page);
+    await openReviewRail(page);
+    await page.getByRole("tab", { name: "작품", exact: true }).click();
+    await page
+      .getByRole("button", { name: "플롯 관리 열기", exact: true })
+      .click();
+    plotDialog = page.getByRole("dialog", { name: "플롯 관리" });
+    boardRegion = plotDialog.getByRole("region", { name: "플롯 보드" });
+    await boardRegion
+      .getByRole("button", { name: "시간 지도", exact: true })
+      .click();
+    track = boardRegion.locator('[data-story-time-track="true"]');
+    await expect(track).toBeVisible();
+    await expect(
+      boardRegion.locator('[data-story-time-unassigned="true"]'),
+    ).toHaveCount(0);
+    await expect(
+      boardRegion.locator('[data-story-time-stack-level="1"]'),
+    ).toHaveCount(1);
+    expect((await readBoard(page)).lanes[0]!.placements.map(
+      (placement) => placement.storyTime,
+    )).toEqual([firstPreviewValue, secondPreviewValue, thirdPreviewValue]);
+
+    const staleBoard = await readBoard(page);
+    const staleFirst = staleBoard.lanes[0]!.placements[0]!;
+    const authoritative = await page.evaluate(
+      async ({
+        workId,
+        plotPlacementId,
+        plotBoardId,
+        expectedPlacementRevision,
+        expectedBoardRevision,
+      }) => window.eumStudio.plots.setStoryTime({
+        schemaVersion: 1,
+        workId,
+        plotPlacementId,
+        plotBoardId,
+        storyTime: 82.8125,
+        storyTimeEnd: null,
+        expectedPlacementRevision,
+        expectedBoardRevision,
+      }),
+      {
+        workId: staleBoard.workId,
+        plotPlacementId: staleFirst.plotPlacementId,
+        plotBoardId: staleBoard.plotBoardId,
+        expectedPlacementRevision: staleFirst.revision,
+        expectedBoardRevision: staleBoard.revision,
+      },
+    );
+    expect(authoritative.lanes[0]!.placements[0]!.storyTime).toBe(82.8125);
+
+    const staleSecondCard = boardRegion
+      .locator('.plot-story-time-card')
+      .filter({ hasText: plotTitles[1] });
+    await dragToFraction(page, staleSecondCard, track, 0.6125);
+    await expect(
+      boardRegion.locator('[data-story-time-preview="true"]'),
+    ).toHaveCount(1);
+    await page.mouse.up();
+    await expect(plotDialog.getByRole("alert")).toHaveText(
+      "플롯 이야기 시간이 달라졌습니다. 다시 열어 확인하세요.",
+    );
+    await expect(boardRegion).toHaveAttribute("data-drag-active", "false");
+    await expect(staleSecondCard).toHaveAttribute(
+      "data-story-time",
+      String(secondPreviewValue),
+    );
+    const boardAfterConflict = await readBoard(page);
+    expect(boardAfterConflict).toEqual(authoritative);
+
+    await electronApp.close();
+    electronApp = await electron.launch({
+      args: electronArguments,
+      cwd: process.cwd(),
+      env: runtimeEnvironment,
+    });
+    page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(page.getByText(workTitle, { exact: true }).first()).toBeVisible();
+    await continueFromMain(page);
+    expect((await readBoard(page)).lanes[0]!.placements.map(
+      (placement) => placement.storyTime,
+    )).toEqual([82.8125, secondPreviewValue, thirdPreviewValue]);
+  } finally {
+    await electronApp.close().catch(() => undefined);
+    await removeVerifiedTemporaryDirectory(directory);
+  }
+});
+
+test("keeps Work-global manuscript and plot event orders separate with exact navigation and plotification", async () => {
+  test.setTimeout(180_000);
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "eum-studio-event-rail-e2e-"),
+  );
+  const suffix = randomUUID().slice(0, 8);
+  const workTitle = `사건 레일 작품-${suffix}`;
+  const firstDocumentTitle = `첫 회차-${suffix}`;
+  const secondDocumentTitle = `둘째 회차-${suffix}`;
+  const firstEventTitle = `첫 원고 사건-${suffix}`;
+  const secondEventTitle = `둘째 원고 사건-${suffix}`;
+  const plannedEventTitle = `예정 사건-${suffix}`;
+  const firstPrefix = "첫 회차 도입 ";
+  const firstQuote = `첫 회차 정확 근거 ${suffix}`;
+  const firstText = `${firstPrefix}${firstQuote} 마무리`;
+  const secondPrefix = "";
+  const secondQuote = `둘째 회차 정확 근거 ${suffix}`;
+  const secondText = `${secondQuote} 끝`;
+  const electronArguments = [
+    ".",
+    `--user-data-dir=${path.join(directory, "electron-user-data")}`,
+  ];
+  const runtimeEnvironment = {
+    ...process.env,
+    EUM_STUDIO_TEST_EPHEMERAL_WORKSPACE: "0",
+    EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH: directory,
+    EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+  };
+  let electronApp = await electron.launch({
+    args: electronArguments,
+    cwd: process.cwd(),
+    env: runtimeEnvironment,
+  });
+
+  const readSelectedManuscriptText = async (manuscript: Locator) => {
+    const host = manuscript.locator(
+      "xpath=ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' manuscript-editor ')]",
+    );
+    const [text, selection] = await Promise.all([
+      readEditorText(manuscript),
+      host.evaluate((element) => ({
+        anchor: Number((element as HTMLElement).dataset.selectionAnchor),
+        head: Number((element as HTMLElement).dataset.selectionHead),
+      })),
+    ]);
+    return text.slice(
+      Math.min(selection.anchor, selection.head),
+      Math.max(selection.anchor, selection.head),
+    );
+  };
+
+  const selectExactRange = async (
+    page: Page,
+    manuscript: Locator,
+    from: number,
+    text: string,
+  ) => {
+    const points = await manuscript.locator(".cm-line").first().evaluate(
+      (line, range) => {
+        const textNode = line.firstChild;
+        if (!(textNode instanceof Text)) {
+          throw new Error("CodeMirror line text node is missing");
+        }
+        const pointAt = (offset: number) => {
+          const characterRange = document.createRange();
+          characterRange.setStart(textNode, offset);
+          characterRange.setEnd(textNode, offset + 1);
+          const rectangle = characterRange.getBoundingClientRect();
+          return {
+            x: rectangle.left,
+            y: rectangle.top + rectangle.height / 2,
+          };
+        };
+        return {
+          start: pointAt(range.from),
+          end: pointAt(range.to),
+        };
+      },
+      { from, to: from + text.length },
+    );
+    await page.mouse.move(points.start.x, points.start.y);
+    await page.mouse.down();
+    await page.mouse.move(points.end.x, points.end.y, { steps: 4 });
+    await page.mouse.up();
+    await expect.poll(() => readSelectedManuscriptText(manuscript)).toBe(text);
+  };
+  const createSelectedEvent = async (
+    page: Page,
+    manuscript: Locator,
+    from: number,
+    quote: string,
+    title: string,
+  ) => {
+    await selectExactRange(page, manuscript, from, quote);
+    await page
+      .getByRole("button", { name: "사건으로 등록", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog", { name: "사건으로 등록" });
+    await dialog.getByLabel("사건 제목").fill(title);
+    await dialog.getByRole("button", { name: "등록", exact: true }).click();
+    await expect(dialog).toBeHidden();
+  };
+  const readRail = async (page: Page) => page.evaluate(async () => {
+    const catalog = await window.eumStudio.workspace.getCatalog();
+    if (catalog.activeWorkId === null) throw new Error("Expected an active Work");
+    return window.eumStudio.structure.listEventRail({
+      schemaVersion: 1,
+      workId: catalog.activeWorkId,
+    });
+  });
+
+  try {
+    let page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.getByRole("button", { name: "작품 만들기", exact: true }).click();
+    const createWorkDialog = page.getByRole("dialog", { name: "새 작품 만들기" });
+    await createWorkDialog.getByLabel("작품 제목").fill(workTitle);
+    await createWorkDialog.getByLabel("첫 회차 제목").fill(firstDocumentTitle);
+    await createWorkDialog
+      .getByRole("button", { name: "작품 만들기", exact: true })
+      .click();
+    await openReviewRail(page);
+
+    let manuscript = page.getByRole("textbox", { name: "원고" });
+    await expect(page.getByTestId("manuscript-title")).toHaveText(
+      firstDocumentTitle,
+    );
+    await manuscript.click();
+    await manuscript.pressSequentially(firstText);
+    await expectEditorText(manuscript, firstText);
+    await expect(page.getByTestId("save-state")).toHaveText("저장됨");
+    await createSelectedEvent(
+      page,
+      manuscript,
+      firstPrefix.length,
+      firstQuote,
+      firstEventTitle,
+    );
+
+    await page.getByRole("button", { name: "새 회차", exact: true }).click();
+    await page.getByLabel("새 회차 제목").fill(secondDocumentTitle);
+    await page.getByRole("button", { name: "만들기", exact: true }).click();
+    await expect(page.getByTestId("manuscript-title")).toHaveText(
+      secondDocumentTitle,
+    );
+    manuscript = page.getByRole("textbox", { name: "원고" });
+    await manuscript.click();
+    await manuscript.pressSequentially(secondText);
+    await expectEditorText(manuscript, secondText);
+    await expect(page.getByTestId("save-state")).toHaveText("저장됨");
+    await page.evaluate(
+      async ({ title, exactQuote, from }) => {
+        const catalog = await window.eumStudio.workspace.getCatalog();
+        if (
+          catalog.activeWorkId === null ||
+          catalog.activeDocumentId === null
+        ) {
+          throw new Error("Expected an active Work and Document");
+        }
+        return window.eumStudio.structure.createEventBlock({
+          schemaVersion: 1,
+          workId: catalog.activeWorkId,
+          documentId: catalog.activeDocumentId,
+          selection: { anchor: from, head: from + exactQuote.length },
+          exactQuote,
+          title,
+          note: "",
+        });
+      },
+      {
+        title: secondEventTitle,
+        exactQuote: secondQuote,
+        from: secondPrefix.length,
+      },
+    );
+
+    await page
+      .getByRole("button", { name: "예정 사건 추가", exact: true })
+      .click();
+    const plannedDialog = page.getByRole("dialog", { name: "예정 사건 추가" });
+    await plannedDialog.getByLabel("사건 제목").fill(plannedEventTitle);
+    await plannedDialog.getByRole("button", { name: "등록", exact: true }).click();
+    await expect(plannedDialog).toBeHidden();
+
+    let eventRegion = page.getByRole("region", { name: "현재 회차 사건" });
+    const manuscriptTitles = eventRegion.locator(
+      ".event-rail-manuscript-list > li > .event-rail-source-button strong",
+    );
+    await expect(manuscriptTitles).toHaveText([
+      firstEventTitle,
+      secondEventTitle,
+    ]);
+    await expect(
+      eventRegion.locator(".event-rail-unpositioned").filter({
+        hasText: plannedEventTitle,
+      }),
+    ).toContainText("원고 미연결");
+    const firstEventRow = eventRegion
+      .locator(".event-rail-manuscript-list > li")
+      .filter({ hasText: firstEventTitle });
+    const secondEventRow = eventRegion
+      .locator(".event-rail-manuscript-list > li")
+      .filter({ hasText: secondEventTitle });
+    await expect(firstEventRow).toContainText(firstDocumentTitle);
+    await expect(firstEventRow).toContainText("범위 확인됨");
+    await expect(secondEventRow).toContainText(secondDocumentTitle);
+
+    await firstEventRow.locator(".event-rail-source-button").click();
+    await expect(page.getByTestId("manuscript-title")).toHaveText(firstDocumentTitle);
+    manuscript = page.getByRole("textbox", { name: "원고" });
+    await expect.poll(() => readSelectedManuscriptText(manuscript)).toBe(
+      firstQuote,
+    );
+    await secondEventRow.locator(".event-rail-source-button").click();
+    await expect(page.getByTestId("manuscript-title")).toHaveText(secondDocumentTitle);
+    manuscript = page.getByRole("textbox", { name: "원고" });
+    await expect.poll(() => readSelectedManuscriptText(manuscript)).toBe(
+      secondQuote,
+    );
+
+    await secondEventRow
+      .getByRole("button", { name: "플롯으로 만들기", exact: true })
+      .click();
+    let plotDialog = page.getByRole("dialog", { name: "플롯 관리" });
+    await expect(plotDialog).toBeVisible();
+    await plotDialog
+      .getByRole("button", { name: "플롯 관리 닫기", exact: true })
+      .click();
+    await firstEventRow
+      .getByRole("button", { name: "플롯으로 만들기", exact: true })
+      .click();
+    plotDialog = page.getByRole("dialog", { name: "플롯 관리" });
+    await expect(plotDialog).toBeVisible();
+    await plotDialog
+      .getByRole("button", { name: "플롯 관리 닫기", exact: true })
+      .click();
+
+    await eventRegion
+      .getByRole("button", { name: "플롯 순서", exact: true })
+      .click();
+    const plotTitles = eventRegion.locator(
+      ".event-rail-plot-list > li > .event-rail-plot-heading strong",
+    );
+    await expect(plotTitles).toHaveText([secondEventTitle, firstEventTitle]);
+    const secondPlotCard = eventRegion
+      .locator(".event-rail-plot-list > li")
+      .filter({ hasText: secondEventTitle });
+    const firstPlotCard = eventRegion
+      .locator(".event-rail-plot-list > li")
+      .filter({ hasText: firstEventTitle });
+    await expect(secondPlotCard).toContainText("원고 2 · 플롯 1 · 플롯 -1");
+    await expect(firstPlotCard).toContainText("원고 1 · 플롯 2 · 플롯 +1");
+
+    const beforePlotification = await readRail(page);
+    const plannedRow = eventRegion
+      .locator(".event-rail-unplotted li")
+      .filter({ hasText: plannedEventTitle });
+    await plannedRow
+      .getByRole("button", { name: "보드에 놓기", exact: true })
+      .click();
+    plotDialog = page.getByRole("dialog", { name: "플롯 관리" });
+    await expect(plotDialog).toBeVisible();
+    await plotDialog
+      .getByRole("button", { name: "플롯 관리 닫기", exact: true })
+      .click();
+    const afterPlotification = await readRail(page);
+    expect(afterPlotification.eventBlocks).toHaveLength(
+      beforePlotification.eventBlocks.length,
+    );
+    expect(afterPlotification.plotEventLinks).toHaveLength(
+      beforePlotification.plotEventLinks.length + 1,
+    );
+    expect(afterPlotification.plotCards).toHaveLength(
+      beforePlotification.plotCards.length + 1,
+    );
+    const plannedEvent = afterPlotification.eventBlocks.find(
+      (event) => event.title === plannedEventTitle,
+    );
+    const plannedCard = afterPlotification.plotCards.find(
+      (card) => card.events.some(
+        (event) => event.eventBlock.eventBlockId === plannedEvent?.eventBlockId,
+      ),
+    );
+    expect(plannedEvent).toBeDefined();
+    expect(plannedCard).toBeDefined();
+    expect(afterPlotification.plotEventLinks.filter(
+      (link) => link.eventBlockId === plannedEvent?.eventBlockId,
+    )).toHaveLength(1);
+    expect(afterPlotification.unplottedEvents).toEqual([]);
+
+    const beforeMove = afterPlotification;
+    await eventRegion
+      .getByRole("button", {
+        name: `${secondEventTitle} 뒤쪽으로 이동`,
+        exact: true,
+      })
+      .click();
+    await expect(plotTitles).toHaveText([
+      firstEventTitle,
+      secondEventTitle,
+      plannedEventTitle,
+    ]);
+    const afterMove = await readRail(page);
+    expect(afterMove.board.revision).toBe(beforeMove.board.revision + 1);
+    const movedBefore = beforeMove.plotCards.find(
+      (card) => card.placement.plotBeat.title === secondEventTitle,
+    )?.placement;
+    const movedAfter = afterMove.plotCards.find(
+      (card) => card.placement.plotBeat.title === secondEventTitle,
+    )?.placement;
+    expect(movedAfter?.revision).toBe((movedBefore?.revision ?? 0) + 1);
+    for (const card of beforeMove.plotCards) {
+      if (card.placement.plotPlacementId === movedBefore?.plotPlacementId) continue;
+      expect(afterMove.plotCards.find(
+        (candidate) =>
+          candidate.placement.plotPlacementId === card.placement.plotPlacementId,
+      )?.placement.revision).toBe(card.placement.revision);
+    }
+    expect(afterMove.eventBlocks).toEqual(beforeMove.eventBlocks);
+    expect(afterMove.eventSources).toEqual(beforeMove.eventSources);
+    expect(afterMove.plotEventLinks).toEqual(beforeMove.plotEventLinks);
+
+    await electronApp.close();
+    electronApp = await electron.launch({
+      args: electronArguments,
+      cwd: process.cwd(),
+      env: runtimeEnvironment,
+    });
+    page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(page.getByText(workTitle, { exact: true }).first()).toBeVisible();
+    await continueFromMain(page);
+    await openReviewRail(page);
+    eventRegion = page.getByRole("region", { name: "현재 회차 사건" });
+    await expect(eventRegion.locator(
+      ".event-rail-manuscript-list > li > .event-rail-source-button strong",
+    )).toHaveText([firstEventTitle, secondEventTitle]);
+    await eventRegion
+      .getByRole("button", { name: "플롯 순서", exact: true })
+      .click();
+    await expect(eventRegion.locator(
+      ".event-rail-plot-list > li > .event-rail-plot-heading strong",
+    )).toHaveText([firstEventTitle, secondEventTitle, plannedEventTitle]);
+    const restartedRail = await readRail(page);
+    expect(restartedRail.eventSources.map(
+      (source) => source.anchors[0]?.exactQuote,
+    )).toEqual(expect.arrayContaining([firstQuote, secondQuote]));
+  } finally {
+    await electronApp.close().catch(() => undefined);
+    await removeVerifiedTemporaryDirectory(directory);
+  }
+});
+
+test("projects final scenes from configured rules, folded overrides, and event exceptions across restart", async () => {
+  test.setTimeout(180_000);
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "eum-studio-scene-projection-e2e-"),
+  );
+  const suffix = randomUUID().slice(0, 8);
+  const workTitle = `장면 projection 작품-${suffix}`;
+  const documentTitle = `장면 회차-${suffix}`;
+  const firstEventTitle = `첫 장면 사건-${suffix}`;
+  const secondEventTitle = `둘째 장면 사건-${suffix}`;
+  const plannedEventTitle = `미배정 예정 사건-${suffix}`;
+  const firstQuote = `첫 사건 ${suffix}`;
+  const secondQuote = `둘째 사건 ${suffix}`;
+  const manuscriptText = `${firstQuote}\n***\n${secondQuote}`;
+  const separatorFrom = manuscriptText.indexOf("***");
+  const electronArguments = [
+    ".",
+    `--user-data-dir=${path.join(directory, "electron-user-data")}`,
+  ];
+  const runtimeEnvironment = {
+    ...process.env,
+    EUM_STUDIO_TEST_EPHEMERAL_WORKSPACE: "0",
+    EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH: directory,
+    EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+  };
+  let electronApp = await electron.launch({
+    args: electronArguments,
+    cwd: process.cwd(),
+    env: runtimeEnvironment,
+  });
+
+  const readProjection = (page: Page) => page.evaluate(async () => {
+    const catalog = await window.eumStudio.workspace.getCatalog();
+    if (catalog.activeWorkId === null) throw new Error("Expected an active Work");
+    return window.eumStudio.structure.listSceneProjection({
+      schemaVersion: 1,
+      workId: catalog.activeWorkId,
+    });
+  });
+
+  try {
+    let page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.getByRole("button", { name: "작품 만들기", exact: true }).click();
+    const createWorkDialog = page.getByRole("dialog", { name: "새 작품 만들기" });
+    await createWorkDialog.getByLabel("작품 제목").fill(workTitle);
+    await createWorkDialog.getByLabel("첫 회차 제목").fill(documentTitle);
+    await createWorkDialog
+      .getByRole("button", { name: "작품 만들기", exact: true })
+      .click();
+    await openReviewRail(page);
+
+    let manuscript = page.getByRole("textbox", { name: "원고" });
+    await manuscript.click();
+    await manuscript.pressSequentially(manuscriptText);
+    await expectEditorText(manuscript, manuscriptText);
+    await expect(page.getByTestId("save-state")).toHaveText("저장됨");
+
+    await page.evaluate(
+      async ({ firstQuote, firstEventTitle, secondQuote, secondEventTitle }) => {
+        const catalog = await window.eumStudio.workspace.getCatalog();
+        if (
+          catalog.activeWorkId === null ||
+          catalog.activeDocumentId === null
+        ) {
+          throw new Error("Expected an active Work and Document");
+        }
+        await window.eumStudio.structure.createEventBlock({
+          schemaVersion: 1,
+          workId: catalog.activeWorkId,
+          documentId: catalog.activeDocumentId,
+          selection: { anchor: 0, head: firstQuote.length },
+          exactQuote: firstQuote,
+          title: firstEventTitle,
+          note: "",
+        });
+        const secondFrom = `${firstQuote}\n***\n`.length;
+        await window.eumStudio.structure.createEventBlock({
+          schemaVersion: 1,
+          workId: catalog.activeWorkId,
+          documentId: catalog.activeDocumentId,
+          selection: {
+            anchor: secondFrom,
+            head: secondFrom + secondQuote.length,
+          },
+          exactQuote: secondQuote,
+          title: secondEventTitle,
+          note: "",
+        });
+      },
+      { firstQuote, firstEventTitle, secondQuote, secondEventTitle },
+    );
+    await page
+      .getByRole("button", { name: "예정 사건 추가", exact: true })
+      .click();
+    const plannedDialog = page.getByRole("dialog", { name: "예정 사건 추가" });
+    await plannedDialog.getByLabel("사건 제목").fill(plannedEventTitle);
+    await plannedDialog.getByRole("button", { name: "등록", exact: true }).click();
+    await expect(plannedDialog).toBeHidden();
+
+    let sceneRegion = page.getByRole("region", { name: "현재 회차 장면" });
+    let sceneCards = sceneRegion.locator(".scene-list-card");
+    await expect(sceneCards).toHaveCount(2);
+    await expect(sceneCards.nth(0)).toContainText(firstEventTitle);
+    await expect(sceneCards.nth(0)).toContainText("자동 소속");
+    await expect(sceneCards.nth(1)).toContainText(secondEventTitle);
+    await expect(sceneRegion.locator(".scene-unassigned-summary"))
+      .toContainText(plannedEventTitle);
+
+    await sceneRegion.getByText("장면 규칙 설정", { exact: true }).click();
+    let rulePattern = sceneRegion.getByLabel("장면 규칙 1 정규식");
+    await expect(rulePattern).toHaveValue("^\\s*\\*\\*\\*\\s*$");
+    await rulePattern.fill("^\\s*---\\s*$");
+    await sceneRegion
+      .getByRole("button", { name: "규칙 저장", exact: true })
+      .click();
+    await expect(sceneCards).toHaveCount(1);
+    rulePattern = sceneRegion.getByLabel("장면 규칙 1 정규식");
+    await rulePattern.fill("^\\s*\\*\\*\\*\\s*$");
+    await sceneRegion
+      .getByRole("button", { name: "규칙 저장", exact: true })
+      .click();
+    await expect(sceneCards).toHaveCount(2);
+
+    await sceneCards.nth(1)
+      .getByRole("button", { name: "앞 장면과 병합", exact: true })
+      .click();
+    await expect(sceneCards).toHaveCount(1);
+    manuscript = page.getByRole("textbox", { name: "원고" });
+    await manuscript.click();
+    await manuscript.press("Control+Home");
+    for (let index = 0; index < separatorFrom; index += 1) {
+      await manuscript.press("ArrowRight");
+    }
+    await sceneCards.nth(0)
+      .getByRole("button", { name: "현재 위치에서 분할", exact: true })
+      .click();
+    await expect(sceneCards).toHaveCount(2);
+    await expect(sceneCards.nth(0)).toContainText(firstEventTitle);
+    await expect(sceneCards.nth(1)).toContainText(secondEventTitle);
+    await expect(sceneCards.nth(0)).toContainText("수동 조정 반영");
+
+    const secondSceneUnassigned = sceneCards.nth(1)
+      .locator(".scene-unassigned-events");
+    await secondSceneUnassigned.locator("summary").click();
+    await secondSceneUnassigned.locator("li")
+      .filter({ hasText: plannedEventTitle })
+      .getByRole("button", { name: "이 장면에 포함", exact: true })
+      .click();
+    await expect(sceneCards.nth(1)).toContainText(plannedEventTitle);
+    await expect(sceneCards.nth(1)).toContainText("수동 포함");
+
+    await sceneCards.nth(0)
+      .getByRole("button", { name: "수동 제외", exact: true })
+      .click();
+    await expect(sceneCards.nth(0).locator(".scene-excluded-events"))
+      .toContainText(firstEventTitle);
+    await expect(sceneCards.nth(0))
+      .toContainText("제외 해제");
+
+    const beforeRestart = await readProjection(page);
+    expect(beforeRestart.status).toBe("clean");
+    expect(beforeRestart.ruleSet).toMatchObject({
+      revision: 3,
+      boundaryRules: [{ pattern: "^\\s*\\*\\*\\*\\s*$", flags: "u" }],
+    });
+    expect(beforeRestart.scenes).toHaveLength(2);
+    expect(beforeRestart.sceneEventOverrides).toHaveLength(2);
+    expect(beforeRestart.scenes[0]?.excludedEvents).toMatchObject([
+      { title: firstEventTitle },
+    ]);
+    expect(beforeRestart.scenes[1]?.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: secondEventTitle, membership: "automatic" }),
+      expect.objectContaining({ title: plannedEventTitle, membership: "manual" }),
+    ]));
+
+    await electronApp.close();
+    electronApp = await electron.launch({
+      args: electronArguments,
+      cwd: process.cwd(),
+      env: runtimeEnvironment,
+    });
+    page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(page.getByText(workTitle, { exact: true }).first()).toBeVisible();
+    await continueFromMain(page);
+    await openReviewRail(page);
+    sceneRegion = page.getByRole("region", { name: "현재 회차 장면" });
+    sceneCards = sceneRegion.locator(".scene-list-card");
+    await expect(sceneCards).toHaveCount(2);
+    await expect(sceneCards.nth(0).locator(".scene-excluded-events"))
+      .toContainText(firstEventTitle);
+    await expect(sceneCards.nth(1)).toContainText(plannedEventTitle);
+    expect(await readProjection(page)).toEqual(beforeRestart);
+
+    await sceneCards.nth(1).locator(".scene-list-open-button").click();
+    await expect.poll(() =>
+      page.locator(".manuscript-editor").evaluate((element) => ({
+        anchor: Number(element.getAttribute("data-selection-anchor")),
+        head: Number(element.getAttribute("data-selection-head")),
+      })),
+    ).toEqual({ anchor: separatorFrom, head: manuscriptText.length });
+  } finally {
+    await electronApp.close().catch(() => undefined);
     await removeVerifiedTemporaryDirectory(directory);
   }
 });
