@@ -19,16 +19,9 @@ describe("AssistantContextDialog", () => {
         canRunNotationReview: true,
         canRunVocabularyLookup: true,
         connections: [{
-          schemaVersion: 1,
           connectionId,
-          revision: 1,
-          connectorKind: "eum-structured-json-v1",
           label: "내 어휘 연결",
-          endpoint: "https://example.invalid/assistant",
           model: "user-model",
-          credentialConfigured: true,
-          createdAt: "2026-08-10T01:00:00.000Z",
-          updatedAt: "2026-08-10T01:00:00.000Z",
         }],
         destinationProfile: {
           schemaVersion: 1,

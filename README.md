@@ -4,7 +4,15 @@
 
 ## 현재 상태
 
-`POC-3 — SQLite·불변 blob·백업` 완료 — 다음 Gate `POC-M — 현행 데이터 이주 rehearsal`
+`정식 작업면 복원 Gate 13 — 별빛 서재 테마 전체 이주` 완료
+
+지정된 `별빛서재_테마수정완료.html`의 테마 코드를 현재 제품 셸에 이식했다. 원본 순서와 표시명을 유지한 밝은 테마 7개·어두운 테마 7개, 각 배경·패널·본문·보조문자·강조·경계·입력·caret·버튼·그림자·focus backdrop 값, Pretendard UI 글꼴, 상단 300px 2열 테마 선택기, `starlight_theme` 선택 저장·재실행 복원을 production Electron에서 검증했다. 현재 Work·Document·원고·세션·저장 동작과 화면 구조는 바꾸지 않고 테마 표면만 대응했다.
+
+지정된 별빛 서재 HTML의 사용자 기능을 현재 원장과 편집기 계약에 맞춰 이주했다. 접힌 전역 Pomodoro/세션 표시와 펼친 오늘 기록·실행 중 메모, 집중 화면, 목표 글자 수 기반 수정금지 집필, 문장 길이·반복 단어 히트맵, 상위 어휘·문장·반복 밀도 분석, 밝은/어두운 화면, 번들 manifest 기반 괄호 단계 전환·둥근 따옴표·말줄임표, UTF-8 TXT 미리보기·명시 교체·단일 undo/redo가 production Electron에서 검증됐다. 기존 작품·회차·자동 저장·백업·목표·기간/일별/연속/회차별 기록·서식·TXT/JSON/CSV 내보내기는 중복 원본을 만들지 않고 현행 구현을 그대로 사용한다.
+
+인물 작업면은 `인물 목록 | 확정 상세 | 인물 뽑기`, 플롯 작업면은 `플롯 목록 | 확정 상세 | 사건 뽑기`의 3열 구조다. 두 뽑기 도구는 GPT가 아니라 런타임 manifest와 작품별 사용자 키워드를 사용하는 로컬 랜덤 도구이며, 키워드는 Work 소유 SQLite 설정으로 재실행 뒤에도 유지된다. GPT 원고 추출 Candidate는 뽑기 도구와 분리해 편집기 우측 `조수` 검토함에서만 실행·검토한다.
+
+사건 레일은 플롯 탭이나 우측 검토 레일이 아니라 편집기 바로 아래 전체 폭에 놓인다. 원고 위치에서 파생된 동일 폭 사건 카드를 가로로 표시하고, 현재 커서 사건을 조용히 강조하며, 카드를 누르면 exact 원고 범위를 연다. 기본 레일은 구조를 편집하지 않는다. 음악은 Spotify 경로 없이 기존 YouTube Data API 연결만 사용하며, 마리나라 엔진의 서버측 검색 필터와 내장 IFrame 재생 방식을 따라 모든 작업면 상단에 항상 보이는 미니 플레이어로 표시한다. 상세 증거는 [현재 실행 상태](plan.md)에 기록한다.
 
 POC-1의 장편 편집기 검증을 마치고 POC-2 저장 계약과 증거를 구현했다. 저장 offset은 UTF-16 code unit, 내부 줄바꿈은 LF, Unicode normalization은 적용하지 않으며, hash·Anchor 검증 입력 계약은 이 문자열의 UTF-16LE code unit bytes로 고정했다. 운영체제·파일 입력의 CRLF/CR 변환은 `ChangeBatch` 생성 전 platform adapter 경계의 책임이며, durable parser는 CR을 조용히 바꾸지 않고 거부한다. `ChangeBatch`는 작품·문서·base revision·순서·불투명 batch identity·schema version·정확한 변경 범위를 소유하고, 고정 필드 순서의 UTF-8 canonical bytes를 만든다. 같은 `batchId`와 같은 canonical bytes만 idempotent duplicate이며, 같은 identity의 다른 bytes는 충돌이다. application 소유권 경계는 등록 작품이 소유한 문서의 현재 durable revision identity를 확인하고, 변화하는 본문 길이는 journal replay의 현재 head에 원자 적용할 때 검증한다.
 
@@ -188,6 +196,6 @@ npm run performance:poc-3
 - UI 전체 구현
 - 제공자·모델·분류·경로의 고정
 - OAuth client 설정 내장
-- 실제 사용자 데이터 쓰기
+- 레거시 원본 콘텐츠를 새 원장에 실제 import하기
 
-`POC-3 — SQLite·불변 blob·백업`의 전체 통과 조건은 완료됐다. 다음 Gate는 `POC-M — 현행 데이터 이주 rehearsal`이며, 읽기 전용 source snapshot·100% receipt coverage·원고 checksum·미매핑 raw 보존·멱등 재실행을 증명하기 전에는 실제 사용자 데이터 위치에 import를 확정하지 않는다. 별빛·음악·조수·투고 기능을 먼저 얹지 않는다.
+`POC-3 — SQLite·불변 blob·백업`의 전체 통과 조건은 완료됐다. `POC-M — 현행 데이터 이주 rehearsal`은 읽기 전용 source snapshot·100% receipt coverage·원고 checksum·미매핑 raw 보존·멱등 재실행을 증명하기 전에는 실제 사용자 데이터 위치에 import를 확정하지 않는다. 2026-08-17의 명시적 정식 작업면 복원 요청으로 캐릭터·플롯·장면·음악 Gate는 이주와 분리해 진행했으며, 이는 레거시 실제 import 승인을 뜻하지 않는다.

@@ -48,6 +48,7 @@ function deriveDailyGoalProgress(input: {
     workId: input.activity.workId,
     activity: input.activity,
     settings: input.settings,
+    nowMs: input.nowMs,
     calendar: {
       today,
       weekStart: localWeekStartDateKey(input.nowMs),
@@ -146,8 +147,8 @@ export function DailyGoalDialog(input: {
         </header>
 
         <p className="daily-goal-description">
-          목표만 정해 두세요. 집중 시간은 뽀모도로 작업 단계에서, 글자 수는
-          집필 기록에서 자동 집계됩니다.
+          목표만 정해 두세요. 집중 시간과 글자 수는 집필 기록에서 자동
+          집계됩니다.
         </p>
 
         <div className="daily-goal-summary">

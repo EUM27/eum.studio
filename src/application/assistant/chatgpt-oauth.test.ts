@@ -10,6 +10,7 @@ describe("ChatGPT OAuth contract", () => {
     expect(
       parseChatGptOAuthProfile({
         schemaVersion: 1,
+        providerId: "runtime-chatgpt",
         displayName: "GPT",
         issuer: "https://auth.openai.com",
         clientId: "runtime-client-id",
@@ -23,11 +24,19 @@ describe("ChatGPT OAuth contract", () => {
           path: "/auth/callback",
           portRange: { start: 1455, end: 1475 },
         },
+        upstream: {
+          baseUrl: "https://chatgpt.com/backend-api/codex",
+          originator: "runtime-originator",
+          clientVersion: "runtime-version",
+          model: "runtime-model",
+        },
       }),
     ).toMatchObject({
       displayName: "GPT",
+      providerId: "runtime-chatgpt",
       issuer: "https://auth.openai.com",
       callback: { redirectHost: "localhost" },
+      upstream: { model: "runtime-model" },
     });
   });
 
@@ -35,7 +44,9 @@ describe("ChatGPT OAuth contract", () => {
     const status = parseChatGptOAuthConnectionStatus({
       schemaVersion: 1,
       revision: 2,
+      providerId: "runtime-chatgpt",
       displayName: "GPT",
+      modelId: "runtime-model",
       connected: true,
       email: "writer@example.com",
       planType: "plus",
@@ -43,6 +54,10 @@ describe("ChatGPT OAuth contract", () => {
     });
 
     expect(status.connected).toBe(true);
+    expect(status).toMatchObject({
+      providerId: "runtime-chatgpt",
+      modelId: "runtime-model",
+    });
     expect(JSON.stringify(status)).not.toMatch(/accessToken|refreshToken|idToken/u);
   });
 });

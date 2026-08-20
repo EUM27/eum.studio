@@ -4,6 +4,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type ReactNode,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
@@ -318,7 +319,8 @@ export function PlotManagerDialog(input: {
   readonly error: string | null;
   readonly eventBlocks: readonly EventBlockProjection[];
   readonly eventLinks: readonly PlotEventLinkProjection[];
-  readonly onClose: () => void;
+  readonly embedded?: boolean;
+  readonly onClose?: () => void;
   readonly onCreate: (draft: PlotDraft) => void;
   readonly onCreateEvent: (
     plot: PlotThreadProjection,
@@ -349,6 +351,8 @@ export function PlotManagerDialog(input: {
   readonly plots: readonly PlotThreadProjection[];
   readonly sources: readonly PlotThreadSourceProjection[];
   readonly selectedPlotThreadId: string | null;
+  readonly sceneDraft?: ReactNode;
+  readonly utility?: ReactNode;
 }) {
   const [query, setQuery] = useState("");
   const [eventBlockId, setEventBlockId] = useState("");
@@ -378,6 +382,7 @@ export function PlotManagerDialog(input: {
   const onMovePlacement = input.onMovePlacement;
   const onSetStoryTime = input.onSetStoryTime;
   const busy = actionState !== "idle" || dropPending;
+  const embedded = input.embedded === true;
   const selectedPlot = input.plots.find(
     (plot) => plot.plotThreadId === input.selectedPlotThreadId,
   ) ?? null;
@@ -897,15 +902,24 @@ export function PlotManagerDialog(input: {
 
   return (
     <div
-      className="dialog-backdrop character-manager-backdrop plot-manager-backdrop"
-      role="presentation"
+      className={
+        embedded
+          ? "plot-manager-embedded-host"
+          : "dialog-backdrop character-manager-backdrop plot-manager-backdrop"
+      }
+      role={embedded ? undefined : "presentation"}
     >
       <section
-        aria-labelledby="plot-manager-heading"
-        aria-modal="true"
-        className="character-manager-dialog plot-manager-dialog"
+        aria-label={embedded ? "플롯 보드 작업면" : undefined}
+        aria-labelledby={embedded ? undefined : "plot-manager-heading"}
+        aria-modal={embedded ? undefined : true}
+        className={
+          embedded
+            ? "character-manager-dialog plot-manager-dialog is-embedded"
+            : "character-manager-dialog plot-manager-dialog"
+        }
         ref={dialogRef}
-        role="dialog"
+        role={embedded ? "region" : "dialog"}
       >
         <header className="character-manager-header plot-manager-header">
           <div>
@@ -913,18 +927,26 @@ export function PlotManagerDialog(input: {
             <h2 id="plot-manager-heading">플롯 관리</h2>
             <p>현재 작품의 플롯 진행과 작가 메모를 관리합니다.</p>
           </div>
-          <button
-            aria-label="플롯 관리 닫기"
-            className="dialog-close"
-            disabled={busy}
-            onClick={input.onClose}
-            type="button"
-          >
-            ×
-          </button>
+          {!embedded && (
+            <button
+              aria-label="플롯 관리 닫기"
+              className="dialog-close"
+              disabled={busy}
+              onClick={() => input.onClose?.()}
+              type="button"
+            >
+              ×
+            </button>
+          )}
         </header>
 
-        <div className="character-manager-body plot-manager-body">
+        <div
+          className={
+            input.utility === undefined
+              ? "character-manager-body plot-manager-body"
+              : "character-manager-body plot-manager-body has-utility"
+          }
+        >
           <section
             aria-label="플롯 목록"
             className="character-manager-list plot-manager-list"
@@ -961,6 +983,10 @@ export function PlotManagerDialog(input: {
                   <div>
                     <span>플롯 보드</span>
                     <strong>{input.board.title}</strong>
+                    <small>
+                      카드를 끌어 순서를 옮기고, 시간 지도에서 이야기 시간을
+                      조정할 수 있습니다.
+                    </small>
                   </div>
                   <div
                     aria-label="플롯 보드 보기"
@@ -1383,6 +1409,7 @@ export function PlotManagerDialog(input: {
               onUpdate={input.onUpdate}
               plot={selectedPlot}
             />
+            {selectedPlot !== null && input.sceneDraft}
             {selectedPlot !== null && (
               <section
                 aria-label="플롯 연결 사건"
@@ -1547,6 +1574,7 @@ export function PlotManagerDialog(input: {
               </section>
             )}
           </section>
+          {input.utility}
         </div>
 
         {input.error !== null && (

@@ -12,7 +12,16 @@ import type {
   SceneProjectionList,
   UpdateSceneRuleSetCommand,
 } from "../../application/structure/scene-projection";
+import type {
+  SceneAnnotationProjection,
+} from "../../application/structure/scene-annotation-contract";
+import type {
+  SceneMusicQueueCandidate,
+  SceneMusicQueueOption,
+} from "../../application/music/scene-music-queue-contract";
 import type { EntityId } from "../../domain/writing";
+import type { YouTubeVideoProjection } from "../../application/music/youtube-music";
+import { SceneMusicQueuePanel } from "../music/SceneMusicQueuePanel";
 
 type SceneRuleSetDraft = Pick<
   UpdateSceneRuleSetCommand,
@@ -62,6 +71,12 @@ function createBoundaryRule(): SceneBoundaryRule {
 
 export function SceneList(input: {
   readonly projection: SceneProjectionList | null;
+  readonly annotations: readonly SceneAnnotationProjection[];
+  readonly musicQueueCandidates: readonly SceneMusicQueueCandidate[];
+  readonly musicQueueBusy: boolean;
+  readonly musicConnected: boolean;
+  readonly favoriteMusicVideos: readonly YouTubeVideoProjection[];
+  readonly musicPlaybackAvailable: boolean;
   readonly activeDocumentId: EntityId<"Document"> | null;
   readonly busy: boolean;
   readonly onOpenScene: (scene: SceneProjection) => void;
@@ -77,6 +92,20 @@ export function SceneList(input: {
     expectedRevision: number | null,
   ) => void;
   readonly onUpdateRuleSet: (draft: SceneRuleSetDraft) => void;
+  readonly onOpenMusicSettings: () => void;
+  readonly onSearchSceneMusic: (
+    annotation: SceneAnnotationProjection,
+    query: string,
+  ) => void;
+  readonly onSelectSceneMusicQueue: (
+    candidate: SceneMusicQueueCandidate,
+    option: SceneMusicQueueOption,
+  ) => void;
+  readonly onPlaySceneMusicQueue: (
+    candidate: SceneMusicQueueCandidate,
+  ) => void;
+  readonly onPlayFavoriteMusicVideo: (video: YouTubeVideoProjection) => void;
+  readonly onToggleFavoriteMusicVideo: (video: YouTubeVideoProjection) => void;
 }) {
   const projection = input.projection;
   const ruleEditorId = useId();
@@ -141,6 +170,40 @@ export function SceneList(input: {
         </div>
         <span>{scenes.length}</span>
       </header>
+
+      <section aria-label="선호 영상" className="scene-music-favorites">
+        <header>
+          <strong>선호 영상</strong>
+          <span>{input.favoriteMusicVideos.length}</span>
+        </header>
+        {input.favoriteMusicVideos.length === 0 ? (
+          <p>검색 결과에서 선호 영상을 저장하면 여기에 모입니다.</p>
+        ) : (
+          <ul>
+            {input.favoriteMusicVideos.map((video) => (
+              <li key={video.videoId}>
+                <span>
+                  <strong>{video.title}</strong>
+                  <small>{video.channel}</small>
+                </span>
+                <button
+                  onClick={() => input.onPlayFavoriteMusicVideo(video)}
+                  type="button"
+                >
+                  재생
+                </button>
+                <button
+                  aria-label={`선호 영상 해제: ${video.title}`}
+                  onClick={() => input.onToggleFavoriteMusicVideo(video)}
+                  type="button"
+                >
+                  해제
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <details className="scene-rule-settings">
         <summary>장면 규칙 설정</summary>
@@ -273,6 +336,9 @@ export function SceneList(input: {
         <ol className="scene-list-items">
           {scenes.map((scene, index) => {
             const previousScene = scenes[index - 1];
+            const annotation = input.annotations.find(
+              (candidate) => candidate.sceneKey === scene.sceneKey,
+            ) ?? null;
             const currentEventIds = new Set([
               ...scene.events.map((event) => event.eventBlockId),
               ...scene.excludedEvents.map((event) => event.eventBlockId),
@@ -293,7 +359,11 @@ export function SceneList(input: {
                   onClick={() => input.onOpenScene(scene)}
                   type="button"
                 >
-                  <strong>{`장면 ${scene.sceneIndex}`}</strong>
+                  <strong>
+                    {annotation === null
+                      ? `장면 ${scene.sceneIndex}`
+                      : `장면 ${scene.sceneIndex} · ${annotation.title}`}
+                  </strong>
                   <span>
                     {scene.range === null
                       ? "위치 없음"
@@ -302,6 +372,49 @@ export function SceneList(input: {
                     {` · ${describeSceneSource(scene.source)}`}
                   </span>
                 </button>
+                {annotation !== null && (
+                  <>
+                    <dl
+                      className="scene-list-annotation"
+                      data-scene-annotation={annotation.sceneAnnotationId}
+                    >
+                      {annotation.summary && (
+                        <><dt>요약</dt><dd>{annotation.summary}</dd></>
+                      )}
+                      {annotation.location && (
+                        <><dt>장소</dt><dd>{annotation.location}</dd></>
+                      )}
+                      {annotation.time && (
+                        <><dt>시간</dt><dd>{annotation.time}</dd></>
+                      )}
+                      {annotation.goal && (
+                        <><dt>목표</dt><dd>{annotation.goal}</dd></>
+                      )}
+                      {annotation.conflict && (
+                        <><dt>갈등</dt><dd>{annotation.conflict}</dd></>
+                      )}
+                      {annotation.outcome && (
+                        <><dt>결과</dt><dd>{annotation.outcome}</dd></>
+                      )}
+                    </dl>
+                    <SceneMusicQueuePanel
+                      annotation={annotation}
+                      busy={input.busy || input.musicQueueBusy}
+                      candidates={input.musicQueueCandidates}
+                      connected={input.musicConnected}
+                      error={null}
+                      favoriteVideoIds={input.favoriteMusicVideos.map(
+                        (video) => video.videoId,
+                      )}
+                      onOpenSettings={input.onOpenMusicSettings}
+                      onPlay={input.onPlaySceneMusicQueue}
+                      onSearch={input.onSearchSceneMusic}
+                      onSelect={input.onSelectSceneMusicQueue}
+                      onToggleFavorite={input.onToggleFavoriteMusicVideo}
+                      playbackAvailable={input.musicPlaybackAvailable}
+                    />
+                  </>
+                )}
                 <div className="scene-list-actions">
                   <button
                     disabled={input.busy || scene.range === null}

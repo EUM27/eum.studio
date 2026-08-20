@@ -30,6 +30,52 @@ describe("work music settings", () => {
       settings: profile.workDefaults,
       updatedAt: null,
     });
+    expect(profile.workDefaults.favoriteVideos).toEqual([]);
+    expect(profile.workDefaults.playlistVideos).toEqual([]);
+  });
+
+  it("preserves unique favorite videos in Work-owned settings", () => {
+    const workId = entityId<"Work">("work-music-a");
+    const favorite = {
+      providerId: "youtube",
+      videoId: "video-a",
+      title: "집중 음악",
+      channel: "작곡가",
+      thumbnailUrl: null,
+      externalUrl: "https://www.youtube.com/watch?v=video-a",
+    };
+
+    expect(parseSaveWorkMusicSettingsCommand({
+      schemaVersion: 1,
+      workId,
+      expectedRevision: 2,
+      settings: {
+        ...profile.workDefaults,
+        favoriteVideos: [favorite],
+      },
+    }, profile).settings.favoriteVideos).toEqual([favorite]);
+  });
+
+  it("preserves the ordered playlist in Work-owned settings", () => {
+    const workId = entityId<"Work">("work-music-a");
+    const videos = [1, 2].map((index) => ({
+      providerId: "youtube",
+      videoId: `video-${index}`,
+      title: `곡 ${index}`,
+      channel: "작곡가",
+      thumbnailUrl: null,
+      externalUrl: `https://www.youtube.com/watch?v=video-${index}`,
+    }));
+
+    expect(parseSaveWorkMusicSettingsCommand({
+      schemaVersion: 1,
+      workId,
+      expectedRevision: 2,
+      settings: {
+        ...profile.workDefaults,
+        playlistVideos: videos,
+      },
+    }, profile).settings.playlistVideos).toEqual(videos);
   });
 
   it("accepts only the configured transition playback modes", () => {

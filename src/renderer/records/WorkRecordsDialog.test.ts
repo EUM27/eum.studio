@@ -157,9 +157,9 @@ describe("WorkRecordsDialog", () => {
     expect(markup).toContain("이번 주 집중");
     expect(markup).toContain("이번 주 글자");
     expect(markup).toContain('name="dailyActiveMinutes"');
-    expect(markup).toContain("25 / 60분");
+    expect(markup).toContain("30 / 60분");
     expect(markup).toContain("-20 / 500자");
-    expect(markup).toContain("25 / 300분");
+    expect(markup).toContain("30 / 300분");
     expect(markup).toContain("-20 / 2000자");
     expect(markup).toContain("JSON 내보내기");
     expect(markup).toContain("CSV 내보내기");

@@ -42,14 +42,14 @@ class PreviousEpisodeFlowWidget extends WidgetType {
 
     const body = document.createElement("div");
     body.className = "previous-flow-context-body";
-    for (const paragraph of this.preview.text.split(/\n{2,}/u)) {
-      const text = paragraph.trim();
-      if (text.length === 0) {
-        continue;
-      }
+    for (const text of this.preview.text.split("\n")) {
       const line = document.createElement("p");
       line.className = "previous-flow-context-line cm-line";
-      line.textContent = text;
+      if (text.length === 0) {
+        line.append(document.createElement("br"));
+      } else {
+        line.textContent = text;
+      }
       body.append(line);
     }
 
@@ -103,7 +103,11 @@ export function createPreviousEpisodeFlowExtension(
         decorations: buildDecorations(preview),
       };
     },
-    provide: (field) =>
+    provide: (field) => [
       EditorView.decorations.from(field, (value) => value.decorations),
+      EditorView.contentAttributes.from(field, (value) => ({
+        "data-has-previous-flow": value.preview === null ? "false" : "true",
+      })),
+    ],
   });
 }

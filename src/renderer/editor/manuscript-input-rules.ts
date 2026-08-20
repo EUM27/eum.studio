@@ -66,6 +66,54 @@ function getReplacementEdit(
   };
 }
 
+function getEvolutionEdit(
+  profile: ManuscriptInputProfile,
+  input: ManuscriptTypingInput,
+): ManuscriptTypingEdit | null {
+  for (const cycle of profile.evolutionCycles ?? []) {
+    if (!cycle.trigger.endsWith(input.text)) continue;
+    for (let index = 0; index < cycle.pairs.length; index += 1) {
+      const pair = cycle.pairs[index]!;
+      const pairFrom = input.from - pair.open.length;
+      if (
+        pairFrom < 0 ||
+        input.readText(pairFrom, input.from) !== pair.open ||
+        input.readText(input.from, input.from + pair.close.length) !== pair.close
+      ) {
+        continue;
+      }
+      const next = cycle.pairs[(index + 1) % cycle.pairs.length]!;
+      const cursor = pairFrom + next.open.length;
+      return {
+        from: pairFrom,
+        to: input.from + pair.close.length,
+        insert: `${next.open}${next.close}`,
+        anchor: cursor,
+        head: cursor,
+      };
+    }
+
+    const typedPrefix = cycle.trigger.slice(
+      0,
+      cycle.trigger.length - input.text.length,
+    );
+    const from = input.from - typedPrefix.length;
+    if (from < 0 || input.readText(from, input.from) !== typedPrefix) {
+      continue;
+    }
+    const first = cycle.pairs[0]!;
+    const cursor = from + first.open.length;
+    return {
+      from,
+      to: input.to,
+      insert: `${first.open}${first.close}`,
+      anchor: cursor,
+      head: cursor,
+    };
+  }
+  return null;
+}
+
 export function getManuscriptTypingEdit(
   profile: ManuscriptInputProfile,
   input: ManuscriptTypingInput,
@@ -82,6 +130,11 @@ export function getManuscriptTypingEdit(
     return null;
   }
 
+  const evolutionEdit = getEvolutionEdit(profile, input);
+  if (evolutionEdit !== null) {
+    return evolutionEdit;
+  }
+
   const replacementEdit = getReplacementEdit(profile, input);
   if (replacementEdit !== null) {
     return replacementEdit;
@@ -94,12 +147,13 @@ export function getManuscriptTypingEdit(
       }
     | undefined;
   for (const pair of profile.autoClosePairs) {
-    if (!pair.close.endsWith(input.text)) {
+    const closingTrigger = pair.trigger ?? pair.close;
+    if (!closingTrigger.endsWith(input.text)) {
       continue;
     }
-    const typedPrefix = pair.close.slice(
+    const typedPrefix = closingTrigger.slice(
       0,
-      pair.close.length - input.text.length,
+      closingTrigger.length - input.text.length,
     );
     const changeFrom = input.from - typedPrefix.length;
     if (
@@ -138,12 +192,13 @@ export function getManuscriptTypingEdit(
       }
     | undefined;
   for (const pair of profile.autoClosePairs) {
-    if (!pair.open.endsWith(input.text)) {
+    const openingTrigger = pair.trigger ?? pair.open;
+    if (!openingTrigger.endsWith(input.text)) {
       continue;
     }
-    const typedPrefix = pair.open.slice(
+    const typedPrefix = openingTrigger.slice(
       0,
-      pair.open.length - input.text.length,
+      openingTrigger.length - input.text.length,
     );
     const changeFrom = input.from - typedPrefix.length;
     if (

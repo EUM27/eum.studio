@@ -157,6 +157,69 @@ describe("manuscript input rules", () => {
     });
   });
 
+  it("inserts curved quotes from a distinct keyboard trigger and skips the closer", () => {
+    const profile = parseManuscriptInputProfile({
+      schemaVersion: 1,
+      autoClosePairs: [{ trigger: "\"", open: "“", close: "”" }],
+      textReplacements: [],
+    });
+
+    expect(getManuscriptTypingEdit(profile, createInput("", 0, "\""))).toEqual({
+      from: 0,
+      to: 0,
+      insert: "“”",
+      anchor: 1,
+      head: 1,
+    });
+    expect(getManuscriptTypingEdit(profile, createInput("“”", 1, "\""))).toEqual({
+      from: 1,
+      to: 1,
+      insert: "",
+      anchor: 2,
+      head: 2,
+    });
+  });
+
+  it("evolves a registered bracket pair when the trigger repeats inside it", () => {
+    const profile = parseManuscriptInputProfile({
+      schemaVersion: 1,
+      autoClosePairs: [],
+      evolutionCycles: [
+        {
+          trigger: "(",
+          pairs: [
+            { open: "(", close: ")" },
+            { open: "【", close: "】" },
+            { open: "〖", close: "〗" },
+          ],
+        },
+      ],
+      textReplacements: [],
+    });
+
+    expect(getManuscriptTypingEdit(profile, createInput("", 0, "("))).toEqual({
+      from: 0,
+      to: 0,
+      insert: "()",
+      anchor: 1,
+      head: 1,
+    });
+    expect(getManuscriptTypingEdit(profile, createInput("()", 1, "("))).toEqual({
+      from: 0,
+      to: 2,
+      insert: "【】",
+      anchor: 1,
+      head: 1,
+    });
+    expect(getManuscriptTypingEdit(profile, createInput("【】", 1, "("))).toEqual({
+      from: 0,
+      to: 2,
+      insert: "〖〗",
+      anchor: 1,
+      head: 1,
+    });
+  });
+
   it("replaces three consecutive periods with the registered midline ellipsis", () => {
     const prefix = randomUUID();
     const profile = parseManuscriptInputProfile({

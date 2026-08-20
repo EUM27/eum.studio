@@ -1,4 +1,8 @@
 import { entityId, type EntityId } from "../../domain/writing";
+import {
+  parseYouTubeVideoProjection,
+  type YouTubeVideoProjection,
+} from "./youtube-music";
 
 export type MusicTransitionPlaybackMode = string;
 
@@ -6,6 +10,8 @@ export type WorkMusicSettings = {
   readonly autoOnEpisodeTransition: boolean;
   readonly autoOnSceneTransition: boolean;
   readonly autoPlayOnPomodoroStart: boolean;
+  readonly favoriteVideos: readonly YouTubeVideoProjection[];
+  readonly playlistVideos: readonly YouTubeVideoProjection[];
   readonly preciseSelection: boolean;
   readonly transitionPlaybackMode: MusicTransitionPlaybackMode;
 };
@@ -93,7 +99,25 @@ function timestamp(value: unknown, label: string): string | null {
 }
 
 function freezeSettings(settings: WorkMusicSettings): WorkMusicSettings {
-  return Object.freeze({ ...settings });
+  return Object.freeze({
+    ...settings,
+    favoriteVideos: Object.freeze([...settings.favoriteVideos]),
+    playlistVideos: Object.freeze([...settings.playlistVideos]),
+  });
+}
+
+function parseUniqueVideos(value: unknown, label: string): readonly YouTubeVideoProjection[] {
+  const values = value ?? [];
+  if (!Array.isArray(values)) {
+    throw new Error(`${label} must be an array`);
+  }
+  const videos = values.map((video, index) =>
+    parseYouTubeVideoProjection(video, `${label}[${index}]`)
+  );
+  if (new Set(videos.map((video) => video.videoId)).size !== videos.length) {
+    throw new Error(`${label} must be unique`);
+  }
+  return Object.freeze(videos);
 }
 
 export function parseWorkMusicSettings(
@@ -101,13 +125,24 @@ export function parseWorkMusicSettings(
   profile: MusicSettingsProfile,
 ): WorkMusicSettings {
   const input = record(value, "WorkMusicSettings");
-  exact(input, [
+  const baseFields = [
     "autoOnEpisodeTransition",
     "autoOnSceneTransition",
     "autoPlayOnPomodoroStart",
     "preciseSelection",
     "transitionPlaybackMode",
-  ], "WorkMusicSettings");
+  ] as const;
+  const fields = Object.keys(input);
+  if (
+    !fields.every((field) =>
+      baseFields.includes(field as (typeof baseFields)[number]) ||
+      field === "favoriteVideos" ||
+      field === "playlistVideos"
+    ) ||
+    !baseFields.every((field) => fields.includes(field))
+  ) {
+    throw new Error("WorkMusicSettings fields do not match the configured schema");
+  }
   if (
     typeof input.transitionPlaybackMode !== "string" ||
     !profile.transitionPlaybackModes.includes(input.transitionPlaybackMode)
@@ -126,6 +161,14 @@ export function parseWorkMusicSettings(
     autoPlayOnPomodoroStart: booleanValue(
       input.autoPlayOnPomodoroStart,
       "WorkMusicSettings.autoPlayOnPomodoroStart",
+    ),
+    favoriteVideos: parseUniqueVideos(
+      input.favoriteVideos,
+      "WorkMusicSettings.favoriteVideos",
+    ),
+    playlistVideos: parseUniqueVideos(
+      input.playlistVideos,
+      "WorkMusicSettings.playlistVideos",
     ),
     preciseSelection: booleanValue(
       input.preciseSelection,

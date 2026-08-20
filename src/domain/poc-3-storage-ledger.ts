@@ -279,10 +279,163 @@ export type Poc3CharacterRecord =
     readonly kind: "character";
     readonly workId: string;
     readonly name: string;
+    readonly aliases: readonly string[];
     readonly role: string;
     readonly summary: string;
+    readonly appearance: string;
+    readonly personality: string;
+    readonly speech: string;
+    readonly goal: string;
+    readonly conflict: string;
     readonly note: string;
   };
+
+export type Poc3CharacterUpdateRecord = {
+  readonly kind: "characterUpdate";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly schemaVersion: number;
+  readonly updatedAt: string;
+  readonly name: string;
+  readonly aliases: readonly string[];
+  readonly role: string;
+  readonly summary: string;
+  readonly appearance: string;
+  readonly personality: string;
+  readonly speech: string;
+  readonly goal: string;
+  readonly conflict: string;
+  readonly note: string;
+};
+
+export type Poc3CharacterRetirementRecord = {
+  readonly kind: "characterRetirement";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly retiredAt: string;
+};
+
+export type Poc3CharacterRelationRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "characterRelation";
+    readonly workId: string;
+    readonly fromCharacterId: string;
+    readonly toCharacterId: string;
+    readonly relationKind: string;
+    readonly description: string;
+    readonly retirementReason?: "user" | "character-retired";
+  };
+
+export type Poc3CharacterRelationUpdateRecord = {
+  readonly kind: "characterRelationUpdate";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly updatedAt: string;
+  readonly relationKind: string;
+  readonly description: string;
+};
+
+export type Poc3CharacterRelationRetirementRecord = {
+  readonly kind: "characterRelationRetirement";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly retiredAt: string;
+  readonly retirementReason: "user" | "character-retired";
+};
+
+export type Poc3CharacterEvidenceRecord = {
+  readonly kind: "characterEvidence";
+  readonly id: string;
+  readonly workId: string;
+  readonly characterId: string;
+  readonly sourceDocumentId: string;
+  readonly sourceAnchorId: string;
+  readonly createdAt: string;
+};
+
+export type Poc3CharacterExtractionCandidateDecisionRecord = {
+  readonly kind: "characterExtractionCandidateDecision";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly status: "ready" | "completed";
+  readonly items: readonly unknown[];
+  readonly updatedAt: string;
+};
+
+export type Poc3CharacterGenerationCandidateDecisionRecord = {
+  readonly kind: "characterGenerationCandidateDecision";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly status: "ready" | "completed";
+  readonly items: readonly unknown[];
+  readonly updatedAt: string;
+};
+
+export type Poc3SceneExtractionCandidateDecisionRecord = {
+  readonly kind: "sceneExtractionCandidateDecision";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly status: "ready" | "completed";
+  readonly boundaries: readonly unknown[];
+  readonly updatedAt: string;
+};
+
+export type Poc3SceneAnnotationRecord = Poc3LedgerRecordMeta & {
+  readonly kind: "sceneAnnotation";
+  readonly workId: string;
+  readonly sceneKey: string;
+  readonly documentId: string;
+  readonly documentRevisionId: string;
+  readonly sourceCandidateId: string;
+  readonly sourceSceneItemId: string;
+  readonly title: string;
+  readonly summary: string;
+  readonly povCharacterId?: string;
+  readonly location: string;
+  readonly time: string;
+  readonly characterIds: readonly string[];
+  readonly goal: string;
+  readonly conflict: string;
+  readonly outcome: string;
+};
+
+export type Poc3SceneAnnotationUpdateRecord = {
+  readonly kind: "sceneAnnotationUpdate";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly updatedAt: string;
+  readonly documentId: string;
+  readonly documentRevisionId: string;
+  readonly sourceCandidateId: string;
+  readonly sourceSceneItemId: string;
+  readonly title: string;
+  readonly summary: string;
+  readonly povCharacterId?: string;
+  readonly location: string;
+  readonly time: string;
+  readonly characterIds: readonly string[];
+  readonly goal: string;
+  readonly conflict: string;
+  readonly outcome: string;
+};
+
+export type Poc3SceneExtractionAnnotationCandidateDecisionRecord = {
+  readonly kind: "sceneExtractionAnnotationCandidateDecision";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly status: "ready" | "completed";
+  readonly scenes: readonly unknown[];
+  readonly updatedAt: string;
+};
 
 export type Poc3LoreEntryRecord =
   Poc3LedgerRecordMeta & {
@@ -833,6 +986,18 @@ export type Poc3LedgerRecord =
   | Poc3EventSourceRetirementRecord
   | Poc3FragmentRecord
   | Poc3CharacterRecord
+  | Poc3CharacterUpdateRecord
+  | Poc3CharacterRetirementRecord
+  | Poc3CharacterRelationRecord
+  | Poc3CharacterRelationUpdateRecord
+  | Poc3CharacterRelationRetirementRecord
+  | Poc3CharacterEvidenceRecord
+  | Poc3CharacterExtractionCandidateDecisionRecord
+  | Poc3CharacterGenerationCandidateDecisionRecord
+  | Poc3SceneExtractionCandidateDecisionRecord
+  | Poc3SceneAnnotationRecord
+  | Poc3SceneAnnotationUpdateRecord
+  | Poc3SceneExtractionAnnotationCandidateDecisionRecord
   | Poc3LoreEntryRecord
   | Poc3LoreEntryEvidenceRecord
   | Poc3LoreEntryHistoryRecord

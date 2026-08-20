@@ -6,7 +6,7 @@ import { entityId } from "../../domain/writing";
 import { DailyGoalDialog, DailyGoalStatus } from "./DailyGoalDialog";
 
 describe("DailyGoalDialog", () => {
-  it("explains automatic Pomodoro and writing-record aggregation", () => {
+  it("explains automatic writing-record aggregation", () => {
     const workId = entityId<"Work">("work-a");
     const markup = renderToStaticMarkup(
       createElement(DailyGoalDialog, {
@@ -51,8 +51,7 @@ describe("DailyGoalDialog", () => {
     );
 
     expect(markup).toContain("오늘 목표");
-    expect(markup).toContain("뽀모도로 작업 단계");
-    expect(markup).toContain("집필 기록에서 자동 집계");
+    expect(markup).toContain("집중 시간과 글자 수는 집필 기록에서 자동");
     expect(markup).toContain("현재 집중 주기 2/4");
   });
 
@@ -115,7 +114,7 @@ describe("DailyGoalDialog", () => {
       }),
     );
 
-    expect(markup).toContain("오늘 25 / 50분");
+    expect(markup).toContain("오늘 30 / 50분");
     expect(markup).toContain("640 / 2,000자");
   });
 });

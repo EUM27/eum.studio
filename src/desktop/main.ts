@@ -22,6 +22,7 @@ import {
   ACTIVITY_PAUSE_POMODORO_CHANNEL,
   ACTIVITY_RESUME_POMODORO_CHANNEL,
   ACTIVITY_RECONCILE_POMODORO_CHANNEL,
+  ACTIVITY_UPDATE_POMODORO_NOTE_CHANNEL,
   ACTIVITY_STOP_POMODORO_CHANNEL,
   ACTIVITY_SAVE_RECORDS_GOALS_CHANNEL,
   ACTIVITY_SAVE_READTHROUGH_CHANNEL,
@@ -31,6 +32,7 @@ import {
   ACTIVITY_STOP_SESSION_CHANNEL,
   ASSISTANT_CHATGPT_OAUTH_START_LOGIN_CHANNEL,
   ASSISTANT_CHATGPT_OAUTH_STATUS_CHANNEL,
+  ASSISTANT_CHAT_RUN_CHANNEL,
   ASSISTANT_GRANT_CONTEXT_PERMISSION_CHANNEL,
   ASSISTANT_CONNECTOR_PROFILE_CHANNEL,
   ASSISTANT_DELETE_CONNECTION_CHANNEL,
@@ -47,8 +49,19 @@ import {
   BACKUP_CREATE_CHANNEL,
   BACKUP_GET_STATUS_CHANNEL,
   BACKUP_RESTORE_CHANNEL,
+  CHARACTER_ADD_EVIDENCE_CHANNEL,
   CHARACTER_CREATE_CHANNEL,
+  CHARACTER_EXTRACTION_DECIDE_CHANNEL,
+  CHARACTER_EXTRACTION_LIST_CHANNEL,
+  CHARACTER_EXTRACTION_RUN_CHANNEL,
+  CHARACTER_GENERATION_DECIDE_CHANNEL,
+  CHARACTER_GENERATION_LIST_CHANNEL,
+  CHARACTER_GENERATION_RUN_CHANNEL,
   CHARACTER_LIST_CHANNEL,
+  CHARACTER_RELATION_CREATE_CHANNEL,
+  CHARACTER_RELATION_LIST_CHANNEL,
+  CHARACTER_RELATION_RETIRE_CHANNEL,
+  CHARACTER_RELATION_UPDATE_CHANNEL,
   CHARACTER_RETIRE_CHANNEL,
   CHARACTER_UPDATE_CHANNEL,
   LORE_ENTRY_ADD_EVIDENCE_CHANNEL,
@@ -135,7 +148,9 @@ import {
   MANUSCRIPT_DOCUMENT_PROFILE_CHANNEL,
   MANUSCRIPT_GET_CONTINUOUS_READING_PROGRESS_CHANNEL,
   MANUSCRIPT_FORMATTING_PROFILE_CHANNEL,
+  MANUSCRIPT_GET_WORK_LAYOUT_SETTINGS_CHANNEL,
   MANUSCRIPT_EXPORT_TEXT_CHANNEL,
+  MANUSCRIPT_SELECT_TEXT_IMPORT_CHANNEL,
   MANUSCRIPT_INPUT_PROFILE_CHANNEL,
   MANUSCRIPT_PERSISTENCE_PROFILE_CHANNEL,
   MANUSCRIPT_PREFLIGHT_GET_SETTINGS_CHANNEL,
@@ -146,6 +161,7 @@ import {
   MANUSCRIPT_SAVE_CHANGE_BATCH_CHANNEL,
   MANUSCRIPT_SAVE_DOCUMENT_CHANGE_CHANNEL,
   MANUSCRIPT_SAVE_FORMATTING_CHANNEL,
+  MANUSCRIPT_SAVE_WORK_LAYOUT_SETTINGS_CHANNEL,
   MANUSCRIPT_STARTUP_RECOVERY_CHANNEL,
   MIGRATION_RUN_LEGACY_REHEARSAL_CHANNEL,
   RUNTIME_INFO_CHANNEL,
@@ -154,11 +170,20 @@ import {
   APP_SETTINGS_PROFILE_CHANNEL,
   APP_SETTINGS_GET_CHANNEL,
   APP_SETTINGS_SAVE_CHANNEL,
+  UI_PREFERENCES_GET_CHANNEL,
+  UI_PREFERENCES_SAVE_CHANNEL,
   MUSIC_SETTINGS_PROFILE_CHANNEL,
   MUSIC_SETTINGS_GET_WORK_CHANNEL,
   MUSIC_SETTINGS_SAVE_WORK_CHANNEL,
+  INSPIRATION_SETTINGS_GET_WORK_CHANNEL,
+  INSPIRATION_SETTINGS_SAVE_WORK_CHANNEL,
   YOUTUBE_MUSIC_CONNECTION_STATUS_CHANNEL,
   YOUTUBE_MUSIC_CONNECTION_SAVE_CHANNEL,
+  YOUTUBE_MUSIC_PROFILE_CHANNEL,
+  YOUTUBE_MUSIC_SEARCH_CHANNEL,
+  SCENE_MUSIC_QUEUE_SEARCH_CHANNEL,
+  SCENE_MUSIC_QUEUE_LIST_CHANNEL,
+  SCENE_MUSIC_QUEUE_SELECT_CHANNEL,
   SCHEDULE_CREATE_ITEM_CHANNEL,
   SCHEDULE_LIST_WORK_CHANNEL,
   SCHEDULE_RETIRE_ITEM_CHANNEL,
@@ -175,6 +200,16 @@ import {
   STRUCTURE_REPLACE_EVENT_SOURCE_CHANNEL,
   STRUCTURE_RETIRE_EVENT_SOURCE_CHANNEL,
   STRUCTURE_SET_SCENE_EVENT_OVERRIDE_CHANNEL,
+  STRUCTURE_RUN_SCENE_EXTRACTION_CHANNEL,
+  STRUCTURE_LIST_SCENE_EXTRACTION_CANDIDATES_CHANNEL,
+  STRUCTURE_DECIDE_SCENE_EXTRACTION_BOUNDARY_CHANNEL,
+  STRUCTURE_LIST_SCENE_ANNOTATIONS_CHANNEL,
+  STRUCTURE_DECIDE_SCENE_EXTRACTION_ANNOTATION_CHANNEL,
+  STRUCTURE_RUN_SCENE_DRAFT_CHANNEL,
+  STRUCTURE_LIST_SCENE_DRAFT_CANDIDATES_CHANNEL,
+  STRUCTURE_UPDATE_SCENE_DRAFT_CANDIDATE_CHANNEL,
+  STRUCTURE_PREPARE_SCENE_DRAFT_INSERTION_CHANNEL,
+  STRUCTURE_COMPLETE_SCENE_DRAFT_INSERTION_CHANNEL,
   STRUCTURE_UPDATE_SCENE_RULE_SET_CHANNEL,
   VERSION_CREATE_WORK_SNAPSHOT_CHANNEL,
   VERSION_COMPARE_WORK_SNAPSHOT_CHANNEL,
@@ -234,6 +269,34 @@ import {
   type SceneProjectionList,
 } from "../application/structure/scene-projection";
 import {
+  parseDecideSceneExtractionAnnotationCommand,
+  parseDecideSceneExtractionBoundaryCommand,
+  parseListSceneExtractionCandidatesCommand,
+  parseRunSceneExtractionCommand,
+  parseSceneExtractionCandidateList,
+  type SceneExtractionCandidateList,
+  type SceneExtractionDecisionResult,
+  type SceneExtractionAnnotationDecisionResult,
+  type SceneExtractionResult,
+} from "../application/structure/scene-extraction-contract";
+import {
+  parseCompleteSceneDraftInsertionCommand,
+  parseListSceneDraftCandidatesCommand,
+  parsePrepareSceneDraftInsertionCommand,
+  parseRunSceneDraftCommand,
+  parseSceneDraftCandidateList,
+  parseUpdateSceneDraftCandidateCommand,
+  type PrepareSceneDraftInsertionResult,
+  type RunSceneDraftResult,
+  type SceneDraftCandidate,
+  type SceneDraftCandidateList,
+} from "../application/structure/scene-draft-contract";
+import {
+  parseListSceneAnnotationsCommand,
+  parseSceneAnnotationList,
+  type SceneAnnotationList,
+} from "../application/structure/scene-annotation-contract";
+import {
   parseCaptureFragmentCommand,
   parseFragmentListProjection,
   parseFragmentShelfProfile,
@@ -245,6 +308,7 @@ import {
   type FragmentProjection,
 } from "../application/fragments/fragment-contract";
 import {
+  parseAddCharacterEvidenceCommand,
   parseCharacterListProjection,
   parseCreateCharacterCommand,
   parseListCharactersCommand,
@@ -253,6 +317,33 @@ import {
   type CharacterListProjection,
   type CharacterProjection,
 } from "../application/characters/character-contract";
+import {
+  parseCharacterRelationListProjection,
+  parseCreateCharacterRelationCommand,
+  parseListCharacterRelationsCommand,
+  parseRetireCharacterRelationCommand,
+  parseUpdateCharacterRelationCommand,
+  type CharacterRelationListProjection,
+  type CharacterRelationProjection,
+} from "../application/characters/character-relation-contract";
+import {
+  parseCharacterExtractionCandidateList,
+  parseDecideCharacterExtractionItemCommand,
+  parseListCharacterExtractionCandidatesCommand,
+  parseRunCharacterExtractionCommand,
+  type CharacterExtractionCandidateList,
+  type CharacterExtractionDecisionResult,
+  type CharacterExtractionResult,
+} from "../application/characters/character-extraction-contract";
+import {
+  parseCharacterGenerationCandidateList,
+  parseDecideCharacterGenerationItemCommand,
+  parseListCharacterGenerationCandidatesCommand,
+  parseRunCharacterGenerationCommand,
+  type CharacterGenerationCandidateList,
+  type CharacterGenerationDecisionResult,
+  type CharacterGenerationResult,
+} from "../application/characters/character-generation-contract";
 import {
   parseAddLoreEntryEvidenceCommand,
   parseCreateLoreEntryCommand,
@@ -448,6 +539,7 @@ import {
   parseGetPomodoroCommand,
   parsePomodoroPhaseCommand,
   parsePomodoroProjection,
+  parseUpdatePomodoroNoteCommand,
   type PomodoroProjection,
 } from "../application/activity/pomodoro-contract";
 import {
@@ -514,7 +606,11 @@ import {
   createAssistantConnectorExecutor,
   type AssistantConnectorManifestProfile,
 } from "../application/assistant/assistant-connector-manifest";
-import { parseChatGptOAuthProfile } from "../application/assistant/chatgpt-oauth";
+import {
+  createChatGptOAuthAssistantConnectionId,
+  parseChatGptOAuthProfile,
+} from "../application/assistant/chatgpt-oauth";
+import { parseRunAssistantChatCommand } from "../application/assistant/assistant-chat";
 import {
   parseRunAssistantVocabularySuggestionCommand,
   type AssistantVocabularySuggestionResult,
@@ -542,6 +638,7 @@ import {
   parseSaveAppSettingsCommand,
   type AppSettingsProjection,
 } from "../application/settings/app-settings";
+import { parseSaveUiPreferencesCommand } from "../application/settings/ui-preferences";
 import {
   createDefaultWorkMusicSettingsProjection,
   parseGetWorkMusicSettingsCommand,
@@ -550,9 +647,28 @@ import {
   type WorkMusicSettingsProjection,
 } from "../application/music/work-music-settings";
 import {
+  createDefaultWorkInspirationSettingsProjection,
+  parseGetWorkInspirationSettingsCommand,
+  parseSaveWorkInspirationSettingsCommand,
+  type WorkInspirationSettingsProjection,
+} from "../application/inspiration/work-inspiration-settings";
+import {
   parseSaveYouTubeMusicConnectionCommand,
   type YouTubeMusicConnectionStatus,
 } from "../application/music/youtube-music-connection";
+import {
+  parseSearchYouTubeVideosCommand,
+  parseYouTubeMusicProfile,
+} from "../application/music/youtube-music";
+import {
+  parseListSceneMusicQueueCandidatesCommand,
+  parseSceneMusicQueueCandidateList,
+  parseSearchSceneMusicQueuesCommand,
+  parseSelectSceneMusicQueueCommand,
+  type SceneMusicQueueCandidate,
+  type SceneMusicQueueCandidateList,
+  type SceneMusicQueueSearchResult,
+} from "../application/music/scene-music-queue-contract";
 import {
   parseCreateWorkSnapshotCommand,
   parseDocumentRevisionListProjection,
@@ -573,6 +689,13 @@ import { parseManuscriptDocumentProfile } from "../application/editor/manuscript
 import { parseManuscriptInputProfile } from "../application/editor/manuscript-input-profile";
 import { parseManuscriptFormattingProfile } from "../application/editor/manuscript-formatting";
 import {
+  createDefaultWorkManuscriptLayoutSettingsProjection,
+  parseGetWorkManuscriptLayoutSettingsCommand,
+  parseSaveWorkManuscriptLayoutSettingsCommand,
+  parseWorkManuscriptLayoutSettingsProjection,
+  type WorkManuscriptLayoutSettingsProjection,
+} from "../application/editor/work-manuscript-layout-settings";
+import {
   createDefaultManuscriptPreflightSettings,
   parseExportManuscriptTextCommand,
   parseGetManuscriptPreflightSettingsCommand,
@@ -581,6 +704,10 @@ import {
   type ExportManuscriptTextCommand,
   type ManuscriptPreflightSettingsProjection,
 } from "../application/editor/manuscript-preflight";
+import {
+  normalizeImportedManuscriptText,
+  parseSelectManuscriptTextImportCommand,
+} from "../application/editor/manuscript-text-import";
 import {
   createUnsetContinuousReadingProgress,
   parseGetContinuousReadingProgressCommand,
@@ -672,10 +799,15 @@ import {
   openNodeChatGptOAuthStore,
 } from "../platform/assistant/node-chatgpt-oauth";
 import {
+  createNodeChatGptCodexClient,
+} from "../platform/assistant/node-chatgpt-codex";
+import {
   createChatGptOAuthWindowLauncher,
   createChatGptOAuthWindowOptions,
 } from "./chatgpt-oauth-window";
 import { openNodeYouTubeMusicConnectionStore } from "../platform/music/node-youtube-music-connection-store";
+import { createNodeYouTubeMusicSearchClient } from "../platform/music/node-youtube-music-search";
+import { openNodeUiPreferencesStore } from "../platform/settings/node-ui-preferences-store";
 import {
   openNodePublishingMailConnectionStore,
 } from "../platform/publishing/node-publishing-mail-connection-store";
@@ -693,6 +825,10 @@ import {
   isTrustedRendererIpcSender,
   shouldShowMainWindow,
 } from "./window-policy";
+import {
+  withYouTubePlayerReferer,
+  YOUTUBE_PLAYER_REQUEST_FILTER,
+} from "./youtube-player-request-policy";
 
 let mainWindow: BrowserWindow | null = null;
 let configuredRendererTarget: string | null =
@@ -701,6 +837,7 @@ let pendingCloseRequest:
   ManuscriptCloseRequest | null = null;
 let allowMainWindowClose = false;
 let activeApplicationRuntime: ApplicationRuntime | null = null;
+let activeYouTubePlayerReferer: string | null = null;
 
 function mediaTypeForWorkCover(filePath: string): string {
   switch (path.extname(filePath).toLocaleLowerCase()) {
@@ -724,6 +861,12 @@ function mediaTypeForWorkCover(filePath: string): string {
 
 type ApplicationRuntime = {
   readonly manuscript: ManuscriptRuntimeCoordinator;
+  getWorkManuscriptLayoutSettings(
+    value: unknown,
+  ): Promise<WorkManuscriptLayoutSettingsProjection>;
+  saveWorkManuscriptLayoutSettings(
+    value: unknown,
+  ): Promise<WorkManuscriptLayoutSettingsProjection>;
   getWorkspaceCatalog(): WorkspaceCatalogProjection;
   getWorkFavorites(): WorkFavoritesProjection;
   setWorkFavorite(value: unknown): Promise<WorkFavoritesProjection>;
@@ -755,6 +898,25 @@ type ApplicationRuntime = {
   listSceneProjection(value: unknown): Promise<SceneProjectionList>;
   updateSceneRuleSet(value: unknown): Promise<SceneProjectionList>;
   setSceneEventOverride(value: unknown): Promise<SceneProjectionList>;
+  runSceneExtraction(value: unknown): Promise<SceneExtractionResult>;
+  listSceneExtractionCandidates(value: unknown): Promise<SceneExtractionCandidateList>;
+  decideSceneExtractionBoundary(value: unknown): Promise<SceneExtractionDecisionResult>;
+  listSceneAnnotations(value: unknown): Promise<SceneAnnotationList>;
+  decideSceneExtractionAnnotation(
+    value: unknown,
+  ): Promise<SceneExtractionAnnotationDecisionResult>;
+  runSceneDraft(value: unknown): Promise<RunSceneDraftResult>;
+  listSceneDraftCandidates(value: unknown): Promise<SceneDraftCandidateList>;
+  updateSceneDraftCandidate(value: unknown): Promise<SceneDraftCandidate>;
+  prepareSceneDraftInsertion(
+    value: unknown,
+  ): Promise<PrepareSceneDraftInsertionResult>;
+  completeSceneDraftInsertion(value: unknown): Promise<SceneDraftCandidate>;
+  searchSceneMusicQueues(value: unknown): Promise<SceneMusicQueueSearchResult>;
+  listSceneMusicQueueCandidates(
+    value: unknown,
+  ): Promise<SceneMusicQueueCandidateList>;
+  selectSceneMusicQueue(value: unknown): Promise<SceneMusicQueueCandidate>;
   captureFragment(value: unknown): Promise<FragmentProjection>;
   listFragments(value: unknown): Promise<FragmentListProjection>;
   updateFragment(value: unknown): Promise<FragmentProjection>;
@@ -763,7 +925,12 @@ type ApplicationRuntime = {
   createCharacter(value: unknown): Promise<CharacterProjection>;
   listCharacters(value: unknown): Promise<CharacterListProjection>;
   updateCharacter(value: unknown): Promise<CharacterProjection>;
+  addCharacterEvidence(value: unknown): Promise<CharacterProjection>;
   retireCharacter(value: unknown): Promise<CharacterProjection>;
+  createCharacterRelation(value: unknown): Promise<CharacterRelationProjection>;
+  listCharacterRelations(value: unknown): Promise<CharacterRelationListProjection>;
+  updateCharacterRelation(value: unknown): Promise<CharacterRelationProjection>;
+  retireCharacterRelation(value: unknown): Promise<CharacterRelationProjection>;
   createLoreEntry(value: unknown): Promise<LoreEntryProjection>;
   listLoreEntries(value: unknown): Promise<LoreEntryListProjection>;
   updateLoreEntry(value: unknown): Promise<LoreEntryProjection>;
@@ -852,6 +1019,7 @@ type ApplicationRuntime = {
   pausePomodoro(value: unknown): Promise<PomodoroProjection>;
   resumePomodoro(value: unknown): Promise<PomodoroProjection>;
   reconcilePomodoro(value: unknown): Promise<PomodoroProjection>;
+  updatePomodoroNote(value: unknown): Promise<PomodoroProjection>;
   stopPomodoro(value: unknown): Promise<PomodoroProjection>;
   prepareWorkRecordsExport(value: unknown): Promise<PreparedWorkRecordsExport>;
   getWorkRecordsGoals(value: unknown): Promise<WorkRecordsGoalsProjection>;
@@ -873,6 +1041,12 @@ type ApplicationRuntime = {
   saveAppSettings(value: unknown): Promise<AppSettingsProjection>;
   getWorkMusicSettings(value: unknown): Promise<WorkMusicSettingsProjection>;
   saveWorkMusicSettings(value: unknown): Promise<WorkMusicSettingsProjection>;
+  getWorkInspirationSettings(
+    value: unknown,
+  ): Promise<WorkInspirationSettingsProjection>;
+  saveWorkInspirationSettings(
+    value: unknown,
+  ): Promise<WorkInspirationSettingsProjection>;
   getYouTubeMusicConnectionStatus(): Promise<YouTubeMusicConnectionStatus>;
   saveYouTubeMusicConnection(value: unknown): Promise<YouTubeMusicConnectionStatus>;
   getWorkQuickMemo(value: unknown): Promise<WorkQuickMemoProjection>;
@@ -900,6 +1074,20 @@ type ApplicationRuntime = {
   runAssistantExternalSettingReview(
     value: unknown,
   ): Promise<AssistantExternalSettingReviewResult>;
+  runCharacterExtraction(value: unknown): Promise<CharacterExtractionResult>;
+  listCharacterExtractionCandidates(
+    value: unknown,
+  ): Promise<CharacterExtractionCandidateList>;
+  decideCharacterExtractionItem(
+    value: unknown,
+  ): Promise<CharacterExtractionDecisionResult>;
+  runCharacterGeneration(value: unknown): Promise<CharacterGenerationResult>;
+  listCharacterGenerationCandidates(
+    value: unknown,
+  ): Promise<CharacterGenerationCandidateList>;
+  decideCharacterGenerationItem(
+    value: unknown,
+  ): Promise<CharacterGenerationDecisionResult>;
   runAssistantNotationReview(
     value: unknown,
   ): Promise<AssistantNotationReviewResult>;
@@ -1044,6 +1232,20 @@ async function registerApplicationHandlers(): Promise<void> {
     documentProfileValue === null
       ? ephemeralDocumentProfile
       : parseManuscriptDocumentProfile(documentProfileValue);
+  const manuscriptInputProfileValue = readRuntimeProfileValue({
+    inlineJson: process.env.EUM_STUDIO_MANUSCRIPT_INPUT_PROFILE,
+    filePath: process.env.EUM_STUDIO_MANUSCRIPT_INPUT_PROFILE_PATH,
+    readTextFile: (filePath) => readFileSync(filePath, "utf8"),
+  });
+  const manuscriptInputProfile = parseManuscriptInputProfile(
+    manuscriptInputProfileValue ??
+      JSON.parse(
+        readFileSync(
+          path.join(app.getAppPath(), "config", "manuscript-input.json"),
+          "utf8",
+        ),
+      ),
+  );
   const formattingProfileValue = readRuntimeProfileValue({
     inlineJson:
       process.env.EUM_STUDIO_MANUSCRIPT_FORMATTING_PROFILE,
@@ -1132,8 +1334,23 @@ async function registerApplicationHandlers(): Promise<void> {
           path.join(app.getAppPath(), "config", "chatgpt-oauth.json"),
           "utf8",
         ),
+    ),
+  );
+  const youtubeMusicProfileValue = readRuntimeProfileValue({
+    inlineJson: process.env.EUM_STUDIO_YOUTUBE_MUSIC_PROFILE,
+    filePath: process.env.EUM_STUDIO_YOUTUBE_MUSIC_PROFILE_PATH,
+    readTextFile: (filePath) => readFileSync(filePath, "utf8"),
+  });
+  const youtubeMusicProfile = parseYouTubeMusicProfile(
+    youtubeMusicProfileValue ??
+      JSON.parse(
+        readFileSync(
+          path.join(app.getAppPath(), "config", "youtube-music.json"),
+          "utf8",
+        ),
       ),
   );
+  activeYouTubePlayerReferer = youtubeMusicProfile.playerReferer;
   const publishingMailConnectorProfileValue = readRuntimeProfileValue({
     inlineJson: process.env.EUM_STUDIO_PUBLISHING_MAIL_CONNECTOR_PROFILE,
     filePath: process.env.EUM_STUDIO_PUBLISHING_MAIL_CONNECTOR_PROFILE_PATH,
@@ -1290,9 +1507,14 @@ async function registerApplicationHandlers(): Promise<void> {
           safeStorage.decryptString(Buffer.from(encrypted)),
       },
     });
+  const uiPreferencesStore = await openNodeUiPreferencesStore({
+    rootDirectoryPath: path.join(app.getPath("userData"), "ui-preferences-v1"),
+  });
   const chatGptOAuthStore = await openNodeChatGptOAuthStore({
     rootDirectoryPath: path.join(app.getPath("userData"), "chatgpt-oauth-v1"),
+    providerId: chatGptOAuthProfile.providerId,
     displayName: chatGptOAuthProfile.displayName,
+    modelId: chatGptOAuthProfile.upstream.model,
     cipher: {
       isEncryptionAvailable: () => safeStorage.isEncryptionAvailable(),
       encryptString: (plainText) => safeStorage.encryptString(plainText),
@@ -1321,6 +1543,16 @@ async function registerApplicationHandlers(): Promise<void> {
     profile: chatGptOAuthProfile,
     store: chatGptOAuthStore,
     openExternal: (url) => chatGptOAuthWindowLauncher.open(url),
+  });
+  const chatGptCodexClient = createNodeChatGptCodexClient({
+    profile: chatGptOAuthProfile,
+    store: chatGptOAuthStore,
+  });
+  const chatGptAssistantConnectionId =
+    createChatGptOAuthAssistantConnectionId(chatGptOAuthProfile.providerId);
+  const youtubeMusicSearchClient = createNodeYouTubeMusicSearchClient({
+    profile: youtubeMusicProfile,
+    store: youtubeMusicConnectionStore,
   });
   let applicationRuntime: ApplicationRuntime;
   if (
@@ -1432,18 +1664,43 @@ async function registerApplicationHandlers(): Promise<void> {
         foreshadowPointProfile,
         assistantDestinationProfile,
         executeAssistantVocabularySuggestion: async (input) => {
+          const requestFingerprint = `sha256:${createHash("sha256")
+            .update(JSON.stringify({
+              query: input.query,
+              context: input.context,
+            }))
+            .digest("hex")}`;
+          if (input.connectionId === chatGptAssistantConnectionId) {
+            const startedAt = new Date().toISOString();
+            const payload = await chatGptCodexClient.suggestVocabulary({
+              query: input.query,
+              context: input.context,
+            });
+            return Object.freeze({
+              receipt: Object.freeze({
+                schemaVersion: 1 as const,
+                receiptId: entityId<"ConnectorReceipt">(randomUUID()),
+                requestId: entityId<"AssistantConnectorRequest">(
+                  input.requestId,
+                ),
+                connectionId: input.connectionId,
+                connectorKind: chatGptOAuthProfile.providerId,
+                operation: "vocabulary-suggestions" as const,
+                requestFingerprint,
+                startedAt,
+                completedAt: new Date().toISOString(),
+                resultState: "succeeded" as const,
+              }),
+              payload,
+            });
+          }
           const execution = await assistantConnectorExecutor.execute({
             schemaVersion: 1,
             requestId: entityId<"AssistantConnectorRequest">(input.requestId),
             connectionId: input.connectionId,
             capability: "vocabulary-lookup",
             operation: "vocabulary-suggestions",
-            requestFingerprint: `sha256:${createHash("sha256")
-              .update(JSON.stringify({
-                query: input.query,
-                context: input.context,
-              }))
-              .digest("hex")}`,
+            requestFingerprint,
             input: Object.freeze({
               query: input.query,
               context: input.context,
@@ -1466,15 +1723,39 @@ async function registerApplicationHandlers(): Promise<void> {
             }),
             settings: input.settings,
           });
+          const requestFingerprint = `sha256:${createHash("sha256")
+            .update(JSON.stringify(connectorInput))
+            .digest("hex")}`;
+          if (input.connectionId === chatGptAssistantConnectionId) {
+            const startedAt = new Date().toISOString();
+            const payload = await chatGptCodexClient.reviewSettings(
+              connectorInput,
+            );
+            return Object.freeze({
+              receipt: Object.freeze({
+                schemaVersion: 1 as const,
+                receiptId: entityId<"ConnectorReceipt">(randomUUID()),
+                requestId: entityId<"AssistantConnectorRequest">(
+                  input.requestId,
+                ),
+                connectionId: input.connectionId,
+                connectorKind: chatGptOAuthProfile.providerId,
+                operation: "setting-review" as const,
+                requestFingerprint,
+                startedAt,
+                completedAt: new Date().toISOString(),
+                resultState: "succeeded" as const,
+              }),
+              payload,
+            });
+          }
           const execution = await assistantConnectorExecutor.execute({
             schemaVersion: 1,
             requestId: entityId<"AssistantConnectorRequest">(input.requestId),
             connectionId: input.connectionId,
             capability: "lore-review",
             operation: "setting-review",
-            requestFingerprint: `sha256:${createHash("sha256")
-              .update(JSON.stringify(connectorInput))
-              .digest("hex")}`,
+            requestFingerprint,
             input: connectorInput,
           });
           return Object.freeze({
@@ -1482,6 +1763,38 @@ async function registerApplicationHandlers(): Promise<void> {
             payload: execution.payload,
           });
         },
+        characterExtraction: Object.freeze({
+          destinationId: chatGptOAuthProfile.providerId,
+          isConnected: () => chatGptOAuthStore.getStatus().connected,
+          execute: ({ paragraphs }) =>
+            chatGptCodexClient.extractCharacters(paragraphs),
+        }),
+        characterGeneration: Object.freeze({
+          destinationId: chatGptOAuthProfile.providerId,
+          isConnected: () => chatGptOAuthStore.getStatus().connected,
+          execute: ({ brief }) =>
+            chatGptCodexClient.generateCharacters(brief),
+        }),
+        sceneExtraction: Object.freeze({
+          destinationId: chatGptOAuthProfile.providerId,
+          isConnected: () => chatGptOAuthStore.getStatus().connected,
+          execute: ({ paragraphs }) =>
+            chatGptCodexClient.extractScenes(paragraphs),
+        }),
+        sceneDraft: Object.freeze({
+          destinationId: chatGptOAuthProfile.providerId,
+          isConnected: () => chatGptOAuthStore.getStatus().connected,
+          execute: ({ context }) => chatGptCodexClient.draftScene(context),
+        }),
+        sceneMusicSearch: Object.freeze({
+          providerId: youtubeMusicProfile.providerId,
+          searchLimit: youtubeMusicProfile.searchLimit,
+          tracksPerOption: youtubeMusicProfile.videosPerOption,
+          isConnected: () =>
+            youtubeMusicConnectionStore.getStatus().apiKeyConfigured,
+          execute: ({ query, limit }) =>
+            youtubeMusicSearchClient.searchVideos(query, limit),
+        }),
         executePublishingAssistantIntent: async (input) => {
           const connectorInput = Object.freeze({
             statement: input.statement,
@@ -1570,6 +1883,10 @@ async function registerApplicationHandlers(): Promise<void> {
     publishingMailScheduleRuntime.reconcile();
     applicationRuntime = {
       manuscript: localRuntime,
+      getWorkManuscriptLayoutSettings: (value) =>
+        localRuntime.getWorkManuscriptLayoutSettings(value),
+      saveWorkManuscriptLayoutSettings: (value) =>
+        localRuntime.saveWorkManuscriptLayoutSettings(value),
       getWorkspaceCatalog: () =>
         localRuntime.getWorkspaceCatalog(),
       getWorkFavorites: () =>
@@ -1632,6 +1949,31 @@ async function registerApplicationHandlers(): Promise<void> {
         localRuntime.updateSceneRuleSet(value),
       setSceneEventOverride: (value) =>
         localRuntime.setSceneEventOverride(value),
+      runSceneExtraction: (value) =>
+        localRuntime.runSceneExtraction(value),
+      listSceneExtractionCandidates: (value) =>
+        localRuntime.listSceneExtractionCandidates(value),
+      decideSceneExtractionBoundary: (value) =>
+        localRuntime.decideSceneExtractionBoundary(value),
+      listSceneAnnotations: (value) =>
+        localRuntime.listSceneAnnotations(value),
+      decideSceneExtractionAnnotation: (value) =>
+        localRuntime.decideSceneExtractionAnnotation(value),
+      runSceneDraft: (value) => localRuntime.runSceneDraft(value),
+      listSceneDraftCandidates: (value) =>
+        localRuntime.listSceneDraftCandidates(value),
+      updateSceneDraftCandidate: (value) =>
+        localRuntime.updateSceneDraftCandidate(value),
+      prepareSceneDraftInsertion: (value) =>
+        localRuntime.prepareSceneDraftInsertion(value),
+      completeSceneDraftInsertion: (value) =>
+        localRuntime.completeSceneDraftInsertion(value),
+      searchSceneMusicQueues: (value) =>
+        localRuntime.searchSceneMusicQueues(value),
+      listSceneMusicQueueCandidates: (value) =>
+        localRuntime.listSceneMusicQueueCandidates(value),
+      selectSceneMusicQueue: (value) =>
+        localRuntime.selectSceneMusicQueue(value),
       captureFragment: (value) =>
         localRuntime.captureFragment(value),
       listFragments: (value) =>
@@ -1648,8 +1990,18 @@ async function registerApplicationHandlers(): Promise<void> {
         localRuntime.listCharacters(value),
       updateCharacter: (value) =>
         localRuntime.updateCharacter(value),
+      addCharacterEvidence: (value) =>
+        localRuntime.addCharacterEvidence(value),
       retireCharacter: (value) =>
         localRuntime.retireCharacter(value),
+      createCharacterRelation: (value) =>
+        localRuntime.createCharacterRelation(value),
+      listCharacterRelations: (value) =>
+        localRuntime.listCharacterRelations(value),
+      updateCharacterRelation: (value) =>
+        localRuntime.updateCharacterRelation(value),
+      retireCharacterRelation: (value) =>
+        localRuntime.retireCharacterRelation(value),
       createLoreEntry: (value) =>
         localRuntime.createLoreEntry(value),
       listLoreEntries: (value) =>
@@ -1816,6 +2168,8 @@ async function registerApplicationHandlers(): Promise<void> {
         localRuntime.resumePomodoro(value),
       reconcilePomodoro: (value) =>
         localRuntime.reconcilePomodoro(value),
+      updatePomodoroNote: (value) =>
+        localRuntime.updatePomodoroNote(value),
       stopPomodoro: (value) =>
         localRuntime.stopPomodoro(value),
       prepareWorkRecordsExport: (value) =>
@@ -1850,6 +2204,10 @@ async function registerApplicationHandlers(): Promise<void> {
         localRuntime.getWorkMusicSettings(value),
       saveWorkMusicSettings: (value) =>
         localRuntime.saveWorkMusicSettings(value),
+      getWorkInspirationSettings: (value) =>
+        localRuntime.getWorkInspirationSettings(value),
+      saveWorkInspirationSettings: (value) =>
+        localRuntime.saveWorkInspirationSettings(value),
       getYouTubeMusicConnectionStatus: async () =>
         youtubeMusicConnectionStore.getStatus(),
       saveYouTubeMusicConnection: (value) =>
@@ -1879,6 +2237,18 @@ async function registerApplicationHandlers(): Promise<void> {
         localRuntime.runAssistantVocabularySuggestion(value),
       runAssistantExternalSettingReview: (value) =>
         localRuntime.runAssistantExternalSettingReview(value),
+      runCharacterExtraction: (value) =>
+        localRuntime.runCharacterExtraction(value),
+      listCharacterExtractionCandidates: (value) =>
+        localRuntime.listCharacterExtractionCandidates(value),
+      decideCharacterExtractionItem: (value) =>
+        localRuntime.decideCharacterExtractionItem(value),
+      runCharacterGeneration: (value) =>
+        localRuntime.runCharacterGeneration(value),
+      listCharacterGenerationCandidates: (value) =>
+        localRuntime.listCharacterGenerationCandidates(value),
+      decideCharacterGenerationItem: (value) =>
+        localRuntime.decideCharacterGenerationItem(value),
       runAssistantNotationReview: (value) =>
         localRuntime.runAssistantNotationReview(value),
       runAssistantSettingReview: (value) =>
@@ -1945,8 +2315,60 @@ async function registerApplicationHandlers(): Promise<void> {
       schemaVersion: 1,
       covers: [],
     });
+    const configuredWorkManuscriptLayouts = new Map<
+      string,
+      WorkManuscriptLayoutSettingsProjection
+    >();
+    const configuredWorkActivities = new Map<string, WorkActivityProjection>();
+    const readConfiguredWorkActivity = (
+      workId: WorkspaceCatalogProjection["activeWorkId"] & string,
+    ): WorkActivityProjection =>
+      configuredWorkActivities.get(workId) ??
+      parseWorkActivityProjection({
+        schemaVersion: 1,
+        workId,
+        activeSessionId: null,
+        activeFocusCycleId: null,
+        sessions: [],
+        focusCycles: [],
+      });
     applicationRuntime = {
       manuscript: manuscriptRuntime,
+      getWorkManuscriptLayoutSettings: async (value) => {
+        const command = parseGetWorkManuscriptLayoutSettingsCommand(value);
+        if (!workspaceCatalog.works.some((work) => work.workId === command.workId)) {
+          throw new Error(`Unknown Work: ${command.workId}`);
+        }
+        return configuredWorkManuscriptLayouts.get(command.workId) ??
+          createDefaultWorkManuscriptLayoutSettingsProjection(
+            command.workId,
+            formattingProfile,
+          );
+      },
+      saveWorkManuscriptLayoutSettings: async (value) => {
+        const command = parseSaveWorkManuscriptLayoutSettingsCommand(value);
+        if (!workspaceCatalog.works.some((work) => work.workId === command.workId)) {
+          throw new Error(`Unknown Work: ${command.workId}`);
+        }
+        const current = configuredWorkManuscriptLayouts.get(command.workId) ??
+          createDefaultWorkManuscriptLayoutSettingsProjection(
+            command.workId,
+            formattingProfile,
+          );
+        if (current.revision !== command.expectedRevision) {
+          throw new Error(
+            `Work manuscript layout revision conflict: expected ${command.expectedRevision}, current ${current.revision}`,
+          );
+        }
+        const projection = parseWorkManuscriptLayoutSettingsProjection({
+          schemaVersion: 1,
+          workId: command.workId,
+          revision: current.revision + 1,
+          settings: command.settings,
+        });
+        configuredWorkManuscriptLayouts.set(command.workId, projection);
+        return projection;
+      },
       getWorkspaceCatalog: () => workspaceCatalog,
       getWorkFavorites: () => configuredWorkFavorites,
       setWorkFavorite: async (value) => {
@@ -2162,6 +2584,101 @@ async function registerApplicationHandlers(): Promise<void> {
           "Scene event overrides are unavailable in a configured manuscript runtime",
         );
       },
+      runSceneExtraction: async () => {
+        throw new Error(
+          "Scene extraction is unavailable in a configured manuscript runtime",
+        );
+      },
+      listSceneExtractionCandidates: async (value) => {
+        const command = parseListSceneExtractionCandidatesCommand(value);
+        if (!workspaceCatalog.works.some((work) => work.workId === command.workId)) {
+          throw new Error(`Unknown Work: ${command.workId}`);
+        }
+        return parseSceneExtractionCandidateList({
+          schemaVersion: 1,
+          workId: command.workId,
+          candidates: [],
+        });
+      },
+      decideSceneExtractionBoundary: async () => {
+        throw new Error(
+          "Scene extraction decisions are unavailable in a configured manuscript runtime",
+        );
+      },
+      listSceneAnnotations: async (value) => {
+        const command = parseListSceneAnnotationsCommand(value);
+        if (!workspaceCatalog.works.some((work) => work.workId === command.workId)) {
+          throw new Error(`Unknown Work: ${command.workId}`);
+        }
+        return parseSceneAnnotationList({
+          schemaVersion: 1,
+          workId: command.workId,
+          annotations: [],
+        });
+      },
+      decideSceneExtractionAnnotation: async () => {
+        throw new Error(
+          "Scene extraction annotation decisions are unavailable in a configured manuscript runtime",
+        );
+      },
+      runSceneDraft: async (value) => {
+        parseRunSceneDraftCommand(value);
+        throw new Error(
+          "Scene drafting is unavailable in a configured manuscript runtime",
+        );
+      },
+      listSceneDraftCandidates: async (value) => {
+        const command = parseListSceneDraftCandidatesCommand(value);
+        if (!workspaceCatalog.works.some((work) => work.workId === command.workId)) {
+          throw new Error(`Unknown Work: ${command.workId}`);
+        }
+        return parseSceneDraftCandidateList({
+          schemaVersion: 1,
+          workId: command.workId,
+          candidates: [],
+        });
+      },
+      updateSceneDraftCandidate: async (value) => {
+        parseUpdateSceneDraftCandidateCommand(value);
+        throw new Error(
+          "Scene draft updates are unavailable in a configured manuscript runtime",
+        );
+      },
+      prepareSceneDraftInsertion: async (value) => {
+        parsePrepareSceneDraftInsertionCommand(value);
+        throw new Error(
+          "Scene draft insertion is unavailable in a configured manuscript runtime",
+        );
+      },
+      completeSceneDraftInsertion: async (value) => {
+        parseCompleteSceneDraftInsertionCommand(value);
+        throw new Error(
+          "Scene draft insertion is unavailable in a configured manuscript runtime",
+        );
+      },
+      searchSceneMusicQueues: async (value) => {
+        parseSearchSceneMusicQueuesCommand(value);
+        throw new Error(
+          "Scene music queue search is unavailable in a configured manuscript runtime",
+        );
+      },
+      listSceneMusicQueueCandidates: async (value) => {
+        const command = parseListSceneMusicQueueCandidatesCommand(value);
+        if (!workspaceCatalog.works.some((work) => work.workId === command.workId)) {
+          throw new Error(`Unknown Work: ${command.workId}`);
+        }
+        return parseSceneMusicQueueCandidateList({
+          schemaVersion: 1,
+          workId: command.workId,
+          candidates: [],
+        });
+      },
+      selectSceneMusicQueue: async (value) => {
+        parseSelectSceneMusicQueueCommand(value);
+        throw new Error(
+          "Scene music queue selection is unavailable in a configured manuscript runtime",
+        );
+      },
       captureFragment: async () => {
         throw new Error(
           "Fragment capture is unavailable in a configured manuscript runtime",
@@ -2214,9 +2731,40 @@ async function registerApplicationHandlers(): Promise<void> {
           "Character update is unavailable in a configured manuscript runtime",
         );
       },
+      addCharacterEvidence: async () => {
+        throw new Error(
+          "Character evidence is unavailable in a configured manuscript runtime",
+        );
+      },
       retireCharacter: async () => {
         throw new Error(
           "Character retirement is unavailable in a configured manuscript runtime",
+        );
+      },
+      createCharacterRelation: async () => {
+        throw new Error(
+          "Character relation creation is unavailable in a configured manuscript runtime",
+        );
+      },
+      listCharacterRelations: async (value) => {
+        const command = parseListCharacterRelationsCommand(value);
+        if (!workspaceCatalog.works.some((work) => work.workId === command.workId)) {
+          throw new Error(`Unknown Work: ${command.workId}`);
+        }
+        return parseCharacterRelationListProjection({
+          schemaVersion: 1,
+          workId: command.workId,
+          relations: [],
+        });
+      },
+      updateCharacterRelation: async () => {
+        throw new Error(
+          "Character relation update is unavailable in a configured manuscript runtime",
+        );
+      },
+      retireCharacterRelation: async () => {
+        throw new Error(
+          "Character relation retirement is unavailable in a configured manuscript runtime",
         );
       },
       createLoreEntry: async () => {
@@ -2670,15 +3218,90 @@ async function registerApplicationHandlers(): Promise<void> {
           points: [],
         });
       },
-      startWritingSession: async () => {
-        throw new Error(
-          "WritingSession is unavailable in a configured manuscript runtime",
+      startWritingSession: async (value) => {
+        const command = parseStartWritingSessionCommand(value);
+        const work = workspaceCatalog.works.find(
+          (candidate) => candidate.workId === command.workId,
         );
+        const document = work?.documents.find(
+          (candidate) => candidate.documentId === command.documentId,
+        );
+        if (work === undefined || document === undefined) {
+          throw new Error(
+            `Work/document boundary violation: ${command.workId}/${command.documentId}`,
+          );
+        }
+        const current = readConfiguredWorkActivity(command.workId);
+        if (current.activeSessionId !== null) {
+          throw new Error(`Work already has an active WritingSession: ${command.workId}`);
+        }
+        const startedAt = new Date().toISOString();
+        const sessionId = randomUUID();
+        const projection = parseWorkActivityProjection({
+          ...current,
+          activeSessionId: sessionId,
+          sessions: [
+            ...current.sessions,
+            {
+              schemaVersion: 1,
+              sessionId,
+              workId: command.workId,
+              documentId: command.documentId,
+              state: "active",
+              startedAt,
+              endedAt: null,
+              activeDurationMs: 0,
+              startRevisionId: document.currentRevisionId,
+              endRevisionId: null,
+              characterDelta: null,
+              note: command.note,
+            },
+          ],
+        });
+        configuredWorkActivities.set(command.workId, projection);
+        return projection;
       },
-      stopWritingSession: async () => {
-        throw new Error(
-          "WritingSession is unavailable in a configured manuscript runtime",
+      stopWritingSession: async (value) => {
+        const command = parseStopWritingSessionCommand(value);
+        const current = readConfiguredWorkActivity(command.workId);
+        const session = current.sessions.find(
+          (candidate) => candidate.sessionId === command.sessionId,
         );
+        if (session === undefined || session.state !== "active") {
+          throw new Error(`WritingSession is not active: ${command.sessionId}`);
+        }
+        const work = workspaceCatalog.works.find(
+          (candidate) => candidate.workId === command.workId,
+        );
+        const document = work?.documents.find(
+          (candidate) => candidate.documentId === session.documentId,
+        );
+        if (document === undefined) {
+          throw new Error(
+            `Work/document boundary violation: ${command.workId}/${session.documentId}`,
+          );
+        }
+        const endedAt = new Date().toISOString();
+        const projection = parseWorkActivityProjection({
+          ...current,
+          activeSessionId: null,
+          sessions: current.sessions.map((candidate) =>
+            candidate.sessionId === command.sessionId
+              ? {
+                  ...candidate,
+                  state: "completed",
+                  endedAt,
+                  activeDurationMs: Math.max(
+                    0,
+                    Date.parse(endedAt) - Date.parse(candidate.startedAt),
+                  ),
+                  endRevisionId: document.currentRevisionId,
+                }
+              : candidate
+          ),
+        });
+        configuredWorkActivities.set(command.workId, projection);
+        return projection;
       },
       startFocusCycle: async () => {
         throw new Error(
@@ -2699,14 +3322,7 @@ async function registerApplicationHandlers(): Promise<void> {
         ) {
           throw new Error(`Unknown Work: ${command.workId}`);
         }
-        return parseWorkActivityProjection({
-          schemaVersion: 1,
-          workId: command.workId,
-          activeSessionId: null,
-          activeFocusCycleId: null,
-          sessions: [],
-          focusCycles: [],
-        });
+        return readConfiguredWorkActivity(command.workId);
       },
       getPomodoro: async (value) => {
         const command = parseGetPomodoroCommand(value);
@@ -2732,6 +3348,9 @@ async function registerApplicationHandlers(): Promise<void> {
         throw new Error("Pomodoro is unavailable in a configured manuscript runtime");
       },
       reconcilePomodoro: async () => {
+        throw new Error("Pomodoro is unavailable in a configured manuscript runtime");
+      },
+      updatePomodoroNote: async () => {
         throw new Error("Pomodoro is unavailable in a configured manuscript runtime");
       },
       stopPomodoro: async () => {
@@ -2888,6 +3507,22 @@ async function registerApplicationHandlers(): Promise<void> {
           "Work music settings persistence is unavailable in a configured manuscript runtime",
         );
       },
+      getWorkInspirationSettings: async (value) => {
+        const command = parseGetWorkInspirationSettingsCommand(value);
+        if (
+          !workspaceCatalog.works.some(
+            (work) => work.workId === command.workId,
+          )
+        ) {
+          throw new Error(`Unknown Work: ${command.workId}`);
+        }
+        return createDefaultWorkInspirationSettingsProjection(command.workId);
+      },
+      saveWorkInspirationSettings: async () => {
+        throw new Error(
+          "Work inspiration settings persistence is unavailable in a configured manuscript runtime",
+        );
+      },
       getYouTubeMusicConnectionStatus: async () =>
         youtubeMusicConnectionStore.getStatus(),
       saveYouTubeMusicConnection: (value) =>
@@ -2958,6 +3593,42 @@ async function registerApplicationHandlers(): Promise<void> {
       runAssistantExternalSettingReview: async () => {
         throw new Error(
           "Assistant external setting review is unavailable in a configured manuscript runtime",
+        );
+      },
+      runCharacterExtraction: async () => {
+        throw new Error(
+          "Character extraction is unavailable in a configured manuscript runtime",
+        );
+      },
+      listCharacterExtractionCandidates: async (value) => {
+        const command = parseListCharacterExtractionCandidatesCommand(value);
+        return parseCharacterExtractionCandidateList({
+          schemaVersion: 1,
+          workId: command.workId,
+          candidates: [],
+        });
+      },
+      decideCharacterExtractionItem: async () => {
+        throw new Error(
+          "Character extraction decisions are unavailable in a configured manuscript runtime",
+        );
+      },
+      runCharacterGeneration: async () => {
+        throw new Error(
+          "Character generation is unavailable in a configured manuscript runtime",
+        );
+      },
+      listCharacterGenerationCandidates: async (value) => {
+        const command = parseListCharacterGenerationCandidatesCommand(value);
+        return parseCharacterGenerationCandidateList({
+          schemaVersion: 1,
+          workId: command.workId,
+          candidates: [],
+        });
+      },
+      decideCharacterGenerationItem: async () => {
+        throw new Error(
+          "Character generation decisions are unavailable in a configured manuscript runtime",
         );
       },
       runAssistantNotationReview: async () => {
@@ -3093,17 +3764,7 @@ async function registerApplicationHandlers(): Promise<void> {
     };
   });
   ipcMain.handle(MANUSCRIPT_INPUT_PROFILE_CHANNEL, () => {
-    const serializedProfile =
-      process.env.EUM_STUDIO_MANUSCRIPT_INPUT_PROFILE;
-    const value =
-      serializedProfile === undefined
-        ? {
-            schemaVersion: 1,
-            autoClosePairs: [],
-            textReplacements: [],
-          }
-        : JSON.parse(serializedProfile);
-    return parseManuscriptInputProfile(value);
+    return manuscriptInputProfile;
   });
   ipcMain.handle(MANUSCRIPT_FORMATTING_PROFILE_CHANNEL, () => {
     return formattingProfile;
@@ -3170,6 +3831,46 @@ async function registerApplicationHandlers(): Promise<void> {
         schemaVersion: 1,
         status: "completed",
         byteLength: receipt.byteLength,
+      } as const;
+    },
+  );
+  ipcMain.handle(
+    MANUSCRIPT_SELECT_TEXT_IMPORT_CHANNEL,
+    async (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      const command = parseSelectManuscriptTextImportCommand(value);
+      const owner = mainWindow;
+      if (owner === null) {
+        throw new Error("Main window is unavailable");
+      }
+      const configuredFilePath =
+        process.env.EUM_STUDIO_MANUSCRIPT_TEXT_IMPORT_PATH;
+      const filePath = configuredFilePath === undefined
+        ? (await dialog.showOpenDialog(owner, {
+            title: "원고 TXT 가져오기",
+            buttonLabel: "가져오기",
+            properties: ["openFile"],
+            filters: [
+              {
+                name: "텍스트 문서",
+                extensions: ["txt"],
+              },
+            ],
+          })).filePaths[0]
+        : configuredFilePath;
+      if (filePath === undefined) {
+        return { schemaVersion: 1, status: "cancelled" } as const;
+      }
+      const content = readFileSync(filePath);
+      return {
+        schemaVersion: 1,
+        status: "selected",
+        workId: command.workId,
+        documentId: command.documentId,
+        documentRevisionId: command.documentRevisionId,
+        fileName: path.basename(filePath),
+        text: normalizeImportedManuscriptText(content.toString("utf8")),
+        byteLength: content.byteLength,
       } as const;
     },
   );
@@ -3454,6 +4155,94 @@ async function registerApplicationHandlers(): Promise<void> {
     },
   );
   ipcMain.handle(
+    STRUCTURE_RUN_SCENE_EXTRACTION_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.runSceneExtraction(
+        parseRunSceneExtractionCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    STRUCTURE_LIST_SCENE_EXTRACTION_CANDIDATES_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.listSceneExtractionCandidates(
+        parseListSceneExtractionCandidatesCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    STRUCTURE_DECIDE_SCENE_EXTRACTION_BOUNDARY_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.decideSceneExtractionBoundary(
+        parseDecideSceneExtractionBoundaryCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    STRUCTURE_LIST_SCENE_ANNOTATIONS_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.listSceneAnnotations(
+        parseListSceneAnnotationsCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    STRUCTURE_DECIDE_SCENE_EXTRACTION_ANNOTATION_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.decideSceneExtractionAnnotation(
+        parseDecideSceneExtractionAnnotationCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    STRUCTURE_RUN_SCENE_DRAFT_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.runSceneDraft(parseRunSceneDraftCommand(value));
+    },
+  );
+  ipcMain.handle(
+    STRUCTURE_LIST_SCENE_DRAFT_CANDIDATES_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.listSceneDraftCandidates(
+        parseListSceneDraftCandidatesCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    STRUCTURE_UPDATE_SCENE_DRAFT_CANDIDATE_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.updateSceneDraftCandidate(
+        parseUpdateSceneDraftCandidateCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    STRUCTURE_PREPARE_SCENE_DRAFT_INSERTION_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.prepareSceneDraftInsertion(
+        parsePrepareSceneDraftInsertionCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    STRUCTURE_COMPLETE_SCENE_DRAFT_INSERTION_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.completeSceneDraftInsertion(
+        parseCompleteSceneDraftInsertionCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
     FRAGMENT_CAPTURE_CHANNEL,
     (event, value: unknown) => {
       assertTrustedRendererSender(event);
@@ -3526,11 +4315,110 @@ async function registerApplicationHandlers(): Promise<void> {
     },
   );
   ipcMain.handle(
+    CHARACTER_ADD_EVIDENCE_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.addCharacterEvidence(
+        parseAddCharacterEvidenceCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
     CHARACTER_RETIRE_CHANNEL,
     (event, value: unknown) => {
       assertTrustedRendererSender(event);
       return applicationRuntime.retireCharacter(
         parseRetireCharacterCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    CHARACTER_RELATION_CREATE_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.createCharacterRelation(
+        parseCreateCharacterRelationCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    CHARACTER_RELATION_LIST_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.listCharacterRelations(
+        parseListCharacterRelationsCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    CHARACTER_RELATION_UPDATE_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.updateCharacterRelation(
+        parseUpdateCharacterRelationCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    CHARACTER_RELATION_RETIRE_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.retireCharacterRelation(
+        parseRetireCharacterRelationCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    CHARACTER_EXTRACTION_RUN_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.runCharacterExtraction(
+        parseRunCharacterExtractionCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    CHARACTER_EXTRACTION_LIST_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.listCharacterExtractionCandidates(
+        parseListCharacterExtractionCandidatesCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    CHARACTER_EXTRACTION_DECIDE_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.decideCharacterExtractionItem(
+        parseDecideCharacterExtractionItemCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    CHARACTER_GENERATION_RUN_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.runCharacterGeneration(
+        parseRunCharacterGenerationCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    CHARACTER_GENERATION_LIST_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.listCharacterGenerationCandidates(
+        parseListCharacterGenerationCandidatesCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    CHARACTER_GENERATION_DECIDE_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.decideCharacterGenerationItem(
+        parseDecideCharacterGenerationItemCommand(value),
       );
     },
   );
@@ -4365,6 +5253,20 @@ async function registerApplicationHandlers(): Promise<void> {
     },
   );
   ipcMain.handle(
+    UI_PREFERENCES_GET_CHANNEL,
+    (event) => {
+      assertTrustedRendererSender(event);
+      return uiPreferencesStore.get();
+    },
+  );
+  ipcMain.handle(
+    UI_PREFERENCES_SAVE_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return uiPreferencesStore.save(parseSaveUiPreferencesCommand(value));
+    },
+  );
+  ipcMain.handle(
     MUSIC_SETTINGS_PROFILE_CHANNEL,
     (event) => {
       assertTrustedRendererSender(event);
@@ -4390,6 +5292,24 @@ async function registerApplicationHandlers(): Promise<void> {
     },
   );
   ipcMain.handle(
+    INSPIRATION_SETTINGS_GET_WORK_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.getWorkInspirationSettings(
+        parseGetWorkInspirationSettingsCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    INSPIRATION_SETTINGS_SAVE_WORK_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.saveWorkInspirationSettings(
+        parseSaveWorkInspirationSettingsCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
     YOUTUBE_MUSIC_CONNECTION_STATUS_CHANNEL,
     (event) => {
       assertTrustedRendererSender(event);
@@ -4402,6 +5322,55 @@ async function registerApplicationHandlers(): Promise<void> {
       assertTrustedRendererSender(event);
       return applicationRuntime.saveYouTubeMusicConnection(
         parseSaveYouTubeMusicConnectionCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    YOUTUBE_MUSIC_PROFILE_CHANNEL,
+    (event) => {
+      assertTrustedRendererSender(event);
+      return youtubeMusicProfile;
+    },
+  );
+  ipcMain.handle(
+    YOUTUBE_MUSIC_SEARCH_CHANNEL,
+    async (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      const command = parseSearchYouTubeVideosCommand(value);
+      return Object.freeze({
+        schemaVersion: 1,
+        query: command.query,
+        videos: await youtubeMusicSearchClient.searchVideos(
+          command.query,
+          youtubeMusicProfile.searchLimit,
+        ),
+      });
+    },
+  );
+  ipcMain.handle(
+    SCENE_MUSIC_QUEUE_SEARCH_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.searchSceneMusicQueues(
+        parseSearchSceneMusicQueuesCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    SCENE_MUSIC_QUEUE_LIST_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.listSceneMusicQueueCandidates(
+        parseListSceneMusicQueueCandidatesCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    SCENE_MUSIC_QUEUE_SELECT_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.selectSceneMusicQueue(
+        parseSelectSceneMusicQueueCommand(value),
       );
     },
   );
@@ -4435,6 +5404,14 @@ async function registerApplicationHandlers(): Promise<void> {
     (event) => {
       assertTrustedRendererSender(event);
       return chatGptOAuthLogin.startLogin();
+    },
+  );
+  ipcMain.handle(
+    ASSISTANT_CHAT_RUN_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      const command = parseRunAssistantChatCommand(value);
+      return chatGptCodexClient.chat(command.messages);
     },
   );
   ipcMain.handle(
@@ -4620,6 +5597,15 @@ async function registerApplicationHandlers(): Promise<void> {
       assertTrustedRendererSender(event);
       return applicationRuntime.reconcilePomodoro(
         parsePomodoroPhaseCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    ACTIVITY_UPDATE_POMODORO_NOTE_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.updatePomodoroNote(
+        parseUpdatePomodoroNoteCommand(value),
       );
     },
   );
@@ -4863,6 +5849,20 @@ async function registerApplicationHandlers(): Promise<void> {
     },
   );
   ipcMain.handle(
+    MANUSCRIPT_GET_WORK_LAYOUT_SETTINGS_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.getWorkManuscriptLayoutSettings(value);
+    },
+  );
+  ipcMain.handle(
+    MANUSCRIPT_SAVE_WORK_LAYOUT_SETTINGS_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.saveWorkManuscriptLayoutSettings(value);
+    },
+  );
+  ipcMain.handle(
     MANUSCRIPT_APPLY_STARTUP_RECOVERY_CHANNEL,
     (event, value: unknown) => {
       assertTrustedRendererSender(event);
@@ -4934,6 +5934,21 @@ async function createMainWindow(): Promise<BrowserWindow> {
     width: 1200,
   });
   mainWindow = window;
+
+  if (activeYouTubePlayerReferer !== null) {
+    const playerReferer = activeYouTubePlayerReferer;
+    window.webContents.session.webRequest.onBeforeSendHeaders(
+      YOUTUBE_PLAYER_REQUEST_FILTER,
+      (details, callback) => {
+        callback({
+          requestHeaders: withYouTubePlayerReferer(
+            details.requestHeaders,
+            playerReferer,
+          ),
+        });
+      },
+    );
+  }
 
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event, requestedTarget) => {
@@ -5015,4 +6030,5 @@ app.on("window-all-closed", () => {
 app.on("will-quit", () => {
   activeApplicationRuntime?.close();
   activeApplicationRuntime = null;
+  activeYouTubePlayerReferer = null;
 });

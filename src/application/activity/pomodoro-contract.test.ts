@@ -7,6 +7,7 @@ import {
   parseConfigureAndStartPomodoroCommand,
   parsePomodoroPolicyPlan,
   parsePomodoroProjection,
+  parseUpdatePomodoroNoteCommand,
   serializePomodoroPolicyPlan,
 } from "./pomodoro-contract";
 
@@ -167,6 +168,23 @@ describe("Pomodoro contract", () => {
       parsePomodoroProjection({
         ...projection,
         manuscript: "원문",
+      }),
+    ).toThrow(/fields/u);
+  });
+
+  it("accepts an exact active phase memo update without changing timer fields", () => {
+    const command = parseUpdatePomodoroNoteCommand({
+      schemaVersion: 1,
+      workId: randomUUID(),
+      focusCycleId: randomUUID(),
+      note: "다음 장면의 감정선 확인",
+    });
+
+    expect(command.note).toBe("다음 장면의 감정선 확인");
+    expect(() =>
+      parseUpdatePomodoroNoteCommand({
+        ...command,
+        targetDurationMs: 1_000,
       }),
     ).toThrow(/fields/u);
   });

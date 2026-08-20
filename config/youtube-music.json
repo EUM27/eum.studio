@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "providerId": "youtube",
+  "displayName": "YouTube",
+  "searchApiBaseUrl": "https://www.googleapis.com/youtube/v3",
+  "iframeApiUrl": "https://www.youtube.com/iframe_api",
+  "watchBaseUrl": "https://www.youtube.com/watch",
+  "playerReferer": "https://eum-studio/",
+  "searchLimit": 6,
+  "videosPerOption": 3,
+  "requestTimeoutMs": 10000
+}

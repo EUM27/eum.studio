@@ -57,6 +57,7 @@ describe("node ChatGPT OAuth", () => {
     const port = await reservePort();
     const profile = parseChatGptOAuthProfile({
       schemaVersion: 1,
+      providerId: "runtime-chatgpt",
       displayName: "GPT",
       issuer: "https://auth.openai.com",
       clientId: "runtime-client-id",
@@ -70,10 +71,18 @@ describe("node ChatGPT OAuth", () => {
         path: "/auth/callback",
         portRange: { start: port, end: port },
       },
+      upstream: {
+        baseUrl: "https://chatgpt.com/backend-api/codex",
+        originator: "runtime-originator",
+        clientVersion: "runtime-version",
+        model: "runtime-model",
+      },
     });
     const store = await openNodeChatGptOAuthStore({
       rootDirectoryPath,
+      providerId: profile.providerId,
       displayName: profile.displayName,
+      modelId: profile.upstream.model,
       cipher: cipher(),
       now: () => "2026-08-13T00:00:00.000Z",
     });

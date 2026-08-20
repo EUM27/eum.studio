@@ -62,4 +62,33 @@ describe("manuscript input profile", () => {
       }),
     ).toThrow("textReplacements contains an ambiguous trigger");
   });
+
+  it("preserves distinct typed triggers and ordered evolution cycles", () => {
+    const profile = parseManuscriptInputProfile({
+      schemaVersion: 1,
+      autoClosePairs: [
+        { trigger: "\"", open: "“", close: "”" },
+      ],
+      evolutionCycles: [
+        {
+          trigger: "(",
+          pairs: [
+            { open: "(", close: ")" },
+            { open: "【", close: "】" },
+          ],
+        },
+      ],
+      textReplacements: [],
+    });
+
+    expect(profile.autoClosePairs[0]).toEqual({
+      trigger: "\"",
+      open: "“",
+      close: "”",
+    });
+    expect(profile.evolutionCycles?.[0]?.pairs).toEqual([
+      { open: "(", close: ")" },
+      { open: "【", close: "】" },
+    ]);
+  });
 });

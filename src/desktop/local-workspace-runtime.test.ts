@@ -168,6 +168,72 @@ function createOptions(rootDirectoryPath: string) {
   } as const;
 }
 
+function downgradeCharacterStorageToSchemaFiveFixture(
+  database: DatabaseSync,
+): void {
+  database.exec(`
+    PRAGMA foreign_keys = OFF;
+    PRAGMA legacy_alter_table = ON;
+    BEGIN IMMEDIATE;
+    DROP TABLE work_manuscript_layout_settings;
+    DROP TABLE assistant_scene_draft_candidates;
+    DROP TABLE scene_music_queue_candidates;
+    DROP TABLE scene_annotations;
+    DROP TABLE assistant_character_generation_candidates;
+    DROP TABLE assistant_scene_extraction_candidates;
+    DROP TABLE character_relations;
+    DROP TABLE assistant_character_extraction_candidates;
+    DROP TABLE character_evidence;
+    CREATE TABLE characters_v5 (
+      id TEXT PRIMARY KEY,
+      schema_version INTEGER NOT NULL,
+      revision INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      retired_at TEXT,
+      work_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      role TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      note TEXT NOT NULL,
+      UNIQUE (work_id, id),
+      FOREIGN KEY (work_id)
+        REFERENCES works (id)
+        ON DELETE RESTRICT
+    ) STRICT;
+    INSERT INTO characters_v5 (
+      id,
+      schema_version,
+      revision,
+      created_at,
+      updated_at,
+      retired_at,
+      work_id,
+      name,
+      role,
+      summary,
+      note
+    )
+    SELECT
+      id,
+      5,
+      revision,
+      created_at,
+      updated_at,
+      retired_at,
+      work_id,
+      name,
+      role,
+      summary,
+      note
+    FROM characters;
+    DROP TABLE characters;
+    ALTER TABLE characters_v5 RENAME TO characters;
+    COMMIT;
+    PRAGMA legacy_alter_table = OFF;
+  `);
+}
+
 describe("local workspace runtime", () => {
   it("prepares only the selected Work records period without changing the ledger", async () => {
     const rootDirectoryPath = await mkdtemp(
@@ -347,6 +413,87 @@ describe("local workspace runtime", () => {
           workId: first.workId,
         }),
       ).resolves.toEqual(saved);
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("persists one Work-owned manuscript layout across episodes and restart", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-work-manuscript-layout-"),
+    );
+    const options = createOptions(rootDirectoryPath);
+    let runtime = await openLocalWorkspaceRuntime(options);
+
+    try {
+      const first = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: randomUUID(),
+        firstDocumentTitle: "1화",
+      });
+      await runtime.createDocument({
+        schemaVersion: 1,
+        workId: first.workId,
+        title: "2화",
+      });
+      const other = await runtime.createWork({
+        schemaVersion: 1,
+        title: randomUUID(),
+        firstDocumentTitle: "1화",
+      });
+      const initial = await runtime.getWorkManuscriptLayoutSettings({
+        schemaVersion: 1,
+        workId: first.workId,
+      });
+      expect(initial).toEqual({
+        schemaVersion: 1,
+        workId: first.workId,
+        revision: 0,
+        settings: {
+          fontFamilyId: options.formattingProfile.defaults.fontFamilyId,
+          fontSizePx: options.formattingProfile.defaults.fontSizePx,
+          contentWidthPx: options.formattingProfile.defaults.contentWidthPx,
+          lineHeight: options.formattingProfile.defaults.lineHeight,
+          paragraphSpacingPx:
+            options.formattingProfile.defaults.paragraphSpacingPx,
+          letterSpacingEm: options.formattingProfile.defaults.letterSpacingEm,
+        },
+      });
+
+      const saved = await runtime.saveWorkManuscriptLayoutSettings({
+        schemaVersion: 1,
+        workId: first.workId,
+        expectedRevision: initial.revision,
+        settings: {
+          fontFamilyId: "pretendard",
+          fontSizePx: 20,
+          contentWidthPx: 620,
+          lineHeight: 1.75,
+          paragraphSpacingPx: 8,
+          letterSpacingEm: 0.02,
+        },
+      });
+      await expect(runtime.getWorkManuscriptLayoutSettings({
+        schemaVersion: 1,
+        workId: first.workId,
+      })).resolves.toEqual(saved);
+      await expect(runtime.getWorkManuscriptLayoutSettings({
+        schemaVersion: 1,
+        workId: other.workId,
+      })).resolves.toMatchObject({
+        revision: 0,
+        settings: {
+          contentWidthPx: options.formattingProfile.defaults.contentWidthPx,
+        },
+      });
+
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      await expect(runtime.getWorkManuscriptLayoutSettings({
+        schemaVersion: 1,
+        workId: first.workId,
+      })).resolves.toEqual(saved);
     } finally {
       runtime.close();
       await rm(rootDirectoryPath, { recursive: true, force: true });
@@ -2009,6 +2156,7 @@ describe("local workspace runtime", () => {
 
       const legacy = new DatabaseSync(profiles.databasePath);
       try {
+        downgradeCharacterStorageToSchemaFiveFixture(legacy);
         legacy.exec("PRAGMA foreign_keys = OFF");
         legacy.exec(`
           BEGIN IMMEDIATE;
@@ -2147,14 +2295,23 @@ describe("local workspace runtime", () => {
       const audit = new DatabaseSync(profiles.databasePath, { readOnly: true });
       try {
         expect(audit.prepare("PRAGMA user_version").get()).toEqual({
-          user_version: 5,
+          user_version: 13,
         });
         expect(
           audit.prepare(`
             SELECT target_schema_version AS "targetSchemaVersion"
             FROM storage_ledger_identity
           `).get(),
-        ).toEqual({ targetSchemaVersion: 5 });
+        ).toEqual({ targetSchemaVersion: 13 });
+        expect(audit.prepare(`
+          SELECT COUNT(*) AS count
+          FROM migration_receipts
+          WHERE migration_id IN (
+            'local-workspace-character-extraction-v5-to-v6',
+            'local-workspace-character-relation-v6-to-v7',
+            'local-workspace-scene-extraction-v7-to-v8'
+          )
+        `).get()).toEqual({ count: 3 });
         expect(
           audit.prepare(`
             SELECT name
@@ -2238,6 +2395,7 @@ describe("local workspace runtime", () => {
 
       const versionTwo = new DatabaseSync(profiles.databasePath);
       try {
+        downgradeCharacterStorageToSchemaFiveFixture(versionTwo);
         versionTwo.exec("PRAGMA foreign_keys = OFF");
         versionTwo.exec(`
           BEGIN IMMEDIATE;
@@ -2285,12 +2443,21 @@ describe("local workspace runtime", () => {
       const audit = new DatabaseSync(profiles.databasePath, { readOnly: true });
       try {
         expect(audit.prepare("PRAGMA user_version").get()).toEqual({
-          user_version: 5,
+          user_version: 13,
         });
         expect(audit.prepare(`
           SELECT target_schema_version AS "targetSchemaVersion"
           FROM storage_ledger_identity
-        `).get()).toEqual({ targetSchemaVersion: 5 });
+        `).get()).toEqual({ targetSchemaVersion: 13 });
+        expect(audit.prepare(`
+          SELECT COUNT(*) AS count
+          FROM migration_receipts
+          WHERE migration_id IN (
+            'local-workspace-character-extraction-v5-to-v6',
+            'local-workspace-character-relation-v6-to-v7',
+            'local-workspace-scene-extraction-v7-to-v8'
+          )
+        `).get()).toEqual({ count: 3 });
         expect(audit.prepare(`
           SELECT migration_id AS "migrationId"
           FROM migration_receipts
@@ -2738,6 +2905,1057 @@ describe("local workspace runtime", () => {
     }
   });
 
+  it("stores GPT character candidates, applies one approved item, and reopens its exact evidence", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-character-extraction-runtime-"),
+    );
+    const destinationId = `chatgpt-${randomUUID()}`;
+    const options = {
+      ...createOptions(rootDirectoryPath),
+      characterExtraction: {
+        destinationId,
+        isConnected: () => true,
+        execute: async (input: Parameters<
+          NonNullable<LocalWorkspaceRuntimeOptions["characterExtraction"]>["execute"]
+        >[0]) => ({
+          providerId: "provider-a",
+          modelId: "model-a",
+          promptVersion: "character-extraction-v1" as const,
+          payload: {
+            characters: [{
+              name: "윤서",
+              aliases: ["서린"],
+              role: "기록자",
+              summary: "문 앞의 상황을 기록한다.",
+              appearance: "",
+              personality: "",
+              speech: "",
+              goal: "",
+              conflict: "",
+              note: "",
+              evidences: [{
+                paragraphId: input.paragraphs[0]!.paragraphId,
+                quote: "윤서",
+              }],
+            }],
+          },
+        }),
+      },
+    } satisfies LocalWorkspaceRuntimeOptions;
+    let runtime = await openLocalWorkspaceRuntime(options);
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "캐릭터 추출 작품",
+        firstDocumentTitle: "1화",
+      });
+      const manuscript = "윤서는 문 앞에 서서 상황을 기록했다.";
+      const saved = await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: created.workId,
+        documentId: created.documentId,
+        baseRevisionId: created.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: manuscript.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: manuscript }],
+      }));
+      if (!("revisionId" in saved)) {
+        throw new Error("Expected a revision save receipt");
+      }
+      const conversationId = randomUUID();
+      await runtime.grantAssistantContextPermission({
+        schemaVersion: 1,
+        workId: created.workId,
+        conversationId,
+        capability: "character.extract",
+        destinationId,
+        localScope: "selection",
+        externalScope: "selection",
+        duration: "once",
+      });
+      const extraction = await runtime.runCharacterExtraction({
+        schemaVersion: 1,
+        requestId: randomUUID(),
+        workId: created.workId,
+        conversationId,
+        sourceRange: {
+          documentId: created.documentId,
+          documentRevisionId: saved.revisionId,
+          from: 0,
+          to: manuscript.length,
+        },
+      });
+      if (extraction.status !== "candidate") {
+        throw new Error("Expected a character extraction Candidate");
+      }
+      expect(extraction.candidate).toMatchObject({
+        status: "ready",
+        providerId: "provider-a",
+        modelId: "model-a",
+        items: [{
+          name: "윤서",
+          aliases: ["서린"],
+          status: "pending",
+          evidences: [{ from: 0, to: 2, exactText: "윤서" }],
+        }],
+      });
+      const item = extraction.candidate.items[0]!;
+      const applied = await runtime.decideCharacterExtractionItem({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: extraction.candidate.candidateId,
+        expectedCandidateRevision: extraction.candidate.revision,
+        itemId: item.itemId,
+        decision: { kind: "create" },
+      });
+      expect(applied).toMatchObject({
+        status: "applied",
+        candidate: { status: "completed", revision: 2 },
+        characters: [{
+          name: "윤서",
+          aliases: ["서린"],
+          evidences: [{
+            exactText: "윤서",
+            integrity: "resolved",
+            range: { from: 0, to: 2 },
+          }],
+        }],
+      });
+
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      expect((await runtime.listCharacterExtractionCandidates({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).candidates[0]).toMatchObject({
+        candidateId: extraction.candidate.candidateId,
+        status: "completed",
+      });
+      expect((await runtime.listCharacters({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).characters[0]).toMatchObject({
+        name: "윤서",
+        evidences: [{ integrity: "resolved", range: { from: 0, to: 2 } }],
+      });
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("stores a generated character setting only after explicit Candidate approval and reopens it", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-character-generation-runtime-"),
+    );
+    let receivedBrief: Parameters<
+      NonNullable<LocalWorkspaceRuntimeOptions["characterGeneration"]>["execute"]
+    >[0]["brief"] | null = null;
+    const options = {
+      ...createOptions(rootDirectoryPath),
+      characterGeneration: {
+        destinationId: `chatgpt-${randomUUID()}`,
+        isConnected: () => true,
+        execute: async (input: Parameters<
+          NonNullable<LocalWorkspaceRuntimeOptions["characterGeneration"]>["execute"]
+        >[0]) => {
+          receivedBrief = input.brief;
+          return {
+            providerId: "provider-a",
+            modelId: "model-a",
+            promptVersion: "character-generation-v1" as const,
+            payload: {
+              characters: [{
+                name: "도윤",
+                aliases: ["윤"],
+                role: "탐정",
+                summary: "사건을 추적한다.",
+                appearance: "",
+                personality: "집요함",
+                speech: "",
+                goal: "진상 규명",
+                conflict: "동료와의 불신",
+                note: "기록자와 협력하는 관계 초안",
+              }],
+            },
+          };
+        },
+      },
+    } satisfies LocalWorkspaceRuntimeOptions;
+    let runtime = await openLocalWorkspaceRuntime(options);
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "캐릭터 설정 생성 작품",
+        firstDocumentTitle: "1화",
+      });
+      const brief = {
+        role: "탐정",
+        personality: "집요함",
+        relationships: "기록자와 협력",
+        genre: "미스터리",
+      };
+      const generated = await runtime.runCharacterGeneration({
+        schemaVersion: 1,
+        requestId: randomUUID(),
+        workId: created.workId,
+        brief,
+      });
+      if (generated.status !== "candidate") {
+        throw new Error("Expected a character generation Candidate");
+      }
+      expect(receivedBrief).toEqual(brief);
+      expect(generated.candidate).toMatchObject({
+        workId: created.workId,
+        brief,
+        status: "ready",
+        items: [{
+          name: "도윤",
+          aliases: ["윤"],
+          role: "탐정",
+          status: "pending",
+          approvedCharacterId: null,
+        }],
+      });
+      expect((await runtime.listCharacters({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).characters).toEqual([]);
+
+      const item = generated.candidate.items[0]!;
+      const approved = await runtime.decideCharacterGenerationItem({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: generated.candidate.candidateId,
+        expectedCandidateRevision: generated.candidate.revision,
+        itemId: item.itemId,
+        decision: { kind: "create" },
+      });
+      expect(approved).toMatchObject({
+        status: "applied",
+        candidate: { status: "completed", revision: 2 },
+        characters: [{
+          name: "도윤",
+          role: "탐정",
+          personality: "집요함",
+          evidences: [],
+        }],
+      });
+
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      expect((await runtime.listCharacterGenerationCandidates({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).candidates[0]).toMatchObject({
+        candidateId: generated.candidate.candidateId,
+        status: "completed",
+        brief,
+      });
+      expect((await runtime.listCharacters({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).characters[0]).toMatchObject({
+        name: "도윤",
+        role: "탐정",
+        personality: "집요함",
+        evidences: [],
+      });
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("marks a character Candidate stale when the manuscript changes before the GPT response", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-character-extraction-stale-runtime-"),
+    );
+    const destinationId = `chatgpt-${randomUUID()}`;
+    let releaseExecution!: () => void;
+    let announceExecution!: () => void;
+    const executionStarted = new Promise<void>((resolve) => {
+      announceExecution = resolve;
+    });
+    const executionRelease = new Promise<void>((resolve) => {
+      releaseExecution = resolve;
+    });
+    const options = {
+      ...createOptions(rootDirectoryPath),
+      characterExtraction: {
+        destinationId,
+        isConnected: () => true,
+        execute: async (input: Parameters<
+          NonNullable<LocalWorkspaceRuntimeOptions["characterExtraction"]>["execute"]
+        >[0]) => {
+          announceExecution();
+          await executionRelease;
+          return {
+            providerId: "provider-a",
+            modelId: "model-a",
+            promptVersion: "character-extraction-v1" as const,
+            payload: {
+              characters: [{
+                name: "윤서",
+                aliases: [],
+                role: "",
+                summary: "",
+                appearance: "",
+                personality: "",
+                speech: "",
+                goal: "",
+                conflict: "",
+                note: "",
+                evidences: [{
+                  paragraphId: input.paragraphs[0]!.paragraphId,
+                  quote: "윤서",
+                }],
+              }],
+            },
+          };
+        },
+      },
+    } satisfies LocalWorkspaceRuntimeOptions;
+    const runtime = await openLocalWorkspaceRuntime(options);
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "stale 후보 작품",
+        firstDocumentTitle: "1화",
+      });
+      const manuscript = "윤서가 문을 열었다.";
+      const firstSave = await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: created.workId,
+        documentId: created.documentId,
+        baseRevisionId: created.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: manuscript.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: manuscript }],
+      }));
+      if (!("revisionId" in firstSave)) {
+        throw new Error("Expected a revision save receipt");
+      }
+      const conversationId = randomUUID();
+      await runtime.grantAssistantContextPermission({
+        schemaVersion: 1,
+        workId: created.workId,
+        conversationId,
+        capability: "character.extract",
+        destinationId,
+        localScope: "selection",
+        externalScope: "selection",
+        duration: "conversation",
+      });
+      const extractionPromise = runtime.runCharacterExtraction({
+        schemaVersion: 1,
+        requestId: randomUUID(),
+        workId: created.workId,
+        conversationId,
+        sourceRange: {
+          documentId: created.documentId,
+          documentRevisionId: firstSave.revisionId,
+          from: 0,
+          to: manuscript.length,
+        },
+      });
+      await executionStarted;
+      const changedText = `${manuscript} 추가`;
+      const secondSave = await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: created.workId,
+        documentId: created.documentId,
+        baseRevisionId: created.revisionId,
+        sequence: 1,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: manuscript.length,
+        afterTextLengthUtf16: changedText.length,
+        changes: [{
+          fromUtf16: manuscript.length,
+          toUtf16: manuscript.length,
+          insertedText: " 추가",
+        }],
+      }));
+      expect(secondSave).toHaveProperty("revisionId");
+      releaseExecution();
+      const extraction = await extractionPromise;
+      if (extraction.status !== "candidate") {
+        throw new Error("Expected a stale character Candidate");
+      }
+      expect(extraction.candidate.status).toBe("stale");
+      expect((await runtime.listCharacters({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).characters).toEqual([]);
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("stores GPT scene candidates and applies an approved paragraph boundary as a split override", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-scene-extraction-runtime-"),
+    );
+    const destinationId = `chatgpt-${randomUUID()}`;
+    const sceneMusicQueries: string[] = [];
+    const options = {
+      ...createOptions(rootDirectoryPath),
+      sceneExtraction: {
+        destinationId,
+        isConnected: () => true,
+        execute: async (input: Parameters<
+          NonNullable<LocalWorkspaceRuntimeOptions["sceneExtraction"]>["execute"]
+        >[0]) => ({
+          providerId: "provider-a",
+          modelId: "model-a",
+          promptVersion: "scene-extraction-v1" as const,
+          payload: {
+            scenes: [
+              {
+                title: "닫힌 방",
+                fromParagraphId: input.paragraphs[0]!.paragraphId,
+                toParagraphId: input.paragraphs[1]!.paragraphId,
+                summary: "윤서가 방 안에 갇힌다.",
+                povCharacter: "윤서",
+                location: "방",
+                time: "",
+                characters: ["윤서"],
+                goal: "문을 연다.",
+                conflict: "문이 잠겼다.",
+                outcome: "",
+              },
+              {
+                title: "바깥 경보",
+                fromParagraphId: input.paragraphs[2]!.paragraphId,
+                toParagraphId: input.paragraphs[2]!.paragraphId,
+                summary: "밖에서 경보가 울린다.",
+                povCharacter: "",
+                location: "밖",
+                time: "",
+                characters: [],
+                goal: "",
+                conflict: "",
+                outcome: "",
+              },
+            ],
+          },
+        }),
+      },
+      sceneMusicSearch: {
+        providerId: "youtube",
+        searchLimit: 4,
+        tracksPerOption: 2,
+        isConnected: () => true,
+        execute: async ({ query }: { readonly query: string }) => {
+          sceneMusicQueries.push(query);
+          return Object.freeze(Array.from({ length: 4 }, (_value, index) =>
+            Object.freeze({
+              providerId: "youtube",
+              videoId: `video${index + 1}`,
+              title: `장면 음악 ${index + 1}`,
+              channel: "작곡가",
+              thumbnailUrl: null,
+              externalUrl: `https://www.youtube.com/watch?v=video${index + 1}`,
+            })
+          ));
+        },
+      },
+    } satisfies LocalWorkspaceRuntimeOptions;
+    let runtime = await openLocalWorkspaceRuntime(options);
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "장면 추출 작품",
+        firstDocumentTitle: "1화",
+      });
+      const character = await runtime.createCharacter({
+        schemaVersion: 1,
+        workId: created.workId,
+        name: "윤서",
+        aliases: [],
+        role: "",
+        summary: "",
+        appearance: "",
+        personality: "",
+        speech: "",
+        goal: "",
+        conflict: "",
+        note: "",
+      });
+      const manuscript = "윤서는 방에 섰다.\n문이 닫혔다.\n밖에서 경보가 울렸다.";
+      const saved = await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: created.workId,
+        documentId: created.documentId,
+        baseRevisionId: created.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: manuscript.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: manuscript }],
+      }));
+      if (!("revisionId" in saved)) throw new Error("Expected a revision save receipt");
+      const conversationId = randomUUID();
+      await runtime.grantAssistantContextPermission({
+        schemaVersion: 1,
+        workId: created.workId,
+        conversationId,
+        capability: "scene.extract",
+        destinationId,
+        localScope: "selection",
+        externalScope: "selection",
+        duration: "once",
+      });
+      const extraction = await runtime.runSceneExtraction({
+        schemaVersion: 1,
+        requestId: randomUUID(),
+        workId: created.workId,
+        conversationId,
+        sourceRange: {
+          documentId: created.documentId,
+          documentRevisionId: saved.revisionId,
+          from: 0,
+          to: manuscript.length,
+        },
+      });
+      if (extraction.status !== "candidate") {
+        throw new Error("Expected a scene extraction Candidate");
+      }
+      const expectedBoundary = manuscript.indexOf("밖에서");
+      expect(extraction.candidate).toMatchObject({
+        status: "ready",
+        scenes: [
+          {
+            title: "닫힌 방",
+            povCharacterId: character.characterId,
+            characterIds: [character.characterId],
+            range: { from: 0, to: expectedBoundary - 1 },
+            annotationStatus: "pending",
+          },
+          {
+            title: "바깥 경보",
+            range: { from: expectedBoundary, to: manuscript.length },
+            annotationStatus: "pending",
+          },
+        ],
+        boundaries: [{ offset: expectedBoundary, status: "pending" }],
+      });
+      const boundary = extraction.candidate.boundaries[0]!;
+      const applied = await runtime.decideSceneExtractionBoundary({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: extraction.candidate.candidateId,
+        expectedCandidateRevision: extraction.candidate.revision,
+        boundaryId: boundary.boundaryId,
+        decision: "accept",
+      });
+      expect(applied).toMatchObject({
+        status: "applied",
+        candidate: {
+          status: "ready",
+          revision: 2,
+          boundaries: [{ status: "accepted" }],
+        },
+        sceneProjection: {
+          status: "clean",
+          scenes: [
+            { range: { start: 0, end: expectedBoundary } },
+            { range: { start: expectedBoundary, end: manuscript.length } },
+          ],
+        },
+      });
+      if (applied.status !== "applied") {
+        throw new Error("Expected an applied scene boundary");
+      }
+      const firstScene = applied.candidate.scenes[0]!;
+      const secondScene = applied.candidate.scenes[1]!;
+      const firstProjection = applied.sceneProjection.scenes[0]!;
+      const secondProjection = applied.sceneProjection.scenes[1]!;
+      const firstAnnotation = await runtime.decideSceneExtractionAnnotation({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: applied.candidate.candidateId,
+        expectedCandidateRevision: applied.candidate.revision,
+        sceneItemId: firstScene.sceneItemId,
+        decision: {
+          kind: "accept",
+          sceneKey: firstProjection.sceneKey,
+          expectedAnnotationRevision: null,
+        },
+      });
+      if (firstAnnotation.status !== "applied") {
+        throw new Error("Expected an applied first scene annotation");
+      }
+      expect(firstAnnotation).toMatchObject({
+        candidate: {
+          status: "ready",
+          revision: 3,
+          scenes: [
+            { annotationStatus: "approved" },
+            { annotationStatus: "pending" },
+          ],
+        },
+        annotations: {
+          annotations: [{
+            sceneKey: firstProjection.sceneKey,
+            title: "닫힌 방",
+            summary: "윤서가 방 안에 갇힌다.",
+            povCharacterId: character.characterId,
+            characterIds: [character.characterId],
+          }],
+        },
+      });
+      const secondAnnotation = await runtime.decideSceneExtractionAnnotation({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: firstAnnotation.candidate.candidateId,
+        expectedCandidateRevision: firstAnnotation.candidate.revision,
+        sceneItemId: secondScene.sceneItemId,
+        decision: {
+          kind: "accept",
+          sceneKey: secondProjection.sceneKey,
+          expectedAnnotationRevision: null,
+        },
+      });
+      expect(secondAnnotation).toMatchObject({
+        status: "applied",
+        candidate: {
+          status: "completed",
+          revision: 4,
+          scenes: [
+            { annotationStatus: "approved" },
+            { annotationStatus: "approved" },
+          ],
+        },
+        annotations: { annotations: expect.arrayContaining([
+          expect.objectContaining({ title: "닫힌 방" }),
+          expect.objectContaining({ title: "바깥 경보" }),
+        ]) },
+      });
+      const approvedFirstAnnotation =
+        secondAnnotation.status === "applied"
+          ? secondAnnotation.annotations.annotations.find(
+              (annotation) => annotation.sceneKey === firstProjection.sceneKey,
+            )
+          : undefined;
+      if (approvedFirstAnnotation === undefined) {
+        throw new Error("Expected an approved first scene annotation");
+      }
+      const musicSearch = await runtime.searchSceneMusicQueues({
+        schemaVersion: 1,
+        requestId: randomUUID(),
+        workId: created.workId,
+        sceneKey: firstProjection.sceneKey,
+        expectedAnnotationRevision: approvedFirstAnnotation.revision,
+        query: "닫힌 방 밤 긴장",
+      });
+      if (musicSearch.status !== "candidate") {
+        throw new Error("Expected a scene music queue Candidate");
+      }
+      expect(sceneMusicQueries).toEqual(["닫힌 방 밤 긴장"]);
+      expect(musicSearch.candidate).toMatchObject({
+        status: "ready",
+        integrity: "current",
+        sceneAnnotationId: approvedFirstAnnotation.sceneAnnotationId,
+        sceneAnnotationRevision: approvedFirstAnnotation.revision,
+      });
+      expect(musicSearch.candidate.options.map((option) =>
+        option.tracks.map((track) => track.videoId)
+      )).toEqual([
+        ["video1", "video2"],
+        ["video3", "video4"],
+      ]);
+      const selectedMusicQueue = await runtime.selectSceneMusicQueue({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: musicSearch.candidate.candidateId,
+        expectedCandidateRevision: musicSearch.candidate.revision,
+        optionId: musicSearch.candidate.options[1]!.optionId,
+      });
+      expect(selectedMusicQueue).toMatchObject({
+        revision: 2,
+        status: "selected",
+        integrity: "current",
+        selectedOptionId: musicSearch.candidate.options[1]!.optionId,
+      });
+
+      await runtime.grantAssistantContextPermission({
+        schemaVersion: 1,
+        workId: created.workId,
+        conversationId,
+        capability: "scene.extract",
+        destinationId,
+        localScope: "selection",
+        externalScope: "selection",
+        duration: "once",
+      });
+      const staleExtraction = await runtime.runSceneExtraction({
+        schemaVersion: 1,
+        requestId: randomUUID(),
+        workId: created.workId,
+        conversationId,
+        sourceRange: {
+          documentId: created.documentId,
+          documentRevisionId: saved.revisionId,
+          from: 0,
+          to: manuscript.length,
+        },
+      });
+      if (staleExtraction.status !== "candidate") {
+        throw new Error("Expected a second scene extraction Candidate");
+      }
+      const changedText = `${manuscript} 추가`;
+      await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: created.workId,
+        documentId: created.documentId,
+        baseRevisionId: created.revisionId,
+        sequence: 1,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: manuscript.length,
+        afterTextLengthUtf16: changedText.length,
+        changes: [{
+          fromUtf16: manuscript.length,
+          toUtf16: manuscript.length,
+          insertedText: " 추가",
+        }],
+      }));
+      await expect(runtime.decideSceneExtractionBoundary({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: staleExtraction.candidate.candidateId,
+        expectedCandidateRevision: staleExtraction.candidate.revision,
+        boundaryId: staleExtraction.candidate.boundaries[0]!.boundaryId,
+        decision: "accept",
+      })).resolves.toMatchObject({
+        status: "stale",
+        candidate: { status: "stale", revision: 2 },
+      });
+      expect((await runtime.listSceneOverrides({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).sceneOverrides).toHaveLength(1);
+      const staleMusicQueues = await runtime.listSceneMusicQueueCandidates({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(staleMusicQueues.candidates).toEqual([
+        expect.objectContaining({
+          candidateId: musicSearch.candidate.candidateId,
+          status: "selected",
+          integrity: "stale",
+        }),
+      ]);
+      await expect(runtime.selectSceneMusicQueue({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: musicSearch.candidate.candidateId,
+        expectedCandidateRevision: selectedMusicQueue.revision,
+        optionId: musicSearch.candidate.options[0]!.optionId,
+      })).rejects.toThrow("Stale scene music queue Candidate");
+
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      const reopenedCandidates = (await runtime.listSceneExtractionCandidates({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).candidates;
+      expect(reopenedCandidates.find(
+        (candidate) => candidate.candidateId === extraction.candidate.candidateId,
+      )).toMatchObject({
+        candidateId: extraction.candidate.candidateId,
+        status: "completed",
+        boundaries: [{ status: "accepted" }],
+        scenes: [
+          { annotationStatus: "approved" },
+          { annotationStatus: "approved" },
+        ],
+      });
+      expect(reopenedCandidates.find(
+        (candidate) => candidate.candidateId === staleExtraction.candidate.candidateId,
+      )).toMatchObject({ status: "stale" });
+      expect((await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).scenes).toHaveLength(2);
+      expect((await runtime.listSceneAnnotations({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).annotations).toEqual(expect.arrayContaining([
+        expect.objectContaining({ title: "닫힌 방" }),
+        expect.objectContaining({ title: "바깥 경보" }),
+      ]));
+      expect((await runtime.listSceneMusicQueueCandidates({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).candidates).toEqual([
+        expect.objectContaining({
+          candidateId: musicSearch.candidate.candidateId,
+          status: "selected",
+          integrity: "stale",
+          selectedOptionId: musicSearch.candidate.options[1]!.optionId,
+        }),
+      ]);
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("stores an editable plot-based scene draft and records only an exact revision insertion", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-scene-draft-runtime-"),
+    );
+    const capturedContexts: unknown[] = [];
+    const options = {
+      ...createOptions(rootDirectoryPath),
+      sceneDraft: {
+        destinationId: "chatgpt-scene-draft",
+        isConnected: () => true,
+        execute: async ({ context }: { readonly context: unknown }) => {
+          capturedContexts.push(context);
+          return {
+            providerId: "provider-a",
+            modelId: "model-a",
+            promptVersion: "scene-draft-v1" as const,
+            payload: { draftText: "\n윤서는 잠긴 문을 밀었다.\n" },
+          };
+        },
+      },
+    } satisfies LocalWorkspaceRuntimeOptions;
+    let runtime = await openLocalWorkspaceRuntime(options);
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "장면 초안 작품",
+        firstDocumentTitle: "1화",
+      });
+      const plot = await runtime.createPlotThread({
+        schemaVersion: 1,
+        workId: created.workId,
+        title: "닫힌 문",
+        stage: "전환",
+        summary: "문을 열어야 한다.",
+        note: "긴장을 유지한다.",
+      });
+      const event = await runtime.createAnchorlessEvent({
+        schemaVersion: 1,
+        workId: created.workId,
+        title: "문이 잠김",
+        note: "경보가 울린다.",
+      });
+      await runtime.linkPlotEvent({
+        schemaVersion: 1,
+        workId: created.workId,
+        plotBeatId: plot.plotThreadId,
+        eventBlockId: event.eventBlockId,
+        role: "primary",
+      });
+      const character = await runtime.createCharacter({
+        schemaVersion: 1,
+        workId: created.workId,
+        name: "윤서",
+        aliases: [],
+        role: "기록자",
+        summary: "상황을 기록한다.",
+        appearance: "",
+        personality: "침착함",
+        speech: "",
+        goal: "문을 연다.",
+        conflict: "문이 잠겼다.",
+        note: "",
+      });
+      const setting = await runtime.createLoreEntry({
+        schemaVersion: 1,
+        workId: created.workId,
+        title: "경보 장치",
+        content: "붉은 빛과 함께 울린다.",
+        category: "장소",
+        aliases: [],
+        enabled: true,
+        evidence: null,
+      });
+      const originalText = "앞 장면.\n뒤 장면.";
+      const firstSave = await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: created.workId,
+        documentId: created.documentId,
+        baseRevisionId: created.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: originalText.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: originalText }],
+      }));
+      if (!("revisionId" in firstSave)) throw new Error("Expected first revision");
+      const insertionOffset = originalText.indexOf("뒤");
+      const generated = await runtime.runSceneDraft({
+        schemaVersion: 1,
+        requestId: randomUUID(),
+        workId: created.workId,
+        plotThreadId: plot.plotThreadId,
+        expectedPlotRevision: plot.revision,
+        target: {
+          documentId: created.documentId,
+          documentRevisionId: firstSave.revisionId,
+          insertionOffset,
+        },
+        characterIds: [character.characterId],
+        settingIds: [setting.loreEntryId],
+      });
+      if (generated.status !== "candidate") {
+        throw new Error("Expected a scene draft Candidate");
+      }
+      expect(capturedContexts).toEqual([expect.objectContaining({
+        plot: expect.objectContaining({ title: "닫힌 문", revision: plot.revision }),
+        events: [expect.objectContaining({ title: "문이 잠김", role: "primary" })],
+        characters: [expect.objectContaining({ name: "윤서" })],
+        settings: [expect.objectContaining({ title: "경보 장치" })],
+      })]);
+      expect(generated.candidate).toMatchObject({
+        status: "ready",
+        integrity: "current",
+        target: { documentRevisionId: firstSave.revisionId, insertionOffset },
+      });
+      const editedText = "\n윤서는 잠긴 문에 손을 얹었다.\n";
+      const edited = await runtime.updateSceneDraftCandidate({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: generated.candidate.candidateId,
+        expectedCandidateRevision: generated.candidate.revision,
+        draftText: editedText,
+      });
+      expect(edited).toMatchObject({
+        revision: 2,
+        draftText: editedText,
+        integrity: "current",
+      });
+      await expect(runtime.prepareSceneDraftInsertion({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: edited.candidateId,
+        expectedCandidateRevision: edited.revision,
+      })).resolves.toMatchObject({
+        status: "authorized",
+        baseDocumentLength: originalText.length,
+      });
+      const resultText =
+        originalText.slice(0, insertionOffset) + editedText +
+        originalText.slice(insertionOffset);
+      const insertionSave = await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: created.workId,
+        documentId: created.documentId,
+        baseRevisionId: created.revisionId,
+        sequence: 1,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: originalText.length,
+        afterTextLengthUtf16: resultText.length,
+        changes: [{
+          fromUtf16: insertionOffset,
+          toUtf16: insertionOffset,
+          insertedText: editedText,
+        }],
+      }));
+      if (!("revisionId" in insertionSave)) {
+        throw new Error("Expected insertion revision");
+      }
+      await expect(runtime.prepareSceneDraftInsertion({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: edited.candidateId,
+        expectedCandidateRevision: edited.revision,
+      })).resolves.toMatchObject({
+        status: "already-inserted",
+        resultDocumentRevisionId: insertionSave.revisionId,
+      });
+      const completed = await runtime.completeSceneDraftInsertion({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: edited.candidateId,
+        expectedCandidateRevision: edited.revision,
+        resultDocumentRevisionId: insertionSave.revisionId,
+      });
+      expect(completed).toMatchObject({
+        revision: 3,
+        status: "applied",
+        integrity: "current",
+        appliedDocumentRevisionId: insertionSave.revisionId,
+      });
+
+      const second = await runtime.runSceneDraft({
+        schemaVersion: 1,
+        requestId: randomUUID(),
+        workId: created.workId,
+        plotThreadId: plot.plotThreadId,
+        expectedPlotRevision: plot.revision,
+        target: {
+          documentId: created.documentId,
+          documentRevisionId: insertionSave.revisionId,
+          insertionOffset: resultText.length,
+        },
+        characterIds: [],
+        settingIds: [],
+      });
+      if (second.status !== "candidate") throw new Error("Expected second draft");
+      await runtime.updatePlotThread({
+        schemaVersion: 1,
+        workId: created.workId,
+        plotThreadId: plot.plotThreadId,
+        expectedRevision: plot.revision,
+        changes: { summary: "문이 열린다." },
+      });
+      await expect(runtime.prepareSceneDraftInsertion({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: second.candidate.candidateId,
+        expectedCandidateRevision: second.candidate.revision,
+      })).resolves.toMatchObject({ status: "stale", candidate: { integrity: "stale" } });
+
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      expect(runtime.getManuscriptDocumentProfile().documents.find(
+        (document) => document.documentId === created.documentId,
+      )?.initialText).toBe(resultText);
+      expect((await runtime.listSceneDraftCandidates({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).candidates).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          candidateId: completed.candidateId,
+          status: "applied",
+          appliedDocumentRevisionId: insertionSave.revisionId,
+        }),
+        expect.objectContaining({
+          candidateId: second.candidate.candidateId,
+          integrity: "stale",
+        }),
+      ]));
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
   it("persists Work-owned characters and soft-retires them across restart", async () => {
     const rootDirectoryPath = await mkdtemp(
       path.join(tmpdir(), "eum-studio-character-runtime-"),
@@ -2760,8 +3978,14 @@ describe("local workspace runtime", () => {
         schemaVersion: 1,
         workId: first.workId,
         name: "윤서",
+        aliases: [],
         role: "",
         summary: "사건을 관찰한다.",
+        appearance: "",
+        personality: "",
+        speech: "",
+        goal: "",
+        conflict: "",
         note: "말투 확인",
       });
 
@@ -2797,8 +4021,14 @@ describe("local workspace runtime", () => {
         expectedRevision: 1,
         changes: {
           name: "윤서린",
+          aliases: ["윤서"],
           role: "기록자",
           summary: "사건의 증언자다.",
+          appearance: "",
+          personality: "",
+          speech: "",
+          goal: "",
+          conflict: "",
           note: "2화 말투 확인",
         },
       });
@@ -2857,6 +4087,150 @@ describe("local workspace runtime", () => {
       } finally {
         database.close();
       }
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("persists independent character relations and retires references with their character", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-character-relation-runtime-"),
+    );
+    const options = createOptions(rootDirectoryPath);
+    let runtime = await openLocalWorkspaceRuntime(options);
+    const createCharacterInput = (workId: string, name: string) => ({
+      schemaVersion: 1 as const,
+      workId,
+      name,
+      aliases: [],
+      role: "",
+      summary: "",
+      appearance: "",
+      personality: "",
+      speech: "",
+      goal: "",
+      conflict: "",
+      note: "",
+    });
+
+    try {
+      const first = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: randomUUID(),
+        firstDocumentTitle: randomUUID(),
+      });
+      const second = await runtime.createWork({
+        schemaVersion: 1,
+        title: randomUUID(),
+        firstDocumentTitle: randomUUID(),
+      });
+      const fromCharacter = await runtime.createCharacter(
+        createCharacterInput(first.workId, "윤서"),
+      );
+      const toCharacter = await runtime.createCharacter(
+        createCharacterInput(first.workId, "재헌"),
+      );
+      const outsideCharacter = await runtime.createCharacter(
+        createCharacterInput(second.workId, "해린"),
+      );
+
+      await expect(runtime.createCharacterRelation({
+        schemaVersion: 1,
+        workId: first.workId,
+        fromCharacterId: fromCharacter.characterId,
+        toCharacterId: outsideCharacter.characterId,
+        kind: "다른 작품",
+        description: "",
+      })).rejects.toThrow("Work/character relation boundary violation");
+
+      const relation = await runtime.createCharacterRelation({
+        schemaVersion: 1,
+        workId: first.workId,
+        fromCharacterId: fromCharacter.characterId,
+        toCharacterId: toCharacter.characterId,
+        kind: "동료",
+        description: "서로의 판단을 신뢰한다.",
+      });
+      expect(relation).toMatchObject({
+        revision: 1,
+        workId: first.workId,
+        fromCharacterId: fromCharacter.characterId,
+        toCharacterId: toCharacter.characterId,
+        kind: "동료",
+        retiredAt: null,
+      });
+      const updated = await runtime.updateCharacterRelation({
+        schemaVersion: 1,
+        workId: first.workId,
+        relationId: relation.relationId,
+        expectedRevision: 1,
+        changes: {
+          kind: "경쟁하는 동료",
+          description: "목표는 같지만 방법이 다르다.",
+        },
+      });
+      expect(updated).toMatchObject({
+        revision: 2,
+        kind: "경쟁하는 동료",
+        description: "목표는 같지만 방법이 다르다.",
+      });
+      await expect(runtime.listCharacterRelations({
+        schemaVersion: 1,
+        workId: second.workId,
+      })).resolves.toMatchObject({ relations: [] });
+
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      expect((await runtime.listCharacterRelations({
+        schemaVersion: 1,
+        workId: first.workId,
+      })).relations).toEqual([updated]);
+      const manuallyRetired = await runtime.retireCharacterRelation({
+        schemaVersion: 1,
+        workId: first.workId,
+        relationId: updated.relationId,
+        expectedRevision: 2,
+      });
+      expect(manuallyRetired).toMatchObject({
+        revision: 3,
+        retirementReason: "user",
+      });
+      const replacement = await runtime.createCharacterRelation({
+        schemaVersion: 1,
+        workId: first.workId,
+        fromCharacterId: fromCharacter.characterId,
+        toCharacterId: toCharacter.characterId,
+        kind: "옛 동료",
+        description: "",
+      });
+      await runtime.retireCharacter({
+        schemaVersion: 1,
+        workId: first.workId,
+        characterId: toCharacter.characterId,
+        expectedRevision: toCharacter.revision,
+      });
+      const relationHistory = (await runtime.listCharacterRelations({
+        schemaVersion: 1,
+        workId: first.workId,
+      })).relations;
+      expect(relationHistory.find(
+        (entry) => entry.relationId === replacement.relationId,
+      )).toMatchObject({
+        revision: 2,
+        retirementReason: "character-retired",
+      });
+
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      expect((await runtime.listCharacterRelations({
+        schemaVersion: 1,
+        workId: first.workId,
+      })).relations).toHaveLength(2);
+      expect((await runtime.listCharacters({
+        schemaVersion: 1,
+        workId: first.workId,
+      })).characters.map((character) => character.name)).toEqual(["윤서"]);
     } finally {
       runtime.close();
       await rm(rootDirectoryPath, { recursive: true, force: true });
@@ -6643,6 +8017,7 @@ describe("local workspace runtime", () => {
 
       const versionFour = new DatabaseSync(profiles.databasePath);
       try {
+        downgradeCharacterStorageToSchemaFiveFixture(versionFour);
         versionFour.exec("PRAGMA foreign_keys = OFF");
         versionFour.exec(`
           BEGIN IMMEDIATE;
@@ -6688,12 +8063,21 @@ describe("local workspace runtime", () => {
       const audit = new DatabaseSync(profiles.databasePath, { readOnly: true });
       try {
         expect(audit.prepare("PRAGMA user_version").get()).toEqual({
-          user_version: 5,
+          user_version: 13,
         });
         expect(audit.prepare(`
           SELECT target_schema_version AS "targetSchemaVersion"
           FROM storage_ledger_identity
-        `).get()).toEqual({ targetSchemaVersion: 5 });
+        `).get()).toEqual({ targetSchemaVersion: 13 });
+        expect(audit.prepare(`
+          SELECT COUNT(*) AS count
+          FROM migration_receipts
+          WHERE migration_id IN (
+            'local-workspace-character-extraction-v5-to-v6',
+            'local-workspace-character-relation-v6-to-v7',
+            'local-workspace-scene-extraction-v7-to-v8'
+          )
+        `).get()).toEqual({ count: 3 });
         expect(audit.prepare(`
           SELECT migration_id AS "migrationId"
           FROM migration_receipts
@@ -6888,6 +8272,17 @@ describe("local workspace runtime", () => {
       const firstCycleId = started.activePhase?.focusCycleId;
       if (firstCycleId === undefined) throw new Error("Expected first Pomodoro phase");
 
+      const noted = await runtime.updatePomodoroNote({
+        schemaVersion: 1,
+        workId: created.workId,
+        focusCycleId: firstCycleId,
+        note: "작업 중에 남긴 세션 메모",
+      });
+      expect(noted.activePhase).toMatchObject({
+        focusCycleId: firstCycleId,
+        note: "작업 중에 남긴 세션 메모",
+      });
+
       const paused = await runtime.pausePomodoro({
         schemaVersion: 1,
         workId: created.workId,
@@ -6911,7 +8306,10 @@ describe("local workspace runtime", () => {
       });
       expect(reopenedManualPause).toMatchObject({
         status: "paused",
-        activePhase: { pauseReason: "manual" },
+        activePhase: {
+          pauseReason: "manual",
+          note: "작업 중에 남긴 세션 메모",
+        },
       });
 
       const resumedWork = await runtime.resumePomodoro({
@@ -8172,8 +9570,14 @@ describe("local workspace runtime", () => {
         schemaVersion: 1,
         workId: created.workId,
         name: "해린",
+        aliases: [],
         role: "항해사",
         summary: "북쪽 항구 출신",
+        appearance: "",
+        personality: "",
+        speech: "",
+        goal: "",
+        conflict: "",
         note: "",
       });
       const sourceRange = {
@@ -8433,16 +9837,28 @@ describe("local workspace runtime", () => {
         schemaVersion: 1,
         workId: created.workId,
         name: "해린",
+        aliases: [],
         role: "주인공",
         summary: "같은 요약",
+        appearance: "",
+        personality: "",
+        speech: "",
+        goal: "",
+        conflict: "",
         note: "",
       });
       const secondCharacter = await runtime.createCharacter({
         schemaVersion: 1,
         workId: created.workId,
         name: "해린",
+        aliases: [],
         role: "조연",
         summary: "같은 요약",
+        appearance: "",
+        personality: "",
+        speech: "",
+        goal: "",
+        conflict: "",
         note: "",
       });
       await runtime.createPlotThread({
@@ -8705,6 +10121,14 @@ describe("local workspace runtime", () => {
         schemaVersion: 1,
         workId: first.workId,
       });
+      const playlistVideo = {
+        providerId: "youtube",
+        videoId: "playlist-video-a",
+        title: "저장할 재생목록 곡",
+        channel: "작곡가",
+        thumbnailUrl: null,
+        externalUrl: "https://www.youtube.com/watch?v=playlist-video-a",
+      };
       const saved = await runtime.saveWorkMusicSettings({
         schemaVersion: 1,
         workId: first.workId,
@@ -8712,6 +10136,7 @@ describe("local workspace runtime", () => {
         settings: {
           ...initial.settings,
           autoOnEpisodeTransition: true,
+          playlistVideos: [playlistVideo],
           transitionPlaybackMode: "ask",
         },
       });
@@ -8721,6 +10146,7 @@ describe("local workspace runtime", () => {
         revision: 1,
         settings: {
           autoOnEpisodeTransition: true,
+          playlistVideos: [playlistVideo],
           transitionPlaybackMode: "ask",
         },
       });
@@ -8736,6 +10162,66 @@ describe("local workspace runtime", () => {
       runtime.close();
       runtime = await openLocalWorkspaceRuntime(options);
       await expect(runtime.getWorkMusicSettings({
+        schemaVersion: 1,
+        workId: first.workId,
+      })).resolves.toEqual(saved);
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("persists inspiration keywords only for the selected Work", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-inspiration-settings-runtime-"),
+    );
+    const options = createOptions(rootDirectoryPath);
+    let runtime = await openLocalWorkspaceRuntime(options);
+    try {
+      const first = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: randomUUID(),
+        firstDocumentTitle: randomUUID(),
+      });
+      const second = await runtime.createWork({
+        schemaVersion: 1,
+        title: randomUUID(),
+        firstDocumentTitle: randomUUID(),
+      });
+      const initial = await runtime.getWorkInspirationSettings({
+        schemaVersion: 1,
+        workId: first.workId,
+      });
+      const saved = await runtime.saveWorkInspirationSettings({
+        schemaVersion: 1,
+        workId: first.workId,
+        expectedRevision: initial.revision,
+        settings: {
+          characterKeywords: ["낡은 열쇠"],
+          eventKeywords: ["예고 없는 귀환"],
+        },
+      });
+
+      expect(saved).toMatchObject({
+        workId: first.workId,
+        revision: 1,
+        settings: {
+          characterKeywords: ["낡은 열쇠"],
+          eventKeywords: ["예고 없는 귀환"],
+        },
+      });
+      await expect(runtime.getWorkInspirationSettings({
+        schemaVersion: 1,
+        workId: second.workId,
+      })).resolves.toMatchObject({
+        workId: second.workId,
+        revision: 0,
+        settings: { characterKeywords: [], eventKeywords: [] },
+      });
+
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      await expect(runtime.getWorkInspirationSettings({
         schemaVersion: 1,
         workId: first.workId,
       })).resolves.toEqual(saved);

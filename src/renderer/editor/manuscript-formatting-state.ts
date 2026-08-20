@@ -442,6 +442,28 @@ function applyValueStyle(
   };
 }
 
+function applyBaseFontStyle(
+  documentState: ManuscriptEditorDocumentState,
+  storedStyle: ManuscriptTextStyle,
+  key: "fontFamilyId" | "fontSizePx",
+  value: string | number,
+): Pick<FormattingStateValue, "documentState" | "storedStyle"> {
+  const ranges = normalizeRanges(
+    documentState.ranges.map((range) => ({
+      ...range,
+      style: removeStyleKey(range.style, key),
+    })),
+  );
+  return {
+    documentState: Object.freeze(
+      key === "fontFamilyId"
+        ? { ...documentState, ranges, fontFamilyId: String(value) }
+        : { ...documentState, ranges, fontSizePx: Number(value) },
+    ),
+    storedStyle: freezeStyle(removeStyleKey(storedStyle, key)),
+  };
+}
+
 function addInsertedStyles(
   ranges: readonly ManuscriptFormattingRange[],
   transaction: Transaction,
@@ -544,6 +566,8 @@ function createValue(
   const frozenState = Object.freeze({
     schemaVersion: 1 as const,
     ranges: normalizeRanges(documentState.ranges),
+    fontFamilyId: documentState.fontFamilyId,
+    fontSizePx: documentState.fontSizePx,
     contentWidthPx: documentState.contentWidthPx,
     lineHeight: documentState.lineHeight,
     paragraphSpacingPx: documentState.paragraphSpacingPx,
@@ -603,18 +627,18 @@ const manuscriptFormattingField = StateField.define<FormattingStateValue>({
         documentState = applied.documentState;
         storedStyle = applied.storedStyle;
       } else if (effect.is(setManuscriptFontFamilyEffect)) {
-        const applied = applyValueStyle(
-          { ...value, documentState, storedStyle },
-          transaction.startState.selection,
+        const applied = applyBaseFontStyle(
+          documentState,
+          storedStyle,
           "fontFamilyId",
           effect.value,
         );
         documentState = applied.documentState;
         storedStyle = applied.storedStyle;
       } else if (effect.is(setManuscriptFontSizeEffect)) {
-        const applied = applyValueStyle(
-          { ...value, documentState, storedStyle },
-          transaction.startState.selection,
+        const applied = applyBaseFontStyle(
+          documentState,
+          storedStyle,
           "fontSizePx",
           effect.value,
         );
@@ -714,12 +738,6 @@ export function createManuscriptFormattingExtension(
   profile: ManuscriptFormattingProfile,
   initialState: ManuscriptEditorDocumentState,
 ): Extension {
-  const defaultFont = profile.fontFamilies.find(
-    (font) => font.id === profile.defaults.fontFamilyId,
-  );
-  if (defaultFont === undefined) {
-    throw new Error("The default manuscript font is not registered");
-  }
   const formattingKeymap = keymap.of([
     {
       key: "Mod-b",
@@ -753,10 +771,16 @@ export function createManuscriptFormattingExtension(
       [manuscriptFormattingField],
       (state) => {
         const value = state.field(manuscriptFormattingField);
+        const font = profile.fontFamilies.find(
+          (candidate) => candidate.id === value.documentState.fontFamilyId,
+        );
+        if (font === undefined) {
+          throw new Error("The manuscript font is not registered");
+        }
         return {
           style: [
-            `font-family: ${defaultFont.cssFamily}`,
-            `font-size: ${profile.defaults.fontSizePx}px`,
+            `font-family: ${font.cssFamily}`,
+            `font-size: ${value.documentState.fontSizePx}px`,
             `width: min(100%, ${value.documentState.contentWidthPx}px)`,
             `max-width: min(100%, ${value.documentState.contentWidthPx}px)`,
             `line-height: ${value.documentState.lineHeight}`,
@@ -865,8 +889,8 @@ export function readActiveManuscriptFormatting(
     bold: readBoolean("bold"),
     italic: readBoolean("italic"),
     underline: readBoolean("underline"),
-    fontFamilyId: selectedFont ?? profile.defaults.fontFamilyId,
-    fontSizePx: selectedSize ?? profile.defaults.fontSizePx,
+    fontFamilyId: selectedFont ?? value.documentState.fontFamilyId,
+    fontSizePx: selectedSize ?? value.documentState.fontSizePx,
     textColor: selectedTextColor ?? profile.defaults.textColor,
     highlightColor: selectedHighlightColor ?? null,
     contentWidthPx: value.documentState.contentWidthPx,
@@ -905,5 +929,60 @@ export function transactionChangesManuscriptFormatting(
     JSON.stringify(
       transaction.state.field(manuscriptFormattingField).documentState,
     )
+  );
+}
+
+export function transactionChangesManuscriptLayoutSettings(
+  transaction: Transaction,
+): boolean {
+  if (
+    !transaction.effects.some(
+      (effect) =>
+        effect.is(setManuscriptFontFamilyEffect) ||
+        effect.is(setManuscriptFontSizeEffect) ||
+        effect.is(setManuscriptContentWidthEffect) ||
+        effect.is(setManuscriptLineHeightEffect) ||
+        effect.is(setManuscriptParagraphSpacingEffect) ||
+        effect.is(setManuscriptLetterSpacingEffect) ||
+        effect.is(restoreManuscriptFormattingEffect),
+    )
+  ) {
+    return false;
+  }
+  const before = transaction.startState.field(manuscriptFormattingField)
+    .documentState;
+  const after = transaction.state.field(manuscriptFormattingField).documentState;
+  return (
+    before.fontFamilyId !== after.fontFamilyId ||
+    before.fontSizePx !== after.fontSizePx ||
+    before.contentWidthPx !== after.contentWidthPx ||
+    before.lineHeight !== after.lineHeight ||
+    before.paragraphSpacingPx !== after.paragraphSpacingPx ||
+    before.letterSpacingEm !== after.letterSpacingEm
+  );
+}
+
+export function transactionChangesManuscriptDocumentFormatting(
+  transaction: Transaction,
+): boolean {
+  if (
+    !transaction.effects.some(
+      (effect) =>
+        effect.is(toggleManuscriptStyleEffect) ||
+        effect.is(setManuscriptTextColorEffect) ||
+        effect.is(setManuscriptHighlightColorEffect) ||
+        effect.is(setManuscriptParagraphAlignmentEffect) ||
+        effect.is(restoreManuscriptFormattingEffect),
+    )
+  ) {
+    return false;
+  }
+  const before = transaction.startState.field(manuscriptFormattingField)
+    .documentState;
+  const after = transaction.state.field(manuscriptFormattingField).documentState;
+  return (
+    JSON.stringify(before.ranges) !== JSON.stringify(after.ranges) ||
+    JSON.stringify(before.paragraphAlignments) !==
+      JSON.stringify(after.paragraphAlignments)
   );
 }

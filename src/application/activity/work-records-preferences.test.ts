@@ -153,7 +153,7 @@ describe("Work records goals", () => {
     ).toThrow(/dailyCharacters/u);
   });
 
-  it("derives characters from WritingSession and focus minutes from Pomodoro work phases", () => {
+  it("derives characters and live focus minutes from the WritingSession ledger", () => {
     const settings = parseWorkRecordsGoalsProjection({
       schemaVersion: 1,
       workId,
@@ -177,9 +177,9 @@ describe("Work records goals", () => {
     });
 
     expect(progress.dailyActiveMinutes).toEqual({
-      value: 35,
+      value: 90,
       target: 120,
-      ratio: 35 / 120,
+      ratio: 90 / 120,
     });
     expect(progress.dailyCharacters).toEqual({
       value: 100,
@@ -187,15 +187,48 @@ describe("Work records goals", () => {
       ratio: 0.2,
     });
     expect(progress.weeklyActiveMinutes).toEqual({
-      value: 85,
+      value: 150,
       target: 600,
-      ratio: 85 / 600,
+      ratio: 150 / 600,
     });
     expect(progress.weeklyCharacters).toEqual({
       value: 300,
       target: 2_000,
       ratio: 0.15,
     });
+
+    const live = deriveWorkRecordsGoalProgress({
+      workId,
+      activity: {
+        schemaVersion: 1,
+        workId,
+        activeSessionId: entityId<"WritingSession">("session-live"),
+        activeFocusCycleId: null,
+        sessions: [{
+          schemaVersion: 1,
+          sessionId: entityId<"WritingSession">("session-live"),
+          workId,
+          documentId: entityId<"Document">("document-a"),
+          state: "active",
+          startedAt: "2026-08-10T10:00:00.000Z",
+          endedAt: null,
+          activeDurationMs: 0,
+          startRevisionId: null,
+          endRevisionId: null,
+          characterDelta: null,
+          note: "",
+        }],
+        focusCycles: [],
+      },
+      settings,
+      nowMs: Date.parse("2026-08-10T10:02:30.000Z"),
+      calendar: {
+        today: "2026-08-10",
+        weekStart: "2026-08-04",
+        dateKey: (timestamp) => timestamp.slice(0, 10),
+      },
+    });
+    expect(live.dailyActiveMinutes.value).toBe(2);
 
     expect(() =>
       deriveWorkRecordsGoalProgress({

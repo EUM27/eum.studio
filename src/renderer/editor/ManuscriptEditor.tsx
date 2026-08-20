@@ -6,7 +6,12 @@ import {
   type StateEffect,
   Transaction,
 } from "@codemirror/state";
-import { EditorView, keymap } from "@codemirror/view";
+import { search, searchKeymap } from "@codemirror/search";
+import {
+  EditorView,
+  highlightActiveLine,
+  keymap,
+} from "@codemirror/view";
 import {
   AlignCenter,
   AlignJustify,
@@ -22,6 +27,7 @@ import {
   Redo2,
   Underline,
   Undo2,
+  X,
 } from "lucide-react";
 import {
   type CSSProperties,
@@ -40,6 +46,11 @@ import {
   type ManuscriptEditorDocumentState,
   type ManuscriptFormattingProfile,
 } from "../../application/editor/manuscript-formatting";
+import {
+  applyManuscriptLayoutSettings,
+  readManuscriptLayoutSettings,
+  type ManuscriptLayoutSettings,
+} from "../../application/editor/work-manuscript-layout-settings";
 import type { ManuscriptDocumentSource } from "../../application/editor/manuscript-document-profile";
 import type { ManuscriptInputProfile } from "../../application/editor/manuscript-input-profile";
 import { derivePreviousEpisodeFlowPreview } from "../../application/editor/previous-episode-flow";
@@ -58,6 +69,11 @@ import {
   setLoreCueContextEffect,
   type LoreCueInteraction,
 } from "./lore-cue-extension";
+import {
+  createSceneBoundaryPreviewExtension,
+  setSceneBoundaryPreviewsEffect,
+  type ManuscriptSceneBoundaryPreview,
+} from "./scene-boundary-preview-extension";
 import type { LoreCue } from "../../application/lore/lore-cue-projection";
 import {
   extractManuscriptTransaction,
@@ -83,21 +99,86 @@ import {
   setManuscriptParagraphSpacingEffect,
   setManuscriptTextColorEffect,
   toggleManuscriptStyleEffect,
-  transactionChangesManuscriptFormatting,
+  transactionChangesManuscriptDocumentFormatting,
+  transactionChangesManuscriptLayoutSettings,
   type ActiveManuscriptFormatting,
 } from "./manuscript-formatting-state";
+import { ManuscriptContextMenu } from "./ManuscriptContextMenu";
+import {
+  createManuscriptHeatmapExtension,
+  setManuscriptHeatmapModeEffect,
+  type ManuscriptHeatmapMode,
+} from "./manuscript-analysis";
+import { createForwardWritingProtection } from "./forward-writing-protection";
+import { resolveTypewriterScrollTop } from "./typewriter-scroll-position";
 
 export type ManuscriptDocumentStateSummary = {
   readonly statistics: ManuscriptTextStatistics;
   readonly selection: ManuscriptSelection;
 };
 
+export type ManuscriptFocusPresentation = {
+  readonly active: boolean;
+  readonly contentWidthPx: number;
+  readonly currentBlockHighlight: boolean;
+  readonly typewriterMode: boolean;
+  readonly typewriterPositionPercent: number;
+  readonly zoomPercent: number;
+};
+
+const typewriterScrollRequestVersions = new WeakMap<EditorView, number>();
+
+function requestTypewriterCursorPosition(
+  view: EditorView,
+  positionPercent: number,
+): void {
+  const requestVersion =
+    (typewriterScrollRequestVersions.get(view) ?? 0) + 1;
+  typewriterScrollRequestVersions.set(view, requestVersion);
+  view.scrollDOM.style.setProperty(
+    "--typewriter-scroll-space",
+    `${view.scrollDOM.clientHeight}px`,
+  );
+  window.setTimeout(() => {
+    const canvas = view.dom.closest<HTMLElement>(
+      ".manuscript-editor-canvas",
+    );
+    if (
+      !view.dom.isConnected ||
+      canvas?.dataset.focusTypewriter !== "true" ||
+      typewriterScrollRequestVersions.get(view) !== requestVersion
+    ) {
+      return;
+    }
+    const cursor = view.coordsAtPos(view.state.selection.main.head, 1);
+    if (cursor === null) {
+      return;
+    }
+    const scroller = view.scrollDOM;
+    const scrollerRect = scroller.getBoundingClientRect();
+    const requestedScrollTop = resolveTypewriterScrollTop({
+      currentScrollTop: scroller.scrollTop,
+      cursorBottom: cursor.bottom,
+      cursorTop: cursor.top,
+      maxScrollTop: scroller.scrollHeight - scroller.clientHeight,
+      positionPercent,
+      scrollerTop: scrollerRect.top,
+      viewportHeight: scroller.clientHeight,
+    });
+    scroller.scrollTop = requestedScrollTop;
+  }, 0);
+}
+
 export type ManuscriptEditorProps = {
   readonly accessibleName: string;
   readonly activeDocument: ManuscriptDocumentSource;
   readonly formattingProfile: ManuscriptFormattingProfile;
+  readonly focusPresentation?: ManuscriptFocusPresentation;
+  readonly forwardWriteProtectedLength?: number | null;
+  readonly heatmapMode?: ManuscriptHeatmapMode;
   readonly inputProfile: ManuscriptInputProfile;
   readonly loreEntries: readonly LoreEntryProjection[];
+  readonly layoutSettings?: ManuscriptLayoutSettings;
   readonly orderedDocuments: readonly ManuscriptDocumentSource[];
   readonly readOnly: boolean;
   readonly resumeLocation:
@@ -106,6 +187,7 @@ export type ManuscriptEditorProps = {
         { readonly status: "resolved" }
       >
     | null;
+  readonly sceneBoundaryPreviews?: readonly ManuscriptSceneBoundaryPreview[];
   readonly onDocumentActivated: (
     document: ManuscriptDocumentSource,
     summary: ManuscriptDocumentStateSummary,
@@ -114,10 +196,18 @@ export type ManuscriptEditorProps = {
     document: ManuscriptDocumentSource,
     state: ManuscriptEditorDocumentState,
   ) => void;
+  readonly onLayoutSettingsChange?: (
+    settings: ManuscriptLayoutSettings,
+  ) => void;
+  readonly onHeatmapModeChange?: (mode: ManuscriptHeatmapMode) => void;
+  readonly onImportText?: () => void;
   readonly onLoreCueHover: (interaction: LoreCueInteraction | null) => void;
   readonly onOpenLoreCue: (cue: LoreCue) => void;
   readonly onOpenContinuousReading: () => void;
   readonly onOpenPreflight: () => void;
+  readonly onOpenAnalysis?: () => void;
+  readonly onAddEvent: () => void;
+  readonly onAddScene: () => void;
   readonly onBlur: (
     document: ManuscriptDocumentSource,
   ) => void;
@@ -163,7 +253,36 @@ export type ManuscriptEditorHandle = {
     cursor: number,
     text: string,
   ) => boolean;
+  readonly insertTextAtExactOffset: (
+    document: ManuscriptDocumentSource,
+    offset: number,
+    expectedDocumentLength: number,
+    text: string,
+  ) => boolean;
+  readonly revealDocumentOffset: (
+    document: ManuscriptDocumentSource,
+    offset: number,
+  ) => boolean;
 };
+
+export type ManuscriptContextSelection = Readonly<{
+  anchor: number;
+  head: number;
+}>;
+
+export function resolveManuscriptContextSelection(
+  selection: Readonly<{ anchor: number; head: number; from: number; to: number }>,
+  pointerOffset: number,
+): ManuscriptContextSelection {
+  if (
+    selection.from !== selection.to &&
+    pointerOffset >= selection.from &&
+    pointerOffset < selection.to
+  ) {
+    return Object.freeze({ anchor: selection.anchor, head: selection.head });
+  }
+  return Object.freeze({ anchor: pointerOffset, head: pointerOffset });
+}
 
 function summarizeState(state: EditorState): ManuscriptDocumentStateSummary {
   const ranges = state.selection.ranges.map((range) =>
@@ -192,20 +311,31 @@ export const ManuscriptEditor = forwardRef<
     accessibleName,
     activeDocument,
     formattingProfile,
+    focusPresentation,
+    forwardWriteProtectedLength = null,
+    heatmapMode = "off",
     inputProfile,
+    layoutSettings,
     loreEntries,
     orderedDocuments,
     onBlur,
     onCompositionEnd,
     onDocumentActivated,
     onFormattingChange,
+    onLayoutSettingsChange,
+    onHeatmapModeChange,
+    onImportText,
     onLoreCueHover,
+    onAddEvent,
+    onAddScene,
     onOpenLoreCue,
     onOpenContinuousReading,
     onOpenPreflight,
+    onOpenAnalysis,
     onTransaction,
     readOnly,
     resumeLocation,
+    sceneBoundaryPreviews = [],
   },
   ref,
 ) {
@@ -213,6 +343,9 @@ export const ManuscriptEditor = forwardRef<
   const viewRef = useRef<EditorView | null>(null);
   const initialDocumentRef = useRef(activeDocument);
   const initialFormattingProfileRef = useRef(formattingProfile);
+  const layoutSettingsRef = useRef(layoutSettings);
+  layoutSettingsRef.current = layoutSettings;
+  const synchronizingLayoutRef = useRef(false);
   const activeDocumentRef = useRef<ManuscriptDocumentSource | null>(null);
   const pendingDocumentRef = useRef<ManuscriptDocumentSource | null>(null);
   const stateRegistryRef = useRef(new ManuscriptDocumentStateRegistry());
@@ -220,30 +353,55 @@ export const ManuscriptEditor = forwardRef<
   orderedDocumentsRef.current = orderedDocuments;
   const loreEntriesRef = useRef(loreEntries);
   loreEntriesRef.current = loreEntries;
+  const sceneBoundaryPreviewsRef = useRef(sceneBoundaryPreviews);
+  sceneBoundaryPreviewsRef.current = sceneBoundaryPreviews;
   const [activeFormatting, setActiveFormatting] =
     useState<ActiveManuscriptFormatting>(() => ({
       bold: false,
       italic: false,
       underline: false,
-      fontFamilyId: formattingProfile.defaults.fontFamilyId,
-      fontSizePx: formattingProfile.defaults.fontSizePx,
+      fontFamilyId:
+        layoutSettings?.fontFamilyId ?? formattingProfile.defaults.fontFamilyId,
+      fontSizePx:
+        layoutSettings?.fontSizePx ?? formattingProfile.defaults.fontSizePx,
       textColor: formattingProfile.defaults.textColor,
       highlightColor: null,
-      contentWidthPx: formattingProfile.defaults.contentWidthPx,
-      lineHeight: formattingProfile.defaults.lineHeight,
-      paragraphSpacingPx: formattingProfile.defaults.paragraphSpacingPx,
-      letterSpacingEm: formattingProfile.defaults.letterSpacingEm,
+      contentWidthPx:
+        layoutSettings?.contentWidthPx ?? formattingProfile.defaults.contentWidthPx,
+      lineHeight: layoutSettings?.lineHeight ?? formattingProfile.defaults.lineHeight,
+      paragraphSpacingPx:
+        layoutSettings?.paragraphSpacingPx ??
+        formattingProfile.defaults.paragraphSpacingPx,
+      letterSpacingEm:
+        layoutSettings?.letterSpacingEm ??
+        formattingProfile.defaults.letterSpacingEm,
       paragraphAlignment: "left",
     }));
   const [additionalToolsVisible, setAdditionalToolsVisible] = useState(false);
+  const [colorMenu, setColorMenu] = useState<"text" | "highlight" | null>(null);
+  const [contextMenu, setContextMenu] = useState<Readonly<{
+    clientX: number;
+    clientY: number;
+  }> | null>(null);
   const readOnlyCompartmentRef = useRef(
     new Compartment(),
   );
+  const forwardWritingProtectionCompartmentRef = useRef(new Compartment());
+  const focusHighlightCompartmentRef = useRef(new Compartment());
+  const focusPresentationRef = useRef(focusPresentation);
+  focusPresentationRef.current = focusPresentation;
   const notifyBlur = useEffectEvent(onBlur);
   const notifyCompositionEnd = useEffectEvent(onCompositionEnd);
   const notifyDocumentActivated = useEffectEvent(onDocumentActivated);
   const notifyFormattingChange = useEffectEvent(onFormattingChange);
+  const notifyLayoutSettingsChange = useEffectEvent(
+    (settings: ManuscriptLayoutSettings) => {
+      onLayoutSettingsChange?.(settings);
+    },
+  );
   const notifyLoreCueHover = useEffectEvent(onLoreCueHover);
+  const notifyAddEvent = useEffectEvent(onAddEvent);
+  const notifyAddScene = useEffectEvent(onAddScene);
   const notifyOpenLoreCue = useEffectEvent(onOpenLoreCue);
   const notifyTransaction = useEffectEvent(onTransaction);
   const materializeDocumentText = (
@@ -435,6 +593,57 @@ export const ManuscriptEditor = forwardRef<
         view.focus();
         return true;
       },
+      insertTextAtExactOffset(
+        document,
+        offset,
+        expectedDocumentLength,
+        text,
+      ) {
+        const view = viewRef.current;
+        const active = activeDocumentRef.current;
+        if (
+          view === null ||
+          readOnly ||
+          active?.documentId !== document.documentId ||
+          active.workId !== document.workId ||
+          !Number.isSafeInteger(offset) ||
+          offset < 0 ||
+          !Number.isSafeInteger(expectedDocumentLength) ||
+          expectedDocumentLength < 0 ||
+          view.state.doc.length !== expectedDocumentLength ||
+          offset > expectedDocumentLength ||
+          text.trim().length === 0
+        ) {
+          return false;
+        }
+        view.dispatch({
+          changes: { from: offset, to: offset, insert: text },
+          selection: EditorSelection.cursor(offset + text.length),
+          scrollIntoView: true,
+          annotations: Transaction.userEvent.of("input.scene-draft.insert"),
+        });
+        view.focus();
+        return true;
+      },
+      revealDocumentOffset(document, offset) {
+        const view = viewRef.current;
+        const active = activeDocumentRef.current;
+        if (
+          view === null ||
+          active?.documentId !== document.documentId ||
+          active.workId !== document.workId ||
+          !Number.isSafeInteger(offset) ||
+          offset < 0 ||
+          offset > view.state.doc.length
+        ) {
+          return false;
+        }
+        view.dispatch({
+          effects: EditorView.scrollIntoView(offset, { y: "center" }),
+        });
+        view.focus();
+        return true;
+      },
     }),
     [formattingProfile, readOnly],
   );
@@ -462,11 +671,40 @@ export const ManuscriptEditor = forwardRef<
         ),
         extensions: [
           manuscriptTextStatisticsExtension,
+          createManuscriptHeatmapExtension(heatmapMode),
           history(),
+          search({ top: true }),
+          EditorState.phrases.of({
+            Find: "검색",
+            Replace: "바꾸기",
+            all: "모두 선택",
+            "by word": "단어 단위",
+            close: "검색 닫기",
+            "current match": "현재 일치",
+            "match case": "대소문자 구분",
+            next: "다음",
+            "on line": "행",
+            previous: "이전",
+            regexp: "정규식",
+            replace: "바꾸기",
+            "replace all": "모두 바꾸기",
+            "replaced $ matches": "$개 일치를 바꿈",
+            "replaced match on line $": "$행의 일치를 바꿈",
+          }),
+          keymap.of(searchKeymap),
           keymap.of(historyKeymap),
           EditorView.lineWrapping,
+          focusHighlightCompartmentRef.current.of(
+            focusPresentationRef.current?.active === true &&
+              focusPresentationRef.current.currentBlockHighlight
+              ? highlightActiveLine()
+              : [],
+          ),
           createPreviousEpisodeFlowExtension(
             readPreviousEpisodeFlow(document),
+          ),
+          createSceneBoundaryPreviewExtension(
+            sceneBoundaryPreviewsRef.current,
           ),
           createLoreCueExtension(
             {
@@ -481,15 +719,24 @@ export const ManuscriptEditor = forwardRef<
           ),
           createManuscriptFormattingExtension(
             formattingProfile,
-            document.editorStateJson === undefined
-              ? createDefaultManuscriptEditorDocumentState(formattingProfile)
-              : parseManuscriptEditorDocumentState(
-                  JSON.parse(document.editorStateJson),
-                  formattingProfile,
-                  document.initialText.length,
-                ),
+            (() => {
+              const documentState = document.editorStateJson === undefined
+                ? createDefaultManuscriptEditorDocumentState(formattingProfile)
+                : parseManuscriptEditorDocumentState(
+                    JSON.parse(document.editorStateJson),
+                    formattingProfile,
+                    document.initialText.length,
+                  );
+              const sharedLayout = layoutSettingsRef.current;
+              return sharedLayout === undefined
+                ? documentState
+                : applyManuscriptLayoutSettings(documentState, sharedLayout);
+            })(),
           ),
           createManuscriptInputRules(inputProfile),
+          forwardWritingProtectionCompartmentRef.current.of(
+            createForwardWritingProtection(forwardWriteProtectedLength),
+          ),
           readOnlyCompartmentRef.current.of([
             EditorState.readOnly.of(readOnly),
             EditorView.editable.of(!readOnly),
@@ -497,6 +744,37 @@ export const ManuscriptEditor = forwardRef<
           EditorView.contentAttributes.of({
             "aria-label": accessibleName,
             "aria-multiline": "true",
+          }),
+          EditorView.domEventHandlers({
+            contextmenu: (event, view) => {
+              const pointerOffset = view.posAtCoords({
+                x: event.clientX,
+                y: event.clientY,
+              });
+              if (pointerOffset === null) return false;
+              event.preventDefault();
+              const current = view.state.selection.main;
+              const selection = resolveManuscriptContextSelection(
+                current,
+                pointerOffset,
+              );
+              if (
+                current.anchor !== selection.anchor ||
+                current.head !== selection.head
+              ) {
+                view.dispatch({
+                  selection: EditorSelection.single(
+                    selection.anchor,
+                    selection.head,
+                  ),
+                });
+              }
+              setContextMenu({
+                clientX: event.clientX,
+                clientY: event.clientY,
+              });
+              return true;
+            },
           }),
           EditorView.updateListener.of((update) => {
             for (const transaction of update.transactions) {
@@ -514,7 +792,19 @@ export const ManuscriptEditor = forwardRef<
                   ),
                 );
               }
-              if (transactionChangesManuscriptFormatting(transaction)) {
+              if (
+                transactionChangesManuscriptLayoutSettings(transaction) &&
+                !synchronizingLayoutRef.current
+              ) {
+                notifyLayoutSettingsChange(
+                  readManuscriptLayoutSettings(
+                    readManuscriptEditorDocumentState(transaction.state),
+                  ),
+                );
+              }
+              if (
+                transactionChangesManuscriptDocumentFormatting(transaction)
+              ) {
                 notifyFormattingChange(
                   document,
                   readManuscriptEditorDocumentState(transaction.state),
@@ -527,6 +817,20 @@ export const ManuscriptEditor = forwardRef<
             publishSelectionEvidence(
               update.state,
             );
+            const pointerSelection = update.transactions.some(
+              (transaction) => transaction.isUserEvent("select.pointer"),
+            );
+            if (
+              focusPresentationRef.current?.active === true &&
+              focusPresentationRef.current.typewriterMode &&
+              (update.docChanged || update.selectionSet) &&
+              !pointerSelection
+            ) {
+              requestTypewriterCursorPosition(
+                update.view,
+                focusPresentationRef.current.typewriterPositionPercent,
+              );
+            }
           }),
         ],
       }),
@@ -552,6 +856,55 @@ export const ManuscriptEditor = forwardRef<
       });
     },
   );
+  const syncSceneBoundaryPreviews = useEffectEvent((view: EditorView) => {
+    view.dispatch({
+      effects: setSceneBoundaryPreviewsEffect.of(
+        sceneBoundaryPreviewsRef.current,
+      ),
+    });
+  });
+  const syncHeatmapMode = useEffectEvent((
+    view: EditorView,
+    mode: ManuscriptHeatmapMode,
+  ) => {
+    view.dispatch({
+      effects: setManuscriptHeatmapModeEffect.of(mode),
+    });
+  });
+  const syncManuscriptLayoutSettings = useEffectEvent((
+    view: EditorView,
+    settings: ManuscriptLayoutSettings,
+  ) => {
+    const current = readManuscriptLayoutSettings(
+      readManuscriptEditorDocumentState(view.state),
+    );
+    if (
+      current.fontFamilyId === settings.fontFamilyId &&
+      current.fontSizePx === settings.fontSizePx &&
+      current.contentWidthPx === settings.contentWidthPx &&
+      current.lineHeight === settings.lineHeight &&
+      current.paragraphSpacingPx === settings.paragraphSpacingPx &&
+      current.letterSpacingEm === settings.letterSpacingEm
+    ) {
+      return;
+    }
+    synchronizingLayoutRef.current = true;
+    try {
+      view.dispatch({
+        effects: [
+          setManuscriptFontFamilyEffect.of(settings.fontFamilyId),
+          setManuscriptFontSizeEffect.of(settings.fontSizePx),
+          setManuscriptContentWidthEffect.of(settings.contentWidthPx),
+          setManuscriptLineHeightEffect.of(settings.lineHeight),
+          setManuscriptParagraphSpacingEffect.of(settings.paragraphSpacingPx),
+          setManuscriptLetterSpacingEffect.of(settings.letterSpacingEm),
+        ],
+        annotations: Transaction.addToHistory.of(false),
+      });
+    } finally {
+      synchronizingLayoutRef.current = false;
+    }
+  });
   const activateDocument = useEffectEvent(
     (document: ManuscriptDocumentSource) => {
       const view = viewRef.current;
@@ -575,14 +928,24 @@ export const ManuscriptEditor = forwardRef<
         if (sourceChanged) {
           view.setState(nextSnapshot.state);
           view.dispatch({
-            effects:
+            effects: [
               readOnlyCompartmentRef.current.reconfigure([
                 EditorState.readOnly.of(readOnly),
                 EditorView.editable.of(!readOnly),
               ]),
+              forwardWritingProtectionCompartmentRef.current.reconfigure(
+                createForwardWritingProtection(forwardWriteProtectedLength),
+              ),
+            ],
           });
+          const sharedLayout = layoutSettingsRef.current;
+          if (sharedLayout !== undefined) {
+            syncManuscriptLayoutSettings(view, sharedLayout);
+          }
           syncPreviousEpisodeFlow(view, document);
           syncLoreCueContext(view, document);
+          syncSceneBoundaryPreviews(view);
+          syncHeatmapMode(view, heatmapMode);
           notifyDocumentActivated(
             document,
             summarizeState(view.state),
@@ -613,14 +976,30 @@ export const ManuscriptEditor = forwardRef<
       activeDocumentRef.current = document;
       view.setState(nextSnapshot.state);
       view.dispatch({
-        effects:
+        effects: [
           readOnlyCompartmentRef.current.reconfigure([
             EditorState.readOnly.of(readOnly),
             EditorView.editable.of(!readOnly),
           ]),
+          forwardWritingProtectionCompartmentRef.current.reconfigure(
+            createForwardWritingProtection(forwardWriteProtectedLength),
+          ),
+          focusHighlightCompartmentRef.current.reconfigure(
+            focusPresentationRef.current?.active === true &&
+              focusPresentationRef.current.currentBlockHighlight
+              ? highlightActiveLine()
+              : [],
+          ),
+        ],
       });
+      const sharedLayout = layoutSettingsRef.current;
+      if (sharedLayout !== undefined) {
+        syncManuscriptLayoutSettings(view, sharedLayout);
+      }
       syncPreviousEpisodeFlow(view, document);
       syncLoreCueContext(view, document);
+      syncSceneBoundaryPreviews(view);
+      syncHeatmapMode(view, heatmapMode);
       if (nextSnapshot.scrollSnapshot !== null) {
         view.dispatch({ effects: nextSnapshot.scrollSnapshot });
       }
@@ -706,6 +1085,47 @@ export const ManuscriptEditor = forwardRef<
 
   useEffect(() => {
     const view = viewRef.current;
+    if (view !== null && layoutSettings !== undefined) {
+      syncManuscriptLayoutSettings(view, layoutSettings);
+    }
+  }, [layoutSettings]);
+
+  useEffect(() => {
+    if (!additionalToolsVisible) {
+      return;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setAdditionalToolsVisible(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [additionalToolsVisible]);
+
+  useEffect(() => {
+    if (colorMenu === null) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        !event.target.parentElement?.closest(".toolbar-color-menu")
+      ) {
+        setColorMenu(null);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setColorMenu(null);
+    };
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [colorMenu]);
+
+  useEffect(() => {
+    const view = viewRef.current;
     const document = activeDocumentRef.current;
     if (view !== null && document !== null) {
       syncPreviousEpisodeFlow(view, document);
@@ -719,6 +1139,20 @@ export const ManuscriptEditor = forwardRef<
       syncLoreCueContext(view, document);
     }
   }, [loreEntries]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (view !== null) {
+      syncSceneBoundaryPreviews(view);
+    }
+  }, [sceneBoundaryPreviews]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (view !== null) {
+      syncHeatmapMode(view, heatmapMode);
+    }
+  }, [heatmapMode]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -767,6 +1201,53 @@ export const ManuscriptEditor = forwardRef<
         ]),
     });
   }, [readOnly]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (view === null) {
+      return;
+    }
+    view.dispatch({
+      effects: forwardWritingProtectionCompartmentRef.current.reconfigure(
+        createForwardWritingProtection(forwardWriteProtectedLength),
+      ),
+    });
+  }, [forwardWriteProtectedLength]);
+
+  const focusPresentationActive = focusPresentation?.active === true;
+  const focusCurrentBlockHighlight =
+    focusPresentation?.active === true && focusPresentation.currentBlockHighlight;
+  const focusTypewriterMode =
+    focusPresentation?.active === true && focusPresentation.typewriterMode;
+  const focusTypewriterPositionPercent =
+    focusPresentation?.typewriterPositionPercent;
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (view === null) {
+      return;
+    }
+    view.dispatch({
+      effects: focusHighlightCompartmentRef.current.reconfigure(
+        focusCurrentBlockHighlight ? highlightActiveLine() : [],
+      ),
+    });
+  }, [focusCurrentBlockHighlight]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (view === null) {
+      return;
+    }
+    if (
+      focusTypewriterMode &&
+      focusTypewriterPositionPercent !== undefined
+    ) {
+      requestTypewriterCursorPosition(view, focusTypewriterPositionPercent);
+    } else {
+      view.scrollDOM.style.removeProperty("--typewriter-scroll-space");
+    }
+  }, [focusTypewriterMode, focusTypewriterPositionPercent]);
 
   const dispatchFormattingEffect = (
     effect: StateEffect<unknown>,
@@ -956,101 +1437,141 @@ export const ManuscriptEditor = forwardRef<
         </div>
 
         <div aria-label="색상" className="formatting-toolbar-group">
-          <label
-            className="toolbar-color-picker"
-            style={{ "--toolbar-color": activeFormatting.textColor } as CSSProperties}
-            title="글자색"
-          >
-            <Palette aria-hidden="true" size={16} />
-            <input
+          <div className="toolbar-color-menu">
+            <button
+              aria-expanded={colorMenu === "text"}
+              aria-haspopup="dialog"
               aria-label="글자색"
+              className="toolbar-color-trigger"
               disabled={readOnly}
-              onChange={(event) =>
-                dispatchFormattingEffect(
-                  setManuscriptTextColorEffect.of(event.target.value),
-                  false,
-                )
+              onClick={() =>
+                setColorMenu((current) => current === "text" ? null : "text")
               }
-              type="color"
-              value={activeFormatting.textColor}
-            />
-          </label>
-          <button
-            aria-label="글자색 기본값"
-            className="toolbar-compact-text-button"
-            disabled={readOnly}
-            onClick={() =>
-              dispatchFormattingEffect(setManuscriptTextColorEffect.of(null))
-            }
-            onMouseDown={(event) => event.preventDefault()}
-            title="글자색 지우기"
-            type="button"
-          >
-            기본
-          </button>
-          <button
-            aria-label="강조색 적용"
-            disabled={readOnly}
-            onClick={() =>
-              dispatchFormattingEffect(
-                setManuscriptHighlightColorEffect.of(
-                  activeFormatting.highlightColor ??
-                    formattingProfile.defaults.highlightColor,
-                ),
-              )
-            }
-            onMouseDown={(event) => event.preventDefault()}
-            title="현재 강조색 적용"
-            type="button"
-          >
-            <Highlighter aria-hidden="true" size={16} />
-          </button>
-          <label
-            className="toolbar-color-picker"
-            style={{
-              "--toolbar-color":
-                activeFormatting.highlightColor ??
-                formattingProfile.defaults.highlightColor,
-            } as CSSProperties}
-            title="강조색 선택"
-          >
-            <span aria-hidden="true">▼</span>
-            <input
+              onMouseDown={(event) => event.preventDefault()}
+              style={{ "--toolbar-color": activeFormatting.textColor } as CSSProperties}
+              title="글자색"
+              type="button"
+            >
+              <Palette aria-hidden="true" size={16} />
+            </button>
+            {colorMenu === "text" && (
+              <div
+                aria-label="글자색 선택"
+                className="toolbar-color-popover"
+                role="dialog"
+              >
+                <label>
+                  <span>색상</span>
+                  <input
+                    aria-label="글자색 선택값"
+                    disabled={readOnly}
+                    onChange={(event) => {
+                      dispatchFormattingEffect(
+                        setManuscriptTextColorEffect.of(event.target.value),
+                        false,
+                      );
+                      setColorMenu(null);
+                    }}
+                    type="color"
+                    value={activeFormatting.textColor}
+                  />
+                </label>
+                <button
+                  disabled={readOnly}
+                  onClick={() => {
+                    dispatchFormattingEffect(setManuscriptTextColorEffect.of(null));
+                    setColorMenu(null);
+                  }}
+                  type="button"
+                >
+                  기본색
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="toolbar-color-menu">
+            <button
+              aria-expanded={colorMenu === "highlight"}
+              aria-haspopup="dialog"
               aria-label="강조색"
+              className="toolbar-color-trigger"
               disabled={readOnly}
-              onChange={(event) =>
-                dispatchFormattingEffect(
-                  setManuscriptHighlightColorEffect.of(event.target.value),
-                  false,
+              onClick={() =>
+                setColorMenu((current) =>
+                  current === "highlight" ? null : "highlight"
                 )
               }
-              type="color"
-              value={
-                activeFormatting.highlightColor ??
-                formattingProfile.defaults.highlightColor
-              }
-            />
-          </label>
-          <button
-            aria-label="강조색 없음"
-            className="toolbar-compact-text-button"
-            disabled={readOnly || activeFormatting.highlightColor === null}
-            onClick={() =>
-              dispatchFormattingEffect(
-                setManuscriptHighlightColorEffect.of(null),
-              )
-            }
-            onMouseDown={(event) => event.preventDefault()}
-            title="강조색 지우기"
-            type="button"
-          >
-            없음
-          </button>
+              onMouseDown={(event) => event.preventDefault()}
+              style={{
+                "--toolbar-color":
+                  activeFormatting.highlightColor ??
+                  formattingProfile.defaults.highlightColor,
+              } as CSSProperties}
+              title="강조색"
+              type="button"
+            >
+              <Highlighter aria-hidden="true" size={16} />
+            </button>
+            {colorMenu === "highlight" && (
+              <div
+                aria-label="강조색 선택"
+                className="toolbar-color-popover"
+                role="dialog"
+              >
+                <label>
+                  <span>색상</span>
+                  <input
+                    aria-label="강조색 선택값"
+                    disabled={readOnly}
+                    onChange={(event) =>
+                      dispatchFormattingEffect(
+                        setManuscriptHighlightColorEffect.of(event.target.value),
+                        false,
+                      )
+                    }
+                    type="color"
+                    value={
+                      activeFormatting.highlightColor ??
+                      formattingProfile.defaults.highlightColor
+                    }
+                  />
+                </label>
+                <button
+                  aria-label="강조색 적용"
+                  disabled={readOnly}
+                  onClick={() => {
+                    dispatchFormattingEffect(
+                      setManuscriptHighlightColorEffect.of(
+                        activeFormatting.highlightColor ??
+                          formattingProfile.defaults.highlightColor,
+                      ),
+                    );
+                    setColorMenu(null);
+                  }}
+                  type="button"
+                >
+                  현재 색 적용
+                </button>
+                <button
+                  disabled={readOnly || activeFormatting.highlightColor === null}
+                  onClick={() => {
+                    dispatchFormattingEffect(
+                      setManuscriptHighlightColorEffect.of(null),
+                    );
+                    setColorMenu(null);
+                  }}
+                  type="button"
+                >
+                  없음
+                </button>
+              </div>
+            )}
+          </div>
         </div>
         <button
           aria-expanded={additionalToolsVisible}
           aria-label={
-            additionalToolsVisible ? "추가 서식 도구 닫기" : "추가 서식 도구 열기"
+            additionalToolsVisible ? "추가 서식 도구 열림" : "추가 서식 도구 열기"
           }
           className="formatting-toolbar-more"
           onClick={() => setAdditionalToolsVisible((visible) => !visible)}
@@ -1061,10 +1582,34 @@ export const ManuscriptEditor = forwardRef<
           <MoreHorizontal aria-hidden="true" size={17} />
         </button>
         </div>
+      </div>
 
-        {additionalToolsVisible && (
-        <div className="formatting-toolbar-row formatting-toolbar-row-secondary">
-        <span aria-hidden="true" className="formatting-toolbar-divider" />
+      {additionalToolsVisible && (
+        <div
+          className="formatting-tools-popover-layer"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) {
+              setAdditionalToolsVisible(false);
+            }
+          }}
+        >
+          <section
+            aria-label="추가 서식 도구"
+            aria-modal="false"
+            className="formatting-tools-popover"
+            role="dialog"
+          >
+            <header className="formatting-tools-popover-header">
+              <strong>추가 서식</strong>
+              <button
+                aria-label="추가 서식 도구 닫기"
+                onClick={() => setAdditionalToolsVisible(false)}
+                type="button"
+              >
+                <X aria-hidden="true" size={16} />
+              </button>
+            </header>
+            <div className="formatting-toolbar-row formatting-toolbar-row-secondary">
 
         <div aria-label="문단 정렬" className="formatting-toolbar-group">
           <button
@@ -1218,6 +1763,45 @@ export const ManuscriptEditor = forwardRef<
         <span aria-hidden="true" className="formatting-toolbar-divider" />
 
         <div aria-label="원고 도구" className="formatting-toolbar-group">
+          {onHeatmapModeChange !== undefined && (
+            <label className="toolbar-heatmap-control">
+              <span>히트맵</span>
+              <select
+                aria-label="히트맵"
+                disabled={readOnly}
+                onChange={(event) =>
+                  onHeatmapModeChange(event.target.value as ManuscriptHeatmapMode)
+                }
+                value={heatmapMode}
+              >
+                <option value="off">꺼짐</option>
+                <option value="sentence">문장 길이</option>
+                <option value="word">반복 단어</option>
+              </select>
+            </label>
+          )}
+          {onOpenAnalysis !== undefined && (
+            <button
+              className="toolbar-text-button"
+              disabled={readOnly}
+              onClick={onOpenAnalysis}
+              onMouseDown={(event) => event.preventDefault()}
+              type="button"
+            >
+              원고 분석
+            </button>
+          )}
+          {onImportText !== undefined && (
+            <button
+              className="toolbar-text-button"
+              disabled={readOnly}
+              onClick={onImportText}
+              onMouseDown={(event) => event.preventDefault()}
+              type="button"
+            >
+              TXT 가져오기
+            </button>
+          )}
           <button
             className="toolbar-text-button"
             disabled={readOnly}
@@ -1237,19 +1821,43 @@ export const ManuscriptEditor = forwardRef<
             원고 점검
           </button>
         </div>
+            </div>
+          </section>
         </div>
-        )}
-      </div>
+      )}
       <div
         className="manuscript-editor-canvas"
+        data-focus-current-block={
+          focusCurrentBlockHighlight ? "true" : undefined
+        }
+        data-focus-presentation={focusPresentationActive ? "true" : undefined}
+        data-focus-typewriter={focusTypewriterMode ? "true" : undefined}
         style={
           {
             "--manuscript-content-width": `${activeFormatting.contentWidthPx}px`,
+            ...(focusPresentation?.active === true
+              ? {
+                  "--focus-content-width": `${focusPresentation.contentWidthPx}px`,
+                  "--focus-font-size": `${
+                    activeFormatting.fontSizePx *
+                    (focusPresentation.zoomPercent / 100)
+                  }px`,
+                }
+              : {}),
           } as CSSProperties
         }
       >
         <div className="manuscript-editor" ref={hostRef} />
       </div>
+      {contextMenu !== null && (
+        <ManuscriptContextMenu
+          clientX={contextMenu.clientX}
+          clientY={contextMenu.clientY}
+          onAddEvent={notifyAddEvent}
+          onAddScene={notifyAddScene}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 });

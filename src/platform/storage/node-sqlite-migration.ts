@@ -94,6 +94,9 @@ export type RunNodeSqliteStorageMigrationInput = {
   };
   readonly beforeCommit?:
     () => Promise<void>;
+  readonly foreignKeyMode?:
+    | "enforced"
+    | "temporarily-disabled";
 };
 
 type NormalizedRows =
@@ -290,6 +293,9 @@ function applyAndVerifySettings(
   database: DatabaseSync,
   requested:
     Poc3RequestedSqliteSettings,
+  foreignKeyMode:
+    | "enforced"
+    | "temporarily-disabled",
 ): void {
   const settings = [
     [
@@ -330,7 +336,11 @@ function applyAndVerifySettings(
     ),
     normalizeRows([
       {
-        foreign_keys: 1,
+        foreign_keys:
+          foreignKeyMode ===
+            "temporarily-disabled"
+            ? 0
+            : 1,
       },
     ]),
     "SQLite foreign key enforcement",
@@ -1108,6 +1118,8 @@ export async function runNodeSqliteStorageMigration(
     applyAndVerifySettings(
       database,
       input.requestedSettings,
+      input.foreignKeyMode ??
+        "enforced",
     );
     database.exec(
       "BEGIN IMMEDIATE",
@@ -1211,6 +1223,27 @@ export async function runNodeSqliteStorageMigration(
     }
     database.exec("COMMIT");
     transactionActive = false;
+    if (
+      input.foreignKeyMode ===
+      "temporarily-disabled"
+    ) {
+      database.exec(
+        "PRAGMA foreign_keys = ON",
+      );
+      assertSameRows(
+        queryRows(
+          database,
+          "PRAGMA foreign_keys",
+        ),
+        normalizeRows([
+          { foreign_keys: 1 },
+        ]),
+        "SQLite restored foreign key enforcement",
+      );
+      assertNoForeignKeyViolations(
+        database,
+      );
+    }
     return Object.freeze({
       requestedTargetSchemaVersion:
         input.targetSchemaVersion,

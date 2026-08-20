@@ -10,15 +10,18 @@ import {
   useSyncExternalStore,
   type FormEvent,
   type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import {
+  Bot,
   ChevronDown,
   ChevronRight,
   FileText,
   Folder,
   FolderPlus,
+  Music2,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
@@ -49,11 +52,16 @@ import {
   type ManuscriptDocumentSource,
 } from "../application/editor/manuscript-document-profile";
 import type { ManuscriptInputProfile } from "../application/editor/manuscript-input-profile";
+import { getPreviousEpisodeFlowPreviewText } from "../application/editor/previous-episode-flow";
 import {
   serializeManuscriptEditorDocumentState,
   type ManuscriptEditorDocumentState,
   type ManuscriptFormattingProfile,
 } from "../application/editor/manuscript-formatting";
+import type {
+  ManuscriptLayoutSettings,
+  WorkManuscriptLayoutSettingsProjection,
+} from "../application/editor/work-manuscript-layout-settings";
 import {
   sanitizeManuscriptTextFileNamePart,
   type ManuscriptPreflightProfile,
@@ -83,6 +91,18 @@ import type {
   SceneProjectionList,
   UpdateSceneRuleSetCommand,
 } from "../application/structure/scene-projection";
+import type {
+  SceneExtractionBoundary,
+  SceneExtractionAnnotationDecision,
+  SceneExtractionCandidate,
+  SceneExtractionScene,
+} from "../application/structure/scene-extraction-contract";
+import type {
+  SceneAnnotationProjection,
+} from "../application/structure/scene-annotation-contract";
+import type {
+  SceneDraftCandidate,
+} from "../application/structure/scene-draft-contract";
 import {
   deriveWorkStructureOverview,
   type WorkStructureOverviewCharacter,
@@ -101,6 +121,10 @@ import type {
   CharacterProjection,
   UpdateCharacterCommand,
 } from "../application/characters/character-contract";
+import type {
+  CharacterRelationProjection,
+  UpdateCharacterRelationCommand,
+} from "../application/characters/character-relation-contract";
 import type {
   PlotThreadProjection,
   UpdatePlotThreadCommand,
@@ -146,6 +170,24 @@ import type {
   PomodoroProjection,
 } from "../application/activity/pomodoro-contract";
 import type {
+  YouTubeMusicProfile,
+  YouTubeVideoProjection,
+} from "../application/music/youtube-music";
+import type {
+  YouTubeMusicConnectionStatus,
+} from "../application/music/youtube-music-connection";
+import type { WorkMusicSettingsProjection } from "../application/music/work-music-settings";
+import type { WorkInspirationSettingsProjection } from "../application/inspiration/work-inspiration-settings";
+import type {
+  CharacterDrawDraft,
+  EventDrawDraft,
+} from "../application/inspiration/inspiration-draw";
+import {
+  selectedSceneMusicQueueOption,
+  type SceneMusicQueueCandidate,
+  type SceneMusicQueueOption,
+} from "../application/music/scene-music-queue-contract";
+import type {
   WorkRecordsGoals,
   WorkRecordsGoalsProjection,
 } from "../application/activity/work-records-preferences";
@@ -174,6 +216,10 @@ import type {
 import type {
   AssistantConnectionProjection,
 } from "../application/assistant/assistant-connection";
+import {
+  createChatGptOAuthAssistantConnectionId,
+  type ChatGptOAuthConnectionStatus,
+} from "../application/assistant/chatgpt-oauth";
 import type {
   AssistantSettingReference,
 } from "../application/assistant/assistant-setting-review";
@@ -191,6 +237,12 @@ import {
   type ManuscriptDocumentStateSummary,
   type ManuscriptEditorHandle,
 } from "./editor/ManuscriptEditor";
+import {
+  FOCUS_TYPEWRITER_POSITION_DEFAULT_PERCENT,
+  FOCUS_TYPEWRITER_POSITION_MAX_PERCENT,
+  FOCUS_TYPEWRITER_POSITION_MIN_PERCENT,
+  FocusModeToolbar,
+} from "./editor/FocusModeToolbar";
 import {
   ManuscriptPreflightDialog,
   type ManuscriptPreflightApplyInput,
@@ -210,6 +262,25 @@ import {
   type CharacterManagerActionState,
 } from "./editor/CharacterManagerDialog";
 import {
+  CharacterCandidateReviewPanel,
+  CharacterWorkspace,
+  type CharacterExtractionActionState,
+  type CharacterGenerationActionState,
+  type CharacterRelationActionState,
+  type CharacterRelationDraft,
+  type CharacterWorkspaceSelection,
+} from "./editor/CharacterWorkspace";
+import type {
+  CharacterExtractionCandidate,
+  CharacterExtractionDecision,
+  CharacterExtractionItem,
+} from "../application/characters/character-extraction-contract";
+import type {
+  CharacterGenerationBrief,
+  CharacterGenerationCandidate,
+  CharacterGenerationItem,
+} from "../application/characters/character-generation-contract";
+import {
   PlotManagerDialog,
   type PlotDraft,
   type PlotManagerActionState,
@@ -217,10 +288,31 @@ import {
   type PlotStoryTimeTarget,
 } from "./editor/PlotManagerDialog";
 import {
-  EventRail,
-  type EventRailMode,
-} from "./editor/EventRail";
+  PlotWorkspace,
+  type PlotWorkspaceTab,
+} from "./editor/PlotWorkspace";
+import { EventDrawTool } from "./editor/EventDrawTool";
+import {
+  BottomEventRail,
+} from "./editor/BottomEventRail";
 import { SceneList } from "./editor/SceneList";
+import {
+  SceneDraftPanel,
+  type SceneDraftActionState,
+} from "./editor/SceneDraftPanel";
+import {
+  MusicMiniPlayer,
+  type YouTubePlaybackRequest,
+} from "./music/MusicMiniPlayer";
+import { MusicLibraryDialog } from "./music/MusicLibraryDialog";
+import {
+  SceneExtractionPanel,
+  type SceneExtractionActionState,
+  type SceneExtractionSelection,
+} from "./editor/SceneExtractionPanel";
+import type {
+  ManuscriptSceneBoundaryPreview,
+} from "./editor/scene-boundary-preview-extension";
 import {
   LoreManagerDialog,
   type LoreEntryDraft,
@@ -243,6 +335,8 @@ import {
   type AssistantContextDialogActionState,
   type AssistantPermissionDraft,
 } from "./assistant/AssistantContextDialog";
+import { AssistantChatDialog } from "./assistant/AssistantChatDialog";
+import type { AssistantChatMessage } from "../application/assistant/assistant-chat";
 import {
   AssistantConnectionsDialog,
   type AssistantConnectionEditorInput,
@@ -256,9 +350,30 @@ import {
   DailyGoalDialog,
   DailyGoalStatus,
 } from "./activity/DailyGoalDialog";
+import {
+  SessionFeedbackPanel,
+  type SessionFeedbackPanelProps,
+} from "./activity/SessionFeedbackPanel";
+import {
+  derivePomodoroPhaseAlert,
+  playPomodoroPhaseAlertSound,
+  PomodoroPhaseAlert,
+  preparePomodoroPhaseAlertSound,
+  type PomodoroPhaseAlertProjection,
+} from "./activity/PomodoroPhaseAlert";
+import {
+  isDarkStarlightTheme,
+  type StarlightThemeKey,
+} from "./theme/starlight-theme";
 import type { ManuscriptTransaction } from "./editor/manuscript-transaction";
+import type { FocusModePreferences } from "../application/settings/ui-preferences";
 import type { ManuscriptTextStatistics } from "./editor/manuscript-text-statistics";
+import type { ManuscriptTextImportResult } from "../application/editor/manuscript-text-import";
 import { ManuscriptTelemetryStore } from "./editor/manuscript-telemetry-store";
+import { ForwardWritingGoalDialog } from "./editor/ForwardWritingMode";
+import { ManuscriptAnalysisDialog } from "./editor/ManuscriptAnalysisDialog";
+import { ManuscriptTextImportDialog } from "./editor/ManuscriptTextImportDialog";
+import type { ManuscriptHeatmapMode } from "./editor/manuscript-analysis";
 import {
   ManuscriptDurableSaveQueue,
   type ManuscriptSaveState,
@@ -304,7 +419,7 @@ type ManuscriptSearchState = {
   readonly result: ManuscriptSearchResult;
 };
 
-type ReviewInspectorTab = "document" | "work" | "versions";
+type ReviewInspectorTab = "document" | "assistant" | "work" | "versions";
 
 type VersionProjectionLoadResult = {
   readonly sequence: number;
@@ -364,6 +479,24 @@ type PendingWorkStructureRange = {
   readonly workId: ManuscriptDocumentSource["workId"];
   readonly documentId: ManuscriptDocumentSource["documentId"];
   readonly range: { readonly from: number; readonly to: number };
+};
+
+type PendingCharacterEvidence = {
+  readonly workId: ManuscriptDocumentSource["workId"];
+  readonly documentId: ManuscriptDocumentSource["documentId"];
+  readonly range: { readonly from: number; readonly to: number };
+};
+
+type PendingSceneBoundaryPreview = {
+  readonly workId: ManuscriptDocumentSource["workId"];
+  readonly documentId: ManuscriptDocumentSource["documentId"];
+  readonly offset: number;
+};
+
+type PendingSceneDraftCompare = {
+  readonly workId: ManuscriptDocumentSource["workId"];
+  readonly documentId: ManuscriptDocumentSource["documentId"];
+  readonly offset: number;
 };
 
 type PendingEventRailRange = {
@@ -461,6 +594,8 @@ const SAVE_STATE_LABELS: Readonly<
   saved: "저장됨",
   failed: "실패",
 });
+const FOCUS_TYPEWRITER_POSITION_STORAGE_KEY =
+  "eum_focus_typewriter_position_percent";
 
 function ManuscriptCount(input: {
   readonly telemetryStore: ManuscriptTelemetryStore;
@@ -500,6 +635,24 @@ function ManuscriptCount(input: {
         </span>
       )}
     </p>
+  );
+}
+
+function SessionFeedbackWithTelemetry(
+  input: Omit<SessionFeedbackPanelProps, "currentCharacterCount"> & {
+    readonly telemetryStore: ManuscriptTelemetryStore;
+  },
+) {
+  const { telemetryStore, ...feedback } = input;
+  const statistics = useSyncExternalStore(
+    telemetryStore.subscribeStatistics,
+    telemetryStore.getStatisticsSnapshot,
+  );
+  return (
+    <SessionFeedbackPanel
+      {...feedback}
+      currentCharacterCount={statistics.characterCount}
+    />
   );
 }
 
@@ -679,11 +832,6 @@ function formatVersionTimestamp(value: string): string {
   });
 }
 
-function elapsedTimerMs(startedAt: string, now: number): number {
-  const startedAtMs = Date.parse(startedAt);
-  return Number.isFinite(startedAtMs) ? Math.max(0, now - startedAtMs) : 0;
-}
-
 function remainingTimerMs(deadlineAt: string | null, now: number): number {
   if (deadlineAt === null) return 0;
   const deadlineAtMs = Date.parse(deadlineAt);
@@ -702,10 +850,37 @@ function renderInHost(
 type AppProps = {
   readonly documentRailHost?: HTMLElement | null;
   readonly embedded?: boolean;
+  readonly eventRailHost?: HTMLElement | null;
+  readonly musicPlayerHost?: HTMLElement | null;
   readonly onCatalogChange?: (
     catalog: WorkspaceCatalogProjection,
   ) => void;
+  readonly onResumePreviewChange?: (
+    preview: ManuscriptResumePreview | null,
+  ) => void;
+  readonly focusModePreferences?: FocusModePreferences;
+  readonly onFocusModePreferencesChange?: (
+    preferences: FocusModePreferences,
+  ) => void;
+  readonly onOpenSettings?: () => void;
+  readonly onThemeChange?: (theme: StarlightThemeKey) => void;
+  readonly theme?: StarlightThemeKey;
+  readonly youtubeMusicConnectionStatus?: YouTubeMusicConnectionStatus | null;
 };
+
+export type ManuscriptResumePreview = Readonly<{
+  workId: ManuscriptDocumentSource["workId"];
+  documentId: ManuscriptDocumentSource["documentId"];
+  text: string;
+  formatting: Readonly<{
+    fontFamily: string;
+    fontSizePx: number;
+    contentWidthPx: number;
+    lineHeight: number;
+    paragraphSpacingPx: number;
+    letterSpacingEm: number;
+  }>;
+}>;
 
 export type ManuscriptWorkspaceHandle = {
   readonly activateLocation: (
@@ -782,70 +957,57 @@ function RenameTitleForm({
 }
 
 function CreateDocumentControl({
-  visible,
-  value,
   disabled,
-  onStart,
-  onCancel,
-  onChange,
-  onSubmit,
+  onCreate,
 }: {
-  readonly visible: boolean;
-  readonly value: string;
   readonly disabled: boolean;
-  readonly onStart: () => void;
-  readonly onCancel: () => void;
-  readonly onChange: (value: string) => void;
-  readonly onSubmit: () => void;
+  readonly onCreate: () => void;
 }) {
-  if (!visible) {
-    return (
-      <span className="create-document-control">
-        <button
-          aria-label="새 회차"
-          className="create-document-button"
-          disabled={disabled}
-          onClick={onStart}
-          title="새 회차"
-          type="button"
-        >
-          <Plus aria-hidden="true" size={16} />
-        </button>
-      </span>
-    );
-  }
   return (
     <span className="create-document-control">
-      <form
-        className="create-document-form"
-        onSubmit={(event) => {
-          event.preventDefault();
-          onSubmit();
-        }}
+      <button
+        aria-label="새 회차"
+        className="create-document-button"
+        disabled={disabled}
+        onClick={onCreate}
+        title="새 회차"
+        type="button"
       >
-        <label>
-          <span>회차 제목</span>
-          <input
-            aria-label="새 회차 제목"
-            autoFocus
-            disabled={disabled}
-            onChange={(event) => onChange(event.target.value)}
-            placeholder="비우면 제목없음"
-            value={value}
-          />
-        </label>
-        <div>
-          <button disabled={disabled} onClick={onCancel} type="button">
-            취소
-          </button>
-          <button disabled={disabled} type="submit">
-            만들기
-          </button>
-        </div>
-      </form>
+        <Plus aria-hidden="true" size={16} />
+      </button>
     </span>
   );
 }
+
+type DocumentDropPreview = Readonly<{
+  sourceDocumentId: WorkspaceDocumentSummary["documentId"];
+}> & (
+  | Readonly<{
+      kind: "document";
+      targetDocumentId: WorkspaceDocumentSummary["documentId"];
+      placement: "before" | "after";
+    }>
+  | Readonly<{
+      kind: "folder";
+      folderId: WorkspaceDocumentFolderSummary["folderId"] | null;
+    }>
+);
+
+type DocumentPointerDrag = Readonly<{
+  pointerId: number;
+  documentId: WorkspaceDocumentSummary["documentId"];
+  originX: number;
+  originY: number;
+  clientX: number;
+  clientY: number;
+  active: boolean;
+  captureElement: HTMLElement;
+}>;
+
+const DOCUMENT_DRAG_START_DISTANCE = 6;
+const DOCUMENT_DRAG_AUTO_SCROLL_EDGE = 42;
+const DOCUMENT_DRAG_AUTO_SCROLL_STEP = 12;
+const DEFAULT_DOCUMENT_FOLDER_TITLE = "제목없음";
 
 function DocumentFolderTree({
   work,
@@ -855,6 +1017,7 @@ function DocumentFolderTree({
   onActivateDocument,
   onRenameDocument,
   onCreateFolder,
+  onMoveDocument,
   onRenameFolder,
   onPlaceDocument,
   onRetireFolder,
@@ -864,10 +1027,17 @@ function DocumentFolderTree({
   readonly activeDocumentId: string | null;
   readonly disabled: boolean;
   readonly onActivateDocument: (documentId: string) => void;
-  readonly onRenameDocument: (document: WorkspaceDocumentSummary) => void;
+  readonly onRenameDocument: (
+    document: WorkspaceDocumentSummary,
+    title: string,
+  ) => Promise<void>;
   readonly onCreateFolder: (
     title: string,
     parentFolderId: WorkspaceDocumentFolderSummary["folderId"] | null,
+  ) => Promise<void>;
+  readonly onMoveDocument: (
+    documentId: WorkspaceDocumentSummary["documentId"],
+    direction: MoveDocumentCommand["direction"],
   ) => Promise<void>;
   readonly onRenameFolder: (
     folderId: WorkspaceDocumentFolderSummary["folderId"],
@@ -884,10 +1054,23 @@ function DocumentFolderTree({
   const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<string>>(
     () => new Set(),
   );
-  const [createParentFolderId, setCreateParentFolderId] = useState<
-    WorkspaceDocumentFolderSummary["folderId"] | null | undefined
-  >(undefined);
-  const [newFolderTitle, setNewFolderTitle] = useState("");
+  const [renameDocumentId, setRenameDocumentId] = useState<
+    WorkspaceDocumentSummary["documentId"] | null
+  >(null);
+  const [renameDocumentTitle, setRenameDocumentTitle] = useState("");
+  const renameDocumentPendingRef = useRef<
+    WorkspaceDocumentSummary["documentId"] | null
+  >(null);
+  const documentPointerDragRef = useRef<DocumentPointerDrag | null>(null);
+  const documentDropPreviewRef = useRef<DocumentDropPreview | null>(null);
+  const documentDropPendingRef = useRef(false);
+  const documentDragSuppressClickRef = useRef<
+    WorkspaceDocumentSummary["documentId"] | null
+  >(null);
+  const documentTreeRef = useRef<HTMLDivElement | null>(null);
+  const documentAutoScrollFrameRef = useRef<number | null>(null);
+  const [documentDropPreview, setDocumentDropPreview] =
+    useState<DocumentDropPreview | null>(null);
   const [renameFolderId, setRenameFolderId] = useState<
     WorkspaceDocumentFolderSummary["folderId"] | null
   >(null);
@@ -916,86 +1099,361 @@ function DocumentFolderTree({
     }
     return groups;
   }, [work.documents]);
-  const folderDepths = useMemo(() => {
-    const byId = new Map(work.folders.map((folder) => [folder.folderId, folder]));
-    return new Map(
-      work.folders.map((folder) => {
-        let depth = 0;
-        let parentFolderId = folder.parentFolderId;
-        while (parentFolderId !== null) {
-          depth += 1;
-          parentFolderId = byId.get(parentFolderId)?.parentFolderId ?? null;
-        }
-        return [folder.folderId, depth] as const;
-      }),
-    );
-  }, [work.folders]);
-
-  const closeCreateFolder = () => {
-    setCreateParentFolderId(undefined);
-    setNewFolderTitle("");
+  const beginDocumentRename = (document: WorkspaceDocumentSummary) => {
+    if (disabled) return;
+    setRenameDocumentId(document.documentId);
+    setRenameDocumentTitle("");
   };
+  const cancelDocumentRename = () => {
+    setRenameDocumentId(null);
+    setRenameDocumentTitle("");
+  };
+  const commitDocumentRename = async (
+    document: WorkspaceDocumentSummary,
+  ): Promise<void> => {
+    const title = renameDocumentTitle.trim();
+    if (
+      title.length === 0 ||
+      renameDocumentPendingRef.current === document.documentId
+    ) {
+      return;
+    }
+    if (title === document.title) {
+      setRenameDocumentId(null);
+      setRenameDocumentTitle("");
+      return;
+    }
+    renameDocumentPendingRef.current = document.documentId;
+    try {
+      await onRenameDocument(document, title);
+      setRenameDocumentId(null);
+      setRenameDocumentTitle("");
+    } finally {
+      renameDocumentPendingRef.current = null;
+    }
+  };
+  const setCurrentDocumentDropPreview = useCallback(
+    (preview: DocumentDropPreview | null) => {
+      documentDropPreviewRef.current = preview;
+      setDocumentDropPreview(preview);
+    },
+    [],
+  );
+  const stopDocumentAutoScroll = useCallback(() => {
+    if (documentAutoScrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(documentAutoScrollFrameRef.current);
+      documentAutoScrollFrameRef.current = null;
+    }
+  }, []);
+  const clearDocumentPointerDrag = useCallback(() => {
+    const drag = documentPointerDragRef.current;
+    documentPointerDragRef.current = null;
+    setCurrentDocumentDropPreview(null);
+    stopDocumentAutoScroll();
+    if (
+      drag !== null &&
+      drag.captureElement.hasPointerCapture(drag.pointerId)
+    ) {
+      drag.captureElement.releasePointerCapture(drag.pointerId);
+    }
+  }, [setCurrentDocumentDropPreview, stopDocumentAutoScroll]);
+  const resolveDocumentDropPreview = useCallback(
+    (
+      drag: DocumentPointerDrag,
+      clientX: number,
+      clientY: number,
+    ): DocumentDropPreview | null => {
+      const source = work.documents.find(
+        (document) => document.documentId === drag.documentId,
+      );
+      if (source === undefined) return null;
+      const pointedElement = document.elementFromPoint(clientX, clientY);
+      const targetDocumentElement = pointedElement?.closest<HTMLElement>(
+        "[data-document-id]",
+      ) ?? null;
+      if (
+        targetDocumentElement !== null &&
+        targetDocumentElement.dataset.documentId !== drag.documentId
+      ) {
+        const target = work.documents.find(
+          (document) =>
+            document.documentId === targetDocumentElement.dataset.documentId,
+        );
+        if (target !== undefined && target.folderId === source.folderId) {
+          const bounds = targetDocumentElement.getBoundingClientRect();
+          return Object.freeze({
+            kind: "document" as const,
+            sourceDocumentId: drag.documentId,
+            targetDocumentId: target.documentId,
+            placement:
+              clientY < bounds.top + bounds.height / 2 ? "before" : "after",
+          });
+        }
+      }
+      const targetFolderElement = pointedElement?.closest<HTMLElement>(
+        "[data-document-folder-id]",
+      ) ?? null;
+      if (targetFolderElement !== null) {
+        const folderId = targetFolderElement.dataset.documentFolderId;
+        if (
+          folderId !== undefined &&
+          work.folders.some((folder) => folder.folderId === folderId)
+        ) {
+          return Object.freeze({
+            kind: "folder" as const,
+            sourceDocumentId: drag.documentId,
+            folderId: folderId as WorkspaceDocumentFolderSummary["folderId"],
+          });
+        }
+      }
+      const rootTarget = pointedElement?.closest<HTMLElement>(
+        "[data-document-root-drop-target]",
+      );
+      return rootTarget === null || rootTarget === undefined
+        ? null
+        : Object.freeze({
+            kind: "folder" as const,
+            sourceDocumentId: drag.documentId,
+            folderId: null,
+          });
+    },
+    [work.documents, work.folders],
+  );
+  const startDocumentAutoScroll = useCallback(() => {
+    if (documentAutoScrollFrameRef.current !== null) return;
+    const step = () => {
+      const drag = documentPointerDragRef.current;
+      const tree = documentTreeRef.current;
+      if (drag === null || !drag.active || tree === null) {
+        documentAutoScrollFrameRef.current = null;
+        return;
+      }
+      const bounds = tree.getBoundingClientRect();
+      const scrollDelta = drag.clientY < bounds.top + DOCUMENT_DRAG_AUTO_SCROLL_EDGE
+        ? -DOCUMENT_DRAG_AUTO_SCROLL_STEP
+        : drag.clientY > bounds.bottom - DOCUMENT_DRAG_AUTO_SCROLL_EDGE
+          ? DOCUMENT_DRAG_AUTO_SCROLL_STEP
+          : 0;
+      if (scrollDelta !== 0) {
+        tree.scrollTop += scrollDelta;
+        setCurrentDocumentDropPreview(
+          resolveDocumentDropPreview(drag, drag.clientX, drag.clientY),
+        );
+      }
+      documentAutoScrollFrameRef.current = window.requestAnimationFrame(step);
+    };
+    documentAutoScrollFrameRef.current = window.requestAnimationFrame(step);
+  }, [resolveDocumentDropPreview, setCurrentDocumentDropPreview]);
+  const requestDocumentDrop = useCallback(
+    async (preview: DocumentDropPreview): Promise<void> => {
+      if (disabled || documentDropPendingRef.current) return;
+      const source = work.documents.find(
+        (document) => document.documentId === preview.sourceDocumentId,
+      );
+      if (source === undefined) return;
+      documentDropPendingRef.current = true;
+      try {
+        if (preview.kind === "folder") {
+          if (source.folderId !== preview.folderId) {
+            await onPlaceDocument(source.documentId, preview.folderId);
+          }
+          return;
+        }
+        const sourceIndex = work.documents.findIndex(
+          (document) => document.documentId === source.documentId,
+        );
+        const targetIndex = work.documents.findIndex(
+          (document) => document.documentId === preview.targetDocumentId,
+        );
+        if (sourceIndex < 0 || targetIndex < 0) return;
+        let destinationIndex =
+          targetIndex + (preview.placement === "after" ? 1 : 0);
+        if (sourceIndex < destinationIndex) destinationIndex -= 1;
+        const direction: MoveDocumentCommand["direction"] =
+          destinationIndex < sourceIndex ? "earlier" : "later";
+        const moveCount = Math.abs(destinationIndex - sourceIndex);
+        for (let index = 0; index < moveCount; index += 1) {
+          await onMoveDocument(source.documentId, direction);
+        }
+      } finally {
+        documentDropPendingRef.current = false;
+      }
+    },
+    [disabled, onMoveDocument, onPlaceDocument, work.documents],
+  );
+  const handleDocumentPointerDown = useCallback(
+    (
+      event: ReactPointerEvent<HTMLButtonElement>,
+      document: WorkspaceDocumentSummary,
+    ) => {
+      if (
+        event.button !== 0 ||
+        disabled ||
+        documentDropPendingRef.current ||
+        documentPointerDragRef.current !== null
+      ) {
+        return;
+      }
+      event.currentTarget.setPointerCapture(event.pointerId);
+      documentPointerDragRef.current = Object.freeze({
+        pointerId: event.pointerId,
+        documentId: document.documentId,
+        originX: event.clientX,
+        originY: event.clientY,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        active: false,
+        captureElement: event.currentTarget,
+      });
+    },
+    [disabled],
+  );
+  const handleDocumentPointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLButtonElement>) => {
+      const drag = documentPointerDragRef.current;
+      if (drag === null || drag.pointerId !== event.pointerId) return;
+      const active = drag.active || Math.hypot(
+        event.clientX - drag.originX,
+        event.clientY - drag.originY,
+      ) >= DOCUMENT_DRAG_START_DISTANCE;
+      const currentDrag = Object.freeze({
+        ...drag,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        active,
+      });
+      documentPointerDragRef.current = currentDrag;
+      if (!active) return;
+      event.preventDefault();
+      setCurrentDocumentDropPreview(
+        resolveDocumentDropPreview(currentDrag, event.clientX, event.clientY),
+      );
+      startDocumentAutoScroll();
+    }, [
+      resolveDocumentDropPreview,
+      setCurrentDocumentDropPreview,
+      startDocumentAutoScroll,
+    ],
+  );
+  const handleDocumentPointerUp = useCallback(
+    (event: ReactPointerEvent<HTMLButtonElement>) => {
+      const drag = documentPointerDragRef.current;
+      if (drag === null || drag.pointerId !== event.pointerId) return;
+      const preview = documentDropPreviewRef.current;
+      const wasActive = drag.active;
+      clearDocumentPointerDrag();
+      if (!wasActive || preview === null) return;
+      event.preventDefault();
+      documentDragSuppressClickRef.current = drag.documentId;
+      window.setTimeout(() => {
+        if (documentDragSuppressClickRef.current === drag.documentId) {
+          documentDragSuppressClickRef.current = null;
+        }
+      }, 0);
+      void requestDocumentDrop(preview).catch(() => undefined);
+    }, [clearDocumentPointerDrag, requestDocumentDrop]);
+
+  useEffect(() => () => {
+    stopDocumentAutoScroll();
+  }, [stopDocumentAutoScroll]);
   const renderDocument = (
     document: WorkspaceDocumentSummary,
     depth: number,
-  ) => (
-    <div
-      className="document-tree-row document-tree-document"
-      key={document.documentId}
-      style={{ "--document-tree-depth": depth } as CSSProperties}
-    >
-      <button
-        aria-current={
-          document.documentId === activeDocumentId ? "page" : undefined
-        }
-        className={
-          document.documentId === activeDocumentId
-            ? "document-tree-open is-active"
-            : "document-tree-open"
-        }
-        disabled={disabled}
-        onClick={() => onActivateDocument(document.documentId)}
-        type="button"
+  ) => {
+    const editing = renameDocumentId === document.documentId;
+    const documentTarget =
+      documentDropPreview?.kind === "document" &&
+      documentDropPreview.targetDocumentId === document.documentId
+        ? documentDropPreview.placement
+        : null;
+    const rowClassName = [
+      "document-tree-row",
+      "document-tree-document",
+      documentDropPreview?.sourceDocumentId === document.documentId
+        ? "is-document-drag-source"
+        : "",
+      documentTarget === "before" ? "is-document-drop-before" : "",
+      documentTarget === "after" ? "is-document-drop-after" : "",
+    ].filter(Boolean).join(" ");
+    return (
+      <div
+        className={rowClassName}
+        data-document-id={document.documentId}
+        key={document.documentId}
+        style={{ "--document-tree-depth": depth } as CSSProperties}
       >
-        <FileText aria-hidden="true" size={14} />
-        <span>{document.title}</span>
-      </button>
-      <span className="document-tree-title-edit-slot">
-        {document.documentId === activeDocumentId && (
-          <button
-            aria-label="회차 이름 변경"
-            className="title-edit-button document-tree-title-edit-button"
+      {editing ? (
+        <form
+          aria-label={`${document.title} 회차 제목 편집`}
+          className="document-title-inline-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void commitDocumentRename(document).catch(() => undefined);
+          }}
+        >
+          <FileText aria-hidden="true" size={14} />
+          <input
+            aria-label="회차 제목"
+            autoFocus
             disabled={disabled}
-            onClick={() => onRenameDocument(document)}
-            type="button"
-          >
-            <Pencil aria-hidden="true" size={13} />
-          </button>
-        )}
-      </span>
-      <select
-        aria-label={`${document.title} 폴더 위치`}
-        disabled={disabled}
-        onChange={(event) => {
-          const folderId = event.target.value;
-          void onPlaceDocument(
-            document.documentId,
-            folderId.length === 0
-              ? null
-              : (folderId as WorkspaceDocumentFolderSummary["folderId"]),
-          );
-        }}
-        value={document.folderId ?? ""}
-      >
-        <option value="">작품 루트</option>
-        {work.folders.map((folder) => (
-          <option key={folder.folderId} value={folder.folderId}>
-            {`${"　".repeat(folderDepths.get(folder.folderId) ?? 0)}${folder.title}`}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
+            onBlur={cancelDocumentRename}
+            onChange={(event) => setRenameDocumentTitle(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                cancelDocumentRename();
+              }
+            }}
+            value={renameDocumentTitle}
+          />
+        </form>
+      ) : (
+        <button
+          aria-current={
+            document.documentId === activeDocumentId ? "page" : undefined
+          }
+          className={
+            document.documentId === activeDocumentId
+              ? "document-tree-open is-active"
+              : "document-tree-open"
+          }
+          disabled={disabled}
+          onClick={() => {
+            if (
+              documentDragSuppressClickRef.current === document.documentId
+            ) {
+              documentDragSuppressClickRef.current = null;
+              return;
+            }
+            onActivateDocument(document.documentId);
+          }}
+          onDoubleClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            beginDocumentRename(document);
+          }}
+          onLostPointerCapture={() => {
+            if (
+              documentPointerDragRef.current?.documentId === document.documentId
+            ) {
+              clearDocumentPointerDrag();
+            }
+          }}
+          onPointerCancel={clearDocumentPointerDrag}
+          onPointerDown={(event) =>
+            handleDocumentPointerDown(event, document)
+          }
+          onPointerMove={handleDocumentPointerMove}
+          onPointerUp={handleDocumentPointerUp}
+          type="button"
+        >
+          <FileText aria-hidden="true" size={14} />
+          <span>{document.title}</span>
+        </button>
+      )}
+      </div>
+    );
+  };
   const renderFolder = (
     folder: WorkspaceDocumentFolderSummary,
     depth: number,
@@ -1006,7 +1464,15 @@ function DocumentFolderTree({
     return (
       <div className="document-tree-folder-group" key={folder.folderId}>
         <div
-          className="document-tree-row document-tree-folder"
+          className={[
+            "document-tree-row",
+            "document-tree-folder",
+            documentDropPreview?.kind === "folder" &&
+              documentDropPreview.folderId === folder.folderId
+              ? "is-document-folder-drop-target"
+              : "",
+          ].filter(Boolean).join(" ")}
+          data-document-folder-id={folder.folderId}
           style={{ "--document-tree-depth": depth } as CSSProperties}
         >
           <button
@@ -1069,8 +1535,10 @@ function DocumentFolderTree({
               aria-label={`${folder.title} 하위 폴더 추가`}
               disabled={disabled}
               onClick={() => {
-                setCreateParentFolderId(folder.folderId);
-                setNewFolderTitle("");
+                void onCreateFolder(
+                  DEFAULT_DOCUMENT_FOLDER_TITLE,
+                  folder.folderId,
+                ).catch(() => undefined);
               }}
               title="하위 폴더 추가"
               type="button"
@@ -1111,16 +1579,22 @@ function DocumentFolderTree({
       </div>
     );
   };
-  const parentFolder =
-    createParentFolderId === null || createParentFolderId === undefined
-      ? undefined
-      : work.folders.find(
-          (folder) => folder.folderId === createParentFolderId,
-        );
 
   return (
-    <section aria-label="회차 폴더" className="document-folder-tree">
-      <header>
+    <section
+      aria-label="회차 폴더"
+      className="document-folder-tree"
+      data-document-drag-active={documentDropPreview !== null ? "true" : "false"}
+    >
+      <header
+        className={
+          documentDropPreview?.kind === "folder" &&
+          documentDropPreview.folderId === null
+            ? "is-document-root-drop-target"
+            : undefined
+        }
+        data-document-root-drop-target="true"
+      >
         <strong>문서</strong>
         <span className="document-folder-header-actions">
           {documentCreateControl}
@@ -1128,8 +1602,10 @@ function DocumentFolderTree({
             aria-label="폴더 추가"
             disabled={disabled}
             onClick={() => {
-              setCreateParentFolderId(null);
-              setNewFolderTitle("");
+              void onCreateFolder(
+                DEFAULT_DOCUMENT_FOLDER_TITLE,
+                null,
+              ).catch(() => undefined);
             }}
             title="폴더 추가"
             type="button"
@@ -1138,42 +1614,11 @@ function DocumentFolderTree({
           </button>
         </span>
       </header>
-      {createParentFolderId !== undefined && (
-        <form
-          aria-label="새 폴더 만들기"
-          className="document-folder-create"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void onCreateFolder(newFolderTitle, createParentFolderId).then(
-              closeCreateFolder,
-              () => undefined,
-            );
-          }}
-        >
-          <span>
-            {parentFolder === undefined
-              ? "작품 루트"
-              : `${parentFolder.title} 아래`}
-          </span>
-          <input
-            aria-label="새 폴더 이름"
-            autoFocus
-            disabled={disabled}
-            onChange={(event) => setNewFolderTitle(event.target.value)}
-            value={newFolderTitle}
-          />
-          <button disabled={disabled} onClick={closeCreateFolder} type="button">
-            취소
-          </button>
-          <button
-            disabled={disabled || newFolderTitle.trim().length === 0}
-            type="submit"
-          >
-            만들기
-          </button>
-        </form>
-      )}
-      <div className="document-tree" aria-label="회차 폴더 트리">
+      <div
+        className="document-tree"
+        aria-label="회차 폴더 트리"
+        ref={documentTreeRef}
+      >
         {(foldersByParentId.get(null) ?? []).map((folder) =>
           renderFolder(folder, 0),
         )}
@@ -1189,13 +1634,27 @@ export const App = forwardRef<
   ManuscriptWorkspaceHandle,
   AppProps
 >(function App(
-  { documentRailHost, embedded = false, onCatalogChange },
+  {
+    documentRailHost,
+    embedded = false,
+    eventRailHost,
+    focusModePreferences,
+    musicPlayerHost,
+    onCatalogChange,
+    onFocusModePreferencesChange,
+    onOpenSettings,
+    onResumePreviewChange,
+    onThemeChange,
+    theme = "light-mode",
+    youtubeMusicConnectionStatus = null,
+  },
   ref,
 ) {
   const documentRailId = useId();
   const recoveryHeadingId = useId();
   const reviewRailId = useId();
   const reviewDocumentTabId = useId();
+  const reviewAssistantTabId = useId();
   const reviewWorkTabId = useId();
   const reviewVersionsTabId = useId();
   const workspaceBodyRef = useRef<HTMLDivElement>(null);
@@ -1213,6 +1672,18 @@ export const App = forwardRef<
   const continuousReadingPendingSaveRef = useRef<Promise<void>>(
     Promise.resolve(),
   );
+  const workManuscriptLayoutByWorkRef = useRef(
+    new Map<string, WorkManuscriptLayoutSettingsProjection>(),
+  );
+  const workManuscriptLayoutSaveChainRef = useRef<Promise<void>>(
+    Promise.resolve(),
+  );
+  const workManuscriptLayoutPendingSaveRef = useRef<Promise<void>>(
+    Promise.resolve(),
+  );
+  const workManuscriptLayoutLoadSequenceRef = useRef(0);
+  const workManuscriptLayoutChangeSequenceRef = useRef(0);
+  const activeWorkIdRef = useRef<EntityId<"Work"> | null>(null);
   const versionLoadSequenceRef = useRef(0);
   const preflightLoadSequenceRef = useRef(0);
   const assistantContextLoadSequenceRef = useRef(0);
@@ -1220,6 +1691,11 @@ export const App = forwardRef<
   const writingSessionTransitionPendingRef = useRef(false);
   const activeWritingSessionRef =
     useRef<WritingSessionProjection | undefined>(undefined);
+  const focusModeOwnedWritingSessionIdRef =
+    useRef<EntityId<"WritingSession"> | null>(null);
+  const focusModeSessionTransitionPendingRef = useRef(false);
+  const focusModeSessionPendingRef = useRef<Promise<void>>(Promise.resolve());
+  const focusModeSessionAttemptedRef = useRef(false);
   const pomodoroReconcilePendingRef = useRef(false);
   const pendingFragmentSourceRef = useRef<PendingFragmentSource | null>(null);
   const pendingForeshadowPointSourceRef =
@@ -1228,6 +1704,12 @@ export const App = forwardRef<
     useRef<PendingPlotThreadSource | null>(null);
   const pendingWorkStructureRangeRef =
     useRef<PendingWorkStructureRange | null>(null);
+  const pendingCharacterEvidenceRef =
+    useRef<PendingCharacterEvidence | null>(null);
+  const pendingSceneBoundaryPreviewRef =
+    useRef<PendingSceneBoundaryPreview | null>(null);
+  const pendingSceneDraftCompareRef =
+    useRef<PendingSceneDraftCompare | null>(null);
   const pendingEventRailRangeRef =
     useRef<PendingEventRailRange | null>(null);
   const pendingLoreEvidenceRef = useRef<PendingLoreEvidence | null>(null);
@@ -1284,10 +1766,8 @@ export const App = forwardRef<
       | "moving-document"
       | "managing-document-folders"
     >("idle");
-  const [showCreateDocument, setShowCreateDocument] = useState(false);
-  const [newDocumentTitle, setNewDocumentTitle] = useState("");
   const [titleEditTarget, setTitleEditTarget] = useState<
-    "work" | "document" | null
+    "work" | null
   >(null);
   const [titleEditValue, setTitleEditValue] = useState("");
   const [workspaceActionError, setWorkspaceActionError] = useState<
@@ -1300,8 +1780,10 @@ export const App = forwardRef<
     readonly EventSourceProjection[]
   >([]);
   const [eventRail, setEventRail] = useState<EventRailProjection | null>(null);
-  const [eventRailMode, setEventRailMode] =
-    useState<EventRailMode>("manuscript");
+  const [activeManuscriptPosition, setActiveManuscriptPosition] = useState<{
+    readonly documentId: EntityId<"Document">;
+    readonly offset: number;
+  } | null>(null);
   const [pendingEventDraft, setPendingEventDraft] = useState<
     PendingEventDraft | null
   >(null);
@@ -1315,10 +1797,70 @@ export const App = forwardRef<
     "idle" | "creating" | "updating-rule" | "updating-event"
   >("idle");
   const [sceneActionError, setSceneActionError] = useState<string | null>(null);
+  const [sceneExtractionCandidates, setSceneExtractionCandidates] = useState<
+    readonly SceneExtractionCandidate[]
+  >([]);
+  const [sceneAnnotations, setSceneAnnotations] = useState<
+    readonly SceneAnnotationProjection[]
+  >([]);
+  const [sceneDraftCandidates, setSceneDraftCandidates] = useState<
+    readonly SceneDraftCandidate[]
+  >([]);
+  const [sceneDraftActionState, setSceneDraftActionState] =
+    useState<SceneDraftActionState>("idle");
+  const [sceneDraftActionError, setSceneDraftActionError] = useState<
+    string | null
+  >(null);
+  const [sceneMusicQueueCandidates, setSceneMusicQueueCandidates] = useState<
+    readonly SceneMusicQueueCandidate[]
+  >([]);
+  const [sceneMusicQueueActionState, setSceneMusicQueueActionState] = useState<
+    "idle" | "searching" | "selecting" | "playing" | "saving-favorite"
+  >("idle");
+  const [sceneMusicQueueError, setSceneMusicQueueError] = useState<
+    string | null
+  >(null);
+  const [musicLibraryOpen, setMusicLibraryOpen] = useState(false);
+  const [musicLibraryResults, setMusicLibraryResults] = useState<
+    readonly YouTubeVideoProjection[]
+  >([]);
+  const [musicLibraryQueue, setMusicLibraryQueue] = useState<
+    readonly YouTubeVideoProjection[]
+  >([]);
+  const [musicLibraryActionState, setMusicLibraryActionState] =
+    useState<"idle" | "searching" | "saving-playlist">("idle");
+  const [musicLibraryError, setMusicLibraryError] = useState<string | null>(null);
+  const [sceneExtractionSelection, setSceneExtractionSelection] =
+    useState<SceneExtractionSelection | null>(null);
+  const [sceneExtractionActionState, setSceneExtractionActionState] =
+    useState<SceneExtractionActionState>("idle");
+  const [sceneExtractionActionError, setSceneExtractionActionError] =
+    useState<string | null>(null);
+  const [sceneExtractionPermissionRequired, setSceneExtractionPermissionRequired] =
+    useState(false);
+  const [sceneExtractionDestinationId, setSceneExtractionDestinationId] =
+    useState<string | null>(null);
   const [workActivity, setWorkActivity] = useState<
     WorkActivityProjection | null
   >(null);
   const [pomodoro, setPomodoro] = useState<PomodoroProjection | null>(null);
+  const [pomodoroPhaseAlert, setPomodoroPhaseAlert] =
+    useState<PomodoroPhaseAlertProjection | null>(null);
+  const [workMusicSettings, setWorkMusicSettings] =
+    useState<WorkMusicSettingsProjection | null>(null);
+  const [workManuscriptLayout, setWorkManuscriptLayout] =
+    useState<WorkManuscriptLayoutSettingsProjection | null>(null);
+  const [workInspirationSettings, setWorkInspirationSettings] =
+    useState<WorkInspirationSettingsProjection | null>(null);
+  const [inspirationActionState, setInspirationActionState] =
+    useState<"idle" | "saving">("idle");
+  const [inspirationActionError, setInspirationActionError] =
+    useState<string | null>(null);
+  const [youtubeMusicProfile, setYoutubeMusicProfile] =
+    useState<YouTubeMusicProfile | null>(null);
+  const [youtubePlaybackRequest, setYoutubePlaybackRequest] =
+    useState<YouTubePlaybackRequest | null>(null);
+  const youtubePlaybackNonceRef = useRef(0);
   const [dailyGoals, setDailyGoals] =
     useState<WorkRecordsGoalsProjection | null>(null);
   const [showDailyGoalDialog, setShowDailyGoalDialog] = useState(false);
@@ -1333,12 +1875,106 @@ export const App = forwardRef<
     | "starting-focus"
     | "pausing-focus"
     | "resuming-focus"
+    | "saving-focus-note"
     | "stopping-focus"
   >("idle");
   const [activityActionError, setActivityActionError] = useState<
     string | null
   >(null);
   const [showFocusDialog, setShowFocusDialog] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
+  const focusModeRef = useRef(focusMode);
+  useEffect(() => {
+    focusModeRef.current = focusMode;
+  }, [focusMode]);
+  const [focusContentWidthPx, setFocusContentWidthPx] = useState(
+    focusModePreferences?.contentWidthPx ?? 700,
+  );
+  const [focusZoomPercent, setFocusZoomPercent] = useState(
+    focusModePreferences?.zoomPercent ?? 100,
+  );
+  const [focusCurrentBlockHighlight, setFocusCurrentBlockHighlight] =
+    useState(focusModePreferences?.currentBlockHighlight ?? false);
+  const [focusTypewriterMode, setFocusTypewriterMode] = useState(
+    focusModePreferences?.typewriterMode ?? false,
+  );
+  const [focusTypewriterPositionPercent, setFocusTypewriterPositionPercent] =
+    useState(() => {
+      if (focusModePreferences !== undefined) {
+        return focusModePreferences.typewriterPositionPercent;
+      }
+      const raw = window.localStorage.getItem(
+        FOCUS_TYPEWRITER_POSITION_STORAGE_KEY,
+      );
+      const stored = raw === null ? Number.NaN : Number(raw);
+      return Number.isFinite(stored)
+        ? Math.min(
+            FOCUS_TYPEWRITER_POSITION_MAX_PERCENT,
+            Math.max(FOCUS_TYPEWRITER_POSITION_MIN_PERCENT, stored),
+          )
+        : FOCUS_TYPEWRITER_POSITION_DEFAULT_PERCENT;
+    });
+  const persistFocusModePreferences = useCallback((
+    changes: Partial<FocusModePreferences>,
+  ) => {
+    const next = Object.freeze({
+      contentWidthPx: focusContentWidthPx,
+      zoomPercent: focusZoomPercent,
+      currentBlockHighlight: focusCurrentBlockHighlight,
+      typewriterMode: focusTypewriterMode,
+      typewriterPositionPercent: focusTypewriterPositionPercent,
+      ...changes,
+    });
+    onFocusModePreferencesChange?.(next);
+  }, [
+    focusContentWidthPx,
+    focusCurrentBlockHighlight,
+    focusTypewriterMode,
+    focusTypewriterPositionPercent,
+    focusZoomPercent,
+    onFocusModePreferencesChange,
+  ]);
+  const changeFocusTypewriterPosition = useCallback((position: number) => {
+    const next = Math.min(
+      FOCUS_TYPEWRITER_POSITION_MAX_PERCENT,
+      Math.max(FOCUS_TYPEWRITER_POSITION_MIN_PERCENT, position),
+    );
+    window.localStorage.setItem(
+      FOCUS_TYPEWRITER_POSITION_STORAGE_KEY,
+      String(next),
+    );
+    setFocusTypewriterPositionPercent(next);
+    persistFocusModePreferences({ typewriterPositionPercent: next });
+  }, [persistFocusModePreferences]);
+  const darkMode = isDarkStarlightTheme(theme);
+  const [showForwardWritingDialog, setShowForwardWritingDialog] = useState(false);
+  const [forwardWriting, setForwardWriting] = useState<{
+    readonly workId: EntityId<"Work">;
+    readonly documentId: EntityId<"Document">;
+    readonly goalCharacters: number;
+    readonly protectedLength: number;
+    readonly baselineCharacterCount: number;
+    readonly writtenCharacters: number;
+  } | null>(null);
+  const [heatmapMode, setHeatmapMode] =
+    useState<ManuscriptHeatmapMode>("off");
+  const [manuscriptAnalysis, setManuscriptAnalysis] = useState<{
+    readonly documentTitle: string;
+    readonly manuscript: string;
+  } | null>(null);
+  const [manuscriptTextImport, setManuscriptTextImport] = useState<{
+    readonly candidate: Extract<
+      ManuscriptTextImportResult,
+      { readonly status: "selected" }
+    >;
+    readonly sourceText: string;
+  } | null>(null);
+  const [manuscriptTextImportAction, setManuscriptTextImportAction] = useState<
+    "idle" | "selecting" | "applying"
+  >("idle");
+  const [manuscriptTextImportError, setManuscriptTextImportError] = useState<
+    string | null
+  >(null);
   const [activityClock, setActivityClock] = useState(() => Date.now());
   const [documentRevisions, setDocumentRevisions] = useState<
     readonly DocumentRevisionProjection[]
@@ -1398,15 +2034,45 @@ export const App = forwardRef<
   const [characters, setCharacters] = useState<
     readonly CharacterProjection[]
   >([]);
+  const [characterRelations, setCharacterRelations] = useState<
+    readonly CharacterRelationProjection[]
+  >([]);
   const [characterDialogOpen, setCharacterDialogOpen] = useState(false);
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(
     null,
   );
   const [characterActionState, setCharacterActionState] =
     useState<CharacterManagerActionState>("idle");
+  const [characterRelationActionState, setCharacterRelationActionState] =
+    useState<CharacterRelationActionState>("idle");
   const [characterActionError, setCharacterActionError] = useState<
     string | null
   >(null);
+  const [workspaceSurface, setWorkspaceSurface] = useState<
+    "manuscript" | "characters" | "plots"
+  >("manuscript");
+  const [plotWorkspaceInitialTab, setPlotWorkspaceInitialTab] =
+    useState<PlotWorkspaceTab>("board");
+  const [characterWorkspaceSelection, setCharacterWorkspaceSelection] =
+    useState<CharacterWorkspaceSelection | null>(null);
+  const [characterExtractionCandidates, setCharacterExtractionCandidates] =
+    useState<readonly CharacterExtractionCandidate[]>([]);
+  const [characterExtractionActionState, setCharacterExtractionActionState] =
+    useState<CharacterExtractionActionState>("idle");
+  const [characterExtractionActionError, setCharacterExtractionActionError] =
+    useState<string | null>(null);
+  const [characterExtractionPermissionRequired, setCharacterExtractionPermissionRequired] =
+    useState(false);
+  const [characterExtractionDestinationId, setCharacterExtractionDestinationId] =
+    useState<string | null>(null);
+  const [characterGenerationCandidates, setCharacterGenerationCandidates] =
+    useState<readonly CharacterGenerationCandidate[]>([]);
+  const [characterGenerationActionState, setCharacterGenerationActionState] =
+    useState<CharacterGenerationActionState>("idle");
+  const [characterGenerationActionError, setCharacterGenerationActionError] =
+    useState<string | null>(null);
+  const [chatGptOAuthStatus, setChatGptOAuthStatus] =
+    useState<ChatGptOAuthConnectionStatus | null>(null);
   const [plots, setPlots] = useState<readonly PlotThreadProjection[]>([]);
   const [plotBoard, setPlotBoard] = useState<PlotBoardProjection | null>(null);
   const [plotSources, setPlotSources] = useState<
@@ -1459,6 +2125,13 @@ export const App = forwardRef<
   >(null);
   const [assistantContextDialogOpen, setAssistantContextDialogOpen] =
     useState(false);
+  const [assistantChatDialogOpen, setAssistantChatDialogOpen] = useState(false);
+  const [assistantChatMessages, setAssistantChatMessages] = useState<
+    readonly AssistantChatMessage[]
+  >([]);
+  const [assistantChatActionState, setAssistantChatActionState] =
+    useState<"idle" | "sending">("idle");
+  const [assistantChatError, setAssistantChatError] = useState<string | null>(null);
   const [assistantContextProjection, setAssistantContextProjection] =
     useState<AssistantContextStateProjection | null>(null);
   const [assistantDestinationProfile, setAssistantDestinationProfile] =
@@ -1569,6 +2242,13 @@ export const App = forwardRef<
       _document: ManuscriptDocumentSource,
       summary: ManuscriptDocumentStateSummary,
     ) => {
+      const selection = summary.selection.ranges[summary.selection.mainIndex];
+      if (selection !== undefined) {
+        setActiveManuscriptPosition({
+          documentId: _document.documentId,
+          offset: selection.head,
+        });
+      }
       setHoveredLoreCue(null);
       setPinnedLoreCue(null);
       setLoreCueActionError(null);
@@ -1660,6 +2340,67 @@ export const App = forwardRef<
           setWorkStructureDialogOpen(true);
         } else {
           setWorkStructureActionError(null);
+          resumeSummary = undefined;
+        }
+      }
+      const pendingCharacterEvidence = pendingCharacterEvidenceRef.current;
+      if (
+        pendingCharacterEvidence !== null &&
+        pendingCharacterEvidence.workId === _document.workId &&
+        pendingCharacterEvidence.documentId === _document.documentId
+      ) {
+        pendingCharacterEvidenceRef.current = null;
+        const selected = manuscriptEditorRef.current?.selectDocumentRange(
+          _document,
+          pendingCharacterEvidence.range,
+        );
+        setCharacterExtractionActionState("idle");
+        if (!selected) {
+          setCharacterExtractionActionError(
+            "캐릭터 근거의 정확한 원고 범위를 선택하지 못했습니다.",
+          );
+        } else {
+          setCharacterExtractionActionError(null);
+          resumeSummary = undefined;
+        }
+      }
+      const pendingSceneBoundaryPreview = pendingSceneBoundaryPreviewRef.current;
+      if (
+        pendingSceneBoundaryPreview !== null &&
+        pendingSceneBoundaryPreview.workId === _document.workId &&
+        pendingSceneBoundaryPreview.documentId === _document.documentId
+      ) {
+        pendingSceneBoundaryPreviewRef.current = null;
+        const revealed = manuscriptEditorRef.current?.revealDocumentOffset(
+          _document,
+          pendingSceneBoundaryPreview.offset,
+        );
+        setSceneExtractionActionState("idle");
+        if (!revealed) {
+          setSceneExtractionActionError(
+            "장면 경계 미리보기 위치를 원고에서 열지 못했습니다.",
+          );
+        } else {
+          setSceneExtractionActionError(null);
+          resumeSummary = undefined;
+        }
+      }
+      const pendingSceneDraftCompare = pendingSceneDraftCompareRef.current;
+      if (
+        pendingSceneDraftCompare !== null &&
+        pendingSceneDraftCompare.workId === _document.workId &&
+        pendingSceneDraftCompare.documentId === _document.documentId
+      ) {
+        pendingSceneDraftCompareRef.current = null;
+        const revealed = manuscriptEditorRef.current?.revealDocumentOffset(
+          _document,
+          Math.min(pendingSceneDraftCompare.offset, _document.initialText.length),
+        );
+        setSceneDraftActionState("idle");
+        if (!revealed) {
+          setSceneDraftActionError("장면 초안의 현재 원고 위치를 열지 못했습니다.");
+        } else {
+          setSceneDraftActionError(null);
           resumeSummary = undefined;
         }
       }
@@ -2079,6 +2820,25 @@ export const App = forwardRef<
           void flush
             .then(async () => {
               await continuousReadingPendingSaveRef.current;
+              await workManuscriptLayoutPendingSaveRef.current;
+              await focusModeSessionPendingRef.current;
+              const focusSession = activeWritingSessionRef.current;
+              const focusSessionId = focusModeOwnedWritingSessionIdRef.current;
+              if (
+                activeDocumentForClose !== undefined &&
+                focusSession !== undefined &&
+                focusSession.sessionId === focusSessionId
+              ) {
+                const projection = await window.eumStudio.activity.stopSession({
+                  schemaVersion: 1,
+                  workId: activeDocumentForClose.workId,
+                  sessionId: focusSession.sessionId,
+                });
+                activeWritingSessionRef.current = projection.sessions.find(
+                  (session) => session.sessionId === projection.activeSessionId,
+                );
+                focusModeOwnedWritingSessionIdRef.current = null;
+              }
               if (activeDocumentForClose !== undefined) {
                 await captureResumeForDocument(activeDocumentForClose);
               }
@@ -2118,6 +2878,64 @@ export const App = forwardRef<
         : undefined,
     [runtime],
   );
+  const activeForwardWriting =
+    activeDocument !== undefined &&
+    forwardWriting?.workId === activeDocument.workId &&
+    forwardWriting.documentId === activeDocument.documentId
+      ? forwardWriting
+      : null;
+  const publishResumePreview = useCallback(
+    (document: ManuscriptDocumentSource | undefined) => {
+      if (document === undefined || runtime.status !== "ready") {
+        onResumePreviewChange?.(null);
+        return;
+      }
+      const editor = manuscriptEditorRef.current;
+      const manuscript = editor?.materializeDocumentText(document) ?? document.initialText;
+      const text = getPreviousEpisodeFlowPreviewText(manuscript);
+      const workLayout =
+        workManuscriptLayout?.workId === document.workId
+          ? workManuscriptLayout.settings
+          : null;
+      const defaults = runtime.formattingProfile.defaults;
+      const fontFamilyId = workLayout?.fontFamilyId ?? defaults.fontFamilyId;
+      const fontFamily = runtime.formattingProfile.fontFamilies.find(
+        (candidate) => candidate.id === fontFamilyId,
+      );
+      if (fontFamily === undefined) {
+        throw new Error(`Unknown manuscript font family: ${fontFamilyId}`);
+      }
+      onResumePreviewChange?.(
+        text.length === 0
+          ? null
+          : Object.freeze({
+              workId: document.workId,
+              documentId: document.documentId,
+              text,
+              formatting: Object.freeze({
+                fontFamily: fontFamily.cssFamily,
+                fontSizePx: workLayout?.fontSizePx ?? defaults.fontSizePx,
+                contentWidthPx:
+                  workLayout?.contentWidthPx ??
+                  defaults.contentWidthPx,
+                lineHeight:
+                  workLayout?.lineHeight ??
+                  defaults.lineHeight,
+                paragraphSpacingPx:
+                  workLayout?.paragraphSpacingPx ??
+                  defaults.paragraphSpacingPx,
+                letterSpacingEm:
+                  workLayout?.letterSpacingEm ??
+                  defaults.letterSpacingEm,
+              }),
+            }),
+      );
+    },
+    [onResumePreviewChange, runtime, workManuscriptLayout],
+  );
+  useEffect(() => {
+    publishResumePreview(activeDocument);
+  }, [activeDocument, publishResumePreview]);
   const sharesDocumentRailWithSidebar =
     documentRailHost !== null && documentRailHost !== undefined;
   const activeWork =
@@ -2318,6 +3136,161 @@ export const App = forwardRef<
       ? (saveStates[activeDocument.documentId] ?? null)
       : null;
   const activeWorkId = activeWork?.workId ?? null;
+  useEffect(() => {
+    activeWorkIdRef.current = activeWorkId;
+  }, [activeWorkId]);
+
+  useEffect(() => {
+    const loadSequence = workManuscriptLayoutLoadSequenceRef.current + 1;
+    workManuscriptLayoutLoadSequenceRef.current = loadSequence;
+    const changeSequence = workManuscriptLayoutChangeSequenceRef.current + 1;
+    workManuscriptLayoutChangeSequenceRef.current = changeSequence;
+    if (activeWorkId === null) {
+      return;
+    }
+    const cached = workManuscriptLayoutByWorkRef.current.get(activeWorkId);
+    let disposed = false;
+    const load = workManuscriptLayoutSaveChainRef.current.then(() =>
+      window.eumStudio.editor.getWorkManuscriptLayoutSettings({
+        schemaVersion: 1,
+        workId: activeWorkId,
+      })
+    );
+    void load.then(
+      (projection) => {
+        workManuscriptLayoutByWorkRef.current.set(activeWorkId, projection);
+        if (
+          !disposed &&
+          workManuscriptLayoutLoadSequenceRef.current === loadSequence &&
+          workManuscriptLayoutChangeSequenceRef.current === changeSequence
+        ) {
+          setWorkManuscriptLayout(projection);
+        }
+      },
+      () => {
+        if (
+          !disposed &&
+          workManuscriptLayoutLoadSequenceRef.current === loadSequence
+        ) {
+          setWorkManuscriptLayout(cached ?? null);
+        }
+      },
+    );
+    return () => {
+      disposed = true;
+    };
+  }, [activeWorkId]);
+
+  const handleWorkManuscriptLayoutChange = useCallback(
+    (settings: ManuscriptLayoutSettings) => {
+      const workId = activeWorkIdRef.current;
+      if (workId === null) {
+        return;
+      }
+      const changeSequence =
+        workManuscriptLayoutChangeSequenceRef.current + 1;
+      workManuscriptLayoutChangeSequenceRef.current = changeSequence;
+      setWorkManuscriptLayout((current) => {
+        if (current?.workId !== workId) {
+          return current;
+        }
+        return Object.freeze({ ...current, settings });
+      });
+      const execution = workManuscriptLayoutSaveChainRef.current.then(
+        async () => {
+          const current =
+            workManuscriptLayoutByWorkRef.current.get(workId) ??
+            await window.eumStudio.editor.getWorkManuscriptLayoutSettings({
+              schemaVersion: 1,
+              workId,
+            });
+          const saved =
+            await window.eumStudio.editor.saveWorkManuscriptLayoutSettings({
+              schemaVersion: 1,
+              workId,
+              expectedRevision: current.revision,
+              settings,
+            });
+          workManuscriptLayoutByWorkRef.current.set(workId, saved);
+          if (
+            activeWorkIdRef.current === workId &&
+            workManuscriptLayoutChangeSequenceRef.current === changeSequence
+          ) {
+            setWorkManuscriptLayout(saved);
+          }
+        },
+      );
+      workManuscriptLayoutSaveChainRef.current = execution.then(
+        () => undefined,
+        () => undefined,
+      );
+      workManuscriptLayoutPendingSaveRef.current = execution;
+      void execution.catch(() => {
+        if (
+          activeWorkIdRef.current === workId &&
+          workManuscriptLayoutChangeSequenceRef.current === changeSequence
+        ) {
+          setWorkManuscriptLayout(
+            workManuscriptLayoutByWorkRef.current.get(workId) ?? null,
+          );
+        }
+      });
+    },
+    [],
+  );
+  const sceneBoundaryPreviews = useMemo<
+    readonly ManuscriptSceneBoundaryPreview[]
+  >(() => {
+    if (activeDocument === undefined) return Object.freeze([]);
+    const currentRevisionId =
+      sceneExtractionSelection?.documentId === activeDocument.documentId
+        ? sceneExtractionSelection.documentRevisionId
+        : activeDocument.documentRevisionId;
+    return Object.freeze(sceneExtractionCandidates.flatMap((candidate) => {
+      if (
+        candidate.status !== "ready" ||
+        candidate.workId !== activeDocument.workId ||
+        candidate.sourceRange.documentId !== activeDocument.documentId ||
+        candidate.sourceRange.documentRevisionId !== currentRevisionId
+      ) {
+        return [];
+      }
+      return candidate.boundaries.flatMap((boundary) => {
+        if (boundary.status !== "pending") return [];
+        const before = candidate.scenes.find(
+          (scene) => scene.sceneItemId === boundary.fromSceneItemId,
+        );
+        const after = candidate.scenes.find(
+          (scene) => scene.sceneItemId === boundary.toSceneItemId,
+        );
+        if (before === undefined || after === undefined) return [];
+        return [Object.freeze({
+          boundaryId: boundary.boundaryId,
+          offset: boundary.offset,
+          beforeTitle: before.title,
+          afterTitle: after.title,
+        })];
+      });
+    }));
+  }, [activeDocument, sceneExtractionCandidates, sceneExtractionSelection]);
+  const assistantContextConnections = useMemo(() => {
+    if (chatGptOAuthStatus?.connected !== true) {
+      return assistantConnections;
+    }
+    const connectionId = createChatGptOAuthAssistantConnectionId(
+      chatGptOAuthStatus.providerId,
+    );
+    return Object.freeze([
+      Object.freeze({
+        connectionId,
+        label: chatGptOAuthStatus.displayName,
+        model: chatGptOAuthStatus.modelId,
+      }),
+      ...assistantConnections.filter(
+        (connection) => connection.connectionId !== connectionId,
+      ),
+    ]);
+  }, [assistantConnections, chatGptOAuthStatus]);
   const activeAssistantGrantCount =
     assistantContextProjection !== null &&
     assistantContextProjection.workId === activeWorkId
@@ -2331,6 +3304,15 @@ export const App = forwardRef<
         ? []
         : characters.filter((character) => character.workId === activeWorkId),
     [activeWorkId, characters],
+  );
+  const activeWorkCharacterRelations = useMemo(
+    () =>
+      activeWorkId === null
+        ? []
+        : characterRelations.filter(
+            (relation) => relation.workId === activeWorkId,
+          ),
+    [activeWorkId, characterRelations],
   );
   const activeSelectedCharacterId =
     selectedCharacterId !== null && activeWorkCharacters.some(
@@ -2418,6 +3400,11 @@ export const App = forwardRef<
   )
     ? selectedPlotThreadId
     : null;
+  const activeSelectedPlot = activeSelectedPlotThreadId === null
+    ? null
+    : activeWorkPlots.find(
+        (plot) => plot.plotThreadId === activeSelectedPlotThreadId,
+      ) ?? null;
   const activeSelectedLoreEntryId = activeWorkLoreEntries.some(
     (entry) => entry.loreEntryId === selectedLoreEntryId,
   )
@@ -2442,6 +3429,37 @@ export const App = forwardRef<
     activeWorkId !== null && pomodoro?.workId === activeWorkId
       ? pomodoro.activePhase
       : null;
+  const openAssistantChatDialog = useCallback(() => {
+    setAssistantChatError(null);
+    setAssistantChatDialogOpen(true);
+  }, []);
+  const runAssistantChat = useCallback(async (message: string) => {
+    if (assistantChatActionState !== "idle") return;
+    const userMessage = Object.freeze({
+      role: "user" as const,
+      text: message,
+    });
+    const nextMessages = Object.freeze([...assistantChatMessages, userMessage]);
+    setAssistantChatMessages(nextMessages);
+    setAssistantChatActionState("sending");
+    setAssistantChatError(null);
+    try {
+      const result = await window.eumStudio.assistant.runChat({
+        schemaVersion: 1,
+        messages: nextMessages,
+      });
+      setAssistantChatMessages((current) => Object.freeze([
+        ...current,
+        result.message,
+      ]));
+    } catch (reason) {
+      setAssistantChatError(
+        reason instanceof Error ? reason.message : "GPT 응답을 받지 못했습니다.",
+      );
+    } finally {
+      setAssistantChatActionState("idle");
+    }
+  }, [assistantChatActionState, assistantChatMessages]);
   const openAssistantContextDialog = useCallback(async () => {
     if (activeWork === undefined) return;
     const sequence = assistantContextLoadSequenceRef.current + 1;
@@ -3141,6 +4159,18 @@ export const App = forwardRef<
         setEventSources([]);
         setEventRail(null);
         setSceneProjection(null);
+        setSceneExtractionCandidates([]);
+        setSceneAnnotations([]);
+        setSceneDraftCandidates([]);
+        setSceneDraftActionError(null);
+        setSceneMusicQueueCandidates([]);
+        setSceneMusicQueueError(null);
+        setSceneExtractionSelection(null);
+        setSceneExtractionActionError(null);
+        setSceneExtractionPermissionRequired(false);
+        setSceneExtractionDestinationId(null);
+        pendingSceneBoundaryPreviewRef.current = null;
+        pendingSceneDraftCompareRef.current = null;
         pendingEventRailRangeRef.current = null;
       }, 0);
       return () => {
@@ -3171,19 +4201,57 @@ export const App = forwardRef<
         }
       },
     );
-    void window.eumStudio.structure.listSceneProjection({
-      schemaVersion: 1,
-      workId: activeWorkId,
-    }).then(
-      (projection) => {
+    void Promise.all([
+      window.eumStudio.structure.listSceneProjection({
+        schemaVersion: 1,
+        workId: activeWorkId,
+      }),
+      window.eumStudio.structure.listSceneExtractionCandidates({
+        schemaVersion: 1,
+        workId: activeWorkId,
+      }),
+      window.eumStudio.structure.listSceneAnnotations({
+        schemaVersion: 1,
+        workId: activeWorkId,
+      }),
+      window.eumStudio.structure.listSceneDraftCandidates({
+        schemaVersion: 1,
+        workId: activeWorkId,
+      }),
+      window.eumStudio.musicPlayback.listSceneQueueCandidates({
+        schemaVersion: 1,
+        workId: activeWorkId,
+      }),
+    ]).then(
+      ([
+        projection,
+        candidateProjection,
+        annotationProjection,
+        draftProjection,
+        musicQueueProjection,
+      ]) => {
         if (!disposed) {
           setSceneProjection(projection);
+          setSceneExtractionCandidates(candidateProjection.candidates);
+          setSceneAnnotations(annotationProjection.annotations);
+          setSceneDraftCandidates(draftProjection.candidates);
+          setSceneMusicQueueCandidates(musicQueueProjection.candidates);
+          setSceneExtractionSelection(null);
+          setSceneExtractionPermissionRequired(false);
+          setSceneExtractionDestinationId(null);
           setSceneActionError(null);
+          setSceneExtractionActionError(null);
+          setSceneDraftActionError(null);
+          setSceneMusicQueueError(null);
         }
       },
       () => {
         if (!disposed) {
           setSceneProjection(null);
+          setSceneExtractionCandidates([]);
+          setSceneAnnotations([]);
+          setSceneDraftCandidates([]);
+          setSceneMusicQueueCandidates([]);
           setSceneActionError("장면 목록을 불러오지 못했습니다.");
         }
       },
@@ -3192,6 +4260,434 @@ export const App = forwardRef<
       disposed = true;
     };
   }, [activeWorkId]);
+
+  useEffect(() => {
+    if (activeWorkId === null) {
+      const reset = window.setTimeout(() => {
+        setWorkMusicSettings(null);
+        setMusicLibraryQueue([]);
+      }, 0);
+      return () => window.clearTimeout(reset);
+    }
+    let disposed = false;
+    void window.eumStudio.settings.getWorkMusic({
+      schemaVersion: 1,
+      workId: activeWorkId,
+    }).then(
+      (projection) => {
+        if (!disposed) {
+          setWorkMusicSettings(projection);
+          setMusicLibraryQueue(projection.settings.playlistVideos);
+        }
+      },
+      () => {
+        if (!disposed) {
+          setWorkMusicSettings(null);
+          setMusicLibraryQueue([]);
+        }
+      },
+    );
+    return () => {
+      disposed = true;
+    };
+  }, [activeWorkId]);
+
+  useEffect(() => {
+    if (activeWorkId === null) {
+      const reset = window.setTimeout(() => {
+        setWorkInspirationSettings(null);
+        setInspirationActionError(null);
+      }, 0);
+      return () => window.clearTimeout(reset);
+    }
+    let disposed = false;
+    void window.eumStudio.settings.getWorkInspiration({
+      schemaVersion: 1,
+      workId: activeWorkId,
+    }).then(
+      (projection) => {
+        if (!disposed) {
+          setWorkInspirationSettings(projection);
+          setInspirationActionError(null);
+        }
+      },
+      () => {
+        if (!disposed) {
+          setWorkInspirationSettings(null);
+          setInspirationActionError("뽑기 키워드를 불러오지 못했습니다.");
+        }
+      },
+    );
+    return () => {
+      disposed = true;
+    };
+  }, [activeWorkId]);
+
+  const saveWorkInspirationSettings = useCallback(async (
+    settings: WorkInspirationSettingsProjection["settings"],
+  ) => {
+    const current = workInspirationSettings;
+    if (
+      activeWorkId === null ||
+      current === null ||
+      current.workId !== activeWorkId ||
+      inspirationActionState !== "idle"
+    ) {
+      return null;
+    }
+    setInspirationActionState("saving");
+    setInspirationActionError(null);
+    try {
+      const saved = await window.eumStudio.settings.saveWorkInspiration({
+        schemaVersion: 1,
+        workId: activeWorkId,
+        expectedRevision: current.revision,
+        settings,
+      });
+      setWorkInspirationSettings((latest) =>
+        latest?.workId === saved.workId ? saved : latest
+      );
+      return saved;
+    } catch {
+      setInspirationActionError("뽑기 키워드를 저장하지 못했습니다.");
+      return null;
+    } finally {
+      setInspirationActionState("idle");
+    }
+  }, [activeWorkId, inspirationActionState, workInspirationSettings]);
+
+  const addCharacterInspirationKeywords = useCallback((
+    keywords: readonly string[],
+  ) => {
+    const current = workInspirationSettings;
+    if (current === null) return;
+    const characterKeywords = Object.freeze([
+      ...new Set([...current.settings.characterKeywords, ...keywords]),
+    ]);
+    void saveWorkInspirationSettings(Object.freeze({
+      ...current.settings,
+      characterKeywords,
+    }));
+  }, [saveWorkInspirationSettings, workInspirationSettings]);
+
+  const deleteCharacterInspirationKeyword = useCallback((keyword: string) => {
+    const current = workInspirationSettings;
+    if (current === null) return;
+    void saveWorkInspirationSettings(Object.freeze({
+      ...current.settings,
+      characterKeywords: Object.freeze(
+        current.settings.characterKeywords.filter((entry) => entry !== keyword),
+      ),
+    }));
+  }, [saveWorkInspirationSettings, workInspirationSettings]);
+
+  const addEventInspirationKeywords = useCallback((
+    keywords: readonly string[],
+  ) => {
+    const current = workInspirationSettings;
+    if (current === null) return;
+    const eventKeywords = Object.freeze([
+      ...new Set([...current.settings.eventKeywords, ...keywords]),
+    ]);
+    void saveWorkInspirationSettings(Object.freeze({
+      ...current.settings,
+      eventKeywords,
+    }));
+  }, [saveWorkInspirationSettings, workInspirationSettings]);
+
+  const deleteEventInspirationKeyword = useCallback((keyword: string) => {
+    const current = workInspirationSettings;
+    if (current === null) return;
+    void saveWorkInspirationSettings(Object.freeze({
+      ...current.settings,
+      eventKeywords: Object.freeze(
+        current.settings.eventKeywords.filter((entry) => entry !== keyword),
+      ),
+    }));
+  }, [saveWorkInspirationSettings, workInspirationSettings]);
+
+  useEffect(() => {
+    let disposed = false;
+    void window.eumStudio.musicPlayback.getProfile().then(
+      (profile) => {
+        if (!disposed) setYoutubeMusicProfile(profile);
+      },
+      () => {
+        if (!disposed) setYoutubeMusicProfile(null);
+      },
+    );
+    return () => {
+      disposed = true;
+    };
+  }, []);
+
+  const playYouTubeQueue = useCallback((
+    videos: readonly YouTubeVideoProjection[],
+  ): boolean => {
+    if (videos.length === 0) return false;
+    youtubePlaybackNonceRef.current += 1;
+    setYoutubePlaybackRequest(Object.freeze({
+      nonce: youtubePlaybackNonceRef.current,
+      videos: Object.freeze([...videos]),
+    }));
+    return true;
+  }, []);
+
+  const searchMusicLibrary = useCallback(async (query: string) => {
+    if (musicLibraryActionState !== "idle") return;
+    setMusicLibraryActionState("searching");
+    setMusicLibraryError(null);
+    try {
+      const result = await window.eumStudio.musicPlayback.searchVideos({
+        schemaVersion: 1,
+        query,
+      });
+      setMusicLibraryResults(result.videos);
+      if (result.videos.length === 0) {
+        setMusicLibraryError("검색 결과가 없습니다.");
+      }
+    } catch (reason) {
+      setMusicLibraryError(
+        reason instanceof Error ? reason.message : "음악을 검색하지 못했습니다.",
+      );
+    } finally {
+      setMusicLibraryActionState("idle");
+    }
+  }, [musicLibraryActionState]);
+
+  const saveMusicLibraryQueue = useCallback(async (
+    nextQueue: readonly YouTubeVideoProjection[],
+  ) => {
+    if (
+      activeWork === undefined ||
+      workMusicSettings?.workId !== activeWork.workId ||
+      musicLibraryActionState !== "idle" ||
+      sceneMusicQueueActionState !== "idle"
+    ) {
+      return;
+    }
+    const previousQueue = workMusicSettings.settings.playlistVideos;
+    setMusicLibraryQueue(nextQueue);
+    setMusicLibraryActionState("saving-playlist");
+    setMusicLibraryError(null);
+    try {
+      const saved = await window.eumStudio.settings.saveWorkMusic({
+        schemaVersion: 1,
+        workId: activeWork.workId,
+        expectedRevision: workMusicSettings.revision,
+        settings: {
+          ...workMusicSettings.settings,
+          playlistVideos: nextQueue,
+        },
+      });
+      setWorkMusicSettings(saved);
+      setMusicLibraryQueue(saved.settings.playlistVideos);
+    } catch (reason) {
+      setMusicLibraryQueue(previousQueue);
+      setMusicLibraryError(
+        reason instanceof Error
+          ? reason.message
+          : "재생목록을 저장하지 못했습니다.",
+      );
+    } finally {
+      setMusicLibraryActionState("idle");
+    }
+  }, [
+    activeWork,
+    musicLibraryActionState,
+    sceneMusicQueueActionState,
+    workMusicSettings,
+  ]);
+
+  const refreshSceneMusicQueueCandidates = useCallback(async (
+    workId: EntityId<"Work">,
+  ) => {
+    const projection =
+      await window.eumStudio.musicPlayback.listSceneQueueCandidates({
+        schemaVersion: 1,
+        workId,
+      });
+    setSceneMusicQueueCandidates(projection.candidates);
+    return projection.candidates;
+  }, []);
+
+  const searchSceneMusicQueues = useCallback(async (
+    annotation: SceneAnnotationProjection,
+    query: string,
+  ) => {
+    const normalizedQuery = query.trim();
+    if (
+      activeWork === undefined ||
+      annotation.workId !== activeWork.workId ||
+      sceneMusicQueueActionState !== "idle" ||
+      normalizedQuery.length === 0
+    ) {
+      if (normalizedQuery.length === 0) {
+        setSceneMusicQueueError("음악 검색어를 입력해 주세요.");
+      }
+      return;
+    }
+    setSceneMusicQueueActionState("searching");
+    setSceneMusicQueueError(null);
+    try {
+      const result = await window.eumStudio.musicPlayback.searchSceneQueues({
+        schemaVersion: 1,
+        requestId: entityId<"SceneMusicQueueRequest">(crypto.randomUUID()),
+        workId: annotation.workId,
+        sceneKey: annotation.sceneKey,
+        expectedAnnotationRevision: annotation.revision,
+        query: normalizedQuery,
+      });
+      if (result.status === "connection-required") {
+        setSceneMusicQueueError("YouTube Data API 연결 후 장면 음악을 찾을 수 있습니다.");
+        return;
+      }
+      setSceneMusicQueueCandidates((current) => Object.freeze([
+        result.candidate,
+        ...current.filter(
+          (candidate) => candidate.candidateId !== result.candidate.candidateId,
+        ),
+      ]));
+    } catch (reason) {
+      setSceneMusicQueueError(
+        reason instanceof Error
+          ? reason.message
+          : "장면 음악 큐를 찾지 못했습니다.",
+      );
+    } finally {
+      setSceneMusicQueueActionState("idle");
+    }
+  }, [activeWork, sceneMusicQueueActionState]);
+
+  const selectSceneMusicQueue = useCallback(async (
+    candidate: SceneMusicQueueCandidate,
+    option: SceneMusicQueueOption,
+  ) => {
+    if (
+      activeWork === undefined ||
+      candidate.workId !== activeWork.workId ||
+      sceneMusicQueueActionState !== "idle"
+    ) {
+      return;
+    }
+    setSceneMusicQueueActionState("selecting");
+    setSceneMusicQueueError(null);
+    try {
+      await window.eumStudio.musicPlayback.selectSceneQueue({
+        schemaVersion: 1,
+        workId: candidate.workId,
+        candidateId: candidate.candidateId,
+        expectedCandidateRevision: candidate.revision,
+        optionId: option.optionId,
+      });
+      await refreshSceneMusicQueueCandidates(candidate.workId);
+    } catch (reason) {
+      setSceneMusicQueueError(
+        reason instanceof Error
+          ? reason.message
+          : "장면 음악 큐를 선택하지 못했습니다.",
+      );
+    } finally {
+      setSceneMusicQueueActionState("idle");
+    }
+  }, [
+    activeWork,
+    refreshSceneMusicQueueCandidates,
+    sceneMusicQueueActionState,
+  ]);
+
+  const playSelectedSceneMusicQueue = useCallback(async (
+    candidate: SceneMusicQueueCandidate,
+  ) => {
+    if (
+      activeWork === undefined ||
+      candidate.workId !== activeWork.workId ||
+      sceneMusicQueueActionState !== "idle"
+    ) {
+      return;
+    }
+    setSceneMusicQueueActionState("playing");
+    setSceneMusicQueueError(null);
+    try {
+      const candidates = await refreshSceneMusicQueueCandidates(
+        candidate.workId,
+      );
+      const currentCandidate = candidates.find(
+        (entry) => entry.candidateId === candidate.candidateId,
+      );
+      const option = currentCandidate === undefined
+        ? null
+        : selectedSceneMusicQueueOption(currentCandidate);
+      if (option === null) {
+        throw new Error("현재 장면에 선택된 최신 큐가 없습니다.");
+      }
+      const played = playYouTubeQueue(option.tracks);
+      if (!played) {
+        setSceneMusicQueueError("선택한 장면 음악 큐를 재생하지 못했습니다.");
+      }
+    } catch (reason) {
+      setSceneMusicQueueError(
+        reason instanceof Error
+          ? reason.message
+          : "선택한 장면 음악 큐를 재생하지 못했습니다.",
+      );
+    } finally {
+      setSceneMusicQueueActionState("idle");
+    }
+  }, [
+    activeWork,
+    playYouTubeQueue,
+    refreshSceneMusicQueueCandidates,
+    sceneMusicQueueActionState,
+  ]);
+
+  const toggleFavoriteMusicVideo = useCallback(async (
+    video: YouTubeVideoProjection,
+  ) => {
+    if (
+      activeWork === undefined ||
+      workMusicSettings?.workId !== activeWork.workId ||
+      sceneMusicQueueActionState !== "idle" ||
+      musicLibraryActionState !== "idle"
+    ) {
+      return;
+    }
+    const currentFavorites = workMusicSettings.settings.favoriteVideos;
+    const alreadyFavorite = currentFavorites.some(
+      (favorite) => favorite.videoId === video.videoId,
+    );
+    setSceneMusicQueueActionState("saving-favorite");
+    setSceneMusicQueueError(null);
+    try {
+      const saved = await window.eumStudio.settings.saveWorkMusic({
+        schemaVersion: 1,
+        workId: activeWork.workId,
+        expectedRevision: workMusicSettings.revision,
+        settings: {
+          ...workMusicSettings.settings,
+          favoriteVideos: alreadyFavorite
+            ? currentFavorites.filter(
+                (favorite) => favorite.videoId !== video.videoId,
+              )
+            : Object.freeze([...currentFavorites, video]),
+        },
+      });
+      setWorkMusicSettings(saved);
+    } catch (reason) {
+      setSceneMusicQueueError(
+        reason instanceof Error
+          ? reason.message
+          : "선호 영상을 저장하지 못했습니다.",
+      );
+    } finally {
+      setSceneMusicQueueActionState("idle");
+    }
+  }, [
+    activeWork,
+    musicLibraryActionState,
+    sceneMusicQueueActionState,
+    workMusicSettings,
+  ]);
 
   useEffect(() => {
     if (activeWorkId === null) {
@@ -3263,22 +4759,58 @@ export const App = forwardRef<
     if (activeWorkId === null) {
       const reset = window.setTimeout(() => {
         setCharacters([]);
+        setCharacterRelations([]);
         setSelectedCharacterId(null);
         setCharacterActionError(null);
+        setCharacterRelationActionState("idle");
         setCharacterDialogOpen(false);
+        setWorkspaceSurface("manuscript");
+        setCharacterWorkspaceSelection(null);
+        setCharacterExtractionCandidates([]);
+        setCharacterExtractionActionError(null);
+        setCharacterExtractionPermissionRequired(false);
+        setCharacterExtractionDestinationId(null);
+        setCharacterGenerationCandidates([]);
+        setCharacterGenerationActionState("idle");
+        setCharacterGenerationActionError(null);
       }, 0);
       return () => {
         window.clearTimeout(reset);
       };
     }
     let disposed = false;
-    void window.eumStudio.characters.list({
-      schemaVersion: 1,
-      workId: activeWorkId,
-    }).then(
-      (projection) => {
+    void Promise.all([
+      window.eumStudio.characters.list({
+        schemaVersion: 1,
+        workId: activeWorkId,
+      }),
+      window.eumStudio.characters.listRelations({
+        schemaVersion: 1,
+        workId: activeWorkId,
+      }),
+      window.eumStudio.characters.listExtractionCandidates({
+        schemaVersion: 1,
+        workId: activeWorkId,
+      }),
+      window.eumStudio.characters.listGenerationCandidates({
+        schemaVersion: 1,
+        workId: activeWorkId,
+      }),
+      window.eumStudio.assistant.getChatGptOAuthStatus(),
+    ]).then(
+      ([
+        projection,
+        relationProjection,
+        extractionProjection,
+        generationProjection,
+        oauthStatus,
+      ]) => {
         if (!disposed) {
           setCharacters(projection.characters);
+          setCharacterRelations(relationProjection.relations);
+          setCharacterExtractionCandidates(extractionProjection.candidates);
+          setCharacterGenerationCandidates(generationProjection.candidates);
+          setChatGptOAuthStatus(oauthStatus);
           setSelectedCharacterId((current) =>
             current !== null && projection.characters.some(
               (character) => character.characterId === current,
@@ -3287,11 +4819,16 @@ export const App = forwardRef<
               : (projection.characters[0]?.characterId ?? null)
           );
           setCharacterActionError(null);
+          setCharacterExtractionActionError(null);
+          setCharacterGenerationActionError(null);
         }
       },
       () => {
         if (!disposed) {
           setCharacters([]);
+          setCharacterRelations([]);
+          setCharacterExtractionCandidates([]);
+          setCharacterGenerationCandidates([]);
           setCharacterActionError("인물 목록을 불러오지 못했습니다.");
         }
       },
@@ -3526,6 +5063,37 @@ export const App = forwardRef<
   }, [activeFocusCycle, activePomodoroPhase, activeWritingSession]);
 
   useEffect(() => {
+    if (workspaceSurface !== "manuscript" || activeForwardWriting !== null) return;
+    const handleFocusModeShortcut = (event: KeyboardEvent) => {
+      const toggleShortcut =
+        event.key === "Enter" &&
+        event.ctrlKey &&
+        event.shiftKey &&
+        !event.altKey;
+      const exitShortcut = event.key === "Escape" && focusMode;
+      if (
+        (!toggleShortcut && !exitShortcut) ||
+        event.defaultPrevented ||
+        event.repeat ||
+        document.querySelector('[role="dialog"][aria-modal="true"]') !== null ||
+        document.querySelector('[role="menu"]') !== null
+      ) {
+        return;
+      }
+      event.preventDefault();
+      if (exitShortcut) {
+        setFocusMode(false);
+      } else {
+        setFocusMode((current) => !current);
+      }
+    };
+    window.addEventListener("keydown", handleFocusModeShortcut);
+    return () => {
+      window.removeEventListener("keydown", handleFocusModeShortcut);
+    };
+  }, [activeForwardWriting, focusMode, workspaceSurface]);
+
+  useEffect(() => {
     if (
       pomodoro === null ||
       activePomodoroPhase?.state !== "running" ||
@@ -3552,8 +5120,16 @@ export const App = forwardRef<
           workId,
         });
         if (!disposed) {
+          const phaseAlert = derivePomodoroPhaseAlert(
+            pomodoro,
+            nextPomodoro,
+          );
           setPomodoro(nextPomodoro);
           setWorkActivity(nextActivity);
+          if (phaseAlert !== null) {
+            setPomodoroPhaseAlert(phaseAlert);
+            playPomodoroPhaseAlertSound();
+          }
           setActivityActionError(null);
         }
       } catch {
@@ -3754,6 +5330,19 @@ export const App = forwardRef<
     });
   }, [activeWork]);
 
+  const openContextEventDialog = useCallback(() => {
+    if (activeDocument === undefined) return;
+    const summary = manuscriptEditorRef.current?.readDocumentState(
+      activeDocument,
+    );
+    const selection = summary?.selection.ranges[summary.selection.mainIndex];
+    if (selection !== undefined && !selection.empty) {
+      openEventBlockDialog();
+      return;
+    }
+    openAnchorlessEventDialog();
+  }, [activeDocument, openAnchorlessEventDialog, openEventBlockDialog]);
+
   const refreshSceneProjection = useCallback(
     async (workId: CreateEventBlockCommand["workId"]) => {
       const projection = await window.eumStudio.structure.listSceneProjection({
@@ -3851,106 +5440,6 @@ export const App = forwardRef<
       persistDocument,
       refreshEventProjection,
     ],
-  );
-
-  const linkEventSource = useCallback(
-    async (eventBlock: EventBlockProjection) => {
-      if (eventActionState !== "idle" || activeDocument === undefined) {
-        return;
-      }
-      const selection = readCurrentEventSourceSelection();
-      if (selection === null) {
-        return;
-      }
-      setEventActionState("linking");
-      setEventActionError(null);
-      try {
-        await persistDocument(activeDocument);
-        await window.eumStudio.structure.linkEventSource({
-          schemaVersion: 1,
-          workId: eventBlock.workId,
-          eventBlockId: eventBlock.eventBlockId,
-          role: "primary",
-          documentId: selection.documentId,
-          selection: selection.selection,
-          exactQuote: selection.exactQuote,
-        });
-        await refreshEventProjection(eventBlock.workId);
-      } catch {
-        setEventActionError("현재 선택을 사건 근거로 연결하지 못했습니다.");
-      } finally {
-        setEventActionState("idle");
-      }
-    },
-    [
-      activeDocument,
-      eventActionState,
-      persistDocument,
-      readCurrentEventSourceSelection,
-      refreshEventProjection,
-    ],
-  );
-
-  const replaceEventSource = useCallback(
-    async (source: EventSourceProjection) => {
-      if (eventActionState !== "idle" || activeDocument === undefined) {
-        return;
-      }
-      const selection = readCurrentEventSourceSelection();
-      if (selection === null) {
-        return;
-      }
-      setEventActionState("replacing");
-      setEventActionError(null);
-      try {
-        await persistDocument(activeDocument);
-        await window.eumStudio.structure.replaceEventSource({
-          schemaVersion: 1,
-          workId: source.workId,
-          eventSourceId: source.eventSourceId,
-          expectedRevision: source.revision,
-          documentId: selection.documentId,
-          selection: selection.selection,
-          exactQuote: selection.exactQuote,
-        });
-        await refreshEventProjection(source.workId);
-      } catch {
-        setEventActionError("현재 선택으로 사건 근거를 교체하지 못했습니다.");
-      } finally {
-        setEventActionState("idle");
-      }
-    },
-    [
-      activeDocument,
-      eventActionState,
-      persistDocument,
-      readCurrentEventSourceSelection,
-      refreshEventProjection,
-    ],
-  );
-
-  const retireEventSource = useCallback(
-    async (source: EventSourceProjection) => {
-      if (eventActionState !== "idle") {
-        return;
-      }
-      setEventActionState("retiring");
-      setEventActionError(null);
-      try {
-        await window.eumStudio.structure.retireEventSource({
-          schemaVersion: 1,
-          workId: source.workId,
-          eventSourceId: source.eventSourceId,
-          expectedRevision: source.revision,
-        });
-        await refreshEventProjection(source.workId);
-      } catch {
-        setEventActionError("사건의 원고 근거를 해제하지 못했습니다.");
-      } finally {
-        setEventActionState("idle");
-      }
-    },
-    [eventActionState, refreshEventProjection],
   );
 
   const createSceneBoundary = useCallback(async (
@@ -4210,6 +5699,69 @@ export const App = forwardRef<
     ],
   );
 
+  useEffect(() => {
+    if (
+      activeDocument === undefined ||
+      activityActionState !== "idle" ||
+      focusModeSessionTransitionPendingRef.current
+    ) {
+      return;
+    }
+    if (focusMode) {
+      if (
+        activeWritingSession !== undefined ||
+        focusModeSessionAttemptedRef.current
+      ) {
+        return;
+      }
+      focusModeSessionAttemptedRef.current = true;
+      focusModeSessionTransitionPendingRef.current = true;
+      const transition = startWritingSession(activeDocument).then(async (projection) => {
+        const started = projection?.sessions.find(
+          (session) => session.sessionId === projection.activeSessionId,
+        );
+        if (started === undefined) {
+          return;
+        }
+        if (!focusModeRef.current) {
+          await stopWritingSession(started, activeDocument);
+          return;
+        }
+        focusModeOwnedWritingSessionIdRef.current = started.sessionId;
+      }).finally(() => {
+        focusModeSessionTransitionPendingRef.current = false;
+      });
+      focusModeSessionPendingRef.current = transition;
+      void transition;
+      return;
+    }
+    focusModeSessionAttemptedRef.current = false;
+    const ownedSessionId = focusModeOwnedWritingSessionIdRef.current;
+    if (ownedSessionId === null) {
+      return;
+    }
+    focusModeOwnedWritingSessionIdRef.current = null;
+    if (activeWritingSession?.sessionId !== ownedSessionId) {
+      return;
+    }
+    focusModeSessionTransitionPendingRef.current = true;
+    const transition = stopWritingSession(
+      activeWritingSession,
+      activeDocument,
+    ).then(() => undefined).finally(() => {
+      focusModeSessionTransitionPendingRef.current = false;
+    });
+    focusModeSessionPendingRef.current = transition;
+    void transition;
+  }, [
+    activeDocument,
+    activeWritingSession,
+    activityActionState,
+    focusMode,
+    startWritingSession,
+    stopWritingSession,
+  ]);
+
   const handleManuscriptTransaction = useCallback(
     (
       document: ManuscriptDocumentSource,
@@ -4218,6 +5770,20 @@ export const App = forwardRef<
       composing: boolean,
       editorStateJson: string,
     ) => {
+      const selection = transaction.selection.ranges[
+        transaction.selection.mainIndex
+      ];
+      if (selection !== undefined) {
+        setActiveManuscriptPosition((current) =>
+          current?.documentId === document.documentId &&
+          current.offset === selection.head
+            ? current
+            : {
+                documentId: document.documentId,
+                offset: selection.head,
+              }
+        );
+      }
       telemetryStore.publish(
         statistics,
         transaction.selection.ranges.some((range) => !range.empty),
@@ -4232,9 +5798,29 @@ export const App = forwardRef<
       if (transaction.changes.length === 0) {
         return;
       }
+      setForwardWriting((current) => {
+        if (
+          current === null ||
+          current.workId !== document.workId ||
+          current.documentId !== document.documentId
+        ) {
+          return current;
+        }
+        const writtenCharacters = Math.max(
+          0,
+          statistics.characterCount - current.baselineCharacterCount,
+        );
+        return writtenCharacters === current.writtenCharacters
+          ? current
+          : { ...current, writtenCharacters };
+      });
       setHoveredLoreCue(null);
       setPinnedLoreCue(null);
       setLoreCueActionError(null);
+      setSceneExtractionSelection((current) =>
+        current?.documentId === document.documentId ? null : current
+      );
+      pendingSceneBoundaryPreviewRef.current = null;
       const pending = durableSaveQueueRef.current?.record(
         document.documentId,
         transaction,
@@ -4289,6 +5875,12 @@ export const App = forwardRef<
         editingDocumentKeyRef.current = null;
       }
       const currentWritingSession = activeWritingSessionRef.current;
+      if (focusMode) {
+        if (!writingSessionTransitionPendingRef.current) {
+          void persistDocument(document).catch(() => undefined);
+        }
+        return;
+      }
       if (
         currentWritingSession?.documentId === document.documentId &&
         !writingSessionTransitionPendingRef.current
@@ -4300,7 +5892,7 @@ export const App = forwardRef<
         void persistDocument(document).catch(() => undefined);
       }
     },
-    [persistDocument, stopWritingSession],
+    [focusMode, persistDocument, stopWritingSession],
   );
 
   const configureAndStartPomodoro = useCallback(
@@ -4308,8 +5900,10 @@ export const App = forwardRef<
       if (activeDocument === undefined || activityActionState !== "idle") {
         return;
       }
+      preparePomodoroPhaseAlertSound();
       setActivityActionState("starting-focus");
       setActivityActionError(null);
+      setPomodoroPhaseAlert(null);
       try {
         await persistDocument(activeDocument);
         const nextPomodoro =
@@ -4326,13 +5920,66 @@ export const App = forwardRef<
           workId: activeDocument.workId,
         });
         setWorkActivity(nextActivity);
+        if (
+          workMusicSettings?.workId === activeDocument.workId &&
+          workMusicSettings.settings.autoPlayOnPomodoroStart
+        ) {
+          const editorState =
+            manuscriptEditorRef.current?.readDocumentState(activeDocument);
+          const selection = editorState?.selection.ranges[
+            editorState.selection.mainIndex
+          ];
+          if (selection !== undefined) {
+            const [currentScenes, currentQueues] = await Promise.all([
+              window.eumStudio.structure.listSceneProjection({
+                schemaVersion: 1,
+                workId: activeDocument.workId,
+              }),
+              window.eumStudio.musicPlayback.listSceneQueueCandidates({
+                schemaVersion: 1,
+                workId: activeDocument.workId,
+              }),
+            ]);
+            setSceneProjection(currentScenes);
+            setSceneMusicQueueCandidates(currentQueues.candidates);
+            const cursor = selection.head;
+            const documentScenes = currentScenes.scenes.filter((scene) =>
+              scene.documentId === activeDocument.documentId &&
+              scene.integrity === "resolved" &&
+              scene.range !== null &&
+              scene.range.start <= cursor
+            );
+            const currentScene = documentScenes.find((scene) =>
+              scene.range !== null && cursor < scene.range.end
+            ) ?? documentScenes.at(-1);
+            const selectedCandidate = currentScene === undefined
+              ? undefined
+              : currentQueues.candidates.find((candidate) =>
+                  candidate.sceneKey === currentScene.sceneKey &&
+                  candidate.status === "selected" &&
+                  candidate.integrity === "current"
+                );
+            const selectedOption = selectedCandidate === undefined
+              ? null
+              : selectedSceneMusicQueueOption(selectedCandidate);
+            if (selectedOption !== null) {
+              playYouTubeQueue(selectedOption.tracks);
+            }
+          }
+        }
       } catch {
         setActivityActionError("집중 타이머를 시작하지 못했습니다.");
       } finally {
         setActivityActionState("idle");
       }
     },
-    [activeDocument, activityActionState, persistDocument],
+    [
+      activeDocument,
+      activityActionState,
+      playYouTubeQueue,
+      persistDocument,
+      workMusicSettings,
+    ],
   );
 
   const pausePomodoro = useCallback(async () => {
@@ -4376,6 +6023,7 @@ export const App = forwardRef<
     ) {
       return;
     }
+    preparePomodoroPhaseAlertSound();
     setActivityActionState("resuming-focus");
     setActivityActionError(null);
     try {
@@ -4392,6 +6040,40 @@ export const App = forwardRef<
       setWorkActivity(nextActivity);
     } catch {
       setActivityActionError("집중 타이머를 재개하지 못했습니다.");
+    } finally {
+      setActivityActionState("idle");
+    }
+  }, [
+    activeDocument,
+    activePomodoroPhase,
+    activityActionState,
+  ]);
+
+  const savePomodoroNote = useCallback(async (note: string) => {
+    if (
+      activeDocument === undefined ||
+      activePomodoroPhase === null ||
+      activityActionState !== "idle"
+    ) {
+      return;
+    }
+    setActivityActionState("saving-focus-note");
+    setActivityActionError(null);
+    try {
+      const nextPomodoro = await window.eumStudio.activity.updatePomodoroNote({
+        schemaVersion: 1,
+        workId: activeDocument.workId,
+        focusCycleId: activePomodoroPhase.focusCycleId,
+        note,
+      });
+      setPomodoro(nextPomodoro);
+      const nextActivity = await window.eumStudio.activity.listWork({
+        schemaVersion: 1,
+        workId: activeDocument.workId,
+      });
+      setWorkActivity(nextActivity);
+    } catch {
+      setActivityActionError("세션 메모를 저장하지 못했습니다.");
     } finally {
       setActivityActionState("idle");
     }
@@ -4463,6 +6145,122 @@ export const App = forwardRef<
     activityActionState,
     persistDocument,
   ]);
+
+  const startForwardWriting = useCallback((goalCharacters: number) => {
+    if (activeDocument === undefined) return;
+    const editor = manuscriptEditorRef.current;
+    const summary = editor?.readDocumentState(activeDocument);
+    const manuscript = editor?.materializeDocumentText(activeDocument);
+    if (summary === null || summary === undefined || manuscript === undefined) {
+      return;
+    }
+    setForwardWriting({
+      workId: activeDocument.workId,
+      documentId: activeDocument.documentId,
+      goalCharacters,
+      protectedLength: manuscript.length,
+      baselineCharacterCount: summary.statistics.characterCount,
+      writtenCharacters: 0,
+    });
+    setFocusMode(true);
+    setShowForwardWritingDialog(false);
+    queueMicrotask(() => {
+      manuscriptEditorRef.current?.selectDocumentRange(activeDocument, {
+        from: manuscript.length,
+        to: manuscript.length,
+      });
+    });
+  }, [activeDocument]);
+
+  const stopForwardWriting = useCallback(() => {
+    setForwardWriting(null);
+    setFocusMode(false);
+    setShowForwardWritingDialog(false);
+  }, []);
+
+  const openManuscriptAnalysis = useCallback(() => {
+    if (activeDocument === undefined) return;
+    const manuscript =
+      manuscriptEditorRef.current?.materializeDocumentText(activeDocument);
+    if (manuscript === undefined) return;
+    setManuscriptAnalysis({
+      documentTitle: activeDocument.label,
+      manuscript,
+    });
+  }, [activeDocument]);
+
+  const selectManuscriptTextImport = useCallback(async () => {
+    if (
+      activeDocument === undefined ||
+      activeForwardWriting !== null ||
+      manuscriptTextImportAction !== "idle"
+    ) {
+      return;
+    }
+    const sourceText =
+      manuscriptEditorRef.current?.materializeDocumentText(activeDocument);
+    if (sourceText === undefined) return;
+    setManuscriptTextImportAction("selecting");
+    setManuscriptTextImportError(null);
+    try {
+      const result = await window.eumStudio.editor.selectManuscriptTextImport({
+        schemaVersion: 1,
+        workId: activeDocument.workId,
+        documentId: activeDocument.documentId,
+        documentRevisionId: activeDocument.documentRevisionId,
+      });
+      if (result.status === "selected") {
+        setManuscriptTextImport({ candidate: result, sourceText });
+      }
+    } catch {
+      setManuscriptTextImportError("원고 TXT 파일을 불러오지 못했습니다.");
+    } finally {
+      setManuscriptTextImportAction("idle");
+    }
+  }, [activeDocument, activeForwardWriting, manuscriptTextImportAction]);
+
+  const applyManuscriptTextImport = useCallback(() => {
+    if (
+      activeDocument === undefined ||
+      manuscriptTextImport === null ||
+      manuscriptTextImportAction !== "idle"
+    ) {
+      return;
+    }
+    const { candidate, sourceText } = manuscriptTextImport;
+    const editor = manuscriptEditorRef.current;
+    if (
+      editor === null ||
+      candidate.workId !== activeDocument.workId ||
+      candidate.documentId !== activeDocument.documentId ||
+      candidate.documentRevisionId !== activeDocument.documentRevisionId
+    ) {
+      setManuscriptTextImportError("가져오기를 연 뒤 대상 회차가 바뀌었습니다.");
+      return;
+    }
+    const currentText = editor.materializeDocumentText(activeDocument);
+    if (currentText !== sourceText) {
+      setManuscriptTextImportError("가져오기를 연 뒤 현재 원고가 바뀌었습니다.");
+      return;
+    }
+    setManuscriptTextImportAction("applying");
+    const applied = editor.replaceDocumentRange(
+      activeDocument,
+      { from: 0, to: currentText.length },
+      currentText,
+      candidate.text,
+    );
+    const confirmed =
+      applied &&
+      editor.materializeDocumentText(activeDocument) === candidate.text;
+    if (confirmed) {
+      setManuscriptTextImport(null);
+      setManuscriptTextImportError(null);
+    } else {
+      setManuscriptTextImportError("가져온 원고를 현재 회차에 적용하지 못했습니다.");
+    }
+    setManuscriptTextImportAction("idle");
+  }, [activeDocument, manuscriptTextImport, manuscriptTextImportAction]);
 
   const refreshStoredVersions = useCallback(async () => {
     if (activeDocument === undefined || versionActionState !== "idle") {
@@ -5014,8 +6812,6 @@ export const App = forwardRef<
           await installCreatedDocument(created.documentId, catalog);
         }
         await refreshSceneProjection(activeWork.workId);
-        setNewDocumentTitle("");
-        setShowCreateDocument(false);
       } catch (error) {
         setWorkspaceActionError("새 회차를 만들지 못했습니다.");
         throw error;
@@ -5156,23 +6952,26 @@ export const App = forwardRef<
     titleEditValue,
   ]);
 
-  const renameActiveDocument = useCallback(async (): Promise<void> => {
-    if (runtime.status !== "ready" || activeDocument === undefined) {
+  const renameDocument = useCallback(async (
+    document: WorkspaceDocumentSummary,
+    title: string,
+  ): Promise<void> => {
+    if (runtime.status !== "ready" || activeWork === undefined) {
       throw new Error("The manuscript workspace is not ready");
     }
     setWorkspaceActionState("renaming-document");
     setWorkspaceActionError(null);
     try {
-      await persistDocument(activeDocument);
+      if (activeDocument !== undefined) {
+        await persistDocument(activeDocument);
+      }
       const catalog = await window.eumStudio.workspace.renameDocument({
         schemaVersion: 1,
-        workId: activeDocument.workId,
-        documentId: activeDocument.documentId,
-        title: titleEditValue,
+        workId: activeWork.workId,
+        documentId: document.documentId,
+        title,
       });
       installRenamedCatalog(catalog);
-      setTitleEditTarget(null);
-      setTitleEditValue("");
     } catch (error) {
       setWorkspaceActionError("회차 이름을 변경하지 못했습니다.");
       throw error;
@@ -5181,10 +6980,10 @@ export const App = forwardRef<
     }
   }, [
     activeDocument,
+    activeWork,
     installRenamedCatalog,
     persistDocument,
     runtime.status,
-    titleEditValue,
   ]);
 
   const retireWork = useCallback(
@@ -5440,12 +7239,13 @@ export const App = forwardRef<
     );
     if (currentDocument !== undefined) {
       await persistDocument(currentDocument);
+      publishResumePreview(currentDocument);
     }
     const catalog = await window.eumStudio.workspace.getCatalog();
     setRuntime({ ...runtime, catalog });
     onCatalogChange?.(catalog);
     return catalog;
-  }, [onCatalogChange, persistDocument, runtime]);
+  }, [onCatalogChange, persistDocument, publishResumePreview, runtime]);
 
   useImperativeHandle(
     ref,
@@ -6027,7 +7827,8 @@ export const App = forwardRef<
     async (draft: CharacterDraft) => {
       if (
         activeWork === undefined ||
-        characterActionState !== "idle"
+        characterActionState !== "idle" ||
+        characterRelationActionState !== "idle"
       ) {
         return;
       }
@@ -6056,7 +7857,7 @@ export const App = forwardRef<
         setCharacterActionState("idle");
       }
     },
-    [activeWork, characterActionState],
+    [activeWork, characterActionState, characterRelationActionState],
   );
   const updateCharacter = useCallback(
     async (
@@ -6066,7 +7867,8 @@ export const App = forwardRef<
       if (
         activeWork === undefined ||
         character.workId !== activeWork.workId ||
-        characterActionState !== "idle"
+        characterActionState !== "idle" ||
+        characterRelationActionState !== "idle"
       ) {
         return;
       }
@@ -6095,14 +7897,15 @@ export const App = forwardRef<
         setCharacterActionState("idle");
       }
     },
-    [activeWork, characterActionState],
+    [activeWork, characterActionState, characterRelationActionState],
   );
   const retireCharacter = useCallback(
     async (character: CharacterProjection) => {
       if (
         activeWork === undefined ||
         character.workId !== activeWork.workId ||
-        characterActionState !== "idle"
+        characterActionState !== "idle" ||
+        characterRelationActionState !== "idle"
       ) {
         return;
       }
@@ -6121,6 +7924,13 @@ export const App = forwardRef<
             entry.characterId !== retired.characterId,
         );
         setCharacters(Object.freeze(remaining));
+        setCharacterRelations((current) => Object.freeze(
+          current.filter((relation) =>
+            relation.workId === retired.workId &&
+            relation.fromCharacterId !== retired.characterId &&
+            relation.toCharacterId !== retired.characterId
+          ),
+        ));
         setSelectedCharacterId((current) =>
           current === retired.characterId
             ? (remaining[0]?.characterId ?? null)
@@ -6132,8 +7942,1115 @@ export const App = forwardRef<
         setCharacterActionState("idle");
       }
     },
-    [activeWork, characterActionState, characters],
+    [
+      activeWork,
+      characterActionState,
+      characterRelationActionState,
+      characters,
+    ],
   );
+  const createCharacterRelation = useCallback(async (
+    character: CharacterProjection,
+    draft: CharacterRelationDraft,
+  ) => {
+    if (
+      activeWork === undefined ||
+      character.workId !== activeWork.workId ||
+      characterRelationActionState !== "idle"
+    ) {
+      return;
+    }
+    setCharacterRelationActionState("creating");
+    setCharacterActionError(null);
+    try {
+      const created = await window.eumStudio.characters.createRelation({
+        schemaVersion: 1,
+        workId: activeWork.workId,
+        fromCharacterId: character.characterId,
+        toCharacterId: entityId<"Character">(draft.toCharacterId),
+        kind: draft.kind,
+        description: draft.description,
+      });
+      setCharacterRelations((current) => Object.freeze([
+        created,
+        ...current.filter((relation) =>
+          relation.workId === created.workId &&
+          relation.relationId !== created.relationId
+        ),
+      ]));
+    } catch {
+      setCharacterActionError(
+        "캐릭터 관계를 만들지 못했습니다. 현재 작품과 대상을 확인하세요.",
+      );
+    } finally {
+      setCharacterRelationActionState("idle");
+    }
+  }, [activeWork, characterRelationActionState]);
+  const updateCharacterRelation = useCallback(async (
+    relation: CharacterRelationProjection,
+    changes: UpdateCharacterRelationCommand["changes"],
+  ) => {
+    if (
+      activeWork === undefined ||
+      relation.workId !== activeWork.workId ||
+      characterRelationActionState !== "idle"
+    ) {
+      return;
+    }
+    setCharacterRelationActionState("updating");
+    setCharacterActionError(null);
+    try {
+      const updated = await window.eumStudio.characters.updateRelation({
+        schemaVersion: 1,
+        workId: activeWork.workId,
+        relationId: relation.relationId,
+        expectedRevision: relation.revision,
+        changes,
+      });
+      setCharacterRelations((current) => Object.freeze(
+        current
+          .filter((entry) => entry.workId === updated.workId)
+          .map((entry) =>
+            entry.relationId === updated.relationId ? updated : entry,
+          ),
+      ));
+    } catch {
+      setCharacterActionError(
+        "캐릭터 관계가 달라졌습니다. 다시 열어 확인하세요.",
+      );
+    } finally {
+      setCharacterRelationActionState("idle");
+    }
+  }, [activeWork, characterRelationActionState]);
+  const retireCharacterRelation = useCallback(async (
+    relation: CharacterRelationProjection,
+  ) => {
+    if (
+      activeWork === undefined ||
+      relation.workId !== activeWork.workId ||
+      characterRelationActionState !== "idle"
+    ) {
+      return;
+    }
+    setCharacterRelationActionState("retiring");
+    setCharacterActionError(null);
+    try {
+      const retired = await window.eumStudio.characters.retireRelation({
+        schemaVersion: 1,
+        workId: activeWork.workId,
+        relationId: relation.relationId,
+        expectedRevision: relation.revision,
+      });
+      setCharacterRelations((current) => Object.freeze(
+        current
+          .filter((entry) => entry.workId === retired.workId)
+          .map((entry) =>
+            entry.relationId === retired.relationId ? retired : entry,
+          ),
+      ));
+    } catch {
+      setCharacterActionError("캐릭터 관계를 삭제하지 못했습니다.");
+    } finally {
+      setCharacterRelationActionState("idle");
+    }
+  }, [activeWork, characterRelationActionState]);
+  const captureCharacterWorkspaceSelection = useCallback(async () => {
+    setCharacterActionError(null);
+    setCharacterExtractionActionError(null);
+    setCharacterExtractionPermissionRequired(false);
+    let selection: CharacterWorkspaceSelection | null = null;
+    if (activeDocument !== undefined) {
+      const summary = manuscriptEditorRef.current?.readDocumentState(
+        activeDocument,
+      );
+      const range = summary?.selection.ranges[summary.selection.mainIndex];
+      if (range !== undefined && !range.empty) {
+        try {
+          await persistDocument(activeDocument);
+          const documentRevisionId =
+            durableSaveQueueRef.current?.getCurrentRevisionId(
+              activeDocument.documentId,
+            ) ?? activeDocument.documentRevisionId;
+          if (documentRevisionId !== null) {
+            selection = Object.freeze({
+              documentId: activeDocument.documentId,
+              documentTitle: activeDocument.label,
+              documentRevisionId,
+              from: range.from,
+              to: range.to,
+            });
+          }
+        } catch {
+          setCharacterExtractionActionError(
+            "현재 선택 범위의 저장 revision을 확정하지 못했습니다.",
+          );
+        }
+      }
+    }
+    setCharacterWorkspaceSelection(selection);
+    return selection;
+  }, [activeDocument, persistDocument]);
+
+  const openCharacterWorkspace = useCallback(async () => {
+    setCharacterDialogOpen(false);
+    const selection = await captureCharacterWorkspaceSelection();
+    setWorkspaceSurface("characters");
+    return selection;
+  }, [captureCharacterWorkspaceSelection]);
+
+  const performCharacterExtraction = useCallback(async (
+    selectionOverride?: CharacterWorkspaceSelection,
+  ) => {
+    const extractionSelection =
+      selectionOverride ?? characterWorkspaceSelection;
+    if (
+      activeWork === undefined ||
+      extractionSelection === null
+    ) {
+      setCharacterExtractionActionError(
+        "원고에서 정확한 범위를 선택한 뒤 캐릭터 추출을 실행하세요.",
+      );
+      return;
+    }
+    setCharacterExtractionActionState("extracting");
+    setCharacterExtractionActionError(null);
+    try {
+      const result = await window.eumStudio.characters.runExtraction({
+        schemaVersion: 1,
+        requestId: entityId<"CharacterExtractionRequest">(
+          crypto.randomUUID(),
+        ),
+        workId: activeWork.workId,
+        conversationId: assistantConversationId,
+        sourceRange: {
+          documentId: entityId<"Document">(
+            extractionSelection.documentId,
+          ),
+          documentRevisionId: entityId<"DocumentRevision">(
+            extractionSelection.documentRevisionId,
+          ),
+          from: extractionSelection.from,
+          to: extractionSelection.to,
+        },
+      });
+      if (result.status === "login-required") {
+        setCharacterExtractionActionError(
+          "GPT 연결이 필요합니다. 앱 설정에서 GPT로 로그인하세요.",
+        );
+        return;
+      }
+      if (result.status === "permission-required") {
+        setCharacterExtractionPermissionRequired(true);
+        setCharacterExtractionDestinationId(result.destinationId);
+        return;
+      }
+      if (result.status === "context-rejected") {
+        setCharacterExtractionActionError(
+          result.reason === "stale-context"
+            ? "선택 뒤 원고가 변경되었습니다. 원고에서 범위를 다시 선택하세요."
+            : "현재 선택 범위를 캐릭터 추출에 사용할 수 없습니다.",
+        );
+        return;
+      }
+      setCharacterExtractionPermissionRequired(false);
+      setCharacterExtractionDestinationId(null);
+      setCharacterExtractionCandidates((current) => Object.freeze([
+        result.candidate,
+        ...current.filter(
+          (candidate) => candidate.candidateId !== result.candidate.candidateId,
+        ),
+      ]));
+    } catch (reason) {
+      setCharacterExtractionActionError(
+        reason instanceof Error
+          ? reason.message
+          : "캐릭터 후보를 만들지 못했습니다.",
+      );
+    } finally {
+      setCharacterExtractionActionState("idle");
+    }
+  }, [
+    activeWork,
+    assistantConversationId,
+    characterWorkspaceSelection,
+  ]);
+
+  const grantCharacterExtractionPermission = useCallback(async () => {
+    if (
+      activeWork === undefined ||
+      characterExtractionDestinationId === null ||
+      characterWorkspaceSelection === null ||
+      characterExtractionActionState !== "idle"
+    ) {
+      return;
+    }
+    setCharacterExtractionActionState("granting");
+    setCharacterExtractionActionError(null);
+    try {
+      await window.eumStudio.assistant.grantContextPermission({
+        schemaVersion: 1,
+        workId: activeWork.workId,
+        conversationId: assistantConversationId,
+        capability: "character.extract",
+        destinationId: characterExtractionDestinationId,
+        localScope: "selection",
+        externalScope: "selection",
+        duration: "once",
+      });
+      setCharacterExtractionPermissionRequired(false);
+      setCharacterExtractionActionState("idle");
+      await performCharacterExtraction();
+    } catch (reason) {
+      setCharacterExtractionActionError(
+        reason instanceof Error
+          ? reason.message
+          : "캐릭터 추출 권한을 승인하지 못했습니다.",
+      );
+      setCharacterExtractionActionState("idle");
+    }
+  }, [
+    activeWork,
+    assistantConversationId,
+    characterExtractionActionState,
+    characterExtractionDestinationId,
+    characterWorkspaceSelection,
+    performCharacterExtraction,
+  ]);
+
+  const decideCharacterExtractionItem = useCallback(async (
+    candidate: CharacterExtractionCandidate,
+    item: CharacterExtractionItem,
+    decision: CharacterExtractionDecision,
+  ) => {
+    if (
+      activeWork === undefined ||
+      candidate.workId !== activeWork.workId ||
+      characterExtractionActionState !== "idle"
+    ) {
+      return;
+    }
+    setCharacterExtractionActionState("deciding");
+    setCharacterExtractionActionError(null);
+    try {
+      const result = await window.eumStudio.characters.decideExtractionItem({
+        schemaVersion: 1,
+        workId: activeWork.workId,
+        candidateId: candidate.candidateId,
+        expectedCandidateRevision: candidate.revision,
+        itemId: item.itemId,
+        decision,
+      });
+      setCharacterExtractionCandidates((current) => Object.freeze([
+        result.candidate,
+        ...current.filter(
+          (entry) => entry.candidateId !== result.candidate.candidateId,
+        ),
+      ]));
+      if (result.status === "stale") {
+        setCharacterExtractionActionError(
+          "후보 생성 뒤 원고가 변경되어 이 후보를 적용할 수 없습니다.",
+        );
+        return;
+      }
+      setCharacters(result.characters);
+      const decidedItem = result.candidate.items.find(
+        (entry) => entry.itemId === item.itemId,
+      );
+      if (decidedItem?.approvedCharacterId != null) {
+        setSelectedCharacterId(decidedItem.approvedCharacterId);
+      }
+    } catch (reason) {
+      setCharacterExtractionActionError(
+        reason instanceof Error
+          ? reason.message
+          : "캐릭터 후보 결정을 저장하지 못했습니다.",
+      );
+    } finally {
+      setCharacterExtractionActionState("idle");
+    }
+  }, [activeWork, characterExtractionActionState]);
+
+  const performCharacterGeneration = useCallback(async (
+    brief: CharacterGenerationBrief,
+  ) => {
+    if (
+      activeWork === undefined ||
+      characterGenerationActionState !== "idle"
+    ) {
+      return;
+    }
+    setCharacterGenerationActionState("generating");
+    setCharacterGenerationActionError(null);
+    try {
+      const result = await window.eumStudio.characters.runGeneration({
+        schemaVersion: 1,
+        requestId: entityId<"CharacterGenerationRequest">(
+          crypto.randomUUID(),
+        ),
+        workId: activeWork.workId,
+        brief,
+      });
+      if (result.status === "login-required") {
+        setCharacterGenerationActionError(
+          "GPT 연결이 필요합니다. 앱 설정에서 GPT로 로그인하세요.",
+        );
+        return;
+      }
+      setCharacterGenerationCandidates((current) => Object.freeze([
+        result.candidate,
+        ...current.filter(
+          (candidate) => candidate.candidateId !== result.candidate.candidateId,
+        ),
+      ]));
+    } catch (reason) {
+      setCharacterGenerationActionError(
+        reason instanceof Error
+          ? reason.message
+          : "캐릭터 설정 초안을 만들지 못했습니다.",
+      );
+    } finally {
+      setCharacterGenerationActionState("idle");
+    }
+  }, [activeWork, characterGenerationActionState]);
+
+  const decideCharacterGenerationItem = useCallback(async (
+    candidate: CharacterGenerationCandidate,
+    item: CharacterGenerationItem,
+    decision: CharacterExtractionDecision,
+  ) => {
+    if (
+      activeWork === undefined ||
+      candidate.workId !== activeWork.workId ||
+      characterGenerationActionState !== "idle"
+    ) {
+      return;
+    }
+    setCharacterGenerationActionState("deciding");
+    setCharacterGenerationActionError(null);
+    try {
+      const result = await window.eumStudio.characters.decideGenerationItem({
+        schemaVersion: 1,
+        workId: activeWork.workId,
+        candidateId: candidate.candidateId,
+        expectedCandidateRevision: candidate.revision,
+        itemId: item.itemId,
+        decision,
+      });
+      setCharacterGenerationCandidates((current) => Object.freeze([
+        result.candidate,
+        ...current.filter(
+          (entry) => entry.candidateId !== result.candidate.candidateId,
+        ),
+      ]));
+      setCharacters(result.characters);
+      const decidedItem = result.candidate.items.find(
+        (entry) => entry.itemId === item.itemId,
+      );
+      if (decidedItem?.approvedCharacterId != null) {
+        setSelectedCharacterId(decidedItem.approvedCharacterId);
+      }
+    } catch (reason) {
+      setCharacterGenerationActionError(
+        reason instanceof Error
+          ? reason.message
+          : "캐릭터 설정 후보 결정을 저장하지 못했습니다.",
+      );
+    } finally {
+      setCharacterGenerationActionState("idle");
+    }
+  }, [activeWork, characterGenerationActionState]);
+
+  const addCharacterEvidence = useCallback(async (
+    character: CharacterProjection,
+  ) => {
+    if (
+      activeWork === undefined ||
+      character.workId !== activeWork.workId ||
+      characterWorkspaceSelection === null ||
+      characterExtractionActionState !== "idle"
+    ) {
+      return;
+    }
+    setCharacterExtractionActionState("adding-evidence");
+    setCharacterExtractionActionError(null);
+    try {
+      const updated = await window.eumStudio.characters.addEvidence({
+        schemaVersion: 1,
+        workId: activeWork.workId,
+        characterId: character.characterId,
+        expectedRevision: character.revision,
+        documentId: entityId<"Document">(
+          characterWorkspaceSelection.documentId,
+        ),
+        documentRevisionId: entityId<"DocumentRevision">(
+          characterWorkspaceSelection.documentRevisionId,
+        ),
+        selection: {
+          anchor: characterWorkspaceSelection.from,
+          head: characterWorkspaceSelection.to,
+        },
+      });
+      setCharacters((current) => Object.freeze([
+        updated,
+        ...current.filter(
+          (entry) => entry.characterId !== updated.characterId,
+        ),
+      ]));
+    } catch (reason) {
+      setCharacterExtractionActionError(
+        reason instanceof Error
+          ? reason.message
+          : "현재 선택을 캐릭터 근거로 연결하지 못했습니다.",
+      );
+    } finally {
+      setCharacterExtractionActionState("idle");
+    }
+  }, [
+    activeWork,
+    characterExtractionActionState,
+    characterWorkspaceSelection,
+  ]);
+
+  const openCharacterEvidence = useCallback(async (
+    character: CharacterProjection,
+    evidence: CharacterProjection["evidences"][number],
+  ) => {
+    if (
+      runtime.status !== "ready" ||
+      activeWork === undefined ||
+      character.workId !== activeWork.workId ||
+      evidence.integrity !== "resolved" ||
+      evidence.range === null
+    ) {
+      setCharacterExtractionActionError(
+        "이 캐릭터 근거의 원고 위치를 바로 열 수 없습니다.",
+      );
+      return;
+    }
+    const targetDocument = runtime.documentProfile.documents.find(
+      (document) =>
+        document.workId === activeWork.workId &&
+        document.documentId === evidence.documentId,
+    );
+    if (targetDocument === undefined) {
+      setCharacterExtractionActionError(
+        "캐릭터 근거의 원본 회차를 현재 작품에서 찾지 못했습니다.",
+      );
+      return;
+    }
+    setWorkspaceSurface("manuscript");
+    if (activeDocument?.documentId === targetDocument.documentId) {
+      const selected = manuscriptEditorRef.current?.selectDocumentRange(
+        targetDocument,
+        evidence.range,
+      );
+      if (!selected) {
+        setCharacterExtractionActionError(
+          "캐릭터 근거의 정확한 원고 범위를 선택하지 못했습니다.",
+        );
+      }
+      return;
+    }
+    pendingCharacterEvidenceRef.current = {
+      workId: activeWork.workId,
+      documentId: targetDocument.documentId,
+      range: evidence.range,
+    };
+    setCharacterExtractionActionState("adding-evidence");
+    try {
+      await activateWorkspaceLocation({
+        schemaVersion: 1,
+        workId: activeWork.workId,
+        documentId: targetDocument.documentId,
+      });
+    } catch {
+      pendingCharacterEvidenceRef.current = null;
+      setCharacterExtractionActionState("idle");
+      setCharacterExtractionActionError(
+        "캐릭터 근거의 원본 회차를 열지 못했습니다.",
+      );
+    }
+  }, [activeDocument, activeWork, activateWorkspaceLocation, runtime]);
+  const openPlotWorkspace = useCallback(async (
+    initialTab: PlotWorkspaceTab = "board",
+  ) => {
+    setPlotDialogOpen(false);
+    setPlotActionError(null);
+    setSceneExtractionActionError(null);
+    setSceneExtractionPermissionRequired(false);
+    let selection: SceneExtractionSelection | null = null;
+    if (activeDocument !== undefined) {
+      const summary = manuscriptEditorRef.current?.readDocumentState(
+        activeDocument,
+      );
+      const range = summary?.selection.ranges[summary.selection.mainIndex];
+      if (range !== undefined && !range.empty) {
+        try {
+          await persistDocument(activeDocument);
+          const documentRevisionId =
+            durableSaveQueueRef.current?.getCurrentRevisionId(
+              activeDocument.documentId,
+            ) ?? activeDocument.documentRevisionId;
+          if (documentRevisionId !== null) {
+            selection = Object.freeze({
+              documentId: activeDocument.documentId,
+              documentTitle: activeDocument.label,
+              documentRevisionId,
+              from: range.from,
+              to: range.to,
+            });
+          }
+        } catch {
+          setSceneExtractionActionError(
+            "현재 선택 범위의 저장 revision을 확정하지 못했습니다.",
+          );
+        }
+      }
+    }
+    setSceneExtractionSelection(selection);
+    setPlotWorkspaceInitialTab(initialTab);
+    setWorkspaceSurface("plots");
+    return selection;
+  }, [activeDocument, persistDocument]);
+
+  const performSceneExtraction = useCallback(async (
+    selectionOverride?: SceneExtractionSelection,
+  ) => {
+    const extractionSelection = selectionOverride ?? sceneExtractionSelection;
+    if (activeWork === undefined || extractionSelection === null) {
+      setSceneExtractionActionError(
+        "원고에서 정확한 범위를 선택한 뒤 장면 구분을 실행하세요.",
+      );
+      return;
+    }
+    setSceneExtractionActionState("extracting");
+    setSceneExtractionActionError(null);
+    try {
+      const result = await window.eumStudio.structure.runSceneExtraction({
+        schemaVersion: 1,
+        requestId: entityId<"SceneExtractionRequest">(crypto.randomUUID()),
+        workId: activeWork.workId,
+        conversationId: assistantConversationId,
+        sourceRange: {
+          documentId: entityId<"Document">(extractionSelection.documentId),
+          documentRevisionId: entityId<"DocumentRevision">(
+            extractionSelection.documentRevisionId,
+          ),
+          from: extractionSelection.from,
+          to: extractionSelection.to,
+        },
+      });
+      if (result.status === "login-required") {
+        setSceneExtractionActionError(
+          "GPT 연결이 필요합니다. 앱 설정에서 GPT로 로그인하세요.",
+        );
+        return;
+      }
+      if (result.status === "permission-required") {
+        setSceneExtractionPermissionRequired(true);
+        setSceneExtractionDestinationId(result.destinationId);
+        return;
+      }
+      if (result.status === "context-rejected") {
+        setSceneExtractionActionError(
+          result.reason === "stale-context"
+            ? "선택 뒤 원고가 변경되었습니다. 범위를 다시 선택하세요."
+            : "현재 선택 범위를 장면 구분에 사용할 수 없습니다.",
+        );
+        return;
+      }
+      setSceneExtractionPermissionRequired(false);
+      setSceneExtractionDestinationId(null);
+      setSceneExtractionCandidates((current) => Object.freeze([
+        result.candidate,
+        ...current.filter(
+          (candidate) => candidate.candidateId !== result.candidate.candidateId,
+        ),
+      ]));
+    } catch (reason) {
+      setSceneExtractionActionError(
+        reason instanceof Error ? reason.message : "장면 후보를 만들지 못했습니다.",
+      );
+    } finally {
+      setSceneExtractionActionState("idle");
+    }
+  }, [
+    activeWork,
+    assistantConversationId,
+    sceneExtractionSelection,
+  ]);
+
+  const grantSceneExtractionPermission = useCallback(async () => {
+    if (
+      activeWork === undefined ||
+      sceneExtractionDestinationId === null ||
+      sceneExtractionSelection === null ||
+      sceneExtractionActionState !== "idle"
+    ) {
+      return;
+    }
+    setSceneExtractionActionState("granting");
+    setSceneExtractionActionError(null);
+    try {
+      await window.eumStudio.assistant.grantContextPermission({
+        schemaVersion: 1,
+        workId: activeWork.workId,
+        conversationId: assistantConversationId,
+        capability: "scene.extract",
+        destinationId: sceneExtractionDestinationId,
+        localScope: "selection",
+        externalScope: "selection",
+        duration: "once",
+      });
+      setSceneExtractionPermissionRequired(false);
+      setSceneExtractionActionState("idle");
+      await performSceneExtraction();
+    } catch (reason) {
+      setSceneExtractionActionError(
+        reason instanceof Error ? reason.message : "장면 구분 권한을 승인하지 못했습니다.",
+      );
+      setSceneExtractionActionState("idle");
+    }
+  }, [
+    activeWork,
+    assistantConversationId,
+    performSceneExtraction,
+    sceneExtractionActionState,
+    sceneExtractionDestinationId,
+    sceneExtractionSelection,
+  ]);
+
+  const decideSceneExtractionBoundary = useCallback(async (
+    candidate: SceneExtractionCandidate,
+    boundary: SceneExtractionBoundary,
+    decision: "accept" | "exclude",
+  ) => {
+    if (
+      activeWork === undefined ||
+      candidate.workId !== activeWork.workId ||
+      sceneExtractionActionState !== "idle"
+    ) {
+      return;
+    }
+    setSceneExtractionActionState("deciding");
+    setSceneExtractionActionError(null);
+    try {
+      const result = await window.eumStudio.structure.decideSceneExtractionBoundary({
+        schemaVersion: 1,
+        workId: activeWork.workId,
+        candidateId: candidate.candidateId,
+        expectedCandidateRevision: candidate.revision,
+        boundaryId: boundary.boundaryId,
+        decision,
+      });
+      setSceneExtractionCandidates((current) => Object.freeze([
+        result.candidate,
+        ...current.filter(
+          (entry) => entry.candidateId !== result.candidate.candidateId,
+        ),
+      ]));
+      if (result.status === "stale") {
+        setSceneExtractionActionError(
+          "후보 생성 뒤 원고가 변경되어 이 경계를 적용할 수 없습니다.",
+        );
+        return;
+      }
+      setSceneProjection(result.sceneProjection);
+      setSceneActionError(null);
+    } catch (reason) {
+      setSceneExtractionActionError(
+        reason instanceof Error ? reason.message : "장면 경계 결정을 저장하지 못했습니다.",
+      );
+    } finally {
+      setSceneExtractionActionState("idle");
+    }
+  }, [activeWork, sceneExtractionActionState]);
+
+  const decideSceneExtractionAnnotation = useCallback(async (
+    candidate: SceneExtractionCandidate,
+    scene: SceneExtractionScene,
+    decision: SceneExtractionAnnotationDecision,
+  ) => {
+    if (
+      activeWork === undefined ||
+      candidate.workId !== activeWork.workId ||
+      sceneExtractionActionState !== "idle"
+    ) {
+      return;
+    }
+    setSceneExtractionActionState("deciding");
+    setSceneExtractionActionError(null);
+    try {
+      const result = await window.eumStudio.structure
+        .decideSceneExtractionAnnotation({
+          schemaVersion: 1,
+          workId: activeWork.workId,
+          candidateId: candidate.candidateId,
+          expectedCandidateRevision: candidate.revision,
+          sceneItemId: scene.sceneItemId,
+          decision,
+        });
+      setSceneExtractionCandidates((current) => Object.freeze([
+        result.candidate,
+        ...current.filter(
+          (entry) => entry.candidateId !== result.candidate.candidateId,
+        ),
+      ]));
+      if (result.status === "stale") {
+        setSceneExtractionActionError(
+          "후보 생성 뒤 원고가 변경되어 이 장면 정보를 적용할 수 없습니다.",
+        );
+        return;
+      }
+      setSceneAnnotations(result.annotations.annotations);
+      setSceneProjection(result.sceneProjection);
+      const musicQueues =
+        await window.eumStudio.musicPlayback.listSceneQueueCandidates({
+          schemaVersion: 1,
+          workId: activeWork.workId,
+        });
+      setSceneMusicQueueCandidates(musicQueues.candidates);
+      setSceneActionError(null);
+    } catch (reason) {
+      setSceneExtractionActionError(
+        reason instanceof Error
+          ? reason.message
+          : "장면 정보 결정을 저장하지 못했습니다.",
+      );
+    } finally {
+      setSceneExtractionActionState("idle");
+    }
+  }, [activeWork, sceneExtractionActionState]);
+
+  const previewSceneExtractionCandidate = useCallback(async (
+    candidate: SceneExtractionCandidate,
+  ) => {
+    if (
+      runtime.status !== "ready" ||
+      activeWork === undefined ||
+      candidate.workId !== activeWork.workId ||
+      sceneExtractionActionState !== "idle"
+    ) {
+      return;
+    }
+    const targetDocument = runtime.documentProfile.documents.find(
+      (document) =>
+        document.workId === candidate.workId &&
+        document.documentId === candidate.sourceRange.documentId,
+    );
+    if (targetDocument === undefined) {
+      setSceneExtractionActionError(
+        "장면 후보의 원본 회차를 현재 작품에서 찾지 못했습니다.",
+      );
+      return;
+    }
+    const offset = candidate.boundaries.find(
+      (boundary) => boundary.status === "pending",
+    )?.offset ?? candidate.sourceRange.from;
+    setWorkspaceSurface("manuscript");
+    setSceneExtractionActionError(null);
+    if (activeDocument?.documentId === targetDocument.documentId) {
+      if (!manuscriptEditorRef.current?.revealDocumentOffset(targetDocument, offset)) {
+        setSceneExtractionActionError(
+          "장면 경계 미리보기 위치를 원고에서 열지 못했습니다.",
+        );
+      }
+      return;
+    }
+    pendingSceneBoundaryPreviewRef.current = {
+      workId: candidate.workId,
+      documentId: candidate.sourceRange.documentId,
+      offset,
+    };
+    setSceneExtractionActionState("previewing");
+    try {
+      await activateWorkspaceLocation({
+        schemaVersion: 1,
+        workId: candidate.workId,
+        documentId: candidate.sourceRange.documentId,
+      });
+    } catch {
+      pendingSceneBoundaryPreviewRef.current = null;
+      setSceneExtractionActionState("idle");
+      setSceneExtractionActionError(
+        "장면 후보의 원본 회차를 열지 못했습니다.",
+      );
+    }
+  }, [
+    activeDocument,
+    activeWork,
+    activateWorkspaceLocation,
+    runtime,
+    sceneExtractionActionState,
+  ]);
+
+  const performSceneDraft = useCallback(async (
+    plot: PlotThreadProjection,
+    characterIds: readonly EntityId<"Character">[],
+    settingIds: readonly EntityId<"LoreEntry">[],
+  ) => {
+    if (
+      activeDocument === undefined ||
+      activeWork === undefined ||
+      plot.workId !== activeWork.workId ||
+      sceneDraftActionState !== "idle"
+    ) {
+      return;
+    }
+    const state = manuscriptEditorRef.current?.readDocumentState(activeDocument);
+    const selection = state?.selection.ranges[state.selection.mainIndex];
+    if (selection === undefined || !selection.empty) {
+      setSceneDraftActionError(
+        "원고에 초안을 넣을 한 곳에 커서를 둔 뒤 플롯 작업면으로 돌아오세요.",
+      );
+      return;
+    }
+    setSceneDraftActionState("generating");
+    setSceneDraftActionError(null);
+    try {
+      await persistDocument(activeDocument);
+      const documentRevisionId =
+        durableSaveQueueRef.current?.getCurrentRevisionId(
+          activeDocument.documentId,
+        ) ?? activeDocument.documentRevisionId;
+      if (documentRevisionId === null) {
+        throw new Error("장면 초안 대상 원고 revision을 확정하지 못했습니다.");
+      }
+      const result = await window.eumStudio.structure.runSceneDraft({
+        schemaVersion: 1,
+        requestId: entityId<"SceneDraftRequest">(crypto.randomUUID()),
+        workId: activeWork.workId,
+        plotThreadId: plot.plotThreadId,
+        expectedPlotRevision: plot.revision,
+        target: {
+          documentId: activeDocument.documentId,
+          documentRevisionId,
+          insertionOffset: selection.from,
+        },
+        characterIds,
+        settingIds,
+      });
+      if (result.status === "login-required") {
+        setSceneDraftActionError("GPT 연결 후 장면 초안을 만들 수 있습니다.");
+        return;
+      }
+      setSceneDraftCandidates((current) => Object.freeze([
+        result.candidate,
+        ...current.filter(
+          (candidate) => candidate.candidateId !== result.candidate.candidateId,
+        ),
+      ]));
+    } catch (reason) {
+      setSceneDraftActionError(
+        reason instanceof Error ? reason.message : "장면 초안을 만들지 못했습니다.",
+      );
+    } finally {
+      setSceneDraftActionState("idle");
+    }
+  }, [
+    activeDocument,
+    activeWork,
+    persistDocument,
+    sceneDraftActionState,
+  ]);
+
+  const updateSceneDraftCandidate = useCallback(async (
+    candidate: SceneDraftCandidate,
+    draftText: string,
+  ) => {
+    if (
+      activeWork === undefined ||
+      candidate.workId !== activeWork.workId ||
+      sceneDraftActionState !== "idle"
+    ) {
+      return;
+    }
+    setSceneDraftActionState("updating");
+    setSceneDraftActionError(null);
+    try {
+      const updated = await window.eumStudio.structure.updateSceneDraftCandidate({
+        schemaVersion: 1,
+        workId: candidate.workId,
+        candidateId: candidate.candidateId,
+        expectedCandidateRevision: candidate.revision,
+        draftText,
+      });
+      setSceneDraftCandidates((current) => Object.freeze([
+        updated,
+        ...current.filter((entry) => entry.candidateId !== updated.candidateId),
+      ]));
+    } catch (reason) {
+      setSceneDraftActionError(
+        reason instanceof Error ? reason.message : "장면 초안 변경을 저장하지 못했습니다.",
+      );
+    } finally {
+      setSceneDraftActionState("idle");
+    }
+  }, [activeWork, sceneDraftActionState]);
+
+  const applySceneDraftCandidate = useCallback(async (
+    candidate: SceneDraftCandidate,
+  ) => {
+    if (
+      activeDocument === undefined ||
+      activeWork === undefined ||
+      candidate.workId !== activeWork.workId ||
+      sceneDraftActionState !== "idle"
+    ) {
+      return;
+    }
+    if (activeDocument.documentId !== candidate.target.documentId) {
+      setSceneDraftActionError(
+        "장면 초안의 대상 회차를 연 뒤 다시 삽입해 주세요.",
+      );
+      return;
+    }
+    setSceneDraftActionState("applying");
+    setSceneDraftActionError(null);
+    try {
+      await persistDocument(activeDocument);
+      const preparation =
+        await window.eumStudio.structure.prepareSceneDraftInsertion({
+          schemaVersion: 1,
+          workId: candidate.workId,
+          candidateId: candidate.candidateId,
+          expectedCandidateRevision: candidate.revision,
+        });
+      setSceneDraftCandidates((current) => Object.freeze([
+        preparation.candidate,
+        ...current.filter(
+          (entry) => entry.candidateId !== preparation.candidate.candidateId,
+        ),
+      ]));
+      if (preparation.status === "stale") {
+        setSceneDraftActionError(
+          "플롯 연결 정보나 대상 원고가 생성 이후 변경되어 자동 삽입하지 않았습니다.",
+        );
+        return;
+      }
+      let resultDocumentRevisionId: EntityId<"DocumentRevision">;
+      if (preparation.status === "already-inserted") {
+        resultDocumentRevisionId = preparation.resultDocumentRevisionId;
+      } else {
+        const inserted = manuscriptEditorRef.current?.insertTextAtExactOffset(
+          activeDocument,
+          candidate.target.insertionOffset,
+          preparation.baseDocumentLength,
+          candidate.draftText,
+        ) ?? false;
+        if (!inserted) {
+          throw new Error("현재 원고가 달라 장면 초안을 삽입하지 않았습니다.");
+        }
+        await persistDocument(activeDocument);
+        const currentRevisionId =
+          durableSaveQueueRef.current?.getCurrentRevisionId(
+            activeDocument.documentId,
+          );
+        if (currentRevisionId === null || currentRevisionId === undefined) {
+          throw new Error("삽입한 장면 초안의 저장 revision을 확인하지 못했습니다.");
+        }
+        resultDocumentRevisionId = currentRevisionId;
+      }
+      const completed =
+        await window.eumStudio.structure.completeSceneDraftInsertion({
+          schemaVersion: 1,
+          workId: candidate.workId,
+          candidateId: candidate.candidateId,
+          expectedCandidateRevision: candidate.revision,
+          resultDocumentRevisionId,
+        });
+      setSceneDraftCandidates((current) => Object.freeze([
+        completed,
+        ...current.filter(
+          (entry) => entry.candidateId !== completed.candidateId,
+        ),
+      ]));
+      setWorkspaceSurface("manuscript");
+    } catch (reason) {
+      setSceneDraftActionError(
+        reason instanceof Error ? reason.message : "장면 초안을 원고에 삽입하지 못했습니다.",
+      );
+    } finally {
+      setSceneDraftActionState("idle");
+    }
+  }, [
+    activeDocument,
+    activeWork,
+    persistDocument,
+    sceneDraftActionState,
+  ]);
+
+  const compareSceneDraftCandidate = useCallback(async (
+    candidate: SceneDraftCandidate,
+  ) => {
+    if (
+      runtime.status !== "ready" ||
+      activeWork === undefined ||
+      candidate.workId !== activeWork.workId ||
+      sceneDraftActionState !== "idle"
+    ) {
+      return;
+    }
+    const targetDocument = runtime.documentProfile.documents.find(
+      (document) =>
+        document.workId === candidate.workId &&
+        document.documentId === candidate.target.documentId,
+    );
+    if (targetDocument === undefined) {
+      setSceneDraftActionError("장면 초안의 대상 회차를 찾지 못했습니다.");
+      return;
+    }
+    setWorkspaceSurface("manuscript");
+    if (activeDocument?.documentId === targetDocument.documentId) {
+      const revealed = manuscriptEditorRef.current?.revealDocumentOffset(
+        targetDocument,
+        Math.min(candidate.target.insertionOffset, targetDocument.initialText.length),
+      );
+      if (!revealed) setSceneDraftActionError("현재 원고 위치를 열지 못했습니다.");
+      return;
+    }
+    pendingSceneDraftCompareRef.current = {
+      workId: candidate.workId,
+      documentId: candidate.target.documentId,
+      offset: candidate.target.insertionOffset,
+    };
+    setSceneDraftActionState("applying");
+    try {
+      await activateWorkspaceLocation({
+        schemaVersion: 1,
+        workId: candidate.workId,
+        documentId: candidate.target.documentId,
+      });
+    } catch {
+      pendingSceneDraftCompareRef.current = null;
+      setSceneDraftActionState("idle");
+      setSceneDraftActionError("장면 초안의 대상 회차를 열지 못했습니다.");
+    }
+  }, [
+    activeDocument,
+    activeWork,
+    activateWorkspaceLocation,
+    runtime,
+    sceneDraftActionState,
+  ]);
+
+  const regenerateSceneDraftCandidate = useCallback((
+    candidate: SceneDraftCandidate,
+  ) => {
+    const plot = activeWorkPlots.find(
+      (entry) => entry.plotThreadId === candidate.context.plot.plotThreadId,
+    );
+    if (plot === undefined) {
+      setSceneDraftActionError("다시 생성할 현재 플롯을 찾지 못했습니다.");
+      return;
+    }
+    void performSceneDraft(
+      plot,
+      candidate.context.characters.map((character) => character.characterId),
+      candidate.context.settings.map((setting) => setting.loreEntryId),
+    );
+  }, [activeWorkPlots, performSceneDraft]);
+
   const applyPlotEventLinkMutation = useCallback(
     (mutation: PlotEventLinkMutationProjection) => {
       setPlots((current) => Object.freeze([
@@ -6170,40 +9087,6 @@ export const App = forwardRef<
       ));
     },
     [],
-  );
-  const createPlotFromEventBlock = useCallback(
-    async (eventBlock: EventBlockProjection) => {
-      if (
-        activeWork === undefined ||
-        eventBlock.workId !== activeWork.workId ||
-        plotActionState !== "idle"
-      ) {
-        return;
-      }
-      setPlotActionState("creating-from-event");
-      setPlotActionError(null);
-      try {
-        const mutation = await window.eumStudio.plots.createFromEvent({
-          schemaVersion: 1,
-          workId: activeWork.workId,
-          eventBlockId: eventBlock.eventBlockId,
-        });
-        applyPlotEventLinkMutation(mutation);
-        await refreshEventRailAfterPlotChange(activeWork.workId);
-        setSelectedPlotThreadId(mutation.plotBeat.plotThreadId);
-        setPlotDialogOpen(true);
-      } catch {
-        setPlotActionError("사건에서 플롯을 만들거나 연결 플롯을 열지 못했습니다.");
-      } finally {
-        setPlotActionState("idle");
-      }
-    },
-    [
-      activeWork,
-      applyPlotEventLinkMutation,
-      plotActionState,
-      refreshEventRailAfterPlotChange,
-    ],
   );
   const createEventFromPlot = useCallback(
     async (plot: PlotThreadProjection, exactSelection: boolean) => {
@@ -8005,9 +10888,127 @@ export const App = forwardRef<
     runtime.startupRecovery.status !== "clean"
       ? "writing-workspace-recovery"
       : null,
+    focusMode && workspaceSurface === "manuscript"
+      ? "writing-workspace-focus-mode"
+      : null,
+    activeForwardWriting !== null && workspaceSurface === "manuscript"
+      ? "writing-workspace-forward-writing"
+      : null,
+    theme,
   ]
     .filter((className): className is string => className !== null)
     .join(" ");
+  const workspaceSectionNavigation = (
+    <nav aria-label="작품 작업면" className="workspace-section-navigation">
+      <button
+        aria-current={workspaceSurface === "manuscript" ? "page" : undefined}
+        className={workspaceSurface === "manuscript" ? "is-active" : undefined}
+        onClick={() => {
+          setWorkspaceSurface("manuscript");
+          setCharacterExtractionActionError(null);
+        }}
+        type="button"
+      >
+        원고
+      </button>
+      <button
+        aria-current={workspaceSurface === "characters" ? "page" : undefined}
+        className={workspaceSurface === "characters" ? "is-active" : undefined}
+        onClick={() => {
+          setFocusMode(false);
+          void openCharacterWorkspace();
+        }}
+        type="button"
+      >
+        인물
+      </button>
+      <button
+        aria-current={workspaceSurface === "plots" ? "page" : undefined}
+        className={workspaceSurface === "plots" ? "is-active" : undefined}
+        onClick={() => {
+          setFocusMode(false);
+          void openPlotWorkspace();
+        }}
+        type="button"
+      >
+        플롯
+      </button>
+    </nav>
+  );
+  const sceneDraftPanel = activeSelectedPlot === null ? null : (
+    <SceneDraftPanel
+      actionState={sceneDraftActionState}
+      candidates={sceneDraftCandidates}
+      characters={activeWorkCharacters}
+      documentLabels={activeWorkDocumentLabels}
+      error={sceneDraftActionError}
+      linkedEventCount={activeWorkPlotEventLinks.filter(
+        (link) => link.plotBeatId === activeSelectedPlot.plotThreadId,
+      ).length}
+      oauthStatus={chatGptOAuthStatus}
+      onApply={(candidate) => {
+        void applySceneDraftCandidate(candidate);
+      }}
+      onCompare={(candidate) => {
+        void compareSceneDraftCandidate(candidate);
+      }}
+      onGenerate={(plot, characterIds, settingIds) => {
+        void performSceneDraft(plot, characterIds, settingIds);
+      }}
+      onOpenSettings={() => onOpenSettings?.()}
+      onRegenerate={regenerateSceneDraftCandidate}
+      onUpdate={(candidate, draftText) => {
+        void updateSceneDraftCandidate(candidate, draftText);
+      }}
+      plot={activeSelectedPlot}
+      settings={activeWorkLoreEntries.filter(
+        (entry) => entry.enabled && entry.retiredAt === null,
+      )}
+    />
+  );
+  const musicFocusText = activePomodoroPhase !== null
+    ? `${activePomodoroPhase.phase === "work" ? "집중" : "휴식"} ${formatTimerDuration(
+        activePomodoroPhase.state === "running"
+          ? remainingTimerMs(activePomodoroPhase.deadlineAt, activityClock)
+          : activePomodoroPhase.remainingDurationMs,
+      )}`
+    : activeFocusCycle !== undefined
+      ? `${activeFocusCycle.phaseRef} ${formatTimerDuration(
+          remainingTimerMs(activeFocusCycle.deadlineAt, activityClock),
+      )}`
+      : null;
+  const focusPomodoroStatus = activePomodoroPhase === null
+    ? null
+    : `${activePomodoroPhase.phase === "work" ? "작업" : "휴식"} ${
+        activePomodoroPhase.cycleNumber
+      }/${pomodoro?.settings?.workCycleCount ?? activePomodoroPhase.cycleNumber} · 완료 ${
+        pomodoro?.completedWorkCycles ?? 0
+      }회`;
+  const focusPomodoroTimerText = activePomodoroPhase === null
+    ? musicFocusText
+    : formatTimerDuration(
+        activePomodoroPhase.state === "running"
+          ? remainingTimerMs(activePomodoroPhase.deadlineAt, activityClock)
+          : activePomodoroPhase.remainingDurationMs,
+      );
+  const focusSaveStatus =
+    runtime.status === "ready" &&
+    runtime.startupRecovery.status === "recovery-pending"
+      ? "복구 적용 대기"
+      : runtime.status === "ready" &&
+          runtime.startupRecovery.status === "read-only-error"
+        ? "복구 확인 필요"
+        : activeSaveState === null
+          ? "저장 경로 없음"
+          : SAVE_STATE_LABELS[activeSaveState];
+  const focusForwardWritingStatus = activeForwardWriting === null
+    ? null
+    : activeForwardWriting.writtenCharacters >= activeForwardWriting.goalCharacters
+      ? `목표 달성 · ${activeForwardWriting.writtenCharacters.toLocaleString()}자`
+      : `목표까지 ${(
+          activeForwardWriting.goalCharacters -
+          activeForwardWriting.writtenCharacters
+        ).toLocaleString()}자`;
 
   return (
     <section
@@ -8035,8 +11036,17 @@ export const App = forwardRef<
       <section
         aria-labelledby="manuscript-heading"
         className={writingWorkspaceClassName}
+        data-workspace-surface={workspaceSurface}
         data-ui-model="eum-studio-editor"
       >
+        {pomodoroPhaseAlert !== null &&
+          pomodoroPhaseAlert.workId === activeWorkId && (
+          <PomodoroPhaseAlert
+            alert={pomodoroPhaseAlert}
+            key={pomodoroPhaseAlert.alertId}
+            onDismiss={() => setPomodoroPhaseAlert(null)}
+          />
+        )}
         <header
           className={
             embedded
@@ -8076,24 +11086,35 @@ export const App = forwardRef<
                 {embedded ? (activeDocument?.label ?? "원고") : "원고"}
               </h2>
             </div>
-            {titleEditTarget === "document" && (
-              <RenameTitleForm
-                itemLabel="회차"
-                onCancel={() => {
-                  setTitleEditTarget(null);
-                  setTitleEditValue("");
-                  setWorkspaceActionError(null);
-                }}
-                onChange={setTitleEditValue}
-                onSubmit={() => {
-                  void renameActiveDocument().catch(() => undefined);
-                }}
-                submitting={workspaceActionState === "renaming-document"}
-                value={titleEditValue}
-              />
-            )}
           </div>
+          {embedded && workspaceSurface !== "manuscript" && (
+            <div className="planning-surface-navigation">
+              {workspaceSectionNavigation}
+            </div>
+          )}
           <div className="manuscript-tools">
+            {embedded && workspaceSurface === "manuscript" && (
+              <div className="manuscript-entry-actions">
+                <button
+                  onClick={() => {
+                    openAssistantChatDialog();
+                  }}
+                  type="button"
+                >
+                  <Bot aria-hidden="true" size={14} />
+                  조수
+                </button>
+                <button
+                  onClick={() => {
+                    void openPlotWorkspace("scenes");
+                  }}
+                  type="button"
+                >
+                  <Music2 aria-hidden="true" size={14} />
+                  음악
+                </button>
+              </div>
+            )}
             <ManuscriptCount telemetryStore={telemetryStore} />
             {embedded && (
               <p
@@ -8228,8 +11249,7 @@ export const App = forwardRef<
                       className="title-edit-button"
                       disabled={
                         workspaceActionState !== "idle" ||
-                        titleEditTarget !== null ||
-                        showCreateDocument
+                        titleEditTarget !== null
                       }
                       onClick={() => {
                         setTitleEditTarget("work");
@@ -8242,6 +11262,7 @@ export const App = forwardRef<
                     </button>
                   </div>
                 </header>
+                {workspaceSectionNavigation}
                 <p className="empty-document-rail-state">
                   이 작품에는 회차가 없습니다.
                 </p>
@@ -8254,32 +11275,20 @@ export const App = forwardRef<
                         workspaceActionState !== "idle" ||
                         titleEditTarget !== null
                       }
-                      onCancel={() => {
-                        setNewDocumentTitle("");
-                        setShowCreateDocument(false);
+                      onCreate={() => {
                         setWorkspaceActionError(null);
-                      }}
-                      onChange={setNewDocumentTitle}
-                      onStart={() => {
-                        setWorkspaceActionError(null);
-                        setShowCreateDocument(true);
-                      }}
-                      onSubmit={() => {
-                        void createDocument(newDocumentTitle).catch(
+                        void createDocument("").catch(
                           () => undefined,
                         );
                       }}
-                      value={newDocumentTitle}
-                      visible={showCreateDocument}
                     />
                   }
                   onActivateDocument={activateDocumentById}
-                  onRenameDocument={(document) => {
-                    setTitleEditTarget("document");
-                    setTitleEditValue(document.title);
-                    setWorkspaceActionError(null);
-                  }}
+                  onRenameDocument={renameDocument}
                   onCreateFolder={createDocumentFolder}
+                  onMoveDocument={async (documentId, direction) => {
+                    await moveDocument(activeWork.workId, documentId, direction);
+                  }}
                   onPlaceDocument={placeDocumentInFolder}
                   onRenameFolder={renameDocumentFolder}
                   onRetireFolder={retireDocumentFolder}
@@ -8311,8 +11320,7 @@ export const App = forwardRef<
                       className="title-edit-button"
                       disabled={
                         workspaceActionState !== "idle" ||
-                        titleEditTarget !== null ||
-                        showCreateDocument
+                        titleEditTarget !== null
                       }
                       onClick={() => {
                         setTitleEditTarget("work");
@@ -8340,6 +11348,7 @@ export const App = forwardRef<
                     </button>
                   )}
                 </header>
+                {workspaceSectionNavigation}
                 <DocumentFolderTree
                   activeDocumentId={runtime.activeDocumentId}
                   disabled={
@@ -8352,32 +11361,20 @@ export const App = forwardRef<
                         workspaceActionState !== "idle" ||
                         titleEditTarget !== null
                       }
-                      onCancel={() => {
-                        setNewDocumentTitle("");
-                        setShowCreateDocument(false);
+                      onCreate={() => {
                         setWorkspaceActionError(null);
-                      }}
-                      onChange={setNewDocumentTitle}
-                      onStart={() => {
-                        setWorkspaceActionError(null);
-                        setShowCreateDocument(true);
-                      }}
-                      onSubmit={() => {
-                        void createDocument(newDocumentTitle).catch(
+                        void createDocument("").catch(
                           () => undefined,
                         );
                       }}
-                      value={newDocumentTitle}
-                      visible={showCreateDocument}
                     />
                   }
                   onActivateDocument={activateDocumentById}
-                  onRenameDocument={(document) => {
-                    setTitleEditTarget("document");
-                    setTitleEditValue(document.title);
-                    setWorkspaceActionError(null);
-                  }}
+                  onRenameDocument={renameDocument}
                   onCreateFolder={createDocumentFolder}
+                  onMoveDocument={async (documentId, direction) => {
+                    await moveDocument(activeWork.workId, documentId, direction);
+                  }}
                   onPlaceDocument={placeDocumentInFolder}
                   onRenameFolder={renameDocumentFolder}
                   onRetireFolder={retireDocumentFolder}
@@ -8398,11 +11395,12 @@ export const App = forwardRef<
                 >
                   <label>
                     <span>작품 원고 검색</span>
-                    <input
+                     <input
                       aria-label="원고 검색"
                       onChange={(event) => {
                         setManuscriptSearchQuery(event.target.value);
                       }}
+                      placeholder="원고 검색"
                       type="search"
                       value={manuscriptSearchQuery}
                     />
@@ -8487,6 +11485,60 @@ export const App = forwardRef<
             className="workspace-center"
             data-active-document-id={activeDocument?.documentId}
           >
+            <div
+              className="manuscript-workspace-surface"
+              hidden={workspaceSurface !== "manuscript"}
+            >
+            {focusMode &&
+              runtime.status === "ready" &&
+              activeDocument !== undefined && (
+                <FocusModeToolbar
+                  contentWidthPx={focusContentWidthPx}
+                  currentBlockHighlight={focusCurrentBlockHighlight}
+                  exitLabel={
+                    activeForwardWriting === null
+                      ? "집중 화면 종료"
+                      : "수정금지 종료"
+                  }
+                  modeLabel={
+                    activeForwardWriting === null ? null : "수정금지 집필"
+                  }
+                  modeStatus={focusForwardWritingStatus}
+                  onContentWidthChange={(value) => {
+                    setFocusContentWidthPx(value);
+                    persistFocusModePreferences({ contentWidthPx: value });
+                  }}
+                  onCurrentBlockHighlightChange={(value) => {
+                    setFocusCurrentBlockHighlight(value);
+                    persistFocusModePreferences({
+                      currentBlockHighlight: value,
+                    });
+                  }}
+                  onExit={() => {
+                    if (activeForwardWriting === null) {
+                      setFocusMode(false);
+                    } else {
+                      stopForwardWriting();
+                    }
+                  }}
+                  onTypewriterModeChange={(value) => {
+                    setFocusTypewriterMode(value);
+                    persistFocusModePreferences({ typewriterMode: value });
+                  }}
+                  onTypewriterPositionChange={changeFocusTypewriterPosition}
+                  onZoomChange={(value) => {
+                    setFocusZoomPercent(value);
+                    persistFocusModePreferences({ zoomPercent: value });
+                  }}
+                  pomodoroPhase={activePomodoroPhase?.phase ?? null}
+                  pomodoroStatus={focusPomodoroStatus}
+                  saveStatus={focusSaveStatus}
+                  timerStatus={focusPomodoroTimerText}
+                  typewriterMode={focusTypewriterMode}
+                  typewriterPositionPercent={focusTypewriterPositionPercent}
+                  zoomPercent={focusZoomPercent}
+                />
+              )}
             {runtime.status === "ready" && activeDocument !== undefined && (
               <nav
                 aria-label="열린 회차 탭"
@@ -8548,24 +11600,51 @@ export const App = forwardRef<
                 accessibleName="원고"
                 activeDocument={activeDocument}
                 formattingProfile={runtime.formattingProfile}
+                {...(focusMode && workspaceSurface === "manuscript"
+                  ? {
+                      focusPresentation: {
+                        active: true,
+                        contentWidthPx: focusContentWidthPx,
+                        currentBlockHighlight: focusCurrentBlockHighlight,
+                        typewriterMode: focusTypewriterMode,
+                        typewriterPositionPercent:
+                          focusTypewriterPositionPercent,
+                        zoomPercent: focusZoomPercent,
+                      },
+                    }
+                  : {})}
+                forwardWriteProtectedLength={
+                  activeForwardWriting?.protectedLength ?? null
+                }
+                heatmapMode={heatmapMode}
                 inputProfile={runtime.inputProfile}
+                {...(workManuscriptLayout?.workId === activeDocument.workId
+                  ? { layoutSettings: workManuscriptLayout.settings }
+                  : {})}
                 loreEntries={activeWorkLoreEntries}
                 orderedDocuments={activeWorkDocuments}
                 onBlur={handleEditorBlur}
+                onAddEvent={openContextEventDialog}
+                onAddScene={() => {
+                  void createSceneBoundary();
+                }}
                 onCompositionEnd={handleCompositionEnd}
                 onDocumentActivated={handleDocumentActivated}
                 onFormattingChange={handleFormattingChange}
+                onHeatmapModeChange={setHeatmapMode}
+                onLayoutSettingsChange={handleWorkManuscriptLayoutChange}
+                onImportText={() => {
+                  void selectManuscriptTextImport();
+                }}
                 onLoreCueHover={handleLoreCueHover}
                 onOpenLoreCue={openLoreCueInspector}
                 onOpenContinuousReading={() => {
                   void openContinuousReading();
                 }}
+                onOpenAnalysis={openManuscriptAnalysis}
                 onOpenPreflight={openManuscriptPreflight}
                 onTransaction={handleManuscriptTransaction}
-                  readOnly={
-                  runtime.startupRecovery.status !==
-                  "clean"
-                  }
+                  readOnly={runtime.startupRecovery.status !== "clean"}
                   resumeLocation={
                     runtime.resumeCheckpoint
                       .status ===
@@ -8573,6 +11652,7 @@ export const App = forwardRef<
                       ? runtime.resumeCheckpoint
                       : null
                   }
+                  sceneBoundaryPreviews={sceneBoundaryPreviews}
                 ref={manuscriptEditorRef}
               />
             )}
@@ -8581,14 +11661,321 @@ export const App = forwardRef<
                 {preflightActionError}
               </p>
             )}
+            {manuscriptTextImportError !== null &&
+              manuscriptTextImport === null && (
+                <p className="preflight-open-error" role="alert">
+                  {manuscriptTextImportError}
+                </p>
+              )}
             {continuousReadingOpenError !== null && (
               <p className="preflight-open-error" role="alert">
                 {continuousReadingOpenError}
               </p>
             )}
+            </div>
+            {runtime.status === "ready" &&
+              activeWork !== undefined &&
+              workspaceSurface === "characters" && (
+                <CharacterWorkspace
+                  actionState={characterActionState}
+                  candidates={characterExtractionCandidates}
+                  characters={activeWorkCharacters}
+                  error={characterActionError ?? inspirationActionError}
+                  extractionActionState={characterExtractionActionState}
+                  extractionError={characterExtractionActionError}
+                  generationActionState={characterGenerationActionState}
+                  generationCandidates={characterGenerationCandidates}
+                  generationError={characterGenerationActionError}
+                  inspirationBusy={
+                    inspirationActionState !== "idle" ||
+                    workInspirationSettings === null
+                  }
+                  inspirationKeywords={
+                    workInspirationSettings?.settings.characterKeywords ?? []
+                  }
+                  oauthStatus={chatGptOAuthStatus}
+                  relationActionState={characterRelationActionState}
+                  relations={activeWorkCharacterRelations}
+                  onAddEvidence={(character) => {
+                    void addCharacterEvidence(character);
+                  }}
+                  onAddInspirationKeywords={addCharacterInspirationKeywords}
+                  onCreate={(draft) => {
+                    void createCharacter(draft);
+                  }}
+                  onCreateRelation={(character, draft) => {
+                    void createCharacterRelation(character, draft);
+                  }}
+                  onDecideCandidate={(candidate, item, decision) => {
+                    void decideCharacterExtractionItem(
+                      candidate,
+                      item,
+                      decision,
+                    );
+                  }}
+                  onDecideGenerationCandidate={(candidate, item, decision) => {
+                    void decideCharacterGenerationItem(
+                      candidate,
+                      item,
+                      decision,
+                    );
+                  }}
+                  onOpenEvidence={(character, evidence) => {
+                    void openCharacterEvidence(character, evidence);
+                  }}
+                  onOpenSettings={() => onOpenSettings?.()}
+                  onDeleteInspirationKeyword={
+                    deleteCharacterInspirationKeyword
+                  }
+                  onRequestExtractionPermission={() => {
+                    void grantCharacterExtractionPermission();
+                  }}
+                  onRetire={(character) => {
+                    void retireCharacter(character);
+                  }}
+                  onRetireRelation={(relation) => {
+                    void retireCharacterRelation(relation);
+                  }}
+                  onRunGeneration={(brief) => {
+                    void performCharacterGeneration(brief);
+                  }}
+                  onRunExtraction={() => {
+                    void performCharacterExtraction();
+                  }}
+                  onSaveDraw={(draft: CharacterDrawDraft) => {
+                    const valuesFor = (...categories: readonly string[]) =>
+                      draft.traits
+                        .filter((trait) => categories.includes(trait.category))
+                        .map((trait) => trait.value)
+                        .join("\n");
+                    void createCharacter({
+                      name: draft.name.trim(),
+                      aliases: Object.freeze([]),
+                      role: valuesFor("역할"),
+                      summary: draft.traits
+                        .map((trait) => `${trait.category}: ${trait.value}`)
+                        .join("\n"),
+                      appearance: valuesFor("의상"),
+                      personality: valuesFor("성격", "버릇", "비밀"),
+                      speech: valuesFor("말투"),
+                      goal: "",
+                      conflict: "",
+                      note: "",
+                    });
+                  }}
+                  onSelect={setSelectedCharacterId}
+                  onUpdate={(character, changes) => {
+                    void updateCharacter(character, changes);
+                  }}
+                  onUpdateRelation={(relation, changes) => {
+                    void updateCharacterRelation(relation, changes);
+                  }}
+                  permissionRequired={characterExtractionPermissionRequired}
+                  selectedCharacterId={activeSelectedCharacterId}
+                  selection={characterWorkspaceSelection}
+                />
+              )}
+            {runtime.status === "ready" &&
+              activeWork !== undefined &&
+              workspaceSurface === "plots" && (
+                <PlotWorkspace
+                  board={(
+                    <PlotManagerDialog
+                      actionState={plotActionState}
+                      board={plotBoard}
+                      canCreateEventFromSelection={
+                        activeDocument !== undefined && hasManuscriptSelection
+                      }
+                      canLinkSource={
+                        activeDocument !== undefined && hasManuscriptSelection
+                      }
+                      documentLabels={activeWorkDocumentLabels}
+                      embedded
+                      error={plotActionError ?? inspirationActionError}
+                      eventBlocks={activeWorkEventBlocks}
+                      eventLinks={activeWorkPlotEventLinks}
+                      onCreate={(draft) => {
+                        void createPlotThread(draft);
+                      }}
+                      onCreateEvent={(plot, exactSelection) => {
+                        void createEventFromPlot(plot, exactSelection);
+                      }}
+                      onLinkEvent={(plot, eventBlockId, role) => {
+                        void linkPlotEvent(plot, eventBlockId, role);
+                      }}
+                      onLinkSource={(plot) => {
+                        void linkPlotThreadSource(plot);
+                      }}
+                      onMovePlacement={movePlotPlacement}
+                      onOpenSource={(source) => {
+                        void openPlotThreadSource(source);
+                      }}
+                      onRetire={(plot) => {
+                        void retirePlotThread(plot);
+                      }}
+                      onSelect={setSelectedPlotThreadId}
+                      onSetStoryTime={setPlotPlacementStoryTime}
+                      onUnlinkEvent={(link) => {
+                        void unlinkPlotEvent(link);
+                      }}
+                      onUpdate={(plot, changes) => {
+                        void updatePlotThread(plot, changes);
+                      }}
+                      plots={activeWorkPlots}
+                      sceneDraft={sceneDraftPanel}
+                      selectedPlotThreadId={activeSelectedPlotThreadId}
+                      sources={activeWorkPlotSources}
+                      utility={(
+                        <EventDrawTool
+                          busy={
+                            plotActionState !== "idle" ||
+                            inspirationActionState !== "idle" ||
+                            workInspirationSettings === null
+                          }
+                          keywords={
+                            workInspirationSettings?.settings.eventKeywords ?? []
+                          }
+                          onAddKeywords={addEventInspirationKeywords}
+                          onDeleteKeyword={deleteEventInspirationKeyword}
+                          onSave={(draft: EventDrawDraft) => {
+                            void createPlotThread({
+                              title: draft.cards
+                                .map((card) => card.title)
+                                .join(" · "),
+                              stage: "",
+                              summary: draft.cards
+                                .map((card) => `${card.title}: ${card.description}`)
+                                .join("\n"),
+                              note: "",
+                            });
+                          }}
+                        />
+                      )}
+                    />
+                  )}
+                  initialTab={plotWorkspaceInitialTab}
+                  scenes={(
+                    <div className="plot-workspace-structure-pane">
+                      <SceneExtractionPanel
+                        actionState={sceneExtractionActionState}
+                        annotations={sceneAnnotations.filter(
+                          (annotation) => annotation.workId === activeWorkId,
+                        )}
+                        candidates={sceneExtractionCandidates}
+                        characters={activeWorkCharacters}
+                        error={sceneExtractionActionError}
+                        oauthStatus={chatGptOAuthStatus}
+                        onDecide={(candidate, boundary, decision) => {
+                          void decideSceneExtractionBoundary(
+                            candidate,
+                            boundary,
+                            decision,
+                          );
+                        }}
+                        onDecideAnnotation={(candidate, scene, decision) => {
+                          void decideSceneExtractionAnnotation(
+                            candidate,
+                            scene,
+                            decision,
+                          );
+                        }}
+                        onOpenSettings={() => onOpenSettings?.()}
+                        onPreviewCandidate={(candidate) => {
+                          void previewSceneExtractionCandidate(candidate);
+                        }}
+                        onRequestPermission={() => {
+                          void grantSceneExtractionPermission();
+                        }}
+                        onRun={() => {
+                          void performSceneExtraction();
+                        }}
+                        permissionRequired={sceneExtractionPermissionRequired}
+                        projection={
+                          sceneProjection?.workId === activeWorkId
+                            ? sceneProjection
+                            : null
+                        }
+                        selection={sceneExtractionSelection}
+                      />
+                      {sceneActionError !== null && (
+                        <p className="event-action-error" role="alert">
+                          {sceneActionError}
+                        </p>
+                      )}
+                      {sceneMusicQueueError !== null && (
+                        <p className="event-action-error" role="alert">
+                          {sceneMusicQueueError}
+                        </p>
+                      )}
+                      <SceneList
+                        activeDocumentId={activeDocument?.documentId ?? null}
+                        annotations={sceneAnnotations.filter(
+                          (annotation) => annotation.workId === activeWorkId,
+                        )}
+                        busy={
+                          sceneActionState !== "idle" ||
+                          sceneExtractionActionState !== "idle"
+                        }
+                        musicConnected={youtubeMusicConnectionStatus?.apiKeyConfigured === true}
+                        favoriteMusicVideos={
+                          workMusicSettings?.settings.favoriteVideos ?? []
+                        }
+                        musicPlaybackAvailable={youtubeMusicProfile !== null}
+                        musicQueueBusy={sceneMusicQueueActionState !== "idle"}
+                        musicQueueCandidates={sceneMusicQueueCandidates}
+                        onMergeWithPrevious={(scene, previousScene) => {
+                          void mergeSceneWithPrevious(scene, previousScene);
+                        }}
+                        onOpenScene={focusScene}
+                        onOpenMusicSettings={() => onOpenSettings?.()}
+                        onPlaySceneMusicQueue={(candidate) => {
+                          void playSelectedSceneMusicQueue(candidate);
+                        }}
+                        onPlayFavoriteMusicVideo={(video) => {
+                          playYouTubeQueue([video]);
+                        }}
+                        onSearchSceneMusic={(annotation, query) => {
+                          void searchSceneMusicQueues(annotation, query);
+                        }}
+                        onSelectSceneMusicQueue={(candidate, option) => {
+                          void selectSceneMusicQueue(candidate, option);
+                        }}
+                        onToggleFavoriteMusicVideo={(video) => {
+                          void toggleFavoriteMusicVideo(video);
+                        }}
+                        onSetEventOverride={(
+                          scene,
+                          eventBlockId,
+                          operation,
+                          expectedRevision,
+                        ) => {
+                          void setSceneEventOverride(
+                            scene,
+                            eventBlockId,
+                            operation,
+                            expectedRevision,
+                          );
+                        }}
+                        onSplitScene={() => {
+                          void createSceneBoundary("split");
+                        }}
+                        onUpdateRuleSet={(draft) => {
+                          void updateSceneRuleSet(draft);
+                        }}
+                        projection={
+                          sceneProjection?.workId === activeWorkId
+                            ? sceneProjection
+                            : null
+                        }
+                      />
+                    </div>
+                  )}
+                />
+              )}
           </div>
           {runtime.status === "ready" &&
             activeDocument !== undefined &&
+            workspaceSurface === "manuscript" &&
             railProjection?.right.visible && (
               <aside
                 aria-label="검토 레일"
@@ -8631,6 +12018,16 @@ export const App = forwardRef<
                   </button>
                   <button
                     aria-controls={reviewRailId}
+                    aria-selected={reviewInspectorTab === "assistant"}
+                    id={reviewAssistantTabId}
+                    onClick={() => setReviewInspectorTab("assistant")}
+                    role="tab"
+                    type="button"
+                  >
+                    조수
+                  </button>
+                  <button
+                    aria-controls={reviewRailId}
                     aria-selected={reviewInspectorTab === "work"}
                     id={reviewWorkTabId}
                     onClick={() => setReviewInspectorTab("work")}
@@ -8654,6 +12051,8 @@ export const App = forwardRef<
                   aria-labelledby={
                     reviewInspectorTab === "document"
                       ? reviewDocumentTabId
+                      : reviewInspectorTab === "assistant"
+                        ? reviewAssistantTabId
                       : reviewInspectorTab === "work"
                         ? reviewWorkTabId
                         : reviewVersionsTabId
@@ -8682,6 +12081,96 @@ export const App = forwardRef<
                           onSelectOccurrence={selectLoreCueOccurrence}
                         />
                       )}
+                  </div>
+                  <div
+                    className="review-inspector-section-stack"
+                    hidden={reviewInspectorTab !== "assistant"}
+                  >
+                    <section
+                      aria-label="인물 후보 만들기"
+                      className="character-manager-rail assistant-candidate-actions"
+                    >
+                      <header>
+                        <h4>원고에서 인물 후보</h4>
+                        <span>
+                          {characterExtractionCandidates.reduce(
+                            (count, candidate) => count + candidate.items.filter(
+                              (item) => item.status === "pending",
+                            ).length,
+                            0,
+                          )}
+                        </span>
+                      </header>
+                      <button
+                        className="create-event-button"
+                        disabled={
+                          !hasManuscriptSelection ||
+                          characterExtractionActionState !== "idle"
+                        }
+                        onClick={() => {
+                          void captureCharacterWorkspaceSelection().then(
+                            (selection) => {
+                              if (selection !== null) {
+                                void performCharacterExtraction(selection);
+                              }
+                            },
+                          );
+                        }}
+                        type="button"
+                      >
+                        선택에서 인물 후보 추출
+                      </button>
+                      {characterWorkspaceSelection !== null && (
+                        <p>
+                          {characterWorkspaceSelection.documentTitle} ·{
+                            " "
+                          }{characterWorkspaceSelection.from.toLocaleString()}–
+                          {characterWorkspaceSelection.to.toLocaleString()}
+                        </p>
+                      )}
+                      {characterExtractionPermissionRequired && (
+                        <button
+                          className="create-event-button"
+                          disabled={characterExtractionActionState !== "idle"}
+                          onClick={() => {
+                            void grantCharacterExtractionPermission();
+                          }}
+                          type="button"
+                        >
+                          이번 선택 전송 허용
+                        </button>
+                      )}
+                    </section>
+                    <CharacterCandidateReviewPanel
+                      busy={
+                        characterExtractionActionState !== "idle" ||
+                        characterGenerationActionState !== "idle"
+                      }
+                      candidates={characterExtractionCandidates}
+                      characters={activeWorkCharacters}
+                      generationCandidates={characterGenerationCandidates}
+                      onDecideCandidate={(candidate, item, decision) => {
+                        void decideCharacterExtractionItem(
+                          candidate,
+                          item,
+                          decision,
+                        );
+                      }}
+                      onDecideGenerationCandidate={(candidate, item, decision) => {
+                        void decideCharacterGenerationItem(
+                          candidate,
+                          item,
+                          decision,
+                        );
+                      }}
+                    />
+                    {(characterExtractionActionError ??
+                      characterGenerationActionError) !== null && (
+                      <p className="event-action-error" role="alert">
+                        {characterExtractionActionError ??
+                          characterGenerationActionError}
+                      </p>
+                    )}
                   </div>
                   <div
                     className="review-inspector-section-stack"
@@ -8881,75 +12370,103 @@ export const App = forwardRef<
                     className="review-inspector-section-stack"
                     hidden={reviewInspectorTab !== "document"}
                   >
-                <CreateEventBlockButton
-                  busy={eventActionState !== "idle"}
-                  onClick={openEventBlockDialog}
-                  telemetryStore={telemetryStore}
-                />
-                <button
-                  className="create-event-button"
-                  disabled={eventActionState !== "idle" || activeWork === undefined}
-                  onClick={openAnchorlessEventDialog}
-                  type="button"
-                >
-                  예정 사건 추가
-                </button>
+                    <div className="document-quick-actions">
+                      <CreateEventBlockButton
+                        busy={eventActionState !== "idle"}
+                        onClick={openEventBlockDialog}
+                        telemetryStore={telemetryStore}
+                      />
+                      <button
+                        className="create-event-button scene-extraction-open-button"
+                        disabled={
+                          !hasManuscriptSelection ||
+                          sceneExtractionActionState !== "idle"
+                        }
+                        onClick={() => {
+                          void openPlotWorkspace("scenes").then((selection) => {
+                            if (selection !== null) {
+                              void performSceneExtraction(selection);
+                            }
+                          });
+                        }}
+                        type="button"
+                      >
+                        선택에서 장면 분석
+                      </button>
+                      <button
+                        className="create-event-button"
+                        disabled={
+                          eventActionState !== "idle" || activeWork === undefined
+                        }
+                        onClick={openAnchorlessEventDialog}
+                        type="button"
+                      >
+                        예정 사건 추가
+                      </button>
+                      <button
+                        className="create-event-button create-scene-button"
+                        disabled={sceneActionState !== "idle"}
+                        onClick={() => {
+                          void createSceneBoundary();
+                        }}
+                        type="button"
+                      >
+                        {sceneActionState === "creating"
+                          ? "장면 저장 중"
+                          : "장면 추가"}
+                      </button>
+                    </div>
                 {eventActionError !== null && (
                   <p className="event-action-error" role="alert">
                     {eventActionError}
                   </p>
                 )}
-                <button
-                  className="create-event-button create-scene-button"
-                  disabled={sceneActionState !== "idle"}
-                  onClick={() => {
-                    void createSceneBoundary();
-                  }}
-                  type="button"
-                >
-                  {sceneActionState === "creating"
-                    ? "장면 경계 저장 중"
-                    : "장면 경계 추가"}
-                </button>
                 {sceneActionError !== null && (
                   <p className="event-action-error" role="alert">
                     {sceneActionError}
                   </p>
                 )}
-                <EventRail
-                  eventBusy={eventActionState !== "idle"}
-                  mode={eventRailMode}
-                  onCreatePlot={(eventBlock) => {
-                    void createPlotFromEventBlock(eventBlock);
-                  }}
-                  onLinkSource={(eventBlock) => {
-                    void linkEventSource(eventBlock);
-                  }}
-                  onModeChange={setEventRailMode}
-                  onMovePlacement={(placement, target) => {
-                    void movePlotPlacement(placement, target);
-                  }}
-                  onOpenSource={(location) => {
-                    void openEventRailSource(location);
-                  }}
-                  onReplaceSource={(source) => {
-                    void replaceEventSource(source);
-                  }}
-                  onRetireSource={(source) => {
-                    void retireEventSource(source);
-                  }}
-                  plotBusy={plotActionState !== "idle"}
-                  projection={
-                    eventRail?.workId === activeWorkId ? eventRail : null
-                  }
-                />
+                {sceneMusicQueueError !== null && (
+                  <p className="event-action-error" role="alert">
+                    {sceneMusicQueueError}
+                  </p>
+                )}
                 <SceneList
                   activeDocumentId={activeDocument?.documentId ?? null}
-                  busy={sceneActionState !== "idle"}
+                  annotations={sceneAnnotations.filter(
+                    (annotation) => annotation.workId === activeWorkId,
+                  )}
+                  busy={
+                    sceneActionState !== "idle" ||
+                    sceneExtractionActionState !== "idle"
+                  }
+                  musicConnected={youtubeMusicConnectionStatus?.apiKeyConfigured === true}
+                  favoriteMusicVideos={
+                    workMusicSettings?.settings.favoriteVideos ?? []
+                  }
+                  musicPlaybackAvailable={youtubeMusicProfile !== null}
+                  musicQueueBusy={sceneMusicQueueActionState !== "idle"}
+                  musicQueueCandidates={sceneMusicQueueCandidates}
                   onMergeWithPrevious={(scene, previousScene) => {
                     void mergeSceneWithPrevious(scene, previousScene);
                   }}
                   onOpenScene={focusScene}
+                  onOpenMusicSettings={() => onOpenSettings?.()}
+                  onPlaySceneMusicQueue={(candidate) => {
+                    void playSelectedSceneMusicQueue(candidate);
+                  }}
+                  onPlayFavoriteMusicVideo={(video) => {
+                    playYouTubeQueue([video]);
+                  }}
+                  onSearchSceneMusic={(annotation, query) => {
+                    void searchSceneMusicQueues(annotation, query);
+                  }}
+                  onSelectSceneMusicQueue={(candidate, option) => {
+                    void selectSceneMusicQueue(candidate, option);
+                  }}
+                  onToggleFavoriteMusicVideo={(video) => {
+                    void toggleFavoriteMusicVideo(video);
+                  }}
                   onSetEventOverride={(
                     scene,
                     eventBlockId,
@@ -9098,6 +12615,7 @@ export const App = forwardRef<
             )}
           {runtime.status === "ready" &&
             activeDocument !== undefined &&
+            workspaceSurface === "manuscript" &&
             railProjection?.right.reentryVisible && (
               <button
                 aria-controls={reviewRailId}
@@ -9115,6 +12633,27 @@ export const App = forwardRef<
               </button>
             )}
         </div>
+        {runtime.status === "ready" &&
+          activeWork !== undefined &&
+          workspaceSurface === "manuscript" &&
+          renderInHost(
+            <BottomEventRail
+              activeDocumentId={activeDocument?.documentId ?? null}
+              cursorOffset={
+                activeManuscriptPosition !== null &&
+                activeManuscriptPosition.documentId === activeDocument?.documentId
+                  ? activeManuscriptPosition.offset
+                  : null
+              }
+              onOpenSource={(location) => {
+                void openEventRailSource(location);
+              }}
+              projection={
+                eventRail?.workId === activeWorkId ? eventRail : null
+              }
+            />,
+            eventRailHost,
+          )}
         <footer
           aria-label="작업 상태"
           className={
@@ -9150,135 +12689,103 @@ export const App = forwardRef<
               </span>
             </>
           )}
-          {activeDocument !== undefined && (
-            <div className="activity-status-controls">
-              {activeWritingSession !== undefined && (
-                <span className="activity-timer" data-testid="writing-session-timer">
-                  <span>기록</span>
-                  <output aria-live="polite">
-                    {formatTimerDuration(
-                      elapsedTimerMs(activeWritingSession.startedAt, activityClock),
-                    )}
-                  </output>
-                  <button
-                    disabled={activityActionState !== "idle"}
-                    onClick={() => {
-                      void stopWritingSession();
-                    }}
-                    type="button"
-                  >
-                    종료
-                  </button>
-                </span>
-              )}
-              {activePomodoroPhase !== null &&
-              pomodoro?.settings !== null &&
-              pomodoro?.settings !== undefined ? (
-                <span
-                  className="activity-timer focus-timer pomodoro-timer"
-                  data-testid="pomodoro-timer"
-                  title={
-                    activePomodoroPhase.pauseReason === "restore"
-                      ? "이전 실행에서 안전하게 일시정지되었습니다."
-                      : activePomodoroPhase.pauseReason === "phase-complete"
-                        ? "다음 단계를 시작할 때까지 일시정지되었습니다."
-                        : `${activePomodoroPhase.phase === "work" ? "작업" : "휴식"} · ${formatTimerDuration(activePomodoroPhase.targetDurationMs)}`
+          {renderInHost(
+            <MusicMiniPlayer
+              connection={youtubeMusicConnectionStatus}
+              focusText={musicFocusText}
+              onOpenLibrary={() => {
+                setMusicLibraryError(null);
+                setMusicLibraryOpen(true);
+              }}
+              playRequest={youtubePlaybackRequest}
+              profile={youtubeMusicProfile}
+            />,
+            musicPlayerHost,
+          )}
+          {activeDocument !== undefined &&
+            activeWork !== undefined &&
+            workActivity !== null &&
+            pomodoro !== null && (
+              <SessionFeedbackWithTelemetry
+                activity={workActivity}
+                busy={activityActionState !== "idle"}
+                documents={activeWork.documents.map((document) => ({
+                  documentId: document.documentId,
+                  title: document.title,
+                }))}
+                darkMode={darkMode}
+                focusCycle={
+                  activePomodoroPhase === null ? activeFocusCycle : undefined
+                }
+                focusMode={focusMode}
+                focusModeAvailable={
+                  workspaceSurface === "manuscript" &&
+                  activeForwardWriting === null
+                }
+                forwardWritingActive={activeForwardWriting !== null}
+                forwardWritingAvailable={
+                  workspaceSurface === "manuscript" &&
+                  runtime.status === "ready" &&
+                  runtime.startupRecovery.status === "clean"
+                }
+                key={`${activeWork.workId}:${workActivity.activeSessionId ?? "no-session"}:${activePomodoroPhase?.focusCycleId ?? activeFocusCycle?.focusCycleId ?? "no-focus"}`}
+                nowMs={activityClock}
+                onConfigure={() => {
+                  setActivityActionError(null);
+                  setShowFocusDialog(true);
+                }}
+                onPause={() => {
+                  void pausePomodoro();
+                }}
+                onResume={() => {
+                  void resumePomodoro();
+                }}
+                onSaveNote={(note) => {
+                  void savePomodoroNote(note);
+                }}
+                onStartWritingSession={() => {
+                  void startWritingSession();
+                }}
+                onStopFocusCycle={() => {
+                  void stopFocusCycle();
+                }}
+                onStopPomodoro={() => {
+                  void stopPomodoro();
+                }}
+                onStopWritingSession={() => {
+                  void stopWritingSession();
+                }}
+                onToggleDarkMode={() => {
+                  onThemeChange?.(darkMode ? "light-mode" : "dark-mode");
+                }}
+                onToggleForwardWriting={() => {
+                  if (activeForwardWriting !== null) {
+                    stopForwardWriting();
+                  } else {
+                    setShowForwardWritingDialog(true);
                   }
-                >
-                  <span>
-                    {activePomodoroPhase.phase === "work" ? "작업" : "휴식"}{" "}
-                    {activePomodoroPhase.cycleNumber}/
-                    {pomodoro.settings.workCycleCount}
-                  </span>
-                  <output aria-live="polite">
-                    {formatTimerDuration(
-                      activePomodoroPhase.state === "running"
-                        ? remainingTimerMs(
-                            activePomodoroPhase.deadlineAt,
-                            activityClock,
-                          )
-                        : activePomodoroPhase.remainingDurationMs,
-                    )}
-                  </output>
-                  <button
-                    disabled={activityActionState !== "idle"}
-                    onClick={() => {
-                      if (activePomodoroPhase.state === "running") {
-                        void pausePomodoro();
-                      } else {
-                        void resumePomodoro();
-                      }
-                    }}
-                    type="button"
-                  >
-                    {activePomodoroPhase.state === "running"
-                      ? "일시정지"
-                      : "재개"}
-                  </button>
-                  <button
-                    disabled={activityActionState !== "idle"}
-                    onClick={() => {
-                      void stopPomodoro();
-                    }}
-                    type="button"
-                  >
-                    종료
-                  </button>
-                </span>
-              ) : activeFocusCycle === undefined ? (
-                <button
-                  disabled={
-                    workActivity === null ||
-                    pomodoro === null ||
-                    activityActionState !== "idle"
-                  }
-                  onClick={() => {
-                    setActivityActionError(null);
-                    setShowFocusDialog(true);
-                  }}
-                  type="button"
-                >
-                  집중 시작
-                </button>
-              ) : (
-                <span
-                  className="activity-timer focus-timer"
-                  data-testid="focus-cycle-timer"
-                  title={`${activeFocusCycle.phaseRef} · ${formatTimerDuration(activeFocusCycle.targetDurationMs)}`}
-                >
-                  <span>{activeFocusCycle.phaseRef}</span>
-                  <output aria-live="polite">
-                    {formatTimerDuration(
-                      remainingTimerMs(activeFocusCycle.deadlineAt, activityClock),
-                    )}
-                  </output>
-                  <button
-                    disabled={activityActionState !== "idle"}
-                    onClick={() => {
-                      void stopFocusCycle();
-                    }}
-                    type="button"
-                  >
-                    종료
-                  </button>
-                </span>
-              )}
-              {pomodoro?.status === "completed" &&
-                pomodoro.settings !== null && (
-                  <span
-                    className="activity-completion"
-                    data-testid="pomodoro-completed"
-                  >
-                    집중 주기 완료 {pomodoro.completedWorkCycles}/
-                    {pomodoro.settings.workCycleCount}
-                  </span>
-                )}
-              {activityActionError !== null && (
-                <span className="activity-status-error" role="alert">
-                  {activityActionError}
-                </span>
-              )}
-            </div>
+                }}
+                onToggleFocusMode={() => {
+                  setFocusMode((current) => !current);
+                }}
+                pomodoro={pomodoro}
+                telemetryStore={telemetryStore}
+              />
+            )}
+          {pomodoro?.status === "completed" &&
+            pomodoro.settings !== null && (
+              <span
+                className="activity-completion"
+                data-testid="pomodoro-completed"
+              >
+                집중 주기 완료 {pomodoro.completedWorkCycles}/
+                {pomodoro.settings.workCycleCount}
+              </span>
+            )}
+          {activityActionError !== null && (
+            <span className="activity-status-error" role="alert">
+              {activityActionError}
+            </span>
           )}
           {embedded &&
             activeDocument !== undefined &&
@@ -9348,6 +12855,44 @@ export const App = forwardRef<
               setWorkSnapshotComparison(null);
             }}
             projection={workSnapshotComparison}
+          />
+        )}
+        {showForwardWritingDialog && activeDocument !== undefined && (
+          <ForwardWritingGoalDialog
+            onCancel={() => {
+              setShowForwardWritingDialog(false);
+            }}
+            onStart={startForwardWriting}
+          />
+        )}
+        {manuscriptAnalysis !== null && (
+          <ManuscriptAnalysisDialog
+            documentTitle={manuscriptAnalysis.documentTitle}
+            manuscript={manuscriptAnalysis.manuscript}
+            onClose={() => setManuscriptAnalysis(null)}
+          />
+        )}
+        {manuscriptTextImport !== null && (
+          <ManuscriptTextImportDialog
+            applying={manuscriptTextImportAction === "applying"}
+            candidate={manuscriptTextImport.candidate}
+            currentText={manuscriptTextImport.sourceText}
+            error={manuscriptTextImportError}
+            onApply={applyManuscriptTextImport}
+            onClose={() => {
+              if (manuscriptTextImportAction === "idle") {
+                setManuscriptTextImport(null);
+                setManuscriptTextImportError(null);
+              }
+            }}
+            stale={
+              activeDocument === undefined ||
+              manuscriptTextImport.candidate.workId !== activeDocument.workId ||
+              manuscriptTextImport.candidate.documentId !==
+                activeDocument.documentId ||
+              manuscriptTextImport.candidate.documentRevisionId !==
+                activeDocument.documentRevisionId
+            }
           />
         )}
         {showFocusDialog && (
@@ -9434,6 +12979,76 @@ export const App = forwardRef<
             session={continuousReadingDialogState.session}
           />
         )}
+        {musicLibraryOpen && (
+          <MusicLibraryDialog
+            connected={youtubeMusicConnectionStatus?.apiKeyConfigured === true}
+            error={musicLibraryError ?? sceneMusicQueueError}
+            favorites={workMusicSettings?.settings.favoriteVideos ?? []}
+            onAddToQueue={(video) => {
+              if (!musicLibraryQueue.some(
+                (entry) => entry.videoId === video.videoId,
+              )) {
+                void saveMusicLibraryQueue(Object.freeze([
+                  ...musicLibraryQueue,
+                  video,
+                ]));
+              }
+            }}
+            onClose={() => setMusicLibraryOpen(false)}
+            onOpenConnectionSettings={() => {
+              setMusicLibraryOpen(false);
+              onOpenSettings?.();
+            }}
+            onPlayQueue={() => {
+              playYouTubeQueue(musicLibraryQueue);
+            }}
+            onPlayVideo={(video) => {
+              playYouTubeQueue([video]);
+            }}
+            onRemoveFromQueue={(video) => {
+              void saveMusicLibraryQueue(Object.freeze(
+                musicLibraryQueue.filter(
+                  (entry) => entry.videoId !== video.videoId,
+                ),
+              ));
+            }}
+            onSearch={(query) => {
+              void searchMusicLibrary(query);
+            }}
+            onToggleFavorite={(video) => {
+              void toggleFavoriteMusicVideo(video);
+            }}
+            queue={musicLibraryQueue}
+            queueSaving={musicLibraryActionState === "saving-playlist"}
+            results={musicLibraryResults}
+            searching={musicLibraryActionState === "searching"}
+          />
+        )}
+        {assistantChatDialogOpen && (
+          <AssistantChatDialog
+            actionState={assistantChatActionState}
+            error={assistantChatError}
+            messages={assistantChatMessages}
+            oauthStatus={chatGptOAuthStatus}
+            onClose={() => {
+              if (assistantChatActionState === "idle") {
+                setAssistantChatDialogOpen(false);
+                setAssistantChatError(null);
+              }
+            }}
+            onOpenSettings={() => {
+              setAssistantChatDialogOpen(false);
+              onOpenSettings?.();
+            }}
+            onOpenTools={() => {
+              setAssistantChatDialogOpen(false);
+              void openAssistantContextDialog();
+            }}
+            onSend={(message) => {
+              void runAssistantChat(message);
+            }}
+          />
+        )}
         {runtime.status === "ready" &&
           assistantConnectionsDialogOpen && (
             <AssistantConnectionsDialog
@@ -9469,7 +13084,7 @@ export const App = forwardRef<
               canRunExternalSettingReview={activeDocument !== undefined}
               canRunNotationReview={hasManuscriptSelection}
               canRunVocabularyLookup={hasManuscriptSelection}
-              connections={assistantConnections}
+              connections={assistantContextConnections}
               destinationProfile={assistantDestinationProfile}
               documentLabels={activeWorkDocumentLabels}
               error={assistantContextActionError}
@@ -9706,6 +13321,7 @@ export const App = forwardRef<
                 void unlinkPlotEvent(link);
               }}
               plots={activeWorkPlots}
+              sceneDraft={sceneDraftPanel}
               sources={activeWorkPlotSources}
               selectedPlotThreadId={activeSelectedPlotThreadId}
             />

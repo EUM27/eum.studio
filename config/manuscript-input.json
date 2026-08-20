@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "autoClosePairs": [
+    { "trigger": "\"", "open": "“", "close": "”" },
+    { "trigger": "'", "open": "‘", "close": "’" }
+  ],
+  "evolutionCycles": [
+    {
+      "trigger": "(",
+      "pairs": [
+        { "open": "(", "close": ")" },
+        { "open": "【", "close": "】" },
+        { "open": "〖", "close": "〗" },
+        { "open": "⦅", "close": "⦆" }
+      ]
+    },
+    {
+      "trigger": "[",
+      "pairs": [
+        { "open": "[", "close": "]" },
+        { "open": "「", "close": "」" },
+        { "open": "『", "close": "』" },
+        { "open": "⟦", "close": "⟧" }
+      ]
+    },
+    {
+      "trigger": "{",
+      "pairs": [
+        { "open": "{", "close": "}" },
+        { "open": "〈", "close": "〉" },
+        { "open": "《", "close": "》" },
+        { "open": "⦃", "close": "⦄" }
+      ]
+    },
+    {
+      "trigger": "<",
+      "pairs": [
+        { "open": "<", "close": ">" },
+        { "open": "〈", "close": "〉" },
+        { "open": "《", "close": "》" },
+        { "open": "⟨", "close": "⟩" }
+      ]
+    }
+  ],
+  "textReplacements": [
+    { "trigger": "...", "replacement": "⋯" }
+  ]
+}

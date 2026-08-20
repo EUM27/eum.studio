@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type FormEvent,
 } from "react";
 import {
@@ -55,6 +56,7 @@ import type {
 import {
   App as ManuscriptWorkspace,
   type ManuscriptWorkspaceHandle,
+  type ManuscriptResumePreview,
 } from "./App";
 import { WorkRecordsDialog } from "./records/WorkRecordsDialog";
 import { WorkScheduleDashboard } from "./schedule/WorkScheduleDashboard";
@@ -75,10 +77,22 @@ import type {
 import type { YouTubeMusicConnectionStatus } from "../application/music/youtube-music-connection";
 import type { ChatGptOAuthConnectionStatus } from "../application/assistant/chatgpt-oauth";
 import {
+  DEFAULT_FOCUS_MODE_PREFERENCES,
+  type FocusModePreferences,
+  type UiPreferencesProjection,
+} from "../application/settings/ui-preferences";
+import {
   AppSettingsDialog,
   type AppSettingsSaveValue,
 } from "./settings/AppSettingsDialog";
 import { StudioAppShell } from "./shell/StudioAppShell";
+import { StarlightThemePicker } from "./theme/StarlightThemePicker";
+import {
+  parseStarlightThemeKey,
+  STARLIGHT_THEMES,
+  STARLIGHT_THEME_STORAGE_KEY,
+  type StarlightThemeKey,
+} from "./theme/starlight-theme";
 import type {
   PublishingPartnerProjection,
   UpdatePublishingPartnerCommand,
@@ -361,6 +375,7 @@ function MainDashboard({
   favoriteWorkIds,
   workCovers,
   activityByWork,
+  resumePreview,
   busy,
   backupBusy,
   importBusy,
@@ -381,6 +396,7 @@ function MainDashboard({
   readonly favoriteWorkIds: readonly EntityId<"Work">[];
   readonly workCovers: readonly WorkCoverProjection[];
   readonly activityByWork: Readonly<Record<string, WorkActivityProjection>>;
+  readonly resumePreview: ManuscriptResumePreview | null;
   readonly busy: boolean;
   readonly error: string | null;
   readonly backupBusy: boolean;
@@ -469,6 +485,13 @@ function MainDashboard({
   );
   const activeActivity =
     activeWork === undefined ? undefined : activityByWork[activeWork.workId];
+  const activeResumePreview =
+    activeWork !== undefined &&
+    activeDocument !== undefined &&
+    resumePreview?.workId === activeWork.workId &&
+    resumePreview.documentId === activeDocument.documentId
+      ? resumePreview
+      : null;
 
   return (
     <div
@@ -478,7 +501,7 @@ function MainDashboard({
       {activeWork !== undefined && (
         <section className="resume-strip" aria-labelledby="resume-strip-heading">
           <div className="resume-strip-copy">
-            <p id="resume-strip-heading">마지막 작업</p>
+            <p className="resume-strip-label" id="resume-strip-heading">마지막 작업</p>
             <div className="resume-strip-location">
               <strong>{activeWork.title}</strong>
               {activeDocument !== undefined && (
@@ -491,6 +514,37 @@ function MainDashboard({
             <time dateTime={activeWork.updatedAt}>
               {formatUpdatedAt(activeWork.updatedAt)}
             </time>
+            {activeResumePreview !== null && (
+              <div
+                aria-label="마지막 원고 미리보기"
+                className="resume-strip-preview"
+                data-content-width={
+                  activeResumePreview.formatting.contentWidthPx
+                }
+                data-font-size={activeResumePreview.formatting.fontSizePx}
+                data-letter-spacing={
+                  activeResumePreview.formatting.letterSpacingEm
+                }
+                data-line-height={activeResumePreview.formatting.lineHeight}
+                data-paragraph-spacing={
+                  activeResumePreview.formatting.paragraphSpacingPx
+                }
+                style={{
+                  "--resume-paragraph-spacing": `${activeResumePreview.formatting.paragraphSpacingPx}px`,
+                  fontFamily: activeResumePreview.formatting.fontFamily,
+                  fontSize: `${activeResumePreview.formatting.fontSizePx}px`,
+                  letterSpacing: `${activeResumePreview.formatting.letterSpacingEm}em`,
+                  lineHeight: activeResumePreview.formatting.lineHeight,
+                  maxWidth: `${activeResumePreview.formatting.contentWidthPx}px`,
+                } as CSSProperties}
+              >
+                {activeResumePreview.text.split("\n").map((line, index) => (
+                  <span className="resume-strip-preview-line" key={index}>
+                    {line.length === 0 ? <br aria-hidden="true" /> : line}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           <button
             className="resume-strip-action"
@@ -1267,6 +1321,98 @@ export function StudioShell() {
   const workspaceRef = useRef<ManuscriptWorkspaceHandle>(null);
   const [documentRailHost, setDocumentRailHost] =
     useState<HTMLDivElement | null>(null);
+  const [eventRailHost, setEventRailHost] =
+    useState<HTMLDivElement | null>(null);
+  const [musicPlayerHost, setMusicPlayerHost] =
+    useState<HTMLDivElement | null>(null);
+  const [theme, setTheme] = useState(() =>
+    parseStarlightThemeKey(
+      window.localStorage.getItem(STARLIGHT_THEME_STORAGE_KEY),
+    ),
+  );
+  const [focusModePreferences, setFocusModePreferences] =
+    useState<FocusModePreferences>(() => {
+      const storedPosition = Number(
+        window.localStorage.getItem("eum_focus_typewriter_position_percent"),
+      );
+      return Number.isFinite(storedPosition) && storedPosition > 0
+        ? Object.freeze({
+            ...DEFAULT_FOCUS_MODE_PREFERENCES,
+            typewriterPositionPercent: storedPosition,
+          })
+        : DEFAULT_FOCUS_MODE_PREFERENCES;
+    });
+  const themeRef = useRef(theme);
+  const focusModePreferencesRef = useRef(focusModePreferences);
+  const uiPreferencesRef = useRef<UiPreferencesProjection>({
+    schemaVersion: 1,
+    revision: 0,
+    themeKey: theme,
+    focusMode: focusModePreferences,
+  });
+  const uiPreferencesSaveChainRef = useRef(Promise.resolve());
+  const [uiPreferencesReady, setUiPreferencesReady] = useState(false);
+  const persistUiPreferences = useCallback((
+    nextTheme: StarlightThemeKey,
+    nextFocusMode: FocusModePreferences,
+  ) => {
+    window.localStorage.setItem(STARLIGHT_THEME_STORAGE_KEY, nextTheme);
+    window.localStorage.setItem(
+      "eum_ui_preferences_v1",
+      JSON.stringify({ themeKey: nextTheme, focusMode: nextFocusMode }),
+    );
+    const execution = uiPreferencesSaveChainRef.current.then(async () => {
+      const current = uiPreferencesRef.current;
+      const saved = await window.eumStudio.settings.saveUiPreferences({
+        schemaVersion: 1,
+        expectedRevision: current.revision,
+        themeKey: nextTheme,
+        focusMode: nextFocusMode,
+      });
+      uiPreferencesRef.current = saved;
+    });
+    uiPreferencesSaveChainRef.current = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+  }, []);
+  const changeTheme = useCallback((nextTheme: StarlightThemeKey) => {
+    themeRef.current = nextTheme;
+    setTheme(nextTheme);
+    persistUiPreferences(nextTheme, focusModePreferencesRef.current);
+  }, [persistUiPreferences]);
+  const changeFocusModePreferences = useCallback((
+    nextFocusMode: FocusModePreferences,
+  ) => {
+    focusModePreferencesRef.current = nextFocusMode;
+    setFocusModePreferences(nextFocusMode);
+    persistUiPreferences(themeRef.current, nextFocusMode);
+  }, [persistUiPreferences]);
+  useEffect(() => {
+    let disposed = false;
+    void window.eumStudio.settings.getUiPreferences().then(
+      (projection) => {
+        if (disposed) return;
+        uiPreferencesRef.current = projection;
+        if (projection.revision === 0) {
+          persistUiPreferences(themeRef.current, focusModePreferencesRef.current);
+          setUiPreferencesReady(true);
+          return;
+        }
+        const restoredTheme = parseStarlightThemeKey(projection.themeKey);
+        themeRef.current = restoredTheme;
+        focusModePreferencesRef.current = projection.focusMode;
+        setTheme(restoredTheme);
+        setFocusModePreferences(projection.focusMode);
+        window.localStorage.setItem(STARLIGHT_THEME_STORAGE_KEY, restoredTheme);
+        setUiPreferencesReady(true);
+      },
+      () => setUiPreferencesReady(true),
+    );
+    return () => {
+      disposed = true;
+    };
+  }, [persistUiPreferences]);
   const [activePage, setActivePage] = useState<ShellPage>("main");
   const [sidebarCompact, setSidebarCompact] = useState(false);
   const [catalogState, setCatalogState] = useState<CatalogState>({
@@ -1276,6 +1422,9 @@ export function StudioShell() {
     readonly EntityId<"Work">[]
   >([]);
   const [workCovers, setWorkCovers] = useState<readonly WorkCoverProjection[]>([]);
+  const [resumePreview, setResumePreview] = useState<
+    ManuscriptResumePreview | null
+  >(null);
   const [showCreateWork, setShowCreateWork] = useState(false);
   const [renameWorkTarget, setRenameWorkTarget] =
     useState<WorkspaceWorkSummary | null>(null);
@@ -1335,6 +1484,30 @@ export function StudioShell() {
   const [appSettingsError, setAppSettingsError] = useState<string | null>(null);
   const [appSettingsScheduleRevision, setAppSettingsScheduleRevision] =
     useState(0);
+
+  useEffect(() => {
+    document.body.classList.remove(
+      ...STARLIGHT_THEMES.map((candidate) => candidate.key),
+    );
+    document.body.classList.add(theme);
+    return () => {
+      document.body.classList.remove(theme);
+    };
+  }, [theme]);
+
+  useEffect(() => {
+    let active = true;
+    void window.eumStudio.settings.getYouTubeMusicConnectionStatus().then(
+      (status) => {
+        if (active) setYoutubeMusicConnectionStatus(status);
+      },
+      () => undefined,
+    );
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const [publishingPartners, setPublishingPartners] = useState<
     readonly PublishingPartnerProjection[]
   >([]);
@@ -2843,7 +3016,6 @@ export function StudioShell() {
     setAppSettingsProjection(null);
     setMusicSettingsProfile(null);
     setWorkMusicSettingsProjection(null);
-    setYoutubeMusicConnectionStatus(null);
     setChatGptOAuthStatus(null);
     setChatGptOAuthLoginState("idle");
     setAppSettingsError(null);
@@ -3040,9 +3212,11 @@ export function StudioShell() {
       compact={sidebarCompact}
       editor={activePage === "workspace"}
       home={activePage === "main"}
+      theme={theme}
     >
       <header className="app-topbar">
         <span aria-hidden="true" className="app-topbar-mark">이</span>
+        <span className="app-topbar-product">이음 스튜디오</span>
         <button
           aria-label={sidebarCompact ? "사이드바 펼치기" : "사이드바 접기"}
           className="app-topbar-button"
@@ -3055,6 +3229,7 @@ export function StudioShell() {
             <PanelLeftClose size={16} />
           )}
         </button>
+        <StarlightThemePicker onChange={changeTheme} theme={theme} />
         <button
           aria-label="홈 열기"
           className="app-topbar-button"
@@ -3064,6 +3239,7 @@ export function StudioShell() {
         >
           <Home aria-hidden="true" size={15} />
         </button>
+        <div className="app-topbar-music" ref={setMusicPlayerHost} />
         <button
           aria-label={showAppSettings ? "앱 설정 닫기" : "앱 설정 열기"}
           aria-pressed={showAppSettings}
@@ -3176,6 +3352,7 @@ export function StudioShell() {
               favoriteWorkIds={favoriteWorkIds}
               workCovers={workCovers}
               importBusy={importRehearsalRunning}
+              resumePreview={resumePreview}
               settingsRevision={appSettingsScheduleRevision}
               onOpenBackup={() => {
                 setShowBackup(true);
@@ -3200,7 +3377,7 @@ export function StudioShell() {
               onSelectCover={selectWorkCover}
             />
           )}
-          {catalog !== null && !catalog.canCreateFirstWork && (
+          {catalog !== null && !catalog.canCreateFirstWork && uiPreferencesReady && (
             <div
               className="persistent-workspace"
               hidden={activePage !== "workspace"}
@@ -3208,13 +3385,26 @@ export function StudioShell() {
               <ManuscriptWorkspace
                 documentRailHost={documentRailHost}
                 embedded
+                eventRailHost={eventRailHost}
+                musicPlayerHost={musicPlayerHost}
                 onCatalogChange={acceptCatalog}
+                onOpenSettings={openAppSettings}
+                onResumePreviewChange={setResumePreview}
+                focusModePreferences={focusModePreferences}
+                onFocusModePreferencesChange={changeFocusModePreferences}
+                onThemeChange={changeTheme}
                 ref={workspaceRef}
+                theme={theme}
+                youtubeMusicConnectionStatus={youtubeMusicConnectionStatus}
               />
             </div>
           )}
         </div>
       </main>
+
+      {activePage === "workspace" && (
+        <div className="studio-event-rail-host" ref={setEventRailHost} />
+      )}
 
       {showCreateWork && (
         <CreateWorkDialog

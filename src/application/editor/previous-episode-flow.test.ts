@@ -37,6 +37,20 @@ describe("previous episode flow", () => {
     );
   });
 
+  it("preserves line breaks, spacing, tabs, and punctuation in the excerpt", () => {
+    const text = [
+      "버릴 문장.",
+      "첫 줄  공백!",
+      "둘째 줄\t—기호?",
+      "",
+      "마지막 문장…",
+    ].join("\n");
+
+    expect(getPreviousEpisodeFlowPreviewText(text, 15)).toBe(
+      "둘째 줄\t—기호?\n\n마지막 문장…",
+    );
+  });
+
   it("derives only the immediate previous document from its latest materialized text", () => {
     const documents = createDocuments([
       randomUUID(),

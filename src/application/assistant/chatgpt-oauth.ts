@@ -1,5 +1,8 @@
+import { entityId, type EntityId } from "../../domain/writing";
+
 export type ChatGptOAuthProfile = {
   readonly schemaVersion: 1;
+  readonly providerId: string;
   readonly displayName: string;
   readonly issuer: string;
   readonly clientId: string;
@@ -13,17 +16,34 @@ export type ChatGptOAuthProfile = {
     path: string;
     portRange: Readonly<{ start: number; end: number }>;
   }>;
+  readonly upstream: Readonly<{
+    baseUrl: string;
+    originator: string;
+    clientVersion: string;
+    model: string;
+  }>;
 };
 
 export type ChatGptOAuthConnectionStatus = {
   readonly schemaVersion: 1;
   readonly revision: number;
+  readonly providerId: string;
   readonly displayName: string;
+  readonly modelId: string;
   readonly connected: boolean;
   readonly email: string | null;
   readonly planType: string | null;
   readonly updatedAt: string | null;
 };
+
+export function createChatGptOAuthAssistantConnectionId(
+  providerId: string,
+): EntityId<"AssistantConnection"> {
+  if (providerId.trim().length === 0) {
+    throw new Error("ChatGPT OAuth providerId must be non-empty text");
+  }
+  return entityId<"AssistantConnection">(`oauth:${providerId.trim()}`);
+}
 
 function record(value: unknown, label: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -71,6 +91,7 @@ export function parseChatGptOAuthProfile(value: unknown): ChatGptOAuthProfile {
     input,
     [
       "schemaVersion",
+      "providerId",
       "displayName",
       "issuer",
       "clientId",
@@ -79,6 +100,7 @@ export function parseChatGptOAuthProfile(value: unknown): ChatGptOAuthProfile {
       "scopes",
       "authorizeParameters",
       "callback",
+      "upstream",
     ],
     "ChatGptOAuthProfile",
   );
@@ -129,8 +151,30 @@ export function parseChatGptOAuthProfile(value: unknown): ChatGptOAuthProfile {
   if (start > end) {
     throw new Error("ChatGptOAuthProfile.callback.portRange must be ascending");
   }
+  const upstream = record(input.upstream, "ChatGptOAuthProfile.upstream");
+  exact(
+    upstream,
+    ["baseUrl", "originator", "clientVersion", "model"],
+    "ChatGptOAuthProfile.upstream",
+  );
+  const upstreamBaseUrl = new URL(
+    text(upstream.baseUrl, "ChatGptOAuthProfile.upstream.baseUrl"),
+  );
+  const loopbackUpstream =
+    upstreamBaseUrl.hostname === "localhost" ||
+    upstreamBaseUrl.hostname === "127.0.0.1" ||
+    upstreamBaseUrl.hostname === "[::1]";
+  if (
+    upstreamBaseUrl.protocol !== "https:" &&
+    !(upstreamBaseUrl.protocol === "http:" && loopbackUpstream)
+  ) {
+    throw new Error(
+      "ChatGptOAuthProfile.upstream.baseUrl must use HTTPS or loopback HTTP",
+    );
+  }
   return Object.freeze({
     schemaVersion: 1,
+    providerId: text(input.providerId, "ChatGptOAuthProfile.providerId"),
     displayName: text(input.displayName, "ChatGptOAuthProfile.displayName"),
     issuer,
     clientId: text(input.clientId, "ChatGptOAuthProfile.clientId"),
@@ -150,6 +194,18 @@ export function parseChatGptOAuthProfile(value: unknown): ChatGptOAuthProfile {
       path: text(callback.path, "ChatGptOAuthProfile.callback.path"),
       portRange: Object.freeze({ start, end }),
     }),
+    upstream: Object.freeze({
+      baseUrl: upstreamBaseUrl.toString().replace(/\/$/u, ""),
+      originator: text(
+        upstream.originator,
+        "ChatGptOAuthProfile.upstream.originator",
+      ),
+      clientVersion: text(
+        upstream.clientVersion,
+        "ChatGptOAuthProfile.upstream.clientVersion",
+      ),
+      model: text(upstream.model, "ChatGptOAuthProfile.upstream.model"),
+    }),
   });
 }
 
@@ -162,7 +218,9 @@ export function parseChatGptOAuthConnectionStatus(
     [
       "schemaVersion",
       "revision",
+      "providerId",
       "displayName",
+      "modelId",
       "connected",
       "email",
       "planType",
@@ -199,7 +257,9 @@ export function parseChatGptOAuthConnectionStatus(
   return Object.freeze({
     schemaVersion: 1,
     revision: input.revision,
+    providerId: text(input.providerId, "ChatGptOAuthConnectionStatus.providerId"),
     displayName: text(input.displayName, "ChatGptOAuthConnectionStatus.displayName"),
+    modelId: text(input.modelId, "ChatGptOAuthConnectionStatus.modelId"),
     connected: input.connected,
     email: input.email as string | null,
     planType: input.planType as string | null,

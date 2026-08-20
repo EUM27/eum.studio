@@ -31,7 +31,7 @@ describe("AppSettingsDialog", () => {
     transitionPlaybackModes: ["restart", "ask"],
   });
 
-  it("renders global YouTube connection and exact Work music settings", () => {
+  it("renders YouTube music connection and exact Work music settings", () => {
     const markup = renderToStaticMarkup(
       createElement(AppSettingsDialog, {
         profile,
@@ -58,7 +58,9 @@ describe("AppSettingsDialog", () => {
         chatGptOAuthStatus: {
           schemaVersion: 1,
           revision: 1,
+          providerId: "runtime-chatgpt",
           displayName: "GPT",
+          modelId: "runtime-model",
           connected: true,
           email: "writer@example.com",
           planType: "plus",
@@ -77,6 +79,9 @@ describe("AppSettingsDialog", () => {
     expect(markup).toContain("1회 기준 글자수");
     expect(markup).toContain('value="3500"');
     expect(markup).toContain("YouTube Data API 키");
+    expect(markup).toContain("YouTube 음악 연결");
+    expect(markup).toContain("내장 YouTube 플레이어에서 재생");
+    expect(markup).not.toContain("Spotify");
     expect(markup).toContain("GPT 로그인");
     expect(markup).toContain("writer@example.com");
     expect(markup).toContain("다시 로그인");
@@ -87,7 +92,6 @@ describe("AppSettingsDialog", () => {
     expect(markup).toContain("정밀 선곡");
     expect(markup).toContain("처음부터 재생");
     expect(markup).toContain("매번 묻기");
-    expect(markup).not.toContain("Spotify");
     expect(markup).not.toContain("백업");
   });
 

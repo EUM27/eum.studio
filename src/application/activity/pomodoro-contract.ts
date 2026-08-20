@@ -39,6 +39,10 @@ export type PomodoroPhaseCommand = GetPomodoroCommand & {
   readonly focusCycleId: EntityId<"FocusCycle">;
 };
 
+export type UpdatePomodoroNoteCommand = PomodoroPhaseCommand & {
+  readonly note: string;
+};
+
 export type PomodoroActivePhaseProjection = {
   readonly focusCycleId: EntityId<"FocusCycle">;
   readonly state: "running" | "paused";
@@ -232,6 +236,21 @@ export function parsePomodoroPhaseCommand(value: unknown): PomodoroPhaseCommand 
     schemaVersion: 1,
     workId: identifier<"Work">(input, "workId", label),
     focusCycleId: identifier<"FocusCycle">(input, "focusCycleId", label),
+  });
+}
+
+export function parseUpdatePomodoroNoteCommand(
+  value: unknown,
+): UpdatePomodoroNoteCommand {
+  const label = "UpdatePomodoroNoteCommand";
+  const input = record(value, label);
+  exact(input, ["schemaVersion", "workId", "focusCycleId", "note"], label);
+  schema(input, label);
+  return Object.freeze({
+    schemaVersion: 1,
+    workId: identifier<"Work">(input, "workId", label),
+    focusCycleId: identifier<"FocusCycle">(input, "focusCycleId", label),
+    note: stringValue(input, "note", label),
   });
 }
 

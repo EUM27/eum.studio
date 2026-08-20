@@ -228,7 +228,10 @@ function parseReviewNote(value: unknown, label: string): AssistantExternalSettin
   });
 }
 
-function parsePayload(value: unknown, sourceRange?: AssistantContextRange): AssistantExternalSettingReviewPayload {
+export function parseAssistantExternalSettingReviewPayload(
+  value: unknown,
+  sourceRange?: AssistantContextRange,
+): AssistantExternalSettingReviewPayload {
   const label = "AssistantExternalSettingReviewPayload";
   const input = record(value, label);
   exact(input, ["reply", "proposals", "reviewNotes"], label);
@@ -317,7 +320,7 @@ export function parseAssistantExternalSettingReviewCandidate(value: unknown): As
   const input = record(value, label);
   exact(input, ["schemaVersion", "candidateId", "workId", "conversationId", "connectionId", "query", "reply", "proposals", "reviewNotes", "receiptId", "createdAt"], label);
   if (input.schemaVersion !== 1) throw new Error(`${label}.schemaVersion must be 1`);
-  const payload = parsePayload({ reply: input.reply, proposals: input.proposals, reviewNotes: input.reviewNotes });
+  const payload = parseAssistantExternalSettingReviewPayload({ reply: input.reply, proposals: input.proposals, reviewNotes: input.reviewNotes });
   return Object.freeze({
     schemaVersion: 1,
     candidateId: identifier<"AssistantExternalSettingReviewCandidate">(input, "candidateId", label),
@@ -342,7 +345,10 @@ export function createAssistantExternalSettingReviewRecords(input: {
   readonly contextReceiptId: string;
   readonly createdAt: string;
 }): Readonly<{ receipt: AssistantExternalSettingReviewReceipt; candidate: AssistantExternalSettingReviewCandidate }> {
-  const payload = parsePayload(input.payload, input.authorization.command.sourceRange);
+  const payload = parseAssistantExternalSettingReviewPayload(
+    input.payload,
+    input.authorization.command.sourceRange,
+  );
   const references = Object.freeze(input.authorization.settings.map(sourceReference));
   for (const proposal of payload.proposals) {
     if (proposal.target !== null && !references.some((reference) => sameReference(reference, proposal.target!))) {

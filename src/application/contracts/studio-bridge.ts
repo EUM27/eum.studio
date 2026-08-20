@@ -17,6 +17,14 @@ import {
   type SaveManuscriptFormattingReceipt,
 } from "../editor/manuscript-formatting";
 import {
+  parseGetWorkManuscriptLayoutSettingsCommand,
+  parseSaveWorkManuscriptLayoutSettingsCommand,
+  parseWorkManuscriptLayoutSettingsProjection,
+  type GetWorkManuscriptLayoutSettingsCommand,
+  type SaveWorkManuscriptLayoutSettingsCommand,
+  type WorkManuscriptLayoutSettingsProjection,
+} from "../editor/work-manuscript-layout-settings";
+import {
   parseExportManuscriptTextCommand,
   parseExportManuscriptTextResult,
   parseGetManuscriptPreflightSettingsCommand,
@@ -30,6 +38,12 @@ import {
   type ManuscriptPreflightSettingsProjection,
   type SaveManuscriptPreflightSettingsCommand,
 } from "../editor/manuscript-preflight";
+import {
+  parseManuscriptTextImportResult,
+  parseSelectManuscriptTextImportCommand,
+  type ManuscriptTextImportResult,
+  type SelectManuscriptTextImportCommand,
+} from "../editor/manuscript-text-import";
 import {
   parseGetContinuousReadingProgressCommand,
   parseSaveContinuousReadingProgressCommand,
@@ -161,6 +175,50 @@ import {
   type UpdateSceneRuleSetCommand,
 } from "../structure/scene-projection";
 import {
+  parseDecideSceneExtractionAnnotationCommand,
+  parseDecideSceneExtractionBoundaryCommand,
+  parseListSceneExtractionCandidatesCommand,
+  parseRunSceneExtractionCommand,
+  parseSceneExtractionCandidateList,
+  parseSceneExtractionAnnotationDecisionResult,
+  parseSceneExtractionDecisionResult,
+  parseSceneExtractionResult,
+  type DecideSceneExtractionAnnotationCommand,
+  type DecideSceneExtractionBoundaryCommand,
+  type ListSceneExtractionCandidatesCommand,
+  type RunSceneExtractionCommand,
+  type SceneExtractionAnnotationDecisionResult,
+  type SceneExtractionCandidateList,
+  type SceneExtractionDecisionResult,
+  type SceneExtractionResult,
+} from "../structure/scene-extraction-contract";
+import {
+  parseCompleteSceneDraftInsertionCommand,
+  parseListSceneDraftCandidatesCommand,
+  parsePrepareSceneDraftInsertionCommand,
+  parsePrepareSceneDraftInsertionResult,
+  parseRunSceneDraftCommand,
+  parseRunSceneDraftResult,
+  parseSceneDraftCandidate,
+  parseSceneDraftCandidateList,
+  parseUpdateSceneDraftCandidateCommand,
+  type CompleteSceneDraftInsertionCommand,
+  type ListSceneDraftCandidatesCommand,
+  type PrepareSceneDraftInsertionCommand,
+  type PrepareSceneDraftInsertionResult,
+  type RunSceneDraftCommand,
+  type RunSceneDraftResult,
+  type SceneDraftCandidate,
+  type SceneDraftCandidateList,
+  type UpdateSceneDraftCandidateCommand,
+} from "../structure/scene-draft-contract";
+import {
+  parseListSceneAnnotationsCommand,
+  parseSceneAnnotationList,
+  type ListSceneAnnotationsCommand,
+  type SceneAnnotationList,
+} from "../structure/scene-annotation-contract";
+import {
   parseCaptureFragmentCommand,
   parseFragmentListProjection,
   parseFragmentProjection,
@@ -193,12 +251,14 @@ import {
   type UpdateForeshadowLineCommand,
 } from "../foreshadowing/foreshadow-line-contract";
 import {
+  parseAddCharacterEvidenceCommand,
   parseCharacterListProjection,
   parseCharacterProjection,
   parseCreateCharacterCommand,
   parseListCharactersCommand,
   parseRetireCharacterCommand,
   parseUpdateCharacterCommand,
+  type AddCharacterEvidenceCommand,
   type CharacterListProjection,
   type CharacterProjection,
   type CreateCharacterCommand,
@@ -206,6 +266,48 @@ import {
   type RetireCharacterCommand,
   type UpdateCharacterCommand,
 } from "../characters/character-contract";
+import {
+  parseCharacterRelationListProjection,
+  parseCharacterRelationProjection,
+  parseCreateCharacterRelationCommand,
+  parseListCharacterRelationsCommand,
+  parseRetireCharacterRelationCommand,
+  parseUpdateCharacterRelationCommand,
+  type CharacterRelationListProjection,
+  type CharacterRelationProjection,
+  type CreateCharacterRelationCommand,
+  type ListCharacterRelationsCommand,
+  type RetireCharacterRelationCommand,
+  type UpdateCharacterRelationCommand,
+} from "../characters/character-relation-contract";
+import {
+  parseCharacterExtractionCandidateList,
+  parseCharacterExtractionDecisionResult,
+  parseCharacterExtractionResult,
+  parseDecideCharacterExtractionItemCommand,
+  parseListCharacterExtractionCandidatesCommand,
+  parseRunCharacterExtractionCommand,
+  type CharacterExtractionCandidateList,
+  type CharacterExtractionDecisionResult,
+  type CharacterExtractionResult,
+  type DecideCharacterExtractionItemCommand,
+  type ListCharacterExtractionCandidatesCommand,
+  type RunCharacterExtractionCommand,
+} from "../characters/character-extraction-contract";
+import {
+  parseCharacterGenerationCandidateList,
+  parseCharacterGenerationDecisionResult,
+  parseCharacterGenerationResult,
+  parseDecideCharacterGenerationItemCommand,
+  parseListCharacterGenerationCandidatesCommand,
+  parseRunCharacterGenerationCommand,
+  type CharacterGenerationCandidateList,
+  type CharacterGenerationDecisionResult,
+  type CharacterGenerationResult,
+  type DecideCharacterGenerationItemCommand,
+  type ListCharacterGenerationCandidatesCommand,
+  type RunCharacterGenerationCommand,
+} from "../characters/character-generation-contract";
 import {
   parseAddLoreEntryEvidenceCommand,
   parseCreateLoreEntryCommand,
@@ -481,10 +583,12 @@ import {
   parseGetPomodoroCommand,
   parsePomodoroPhaseCommand,
   parsePomodoroProjection,
+  parseUpdatePomodoroNoteCommand,
   type ConfigureAndStartPomodoroCommand,
   type GetPomodoroCommand,
   type PomodoroPhaseCommand,
   type PomodoroProjection,
+  type UpdatePomodoroNoteCommand,
 } from "../activity/pomodoro-contract";
 import {
   parseListWorkActivityCommand,
@@ -613,6 +717,12 @@ import {
   type RunAssistantSettingReviewCommand,
 } from "../assistant/assistant-setting-review";
 import {
+  parseAssistantChatResult,
+  parseRunAssistantChatCommand,
+  type AssistantChatResult,
+  type RunAssistantChatCommand,
+} from "../assistant/assistant-chat";
+import {
   parseAppSettingsProfile,
   parseAppSettingsProjection,
   parseSaveAppSettingsCommand,
@@ -620,6 +730,12 @@ import {
   type AppSettingsProjection,
   type SaveAppSettingsCommand,
 } from "../settings/app-settings";
+import {
+  parseSaveUiPreferencesCommand,
+  parseUiPreferencesProjection,
+  type SaveUiPreferencesCommand,
+  type UiPreferencesProjection,
+} from "../settings/ui-preferences";
 import {
   parseGetWorkMusicSettingsCommand,
   parseMusicSettingsProfile,
@@ -631,11 +747,41 @@ import {
   type WorkMusicSettingsProjection,
 } from "../music/work-music-settings";
 import {
+  parseGetWorkInspirationSettingsCommand,
+  parseSaveWorkInspirationSettingsCommand,
+  parseWorkInspirationSettingsProjection,
+  type GetWorkInspirationSettingsCommand,
+  type SaveWorkInspirationSettingsCommand,
+  type WorkInspirationSettingsProjection,
+} from "../inspiration/work-inspiration-settings";
+import {
   parseSaveYouTubeMusicConnectionCommand,
   parseYouTubeMusicConnectionStatus,
   type SaveYouTubeMusicConnectionCommand,
   type YouTubeMusicConnectionStatus,
 } from "../music/youtube-music-connection";
+import {
+  parseSearchYouTubeVideosCommand,
+  parseYouTubeVideoSearchResult,
+  parseYouTubeMusicProfile,
+  type SearchYouTubeVideosCommand,
+  type YouTubeMusicProfile,
+  type YouTubeVideoSearchResult,
+} from "../music/youtube-music";
+import {
+  parseListSceneMusicQueueCandidatesCommand,
+  parseSceneMusicQueueCandidate,
+  parseSceneMusicQueueCandidateList,
+  parseSceneMusicQueueSearchResult,
+  parseSearchSceneMusicQueuesCommand,
+  parseSelectSceneMusicQueueCommand,
+  type ListSceneMusicQueueCandidatesCommand,
+  type SceneMusicQueueCandidate,
+  type SceneMusicQueueCandidateList,
+  type SceneMusicQueueSearchResult,
+  type SearchSceneMusicQueuesCommand,
+  type SelectSceneMusicQueueCommand,
+} from "../music/scene-music-queue-contract";
 import {
   parseCreateWorkSnapshotCommand,
   parseDocumentRevisionListProjection,
@@ -686,12 +832,18 @@ export const MANUSCRIPT_PREFLIGHT_SAVE_SETTINGS_CHANNEL =
   "studio:editor:save-manuscript-preflight-settings";
 export const MANUSCRIPT_EXPORT_TEXT_CHANNEL =
   "studio:editor:export-manuscript-text";
+export const MANUSCRIPT_SELECT_TEXT_IMPORT_CHANNEL =
+  "studio:editor:select-manuscript-text-import";
 export const MANUSCRIPT_SAVE_CHANGE_BATCH_CHANNEL =
   "studio:editor:save-change-batch";
 export const MANUSCRIPT_SAVE_DOCUMENT_CHANGE_CHANNEL =
   "studio:editor:save-document-change";
 export const MANUSCRIPT_SAVE_FORMATTING_CHANNEL =
   "studio:editor:save-formatting";
+export const MANUSCRIPT_GET_WORK_LAYOUT_SETTINGS_CHANNEL =
+  "studio:editor:get-work-layout-settings";
+export const MANUSCRIPT_SAVE_WORK_LAYOUT_SETTINGS_CHANNEL =
+  "studio:editor:save-work-layout-settings";
 export const MANUSCRIPT_PERSISTENCE_PROFILE_CHANNEL =
   "studio:editor:get-manuscript-persistence-profile";
 export const MANUSCRIPT_STARTUP_RECOVERY_CHANNEL =
@@ -770,6 +922,26 @@ export const STRUCTURE_UPDATE_SCENE_RULE_SET_CHANNEL =
   "studio:structure:update-scene-rule-set";
 export const STRUCTURE_SET_SCENE_EVENT_OVERRIDE_CHANNEL =
   "studio:structure:set-scene-event-override";
+export const STRUCTURE_RUN_SCENE_EXTRACTION_CHANNEL =
+  "studio:structure:extract-scenes";
+export const STRUCTURE_LIST_SCENE_EXTRACTION_CANDIDATES_CHANNEL =
+  "studio:structure:list-scene-extraction-candidates";
+export const STRUCTURE_DECIDE_SCENE_EXTRACTION_BOUNDARY_CHANNEL =
+  "studio:structure:decide-scene-extraction-boundary";
+export const STRUCTURE_LIST_SCENE_ANNOTATIONS_CHANNEL =
+  "studio:structure:list-scene-annotations";
+export const STRUCTURE_DECIDE_SCENE_EXTRACTION_ANNOTATION_CHANNEL =
+  "studio:structure:decide-scene-extraction-annotation";
+export const STRUCTURE_RUN_SCENE_DRAFT_CHANNEL =
+  "studio:structure:run-scene-draft";
+export const STRUCTURE_LIST_SCENE_DRAFT_CANDIDATES_CHANNEL =
+  "studio:structure:list-scene-draft-candidates";
+export const STRUCTURE_UPDATE_SCENE_DRAFT_CANDIDATE_CHANNEL =
+  "studio:structure:update-scene-draft-candidate";
+export const STRUCTURE_PREPARE_SCENE_DRAFT_INSERTION_CHANNEL =
+  "studio:structure:prepare-scene-draft-insertion";
+export const STRUCTURE_COMPLETE_SCENE_DRAFT_INSERTION_CHANNEL =
+  "studio:structure:complete-scene-draft-insertion";
 export const FRAGMENT_PROFILE_CHANNEL =
   "studio:fragments:get-profile";
 export const FRAGMENT_CAPTURE_CHANNEL =
@@ -788,8 +960,30 @@ export const CHARACTER_LIST_CHANNEL =
   "studio:characters:list";
 export const CHARACTER_UPDATE_CHANNEL =
   "studio:characters:update";
+export const CHARACTER_ADD_EVIDENCE_CHANNEL =
+  "studio:characters:add-evidence";
 export const CHARACTER_RETIRE_CHANNEL =
   "studio:characters:retire";
+export const CHARACTER_RELATION_CREATE_CHANNEL =
+  "studio:character-relations:create";
+export const CHARACTER_RELATION_LIST_CHANNEL =
+  "studio:character-relations:list";
+export const CHARACTER_RELATION_UPDATE_CHANNEL =
+  "studio:character-relations:update";
+export const CHARACTER_RELATION_RETIRE_CHANNEL =
+  "studio:character-relations:retire";
+export const CHARACTER_EXTRACTION_RUN_CHANNEL =
+  "studio:characters:extract";
+export const CHARACTER_EXTRACTION_LIST_CHANNEL =
+  "studio:characters:list-extraction-candidates";
+export const CHARACTER_EXTRACTION_DECIDE_CHANNEL =
+  "studio:characters:decide-extraction-candidate";
+export const CHARACTER_GENERATION_RUN_CHANNEL =
+  "studio:characters:generate";
+export const CHARACTER_GENERATION_LIST_CHANNEL =
+  "studio:characters:list-generation-candidates";
+export const CHARACTER_GENERATION_DECIDE_CHANNEL =
+  "studio:characters:decide-generation-candidate";
 export const LORE_ENTRY_CREATE_CHANNEL =
   "studio:lore-entries:create";
 export const LORE_ENTRY_LIST_CHANNEL =
@@ -964,6 +1158,8 @@ export const ACTIVITY_RESUME_POMODORO_CHANNEL =
   "studio:activity:resume-pomodoro";
 export const ACTIVITY_RECONCILE_POMODORO_CHANNEL =
   "studio:activity:reconcile-pomodoro";
+export const ACTIVITY_UPDATE_POMODORO_NOTE_CHANNEL =
+  "studio:activity:update-pomodoro-note";
 export const ACTIVITY_STOP_POMODORO_CHANNEL =
   "studio:activity:stop-pomodoro";
 export const SCHEDULE_LIST_WORK_CHANNEL =
@@ -984,6 +1180,8 @@ export const ASSISTANT_CHATGPT_OAUTH_STATUS_CHANNEL =
   "studio:assistant:chatgpt-oauth-status";
 export const ASSISTANT_CHATGPT_OAUTH_START_LOGIN_CHANNEL =
   "studio:assistant:chatgpt-oauth-start-login";
+export const ASSISTANT_CHAT_RUN_CHANNEL =
+  "studio:assistant:chat-run";
 export const ASSISTANT_LIST_CONTEXT_STATE_CHANNEL =
   "studio:assistant:list-context-state";
 export const ASSISTANT_GRANT_CONTEXT_PERMISSION_CHANNEL =
@@ -1016,16 +1214,34 @@ export const APP_SETTINGS_GET_CHANNEL =
   "studio:settings:get";
 export const APP_SETTINGS_SAVE_CHANNEL =
   "studio:settings:save";
+export const UI_PREFERENCES_GET_CHANNEL =
+  "studio:settings:ui-preferences-get";
+export const UI_PREFERENCES_SAVE_CHANNEL =
+  "studio:settings:ui-preferences-save";
 export const MUSIC_SETTINGS_PROFILE_CHANNEL =
   "studio:music:settings-profile";
 export const MUSIC_SETTINGS_GET_WORK_CHANNEL =
   "studio:music:get-work-settings";
 export const MUSIC_SETTINGS_SAVE_WORK_CHANNEL =
   "studio:music:save-work-settings";
+export const INSPIRATION_SETTINGS_GET_WORK_CHANNEL =
+  "studio:inspiration:get-work-settings";
+export const INSPIRATION_SETTINGS_SAVE_WORK_CHANNEL =
+  "studio:inspiration:save-work-settings";
 export const YOUTUBE_MUSIC_CONNECTION_STATUS_CHANNEL =
   "studio:music:youtube-connection-status";
 export const YOUTUBE_MUSIC_CONNECTION_SAVE_CHANNEL =
   "studio:music:youtube-connection-save";
+export const YOUTUBE_MUSIC_PROFILE_CHANNEL =
+  "studio:music:youtube-profile";
+export const YOUTUBE_MUSIC_SEARCH_CHANNEL =
+  "studio:music:youtube-search";
+export const SCENE_MUSIC_QUEUE_SEARCH_CHANNEL =
+  "studio:music:scene-queue-search";
+export const SCENE_MUSIC_QUEUE_LIST_CHANNEL =
+  "studio:music:scene-queue-list";
+export const SCENE_MUSIC_QUEUE_SELECT_CHANNEL =
+  "studio:music:scene-queue-select";
 export const VERSION_LIST_DOCUMENT_REVISIONS_CHANNEL =
   "studio:version:list-document-revisions";
 export const VERSION_RESTORE_DOCUMENT_REVISION_CHANNEL =
@@ -1157,6 +1373,36 @@ export type StudioBridge = {
     setSceneEventOverride: (
       command: SetSceneEventOverrideCommand,
     ) => Promise<SceneProjectionList>;
+    runSceneExtraction: (
+      command: RunSceneExtractionCommand,
+    ) => Promise<SceneExtractionResult>;
+    listSceneExtractionCandidates: (
+      command: ListSceneExtractionCandidatesCommand,
+    ) => Promise<SceneExtractionCandidateList>;
+    decideSceneExtractionBoundary: (
+      command: DecideSceneExtractionBoundaryCommand,
+    ) => Promise<SceneExtractionDecisionResult>;
+    listSceneAnnotations: (
+      command: ListSceneAnnotationsCommand,
+    ) => Promise<SceneAnnotationList>;
+    decideSceneExtractionAnnotation: (
+      command: DecideSceneExtractionAnnotationCommand,
+    ) => Promise<SceneExtractionAnnotationDecisionResult>;
+    runSceneDraft: (
+      command: RunSceneDraftCommand,
+    ) => Promise<RunSceneDraftResult>;
+    listSceneDraftCandidates: (
+      command: ListSceneDraftCandidatesCommand,
+    ) => Promise<SceneDraftCandidateList>;
+    updateSceneDraftCandidate: (
+      command: UpdateSceneDraftCandidateCommand,
+    ) => Promise<SceneDraftCandidate>;
+    prepareSceneDraftInsertion: (
+      command: PrepareSceneDraftInsertionCommand,
+    ) => Promise<PrepareSceneDraftInsertionResult>;
+    completeSceneDraftInsertion: (
+      command: CompleteSceneDraftInsertionCommand,
+    ) => Promise<SceneDraftCandidate>;
   };
   fragments: {
     getProfile: () => Promise<FragmentShelfProfile>;
@@ -1186,9 +1432,42 @@ export type StudioBridge = {
     update: (
       command: UpdateCharacterCommand,
     ) => Promise<CharacterProjection>;
+    addEvidence: (
+      command: AddCharacterEvidenceCommand,
+    ) => Promise<CharacterProjection>;
     retire: (
       command: RetireCharacterCommand,
     ) => Promise<CharacterProjection>;
+    createRelation: (
+      command: CreateCharacterRelationCommand,
+    ) => Promise<CharacterRelationProjection>;
+    listRelations: (
+      command: ListCharacterRelationsCommand,
+    ) => Promise<CharacterRelationListProjection>;
+    updateRelation: (
+      command: UpdateCharacterRelationCommand,
+    ) => Promise<CharacterRelationProjection>;
+    retireRelation: (
+      command: RetireCharacterRelationCommand,
+    ) => Promise<CharacterRelationProjection>;
+    runExtraction: (
+      command: RunCharacterExtractionCommand,
+    ) => Promise<CharacterExtractionResult>;
+    listExtractionCandidates: (
+      command: ListCharacterExtractionCandidatesCommand,
+    ) => Promise<CharacterExtractionCandidateList>;
+    decideExtractionItem: (
+      command: DecideCharacterExtractionItemCommand,
+    ) => Promise<CharacterExtractionDecisionResult>;
+    runGeneration: (
+      command: RunCharacterGenerationCommand,
+    ) => Promise<CharacterGenerationResult>;
+    listGenerationCandidates: (
+      command: ListCharacterGenerationCandidatesCommand,
+    ) => Promise<CharacterGenerationCandidateList>;
+    decideGenerationItem: (
+      command: DecideCharacterGenerationItemCommand,
+    ) => Promise<CharacterGenerationDecisionResult>;
   };
   loreEntries: {
     create: (
@@ -1488,6 +1767,9 @@ export type StudioBridge = {
     reconcilePomodoro: (
       command: PomodoroPhaseCommand,
     ) => Promise<PomodoroProjection>;
+    updatePomodoroNote: (
+      command: UpdatePomodoroNoteCommand,
+    ) => Promise<PomodoroProjection>;
     stopPomodoro: (
       command: PomodoroPhaseCommand,
     ) => Promise<PomodoroProjection>;
@@ -1515,6 +1797,10 @@ export type StudioBridge = {
     save: (
       command: SaveAppSettingsCommand,
     ) => Promise<AppSettingsProjection>;
+    getUiPreferences: () => Promise<UiPreferencesProjection>;
+    saveUiPreferences: (
+      command: SaveUiPreferencesCommand,
+    ) => Promise<UiPreferencesProjection>;
     getMusicProfile: () => Promise<MusicSettingsProfile>;
     getWorkMusic: (
       command: GetWorkMusicSettingsCommand,
@@ -1522,10 +1808,31 @@ export type StudioBridge = {
     saveWorkMusic: (
       command: SaveWorkMusicSettingsCommand,
     ) => Promise<WorkMusicSettingsProjection>;
+    getWorkInspiration: (
+      command: GetWorkInspirationSettingsCommand,
+    ) => Promise<WorkInspirationSettingsProjection>;
+    saveWorkInspiration: (
+      command: SaveWorkInspirationSettingsCommand,
+    ) => Promise<WorkInspirationSettingsProjection>;
     getYouTubeMusicConnectionStatus: () => Promise<YouTubeMusicConnectionStatus>;
     saveYouTubeMusicConnection: (
       command: SaveYouTubeMusicConnectionCommand,
     ) => Promise<YouTubeMusicConnectionStatus>;
+  };
+  musicPlayback: {
+    getProfile: () => Promise<YouTubeMusicProfile>;
+    searchVideos: (
+      command: SearchYouTubeVideosCommand,
+    ) => Promise<YouTubeVideoSearchResult>;
+    searchSceneQueues: (
+      command: SearchSceneMusicQueuesCommand,
+    ) => Promise<SceneMusicQueueSearchResult>;
+    listSceneQueueCandidates: (
+      command: ListSceneMusicQueueCandidatesCommand,
+    ) => Promise<SceneMusicQueueCandidateList>;
+    selectSceneQueue: (
+      command: SelectSceneMusicQueueCommand,
+    ) => Promise<SceneMusicQueueCandidate>;
   };
   quickTools: {
     getMemo: (
@@ -1538,6 +1845,9 @@ export type StudioBridge = {
   assistant: {
     getChatGptOAuthStatus: () => Promise<ChatGptOAuthConnectionStatus>;
     startChatGptOAuthLogin: () => Promise<ChatGptOAuthConnectionStatus>;
+    runChat: (
+      command: RunAssistantChatCommand,
+    ) => Promise<AssistantChatResult>;
     listConnections: () => Promise<AssistantConnectionListProjection>;
     saveConnection: (
       command: SaveAssistantConnectionCommand,
@@ -1611,6 +1921,9 @@ export type StudioBridge = {
     exportManuscriptText: (
       command: ExportManuscriptTextCommand,
     ) => Promise<ExportManuscriptTextResult>;
+    selectManuscriptTextImport: (
+      command: SelectManuscriptTextImportCommand,
+    ) => Promise<ManuscriptTextImportResult>;
     getManuscriptPersistenceProfile: () => Promise<ManuscriptPersistenceProfile | null>;
     getManuscriptStartupRecovery: () => Promise<StartupRecoveryProjection>;
     getManuscriptResumeCheckpoint: () => Promise<ManuscriptResumeCheckpointProjection>;
@@ -1627,6 +1940,12 @@ export type StudioBridge = {
     saveFormatting: (
       command: SaveManuscriptFormattingCommand,
     ) => Promise<SaveManuscriptFormattingReceipt>;
+    getWorkManuscriptLayoutSettings: (
+      command: GetWorkManuscriptLayoutSettingsCommand,
+    ) => Promise<WorkManuscriptLayoutSettingsProjection>;
+    saveWorkManuscriptLayoutSettings: (
+      command: SaveWorkManuscriptLayoutSettingsCommand,
+    ) => Promise<WorkManuscriptLayoutSettingsProjection>;
     applyManuscriptStartupRecovery: (
       command: ApplyStartupRecoveryCommand,
     ) => Promise<ApplyStartupRecoveryAcknowledgement>;
@@ -1651,10 +1970,13 @@ export type BridgeInvoke = (
     | typeof MANUSCRIPT_PREFLIGHT_GET_SETTINGS_CHANNEL
     | typeof MANUSCRIPT_PREFLIGHT_SAVE_SETTINGS_CHANNEL
     | typeof MANUSCRIPT_EXPORT_TEXT_CHANNEL
+    | typeof MANUSCRIPT_SELECT_TEXT_IMPORT_CHANNEL
     | typeof MANUSCRIPT_PERSISTENCE_PROFILE_CHANNEL
     | typeof MANUSCRIPT_SAVE_CHANGE_BATCH_CHANNEL
     | typeof MANUSCRIPT_SAVE_DOCUMENT_CHANGE_CHANNEL
     | typeof MANUSCRIPT_SAVE_FORMATTING_CHANNEL
+    | typeof MANUSCRIPT_GET_WORK_LAYOUT_SETTINGS_CHANNEL
+    | typeof MANUSCRIPT_SAVE_WORK_LAYOUT_SETTINGS_CHANNEL
     | typeof MANUSCRIPT_STARTUP_RECOVERY_CHANNEL
     | typeof MANUSCRIPT_RESUME_CHECKPOINT_CHANNEL
     | typeof MANUSCRIPT_GET_CONTINUOUS_READING_PROGRESS_CHANNEL
@@ -1692,6 +2014,16 @@ export type BridgeInvoke = (
     | typeof STRUCTURE_LIST_SCENE_PROJECTION_CHANNEL
     | typeof STRUCTURE_UPDATE_SCENE_RULE_SET_CHANNEL
     | typeof STRUCTURE_SET_SCENE_EVENT_OVERRIDE_CHANNEL
+    | typeof STRUCTURE_RUN_SCENE_EXTRACTION_CHANNEL
+    | typeof STRUCTURE_LIST_SCENE_EXTRACTION_CANDIDATES_CHANNEL
+    | typeof STRUCTURE_DECIDE_SCENE_EXTRACTION_BOUNDARY_CHANNEL
+    | typeof STRUCTURE_LIST_SCENE_ANNOTATIONS_CHANNEL
+    | typeof STRUCTURE_DECIDE_SCENE_EXTRACTION_ANNOTATION_CHANNEL
+    | typeof STRUCTURE_RUN_SCENE_DRAFT_CHANNEL
+    | typeof STRUCTURE_LIST_SCENE_DRAFT_CANDIDATES_CHANNEL
+    | typeof STRUCTURE_UPDATE_SCENE_DRAFT_CANDIDATE_CHANNEL
+    | typeof STRUCTURE_PREPARE_SCENE_DRAFT_INSERTION_CHANNEL
+    | typeof STRUCTURE_COMPLETE_SCENE_DRAFT_INSERTION_CHANNEL
     | typeof FRAGMENT_PROFILE_CHANNEL
     | typeof FRAGMENT_CAPTURE_CHANNEL
     | typeof FRAGMENT_LIST_CHANNEL
@@ -1701,7 +2033,18 @@ export type BridgeInvoke = (
     | typeof CHARACTER_CREATE_CHANNEL
     | typeof CHARACTER_LIST_CHANNEL
     | typeof CHARACTER_UPDATE_CHANNEL
+    | typeof CHARACTER_ADD_EVIDENCE_CHANNEL
     | typeof CHARACTER_RETIRE_CHANNEL
+    | typeof CHARACTER_RELATION_CREATE_CHANNEL
+    | typeof CHARACTER_RELATION_LIST_CHANNEL
+    | typeof CHARACTER_RELATION_UPDATE_CHANNEL
+    | typeof CHARACTER_RELATION_RETIRE_CHANNEL
+    | typeof CHARACTER_EXTRACTION_RUN_CHANNEL
+    | typeof CHARACTER_EXTRACTION_LIST_CHANNEL
+    | typeof CHARACTER_EXTRACTION_DECIDE_CHANNEL
+    | typeof CHARACTER_GENERATION_RUN_CHANNEL
+    | typeof CHARACTER_GENERATION_LIST_CHANNEL
+    | typeof CHARACTER_GENERATION_DECIDE_CHANNEL
     | typeof LORE_ENTRY_CREATE_CHANNEL
     | typeof LORE_ENTRY_LIST_CHANNEL
     | typeof LORE_ENTRY_UPDATE_CHANNEL
@@ -1789,6 +2132,7 @@ export type BridgeInvoke = (
     | typeof ACTIVITY_PAUSE_POMODORO_CHANNEL
     | typeof ACTIVITY_RESUME_POMODORO_CHANNEL
     | typeof ACTIVITY_RECONCILE_POMODORO_CHANNEL
+    | typeof ACTIVITY_UPDATE_POMODORO_NOTE_CHANNEL
     | typeof ACTIVITY_STOP_POMODORO_CHANNEL
     | typeof SCHEDULE_LIST_WORK_CHANNEL
     | typeof SCHEDULE_CREATE_ITEM_CHANNEL
@@ -1799,6 +2143,7 @@ export type BridgeInvoke = (
     | typeof QUICK_TOOLS_SAVE_MEMO_CHANNEL
     | typeof ASSISTANT_CHATGPT_OAUTH_STATUS_CHANNEL
     | typeof ASSISTANT_CHATGPT_OAUTH_START_LOGIN_CHANNEL
+    | typeof ASSISTANT_CHAT_RUN_CHANNEL
     | typeof ASSISTANT_LIST_CONTEXT_STATE_CHANNEL
     | typeof ASSISTANT_GRANT_CONTEXT_PERMISSION_CHANNEL
     | typeof ASSISTANT_REVOKE_CONTEXT_PERMISSION_CHANNEL
@@ -1815,11 +2160,20 @@ export type BridgeInvoke = (
     | typeof APP_SETTINGS_PROFILE_CHANNEL
     | typeof APP_SETTINGS_GET_CHANNEL
     | typeof APP_SETTINGS_SAVE_CHANNEL
+    | typeof UI_PREFERENCES_GET_CHANNEL
+    | typeof UI_PREFERENCES_SAVE_CHANNEL
     | typeof MUSIC_SETTINGS_PROFILE_CHANNEL
     | typeof MUSIC_SETTINGS_GET_WORK_CHANNEL
     | typeof MUSIC_SETTINGS_SAVE_WORK_CHANNEL
+    | typeof INSPIRATION_SETTINGS_GET_WORK_CHANNEL
+    | typeof INSPIRATION_SETTINGS_SAVE_WORK_CHANNEL
     | typeof YOUTUBE_MUSIC_CONNECTION_STATUS_CHANNEL
     | typeof YOUTUBE_MUSIC_CONNECTION_SAVE_CHANNEL
+    | typeof YOUTUBE_MUSIC_PROFILE_CHANNEL
+    | typeof YOUTUBE_MUSIC_SEARCH_CHANNEL
+    | typeof SCENE_MUSIC_QUEUE_SEARCH_CHANNEL
+    | typeof SCENE_MUSIC_QUEUE_LIST_CHANNEL
+    | typeof SCENE_MUSIC_QUEUE_SELECT_CHANNEL
     | typeof VERSION_LIST_DOCUMENT_REVISIONS_CHANNEL
     | typeof VERSION_RESTORE_DOCUMENT_REVISION_CHANNEL
     | typeof VERSION_CREATE_WORK_SNAPSHOT_CHANNEL
@@ -1833,9 +2187,12 @@ export type BridgeInvoke = (
     | ChangeBatch
     | SaveManuscriptDocumentChangeCommand
     | SaveManuscriptFormattingCommand
+    | GetWorkManuscriptLayoutSettingsCommand
+    | SaveWorkManuscriptLayoutSettingsCommand
     | GetManuscriptPreflightSettingsCommand
     | SaveManuscriptPreflightSettingsCommand
     | ExportManuscriptTextCommand
+    | SelectManuscriptTextImportCommand
     | ApplyStartupRecoveryCommand
     | ManuscriptCloseResult
     | GetContinuousReadingProgressCommand
@@ -1861,6 +2218,19 @@ export type BridgeInvoke = (
     | ListSceneProjectionCommand
     | UpdateSceneRuleSetCommand
     | SetSceneEventOverrideCommand
+    | RunSceneExtractionCommand
+    | ListSceneExtractionCandidatesCommand
+    | DecideSceneExtractionBoundaryCommand
+    | ListSceneAnnotationsCommand
+    | DecideSceneExtractionAnnotationCommand
+    | RunSceneDraftCommand
+    | ListSceneDraftCandidatesCommand
+    | UpdateSceneDraftCandidateCommand
+    | PrepareSceneDraftInsertionCommand
+    | CompleteSceneDraftInsertionCommand
+    | SearchSceneMusicQueuesCommand
+    | ListSceneMusicQueueCandidatesCommand
+    | SelectSceneMusicQueueCommand
     | CaptureFragmentCommand
     | ListFragmentsCommand
     | UpdateFragmentCommand
@@ -1869,7 +2239,12 @@ export type BridgeInvoke = (
     | CreateCharacterCommand
     | ListCharactersCommand
     | UpdateCharacterCommand
+    | AddCharacterEvidenceCommand
     | RetireCharacterCommand
+    | CreateCharacterRelationCommand
+    | ListCharacterRelationsCommand
+    | UpdateCharacterRelationCommand
+    | RetireCharacterRelationCommand
     | CreateLoreEntryCommand
     | ListLoreEntriesCommand
     | UpdateLoreEntryCommand
@@ -1925,6 +2300,12 @@ export type BridgeInvoke = (
     | RunAssistantVocabularyLookupCommand
     | RunAssistantVocabularySuggestionCommand
     | RunAssistantExternalSettingReviewCommand
+    | RunCharacterExtractionCommand
+    | ListCharacterExtractionCandidatesCommand
+    | DecideCharacterExtractionItemCommand
+    | RunCharacterGenerationCommand
+    | ListCharacterGenerationCandidatesCommand
+    | DecideCharacterGenerationItemCommand
     | RunAssistantNotationReviewCommand
     | RunAssistantSettingReviewCommand
     | SaveAssistantConnectionCommand
@@ -1932,6 +2313,8 @@ export type BridgeInvoke = (
     | SaveAppSettingsCommand
     | GetWorkMusicSettingsCommand
     | SaveWorkMusicSettingsCommand
+    | GetWorkInspirationSettingsCommand
+    | SaveWorkInspirationSettingsCommand
     | SaveYouTubeMusicConnectionCommand
     | ListDocumentRevisionsCommand
     | RestoreDocumentRevisionCommand
@@ -2439,6 +2822,123 @@ export function createStudioBridge(
           throw new Error("Invalid SceneProjection list");
         }
       },
+      runSceneExtraction: async (input) => {
+        const command = parseRunSceneExtractionCommand(input);
+        const value = await invoke(
+          STRUCTURE_RUN_SCENE_EXTRACTION_CHANNEL,
+          command,
+        );
+        try {
+          return parseSceneExtractionResult(value);
+        } catch {
+          throw new Error("Invalid scene extraction result");
+        }
+      },
+      listSceneExtractionCandidates: async (input) => {
+        const command = parseListSceneExtractionCandidatesCommand(input);
+        const value = await invoke(
+          STRUCTURE_LIST_SCENE_EXTRACTION_CANDIDATES_CHANNEL,
+          command,
+        );
+        try {
+          return parseSceneExtractionCandidateList(value);
+        } catch {
+          throw new Error("Invalid scene extraction Candidate list");
+        }
+      },
+      decideSceneExtractionBoundary: async (input) => {
+        const command = parseDecideSceneExtractionBoundaryCommand(input);
+        const value = await invoke(
+          STRUCTURE_DECIDE_SCENE_EXTRACTION_BOUNDARY_CHANNEL,
+          command,
+        );
+        try {
+          return parseSceneExtractionDecisionResult(value);
+        } catch {
+          throw new Error("Invalid scene extraction decision result");
+        }
+      },
+      listSceneAnnotations: async (input) => {
+        const command = parseListSceneAnnotationsCommand(input);
+        const value = await invoke(
+          STRUCTURE_LIST_SCENE_ANNOTATIONS_CHANNEL,
+          command,
+        );
+        try {
+          return parseSceneAnnotationList(value);
+        } catch {
+          throw new Error("Invalid scene annotation list");
+        }
+      },
+      decideSceneExtractionAnnotation: async (input) => {
+        const command = parseDecideSceneExtractionAnnotationCommand(input);
+        const value = await invoke(
+          STRUCTURE_DECIDE_SCENE_EXTRACTION_ANNOTATION_CHANNEL,
+          command,
+        );
+        try {
+          return parseSceneExtractionAnnotationDecisionResult(value);
+        } catch {
+          throw new Error("Invalid scene extraction annotation decision result");
+        }
+      },
+      runSceneDraft: async (input) => {
+        const command = parseRunSceneDraftCommand(input);
+        const value = await invoke(STRUCTURE_RUN_SCENE_DRAFT_CHANNEL, command);
+        try {
+          return parseRunSceneDraftResult(value);
+        } catch {
+          throw new Error("Invalid scene draft result");
+        }
+      },
+      listSceneDraftCandidates: async (input) => {
+        const command = parseListSceneDraftCandidatesCommand(input);
+        const value = await invoke(
+          STRUCTURE_LIST_SCENE_DRAFT_CANDIDATES_CHANNEL,
+          command,
+        );
+        try {
+          return parseSceneDraftCandidateList(value);
+        } catch {
+          throw new Error("Invalid scene draft Candidate list");
+        }
+      },
+      updateSceneDraftCandidate: async (input) => {
+        const command = parseUpdateSceneDraftCandidateCommand(input);
+        const value = await invoke(
+          STRUCTURE_UPDATE_SCENE_DRAFT_CANDIDATE_CHANNEL,
+          command,
+        );
+        try {
+          return parseSceneDraftCandidate(value);
+        } catch {
+          throw new Error("Invalid updated scene draft Candidate");
+        }
+      },
+      prepareSceneDraftInsertion: async (input) => {
+        const command = parsePrepareSceneDraftInsertionCommand(input);
+        const value = await invoke(
+          STRUCTURE_PREPARE_SCENE_DRAFT_INSERTION_CHANNEL,
+          command,
+        );
+        try {
+          return parsePrepareSceneDraftInsertionResult(value);
+        } catch {
+          throw new Error("Invalid scene draft insertion preparation");
+        }
+      },
+      completeSceneDraftInsertion: async (input) => {
+        const command = parseCompleteSceneDraftInsertionCommand(input);
+        const value = await invoke(
+          STRUCTURE_COMPLETE_SCENE_DRAFT_INSERTION_CHANNEL,
+          command,
+        );
+        try {
+          return parseSceneDraftCandidate(value);
+        } catch {
+          throw new Error("Invalid completed scene draft Candidate");
+        }
+      },
     },
     fragments: {
       getProfile: async () => {
@@ -2523,6 +3023,15 @@ export function createStudioBridge(
           throw new Error("Invalid character update result");
         }
       },
+      addEvidence: async (input) => {
+        const command = parseAddCharacterEvidenceCommand(input);
+        const value = await invoke(CHARACTER_ADD_EVIDENCE_CHANNEL, command);
+        try {
+          return parseCharacterProjection(value);
+        } catch {
+          throw new Error("Invalid character evidence result");
+        }
+      },
       retire: async (input) => {
         const command = parseRetireCharacterCommand(input);
         const value = await invoke(CHARACTER_RETIRE_CHANNEL, command);
@@ -2530,6 +3039,102 @@ export function createStudioBridge(
           return parseCharacterProjection(value);
         } catch {
           throw new Error("Invalid character retirement result");
+        }
+      },
+      createRelation: async (input) => {
+        const command = parseCreateCharacterRelationCommand(input);
+        const value = await invoke(CHARACTER_RELATION_CREATE_CHANNEL, command);
+        try {
+          return parseCharacterRelationProjection(value);
+        } catch {
+          throw new Error("Invalid character relation creation result");
+        }
+      },
+      listRelations: async (input) => {
+        const command = parseListCharacterRelationsCommand(input);
+        const value = await invoke(CHARACTER_RELATION_LIST_CHANNEL, command);
+        try {
+          return parseCharacterRelationListProjection(value);
+        } catch {
+          throw new Error("Invalid character relation list");
+        }
+      },
+      updateRelation: async (input) => {
+        const command = parseUpdateCharacterRelationCommand(input);
+        const value = await invoke(CHARACTER_RELATION_UPDATE_CHANNEL, command);
+        try {
+          return parseCharacterRelationProjection(value);
+        } catch {
+          throw new Error("Invalid character relation update result");
+        }
+      },
+      retireRelation: async (input) => {
+        const command = parseRetireCharacterRelationCommand(input);
+        const value = await invoke(CHARACTER_RELATION_RETIRE_CHANNEL, command);
+        try {
+          return parseCharacterRelationProjection(value);
+        } catch {
+          throw new Error("Invalid character relation retirement result");
+        }
+      },
+      runExtraction: async (input) => {
+        const command = parseRunCharacterExtractionCommand(input);
+        const value = await invoke(CHARACTER_EXTRACTION_RUN_CHANNEL, command);
+        try {
+          return parseCharacterExtractionResult(value);
+        } catch {
+          throw new Error("Invalid character extraction result");
+        }
+      },
+      listExtractionCandidates: async (input) => {
+        const command = parseListCharacterExtractionCandidatesCommand(input);
+        const value = await invoke(CHARACTER_EXTRACTION_LIST_CHANNEL, command);
+        try {
+          return parseCharacterExtractionCandidateList(value);
+        } catch {
+          throw new Error("Invalid character extraction Candidate list");
+        }
+      },
+      decideExtractionItem: async (input) => {
+        const command = parseDecideCharacterExtractionItemCommand(input);
+        const value = await invoke(CHARACTER_EXTRACTION_DECIDE_CHANNEL, command);
+        try {
+          return parseCharacterExtractionDecisionResult(
+            value,
+            parseCharacterProjection,
+          );
+        } catch {
+          throw new Error("Invalid character extraction decision result");
+        }
+      },
+      runGeneration: async (input) => {
+        const command = parseRunCharacterGenerationCommand(input);
+        const value = await invoke(CHARACTER_GENERATION_RUN_CHANNEL, command);
+        try {
+          return parseCharacterGenerationResult(value);
+        } catch {
+          throw new Error("Invalid character generation result");
+        }
+      },
+      listGenerationCandidates: async (input) => {
+        const command = parseListCharacterGenerationCandidatesCommand(input);
+        const value = await invoke(CHARACTER_GENERATION_LIST_CHANNEL, command);
+        try {
+          return parseCharacterGenerationCandidateList(value);
+        } catch {
+          throw new Error("Invalid character generation Candidate list");
+        }
+      },
+      decideGenerationItem: async (input) => {
+        const command = parseDecideCharacterGenerationItemCommand(input);
+        const value = await invoke(CHARACTER_GENERATION_DECIDE_CHANNEL, command);
+        try {
+          return parseCharacterGenerationDecisionResult(
+            value,
+            parseCharacterProjection,
+          );
+        } catch {
+          throw new Error("Invalid character generation decision result");
         }
       },
     },
@@ -3366,6 +3971,18 @@ export function createStudioBridge(
           throw new Error("Invalid reconciled Pomodoro projection");
         }
       },
+      updatePomodoroNote: async (input) => {
+        const command = parseUpdatePomodoroNoteCommand(input);
+        const value = await invoke(
+          ACTIVITY_UPDATE_POMODORO_NOTE_CHANNEL,
+          command,
+        );
+        try {
+          return parsePomodoroProjection(value);
+        } catch {
+          throw new Error("Invalid updated Pomodoro projection");
+        }
+      },
       stopPomodoro: async (input) => {
         const command = parsePomodoroPhaseCommand(input);
         const value = await invoke(ACTIVITY_STOP_POMODORO_CHANNEL, command);
@@ -3454,6 +4071,23 @@ export function createStudioBridge(
           throw new Error("Invalid saved app settings projection");
         }
       },
+      getUiPreferences: async () => {
+        const value = await invoke(UI_PREFERENCES_GET_CHANNEL);
+        try {
+          return parseUiPreferencesProjection(value);
+        } catch {
+          throw new Error("Invalid UI preferences projection");
+        }
+      },
+      saveUiPreferences: async (input) => {
+        const command = parseSaveUiPreferencesCommand(input);
+        const value = await invoke(UI_PREFERENCES_SAVE_CHANNEL, command);
+        try {
+          return parseUiPreferencesProjection(value);
+        } catch {
+          throw new Error("Invalid saved UI preferences projection");
+        }
+      },
       getMusicProfile: async () => {
         const value = await invoke(MUSIC_SETTINGS_PROFILE_CHANNEL);
         try {
@@ -3484,6 +4118,30 @@ export function createStudioBridge(
           throw new Error("Invalid saved Work music settings projection");
         }
       },
+      getWorkInspiration: async (input) => {
+        const command = parseGetWorkInspirationSettingsCommand(input);
+        const value = await invoke(
+          INSPIRATION_SETTINGS_GET_WORK_CHANNEL,
+          command,
+        );
+        try {
+          return parseWorkInspirationSettingsProjection(value);
+        } catch {
+          throw new Error("Invalid Work inspiration settings projection");
+        }
+      },
+      saveWorkInspiration: async (input) => {
+        const command = parseSaveWorkInspirationSettingsCommand(input);
+        const value = await invoke(
+          INSPIRATION_SETTINGS_SAVE_WORK_CHANNEL,
+          command,
+        );
+        try {
+          return parseWorkInspirationSettingsProjection(value);
+        } catch {
+          throw new Error("Invalid saved Work inspiration settings projection");
+        }
+      },
       getYouTubeMusicConnectionStatus: async () => {
         const value = await invoke(YOUTUBE_MUSIC_CONNECTION_STATUS_CHANNEL);
         try {
@@ -3499,6 +4157,52 @@ export function createStudioBridge(
           return parseYouTubeMusicConnectionStatus(value);
         } catch {
           throw new Error("Invalid saved YouTube music connection status");
+        }
+      },
+    },
+    musicPlayback: {
+      getProfile: async () => {
+        const value = await invoke(YOUTUBE_MUSIC_PROFILE_CHANNEL);
+        try {
+          return parseYouTubeMusicProfile(value);
+        } catch {
+          throw new Error("Invalid YouTube music profile");
+        }
+      },
+      searchVideos: async (input) => {
+        const command = parseSearchYouTubeVideosCommand(input);
+        const value = await invoke(YOUTUBE_MUSIC_SEARCH_CHANNEL, command);
+        try {
+          return parseYouTubeVideoSearchResult(value);
+        } catch {
+          throw new Error("Invalid YouTube music search result");
+        }
+      },
+      searchSceneQueues: async (input) => {
+        const command = parseSearchSceneMusicQueuesCommand(input);
+        const value = await invoke(SCENE_MUSIC_QUEUE_SEARCH_CHANNEL, command);
+        try {
+          return parseSceneMusicQueueSearchResult(value);
+        } catch {
+          throw new Error("Invalid scene music queue search result");
+        }
+      },
+      listSceneQueueCandidates: async (input) => {
+        const command = parseListSceneMusicQueueCandidatesCommand(input);
+        const value = await invoke(SCENE_MUSIC_QUEUE_LIST_CHANNEL, command);
+        try {
+          return parseSceneMusicQueueCandidateList(value);
+        } catch {
+          throw new Error("Invalid scene music queue Candidate list");
+        }
+      },
+      selectSceneQueue: async (input) => {
+        const command = parseSelectSceneMusicQueueCommand(input);
+        const value = await invoke(SCENE_MUSIC_QUEUE_SELECT_CHANNEL, command);
+        try {
+          return parseSceneMusicQueueCandidate(value);
+        } catch {
+          throw new Error("Invalid selected scene music queue Candidate");
         }
       },
     },
@@ -3537,6 +4241,15 @@ export function createStudioBridge(
           return parseChatGptOAuthConnectionStatus(value);
         } catch {
           throw new Error("Invalid ChatGPT OAuth login result");
+        }
+      },
+      runChat: async (input) => {
+        const command = parseRunAssistantChatCommand(input);
+        const value = await invoke(ASSISTANT_CHAT_RUN_CHANNEL, command);
+        try {
+          return parseAssistantChatResult(value);
+        } catch {
+          throw new Error("Invalid assistant chat result");
         }
       },
       listConnections: async () => {
@@ -3840,6 +4553,18 @@ export function createStudioBridge(
           throw new Error("Invalid manuscript text export result");
         }
       },
+      selectManuscriptTextImport: async (input) => {
+        const command = parseSelectManuscriptTextImportCommand(input);
+        const value = await invoke(
+          MANUSCRIPT_SELECT_TEXT_IMPORT_CHANNEL,
+          command,
+        );
+        try {
+          return parseManuscriptTextImportResult(value);
+        } catch {
+          throw new Error("Invalid manuscript text import result");
+        }
+      },
       getManuscriptPersistenceProfile: async () => {
         const value = await invoke(
           MANUSCRIPT_PERSISTENCE_PROFILE_CHANNEL,
@@ -3938,6 +4663,30 @@ export function createStudioBridge(
           return parseSaveManuscriptFormattingReceipt(value);
         } catch {
           throw new Error("Invalid manuscript formatting save receipt");
+        }
+      },
+      getWorkManuscriptLayoutSettings: async (input) => {
+        const command = parseGetWorkManuscriptLayoutSettingsCommand(input);
+        const value = await invoke(
+          MANUSCRIPT_GET_WORK_LAYOUT_SETTINGS_CHANNEL,
+          command,
+        );
+        try {
+          return parseWorkManuscriptLayoutSettingsProjection(value);
+        } catch {
+          throw new Error("Invalid Work manuscript layout settings projection");
+        }
+      },
+      saveWorkManuscriptLayoutSettings: async (input) => {
+        const command = parseSaveWorkManuscriptLayoutSettingsCommand(input);
+        const value = await invoke(
+          MANUSCRIPT_SAVE_WORK_LAYOUT_SETTINGS_CHANNEL,
+          command,
+        );
+        try {
+          return parseWorkManuscriptLayoutSettingsProjection(value);
+        } catch {
+          throw new Error("Invalid saved Work manuscript layout settings projection");
         }
       },
       applyManuscriptStartupRecovery: async (

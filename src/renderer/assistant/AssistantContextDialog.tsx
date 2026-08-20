@@ -33,9 +33,12 @@ import type {
 import type {
   AssistantSettingReference,
 } from "../../application/assistant/assistant-setting-review";
-import type {
-  AssistantConnectionProjection,
-} from "../../application/assistant/assistant-connection";
+
+export type AssistantContextConnectionProjection = Readonly<{
+  connectionId: string;
+  label: string;
+  model: string;
+}>;
 
 export type AssistantContextDialogActionState =
   | "loading"
@@ -59,6 +62,8 @@ export type AssistantPermissionDraft = {
 const CAPABILITY_LABELS: Readonly<Record<AssistantCapability, string>> = {
   "vocabulary-lookup": "어휘 확인",
   "lore-review": "설정 검토",
+  "character.extract": "캐릭터 추출",
+  "scene.extract": "장면 구분",
   "publishing-operations": "투고 운영",
 };
 
@@ -143,7 +148,7 @@ export function AssistantContextDialog(input: {
   readonly canRunNotationReview: boolean;
   readonly canRunExternalSettingReview: boolean;
   readonly canRunVocabularyLookup: boolean;
-  readonly connections: readonly AssistantConnectionProjection[];
+  readonly connections: readonly AssistantContextConnectionProjection[];
   readonly destinationProfile: AssistantDestinationProfile | null;
   readonly documentLabels: Readonly<Record<string, string>>;
   readonly error: string | null;
@@ -290,9 +295,12 @@ export function AssistantContextDialog(input: {
                 </div>
               </div>
               {input.connections.length === 0 ? (
-                <p className="assistant-context-empty">
-                  먼저 연결 설정에서 사용할 연결을 저장하세요.
-                </p>
+                <div className="assistant-context-empty">
+                  <p>사용할 연결이 없습니다.</p>
+                  <button onClick={input.onOpenConnections} type="button">
+                    연결 설정 열기
+                  </button>
+                </div>
               ) : (
                 <form
                   onSubmit={(event) => {
@@ -399,9 +407,12 @@ export function AssistantContextDialog(input: {
                 </div>
               </div>
               {input.connections.length === 0 ? (
-                <p className="assistant-context-empty">
-                  먼저 연결 설정에서 사용할 연결을 저장하세요.
-                </p>
+                <div className="assistant-context-empty">
+                  <p>사용할 연결이 없습니다.</p>
+                  <button onClick={input.onOpenConnections} type="button">
+                    연결 설정 열기
+                  </button>
+                </div>
               ) : (
                 <form
                   onSubmit={(event) => {

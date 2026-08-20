@@ -56,12 +56,14 @@ export function AssistantConnectionsDialog(input: {
   const [model, setModel] = useState(initial?.model ?? "");
   const [credentialValue, setCredentialValue] = useState("");
   const [removeCredential, setRemoveCredential] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(initial !== null);
   const busy = input.actionState !== "idle";
   const selected = input.connections.find(
     (connection) => connection.connectionId === selectedId,
   ) ?? null;
 
   function selectConnection(connection: AssistantConnectionProjection): void {
+    setEditorOpen(true);
     setSelectedId(connection.connectionId);
     setLabel(connection.label);
     setConnectorKind(connection.connectorKind ?? "");
@@ -72,6 +74,7 @@ export function AssistantConnectionsDialog(input: {
   }
 
   function startNewConnection(): void {
+    setEditorOpen(true);
     setSelectedId(null);
     setLabel("");
     setConnectorKind("");
@@ -128,6 +131,7 @@ export function AssistantConnectionsDialog(input: {
         <div className="assistant-connections-body">
           <aside aria-label="저장된 조수 연결" className="assistant-connections-list">
             <button
+              aria-pressed={editorOpen && selected === null}
               className="assistant-connection-new"
               disabled={busy}
               onClick={startNewConnection}
@@ -166,6 +170,7 @@ export function AssistantConnectionsDialog(input: {
             )}
           </aside>
 
+          {editorOpen ? (
           <form className="assistant-connection-form" onSubmit={submit}>
             <div className="assistant-connection-form-title">
               <div>
@@ -177,7 +182,8 @@ export function AssistantConnectionsDialog(input: {
                   className="assistant-connection-delete"
                   disabled={busy}
                   onClick={() => {
-                    startNewConnection();
+                    setEditorOpen(false);
+                    setSelectedId(null);
                     input.onDelete(selected);
                   }}
                   type="button"
@@ -191,6 +197,7 @@ export function AssistantConnectionsDialog(input: {
               <span>연결 종류</span>
               <select
                 aria-label="연결 종류"
+                autoFocus
                 disabled={busy}
                 onChange={(event) => setConnectorKind(event.target.value)}
                 required
@@ -292,6 +299,17 @@ export function AssistantConnectionsDialog(input: {
               </button>
             </footer>
           </form>
+          ) : (
+            <section className="assistant-connection-empty-editor">
+              <KeyRound aria-hidden="true" size={24} />
+              <h3>연결을 선택하거나 새로 만드세요</h3>
+              <p>새 연결을 누르면 연결 종류와 필요한 값을 입력할 수 있습니다.</p>
+              <button onClick={startNewConnection} type="button">
+                <Plus aria-hidden="true" size={16} />
+                새 연결
+              </button>
+            </section>
+          )}
         </div>
       </section>
     </div>

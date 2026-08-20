@@ -145,11 +145,13 @@ export function WorkRecordsDialog(input: {
             workId: input.work.workId,
             activity: input.activity,
             settings: input.goalSettings,
+            nowMs: input.nowMs,
             calendar: { today, weekStart, dateKey: localDateKey },
           }),
     [
       input.activity,
       input.goalSettings,
+      input.nowMs,
       input.work.workId,
       today,
       weekStart,
@@ -298,7 +300,7 @@ export function WorkRecordsDialog(input: {
           <header>
             <div>
               <h3>집필 목표</h3>
-              <span>집중은 뽀모도로 작업 단계, 글자는 집필 기록에서 자동 집계합니다.</span>
+              <span>집중 시간과 글자 수는 집필 기록에서 자동 집계합니다.</span>
             </div>
             {input.goalActionState === "loading" && <span>불러오는 중</span>}
           </header>

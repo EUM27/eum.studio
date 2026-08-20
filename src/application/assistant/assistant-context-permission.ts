@@ -3,6 +3,8 @@ import { entityId, type EntityId } from "../../domain/writing";
 export const ASSISTANT_CAPABILITIES = [
   "vocabulary-lookup",
   "lore-review",
+  "character.extract",
+  "scene.extract",
   "publishing-operations",
 ] as const;
 

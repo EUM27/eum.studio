@@ -82,7 +82,14 @@ function parseTokens(value: unknown): ChatGptOAuthTokens {
   });
 }
 
-function parseStoredConnection(value: unknown): StoredConnection {
+function parseStoredConnection(
+  value: unknown,
+  profile: Readonly<{
+    providerId: string;
+    displayName: string;
+    modelId: string;
+  }>,
+): StoredConnection {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error("Stored ChatGPT OAuth connection must be an object");
   }
@@ -102,7 +109,9 @@ function parseStoredConnection(value: unknown): StoredConnection {
   const status = parseChatGptOAuthConnectionStatus({
     schemaVersion: input.schemaVersion,
     revision: input.revision,
-    displayName: "GPT",
+    providerId: profile.providerId,
+    displayName: profile.displayName,
+    modelId: profile.modelId,
     connected: input.encryptedCredential !== null,
     email: null,
     planType: null,
@@ -125,7 +134,9 @@ function parseStoredConnection(value: unknown): StoredConnection {
 
 class NodeChatGptOAuthStore implements ChatGptOAuthConnectionStore {
   readonly #cipher: ChatGptOAuthCredentialCipher;
+  readonly #providerId: string;
   readonly #displayName: string;
+  readonly #modelId: string;
   readonly #filePath: string;
   readonly #now: () => string;
   #state: StoredConnection;
@@ -133,13 +144,17 @@ class NodeChatGptOAuthStore implements ChatGptOAuthConnectionStore {
 
   constructor(input: {
     cipher: ChatGptOAuthCredentialCipher;
+    providerId: string;
     displayName: string;
+    modelId: string;
     filePath: string;
     now: () => string;
     state: StoredConnection;
   }) {
     this.#cipher = input.cipher;
+    this.#providerId = input.providerId;
     this.#displayName = input.displayName;
+    this.#modelId = input.modelId;
     this.#filePath = input.filePath;
     this.#now = input.now;
     this.#state = input.state;
@@ -150,7 +165,9 @@ class NodeChatGptOAuthStore implements ChatGptOAuthConnectionStore {
     return parseChatGptOAuthConnectionStatus({
       schemaVersion: 1,
       revision: this.#state.revision,
+      providerId: this.#providerId,
       displayName: this.#displayName,
+      modelId: this.#modelId,
       connected: tokens !== null,
       email: tokens?.email ?? null,
       planType: tokens?.planType ?? null,
@@ -208,7 +225,9 @@ class NodeChatGptOAuthStore implements ChatGptOAuthConnectionStore {
 
 export async function openNodeChatGptOAuthStore(input: {
   readonly rootDirectoryPath: string;
+  readonly providerId: string;
   readonly displayName: string;
+  readonly modelId: string;
   readonly cipher: ChatGptOAuthCredentialCipher;
   readonly now?: () => string;
 }): Promise<ChatGptOAuthConnectionStore> {
@@ -224,7 +243,14 @@ export async function openNodeChatGptOAuthStore(input: {
     updatedAt: null,
   });
   try {
-    state = parseStoredConnection(JSON.parse(await readFile(filePath, "utf8")));
+    state = parseStoredConnection(
+      JSON.parse(await readFile(filePath, "utf8")),
+      {
+        providerId: input.providerId,
+        displayName: input.displayName,
+        modelId: input.modelId,
+      },
+    );
   } catch (reason) {
     if (!(reason instanceof Error) || !("code" in reason) || reason.code !== "ENOENT") {
       throw reason;
@@ -232,7 +258,9 @@ export async function openNodeChatGptOAuthStore(input: {
   }
   return new NodeChatGptOAuthStore({
     cipher: input.cipher,
+    providerId: input.providerId,
     displayName: input.displayName,
+    modelId: input.modelId,
     filePath,
     now: input.now ?? (() => new Date().toISOString()),
     state,

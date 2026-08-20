@@ -67,6 +67,8 @@ export type ManuscriptParagraphAlignmentEntry = {
 export type ManuscriptEditorDocumentState = {
   readonly schemaVersion: 1;
   readonly ranges: readonly ManuscriptFormattingRange[];
+  readonly fontFamilyId: string;
+  readonly fontSizePx: number;
   readonly contentWidthPx: number;
   readonly lineHeight: number;
   readonly paragraphSpacingPx: number;
@@ -498,6 +500,8 @@ export function createDefaultManuscriptEditorDocumentState(
   return Object.freeze({
     schemaVersion: 1,
     ranges: Object.freeze([]),
+    fontFamilyId: profile.defaults.fontFamilyId,
+    fontSizePx: profile.defaults.fontSizePx,
     contentWidthPx: profile.defaults.contentWidthPx,
     lineHeight: profile.defaults.lineHeight,
     paragraphSpacingPx: profile.defaults.paragraphSpacingPx,
@@ -517,6 +521,8 @@ export function parseManuscriptEditorDocumentState(
     [
       "schemaVersion",
       "ranges",
+      "fontFamilyId",
+      "fontSizePx",
       "contentWidthPx",
       "lineHeight",
       "paragraphSpacingPx",
@@ -527,6 +533,24 @@ export function parseManuscriptEditorDocumentState(
   );
   if (input.schemaVersion !== 1) {
     throw new Error("ManuscriptEditorDocumentState.schemaVersion must be 1");
+  }
+  const fontFamilyId = input.fontFamilyId === undefined
+    ? profile.defaults.fontFamilyId
+    : readNonEmptyString(
+        input.fontFamilyId,
+        "ManuscriptEditorDocumentState.fontFamilyId",
+      );
+  if (!profile.fontFamilies.some((font) => font.id === fontFamilyId)) {
+    throw new Error("ManuscriptEditorDocumentState.fontFamilyId is not registered");
+  }
+  const fontSizePx = input.fontSizePx === undefined
+    ? profile.defaults.fontSizePx
+    : readPositiveInteger(
+        input.fontSizePx,
+        "ManuscriptEditorDocumentState.fontSizePx",
+      );
+  if (!profile.fontSizesPx.includes(fontSizePx)) {
+    throw new Error("ManuscriptEditorDocumentState.fontSizePx is not registered");
   }
   const contentWidthPx = readPositiveInteger(
     input.contentWidthPx,
@@ -621,6 +645,8 @@ export function parseManuscriptEditorDocumentState(
   return Object.freeze({
     schemaVersion: 1,
     ranges: Object.freeze(ranges),
+    fontFamilyId,
+    fontSizePx,
     contentWidthPx,
     lineHeight,
     paragraphSpacingPx,

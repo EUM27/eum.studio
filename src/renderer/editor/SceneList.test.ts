@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { entityId } from "../../domain/writing";
 import type { SceneProjectionList } from "../../application/structure/scene-projection";
+import type { SceneAnnotationProjection } from "../../application/structure/scene-annotation-contract";
 import { SceneList } from "./SceneList";
 
 const createdAt = "2026-08-16T00:00:00.000Z";
@@ -82,12 +83,51 @@ const projection: SceneProjectionList = Object.freeze({
   sceneEventOverrides: Object.freeze([]),
 });
 
+const annotation: SceneAnnotationProjection = Object.freeze({
+  schemaVersion: 1,
+  sceneAnnotationId: entityId<"SceneAnnotation">("annotation-a"),
+  revision: 1,
+  workId,
+  sceneKey: "scene-final-1",
+  documentId,
+  documentRevisionId: entityId<"DocumentRevision">("revision-scene-list"),
+  sourceCandidateId: entityId<"SceneExtractionCandidate">("candidate-a"),
+  sourceSceneItemId: entityId<"SceneExtractionItem">("scene-item-a"),
+  title: "닫힌 방",
+  summary: "문이 닫힌 뒤 대화가 멈춘다.",
+  povCharacterId: null,
+  location: "방",
+  time: "밤",
+  characterIds: Object.freeze([]),
+  goal: "",
+  conflict: "문이 닫힌다.",
+  outcome: "",
+  createdAt,
+  updatedAt: createdAt,
+});
+
+const musicProps = {
+  favoriteMusicVideos: [],
+  musicQueueCandidates: [],
+  musicQueueBusy: false,
+  musicConnected: true,
+  musicPlaybackAvailable: true,
+  onOpenMusicSettings: vi.fn(),
+  onPlayFavoriteMusicVideo: vi.fn(),
+  onSearchSceneMusic: vi.fn(),
+  onSelectSceneMusicQueue: vi.fn(),
+  onToggleFavoriteMusicVideo: vi.fn(),
+  onPlaySceneMusicQueue: vi.fn(),
+} as const;
+
 describe("SceneList", () => {
   it("shows final scenes, automatic membership, manual exceptions, and unassigned events", () => {
     const markup = renderToStaticMarkup(createElement(SceneList, {
       projection,
+      annotations: [annotation],
       activeDocumentId: documentId,
       busy: false,
+      ...musicProps,
       onOpenScene: vi.fn(),
       onSplitScene: vi.fn(),
       onMergeWithPrevious: vi.fn(),
@@ -96,6 +136,8 @@ describe("SceneList", () => {
     }));
 
     expect(markup).toContain("장면 1");
+    expect(markup).toContain("닫힌 방");
+    expect(markup).toContain("문이 닫힌 뒤 대화가 멈춘다.");
     expect(markup).toContain("0–17");
     expect(markup).toContain("자동 소속 사건");
     expect(markup).toContain("자동 소속");
@@ -103,14 +145,19 @@ describe("SceneList", () => {
     expect(markup).toContain("제외 해제");
     expect(markup).toContain("미배정 예정 사건");
     expect(markup).toContain("이 장면에 포함");
+    expect(markup).toContain("이 장면으로 음악 찾기");
+    expect(markup).toContain("선호 영상");
+    expect(markup).toContain("닫힌 방 방 밤 문이 닫힌다.");
     expect(markup).not.toContain("SceneOverride");
   });
 
   it("exposes the configured parser instead of fixing a delimiter in product code", () => {
     const markup = renderToStaticMarkup(createElement(SceneList, {
       projection,
+      annotations: [],
       activeDocumentId: documentId,
       busy: false,
+      ...musicProps,
       onOpenScene: vi.fn(),
       onSplitScene: vi.fn(),
       onMergeWithPrevious: vi.fn(),

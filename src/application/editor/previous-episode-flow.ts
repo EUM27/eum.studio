@@ -8,9 +8,9 @@ export type PreviousEpisodeFlowPreview = {
   readonly text: string;
 };
 
-type PreviewSentence = {
-  readonly blockIndex: number;
-  readonly text: string;
+type PreviewSentenceRange = {
+  readonly from: number;
+  readonly to: number;
 };
 
 const sentenceTerminators = new Set([
@@ -33,91 +33,69 @@ const sentenceClosingMarks = new Set([
   "]",
 ]);
 
-function splitPreviewSentences(block: string): readonly string[] {
-  const normalizedBlock = block.replace(/\s+/gu, " ").trim();
-  if (normalizedBlock.length === 0) {
+function collectPreviewSentenceRanges(
+  text: string,
+  contentStart: number,
+  contentEnd: number,
+): readonly PreviewSentenceRange[] {
+  if (contentStart === contentEnd) {
     return [];
   }
 
-  const sentences: string[] = [];
-  let sentenceStart = 0;
-  for (let index = 0; index < normalizedBlock.length; index += 1) {
-    const character = normalizedBlock[index];
+  const sentences: PreviewSentenceRange[] = [];
+  let sentenceStart = contentStart;
+  for (let index = contentStart; index < contentEnd; index += 1) {
+    const character = text[index];
     if (character === undefined || !sentenceTerminators.has(character)) {
       continue;
     }
 
     let sentenceEnd = index + 1;
     while (
-      sentenceEnd < normalizedBlock.length &&
-      sentenceClosingMarks.has(normalizedBlock[sentenceEnd] ?? "")
+      sentenceEnd < contentEnd &&
+      sentenceClosingMarks.has(text[sentenceEnd] ?? "")
     ) {
       sentenceEnd += 1;
     }
-    const sentence = normalizedBlock.slice(sentenceStart, sentenceEnd).trim();
-    if (sentence.length > 0) {
-      sentences.push(sentence);
+    if (sentenceStart < sentenceEnd) {
+      sentences.push(Object.freeze({ from: sentenceStart, to: sentenceEnd }));
     }
     sentenceStart = sentenceEnd;
     while (
-      sentenceStart < normalizedBlock.length &&
-      /\s/u.test(normalizedBlock[sentenceStart] ?? "")
+      sentenceStart < contentEnd &&
+      /\s/u.test(text[sentenceStart] ?? "")
     ) {
       sentenceStart += 1;
     }
+    index = sentenceStart - 1;
   }
 
-  const tail = normalizedBlock.slice(sentenceStart).trim();
-  if (tail.length > 0) {
-    sentences.push(tail);
+  if (sentenceStart < contentEnd) {
+    sentences.push(Object.freeze({ from: sentenceStart, to: contentEnd }));
   }
-  return sentences.length > 0 ? sentences : [normalizedBlock];
-}
-
-function joinPreviewSentences(units: readonly PreviewSentence[]): string {
-  const paragraphs: string[][] = [];
-  const paragraphIndexes: number[] = [];
-  for (const unit of units) {
-    let targetIndex = paragraphIndexes.indexOf(unit.blockIndex);
-    if (targetIndex === -1) {
-      targetIndex = paragraphs.length;
-      paragraphIndexes.push(unit.blockIndex);
-      paragraphs.push([]);
-    }
-    paragraphs[targetIndex]?.push(unit.text);
-  }
-  return paragraphs.map((paragraph) => paragraph.join(" ")).join("\n\n");
+  return Object.freeze(sentences);
 }
 
 export function getPreviousEpisodeFlowPreviewText(
   text: string,
   targetCharacters = PREVIOUS_EPISODE_FLOW_TARGET_CHARACTERS,
 ): string {
-  const normalizedText = text.replace(/\r\n?/gu, "\n").trim();
-  if (normalizedText.length === 0) {
+  const canonicalText = text.replace(/\r\n?/gu, "\n");
+  const contentStart = canonicalText.search(/\S/u);
+  if (contentStart === -1) {
     return "";
   }
-
-  const looseBlocks = normalizedText
-    .split(/\n{2,}/u)
-    .map((block) => block.trim())
-    .filter((block) => block.length > 0);
-  const lineBlocks = normalizedText
-    .split(/\n+/u)
-    .map((block) => block.trim())
-    .filter((block) => block.length > 0);
-  const blocks = looseBlocks.length > 1 ? looseBlocks : lineBlocks;
-  const sentenceUnits = blocks.flatMap((block, blockIndex) =>
-    splitPreviewSentences(block).map((sentence) => ({
-      blockIndex,
-      text: sentence,
-    })),
+  const contentEnd = canonicalText.trimEnd().length;
+  const sentenceUnits = collectPreviewSentenceRanges(
+    canonicalText,
+    contentStart,
+    contentEnd,
   );
   if (sentenceUnits.length === 0) {
     return "";
   }
 
-  const selectedUnits: PreviewSentence[] = [];
+  const selectedUnits: PreviewSentenceRange[] = [];
   let selectedCharacterCount = 0;
   for (let index = sentenceUnits.length - 1; index >= 0; index -= 1) {
     const unit = sentenceUnits[index];
@@ -125,13 +103,20 @@ export function getPreviousEpisodeFlowPreviewText(
       continue;
     }
     selectedUnits.unshift(unit);
-    selectedCharacterCount += unit.text.length;
+    selectedCharacterCount += unit.to - unit.from;
     if (selectedCharacterCount >= targetCharacters) {
       break;
     }
   }
 
-  return joinPreviewSentences(selectedUnits);
+  const first = selectedUnits[0];
+  const last = selectedUnits.at(-1);
+  if (first === undefined || last === undefined) {
+    return "";
+  }
+  const selectedStart = first.from === contentStart ? 0 : first.from;
+  const selectedEnd = last.to === contentEnd ? canonicalText.length : last.to;
+  return canonicalText.slice(selectedStart, selectedEnd);
 }
 
 export function derivePreviousEpisodeFlowPreview(

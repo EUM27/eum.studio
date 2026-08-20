@@ -45,15 +45,6 @@ export type WorkRecordsGoalProgress = {
   readonly weeklyCharacters: WorkRecordsGoalProgressValue;
 };
 
-function recordedPomodoroWorkDurationMs(
-  cycle: WorkActivityProjection["focusCycles"][number],
-): number {
-  if (cycle.phaseRef !== "work") return 0;
-  if (cycle.state === "completed") return cycle.targetDurationMs;
-  if (cycle.state !== "stopped" || cycle.remainingDurationMs === null) return 0;
-  return Math.max(0, cycle.targetDurationMs - cycle.remainingDurationMs);
-}
-
 function readRecord(value: unknown, label: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error(`${label} must be an object`);
@@ -214,6 +205,7 @@ export function deriveWorkRecordsGoalProgress(input: {
   readonly workId: EntityId<"Work">;
   readonly activity: WorkActivityProjection;
   readonly settings: WorkRecordsGoalsProjection;
+  readonly nowMs?: number;
   readonly calendar: {
     readonly today: string;
     readonly weekStart: string;
@@ -247,9 +239,23 @@ export function deriveWorkRecordsGoalProgress(input: {
       throw new Error(`WritingSession ${session.sessionId} calendar date is invalid`);
     }
     if (date >= input.calendar.weekStart && date <= input.calendar.today) {
+      weeklyFocusDurationMs +=
+        session.state === "active" && Number.isFinite(input.nowMs)
+          ? Math.max(
+              session.activeDurationMs,
+              (input.nowMs as number) - Date.parse(session.startedAt),
+            )
+          : session.activeDurationMs;
       weeklyCharacters += session.characterDelta ?? 0;
     }
     if (date === input.calendar.today) {
+      dailyFocusDurationMs +=
+        session.state === "active" && Number.isFinite(input.nowMs)
+          ? Math.max(
+              session.activeDurationMs,
+              (input.nowMs as number) - Date.parse(session.startedAt),
+            )
+          : session.activeDurationMs;
       dailyCharacters += session.characterDelta ?? 0;
     }
   }
@@ -257,18 +263,6 @@ export function deriveWorkRecordsGoalProgress(input: {
   for (const cycle of input.activity.focusCycles) {
     if (cycle.workId !== input.workId) {
       throw new Error(`FocusCycle ${cycle.focusCycleId} is outside Work`);
-    }
-    const durationMs = recordedPomodoroWorkDurationMs(cycle);
-    if (durationMs === 0) continue;
-    const date = input.calendar.dateKey(cycle.completedAt ?? cycle.startedAt);
-    if (!DATE_KEY_PATTERN.test(date)) {
-      throw new Error(`FocusCycle ${cycle.focusCycleId} calendar date is invalid`);
-    }
-    if (date >= input.calendar.weekStart && date <= input.calendar.today) {
-      weeklyFocusDurationMs += durationMs;
-    }
-    if (date === input.calendar.today) {
-      dailyFocusDurationMs += durationMs;
     }
   }
 

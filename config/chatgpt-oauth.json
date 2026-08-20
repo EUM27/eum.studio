@@ -1,5 +1,6 @@
 {
   "schemaVersion": 1,
+  "providerId": "openai-chatgpt-oauth",
   "displayName": "GPT",
   "issuer": "https://auth.openai.com",
   "clientId": "app_EMoamEEZ73f0CkXaXp7hrann",
@@ -26,5 +27,11 @@
       "start": 1455,
       "end": 1475
     }
+  },
+  "upstream": {
+    "baseUrl": "https://chatgpt.com/backend-api/codex",
+    "originator": "codex_cli_rs",
+    "clientVersion": "0.147.0",
+    "model": "gpt-5.4"
   }
 }

@@ -1137,6 +1137,36 @@ select {
   box-shadow: inset 0 -1px 0 #9b88b3;
 }
 
+.manuscript-editor .cm-scene-boundary-preview {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(1.1rem, 1fr) auto minmax(1.1rem, 1fr);
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.65rem 0;
+  color: #756c7f;
+  font-family: var(--eum-ui-font);
+  font-size: 0.62rem;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.manuscript-editor .cm-scene-boundary-preview-line {
+  height: 1px;
+  background: repeating-linear-gradient(
+    90deg,
+    #c8bfce 0,
+    #c8bfce 0.3rem,
+    transparent 0.3rem,
+    transparent 0.55rem
+  );
+}
+
+.manuscript-editor .cm-scene-boundary-preview strong {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .lore-cue-tooltip {
   position: fixed;
   z-index: 80;

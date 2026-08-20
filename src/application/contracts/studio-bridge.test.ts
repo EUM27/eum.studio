@@ -11,6 +11,7 @@ import {
   ACTIVITY_PAUSE_POMODORO_CHANNEL,
   ACTIVITY_RESUME_POMODORO_CHANNEL,
   ACTIVITY_RECONCILE_POMODORO_CHANNEL,
+  ACTIVITY_UPDATE_POMODORO_NOTE_CHANNEL,
   ACTIVITY_STOP_POMODORO_CHANNEL,
   ACTIVITY_SAVE_RECORDS_GOALS_CHANNEL,
   ACTIVITY_SAVE_READTHROUGH_CHANNEL,
@@ -36,8 +37,17 @@ import {
   BACKUP_CREATE_CHANNEL,
   BACKUP_GET_STATUS_CHANNEL,
   BACKUP_RESTORE_CHANNEL,
+  CHARACTER_ADD_EVIDENCE_CHANNEL,
   CHARACTER_CREATE_CHANNEL,
+  CHARACTER_EXTRACTION_LIST_CHANNEL,
+  CHARACTER_EXTRACTION_RUN_CHANNEL,
+  CHARACTER_GENERATION_LIST_CHANNEL,
+  CHARACTER_GENERATION_RUN_CHANNEL,
   CHARACTER_LIST_CHANNEL,
+  CHARACTER_RELATION_CREATE_CHANNEL,
+  CHARACTER_RELATION_LIST_CHANNEL,
+  CHARACTER_RELATION_RETIRE_CHANNEL,
+  CHARACTER_RELATION_UPDATE_CHANNEL,
   CHARACTER_RETIRE_CHANNEL,
   CHARACTER_UPDATE_CHANNEL,
   LORE_ENTRY_ADD_EVIDENCE_CHANNEL,
@@ -123,6 +133,7 @@ import {
   MANUSCRIPT_GET_CONTINUOUS_READING_PROGRESS_CHANNEL,
   MANUSCRIPT_INPUT_PROFILE_CHANNEL,
   MANUSCRIPT_EXPORT_TEXT_CHANNEL,
+  MANUSCRIPT_SELECT_TEXT_IMPORT_CHANNEL,
   MANUSCRIPT_PREFLIGHT_GET_SETTINGS_CHANNEL,
   MANUSCRIPT_PREFLIGHT_PROFILE_CHANNEL,
   MANUSCRIPT_PREFLIGHT_SAVE_SETTINGS_CHANNEL,
@@ -155,6 +166,9 @@ import {
   STRUCTURE_REPLACE_EVENT_SOURCE_CHANNEL,
   STRUCTURE_RETIRE_EVENT_SOURCE_CHANNEL,
   STRUCTURE_SET_SCENE_EVENT_OVERRIDE_CHANNEL,
+  STRUCTURE_RUN_SCENE_EXTRACTION_CHANNEL,
+  STRUCTURE_LIST_SCENE_EXTRACTION_CANDIDATES_CHANNEL,
+  STRUCTURE_LIST_SCENE_ANNOTATIONS_CHANNEL,
   STRUCTURE_UPDATE_SCENE_RULE_SET_CHANNEL,
   VERSION_CREATE_WORK_SNAPSHOT_CHANNEL,
   VERSION_COMPARE_WORK_SNAPSHOT_CHANNEL,
@@ -210,7 +224,9 @@ describe("studio bridge contract", () => {
     const status = {
       schemaVersion: 1 as const,
       revision: 1,
+      providerId: "runtime-chatgpt",
       displayName: "GPT",
+      modelId: "runtime-model",
       connected: true,
       email: "writer@example.com",
       planType: "plus",
@@ -848,9 +864,10 @@ describe("studio bridge contract", () => {
     expect(command).not.toHaveProperty("filePath");
   });
 
-  it("uses only typed preflight profile, Work settings, and text export channels", async () => {
+  it("uses only typed preflight, text export, and text import channels", async () => {
     const workId = entityId<"Work">(randomUUID());
     const documentId = entityId<"Document">(randomUUID());
+    const documentRevisionId = entityId<"DocumentRevision">(randomUUID());
     const profile = parseManuscriptPreflightProfile({
       schemaVersion: 1,
       defaults: {
@@ -884,6 +901,16 @@ describe("studio bridge contract", () => {
       status: "completed" as const,
       byteLength: Buffer.byteLength("승인 원문", "utf8"),
     };
+    const importResult = {
+      schemaVersion: 1 as const,
+      status: "selected" as const,
+      workId,
+      documentId,
+      documentRevisionId,
+      fileName: "가져온 원고.txt",
+      text: "가져온 원고",
+      byteLength: Buffer.byteLength("가져온 원고", "utf8"),
+    };
     const invoke = vi.fn(async (channel: string) => {
       if (channel === MANUSCRIPT_PREFLIGHT_PROFILE_CHANNEL) {
         return profile;
@@ -896,6 +923,9 @@ describe("studio bridge contract", () => {
       }
       if (channel === MANUSCRIPT_EXPORT_TEXT_CHANNEL) {
         return exportResult;
+      }
+      if (channel === MANUSCRIPT_SELECT_TEXT_IMPORT_CHANNEL) {
+        return importResult;
       }
       throw new Error(`Unexpected channel: ${channel}`);
     });
@@ -926,11 +956,20 @@ describe("studio bridge contract", () => {
         text: "승인 원문",
       }),
     ).resolves.toEqual(exportResult);
+    await expect(
+      bridge.editor.selectManuscriptTextImport({
+        schemaVersion: 1,
+        workId,
+        documentId,
+        documentRevisionId,
+      }),
+    ).resolves.toEqual(importResult);
     expect(invoke.mock.calls.map(([channel]) => channel)).toEqual([
       MANUSCRIPT_PREFLIGHT_PROFILE_CHANNEL,
       MANUSCRIPT_PREFLIGHT_GET_SETTINGS_CHANNEL,
       MANUSCRIPT_PREFLIGHT_SAVE_SETTINGS_CHANNEL,
       MANUSCRIPT_EXPORT_TEXT_CHANNEL,
+      MANUSCRIPT_SELECT_TEXT_IMPORT_CHANNEL,
     ]);
   });
 
@@ -1867,6 +1906,59 @@ describe("studio bridge contract", () => {
     );
   });
 
+  it("exposes exact scene extraction requests and Candidate lists on narrow channels", async () => {
+    const workId = entityId<"Work">(randomUUID());
+    const documentId = entityId<"Document">(randomUUID());
+    const documentRevisionId = entityId<"DocumentRevision">(randomUUID());
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === STRUCTURE_LIST_SCENE_EXTRACTION_CANDIDATES_CHANNEL) {
+        return { schemaVersion: 1, workId, candidates: [] };
+      }
+      if (channel === STRUCTURE_LIST_SCENE_ANNOTATIONS_CHANNEL) {
+        return { schemaVersion: 1, workId, annotations: [] };
+      }
+      return { schemaVersion: 1, status: "login-required" };
+    });
+    const bridge = createStudioBridge(invoke);
+    const command = {
+      schemaVersion: 1,
+      requestId: entityId<"SceneExtractionRequest">(randomUUID()),
+      workId,
+      conversationId: entityId<"AssistantConversation">(randomUUID()),
+      sourceRange: {
+        documentId,
+        documentRevisionId,
+        from: 3,
+        to: 19,
+      },
+    } as const;
+
+    await expect(bridge.structure.runSceneExtraction(command)).resolves.toEqual({
+      schemaVersion: 1,
+      status: "login-required",
+    });
+    await expect(bridge.structure.listSceneExtractionCandidates({
+      schemaVersion: 1,
+      workId,
+    })).resolves.toEqual({ schemaVersion: 1, workId, candidates: [] });
+    await expect(bridge.structure.listSceneAnnotations({
+      schemaVersion: 1,
+      workId,
+    })).resolves.toEqual({ schemaVersion: 1, workId, annotations: [] });
+    expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_RUN_SCENE_EXTRACTION_CHANNEL,
+      command,
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_LIST_SCENE_EXTRACTION_CANDIDATES_CHANNEL,
+      { schemaVersion: 1, workId },
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_LIST_SCENE_ANNOTATIONS_CHANNEL,
+      { schemaVersion: 1, workId },
+    );
+  });
+
   it("exposes fragment profile and exact Work-scoped shelf commands on narrow channels", async () => {
     const workId = entityId<"Work">(randomUUID());
     const documentId = entityId<"Document">(randomUUID());
@@ -2023,6 +2115,8 @@ describe("studio bridge contract", () => {
   it("exposes exact Work-scoped character commands on narrow channels", async () => {
     const workId = entityId<"Work">(randomUUID());
     const characterId = entityId<"Character">(randomUUID());
+    const otherCharacterId = entityId<"Character">(randomUUID());
+    const relationId = entityId<"CharacterRelation">(randomUUID());
     const now = new Date().toISOString();
     const character = {
       schemaVersion: 1,
@@ -2030,9 +2124,16 @@ describe("studio bridge contract", () => {
       revision: 1,
       workId,
       name: "윤서",
+      aliases: [],
       role: "",
       summary: "",
+      appearance: "",
+      personality: "",
+      speech: "",
+      goal: "",
+      conflict: "",
       note: "",
+      evidences: [],
       createdAt: now,
       updatedAt: now,
       retiredAt: null,
@@ -2045,9 +2146,53 @@ describe("studio bridge contract", () => {
       updatedAt: now,
     } as const;
     const retired = { ...updated, revision: 3, retiredAt: now } as const;
+    const relation = {
+      schemaVersion: 1,
+      relationId,
+      revision: 1,
+      workId,
+      fromCharacterId: characterId,
+      toCharacterId: otherCharacterId,
+      kind: "동료",
+      description: "",
+      createdAt: now,
+      updatedAt: now,
+      retiredAt: null,
+      retirementReason: null,
+    } as const;
+    const updatedRelation = {
+      ...relation,
+      revision: 2,
+      description: "서로를 신뢰한다.",
+    } as const;
+    const retiredRelation = {
+      ...updatedRelation,
+      revision: 3,
+      retiredAt: now,
+      retirementReason: "user",
+    } as const;
     const invoke = vi.fn(async (channel: string) => {
       if (channel === CHARACTER_LIST_CHANNEL) return list;
+      if (channel === CHARACTER_RELATION_LIST_CHANNEL) {
+        return { schemaVersion: 1, workId, relations: [relation] };
+      }
+      if (channel === CHARACTER_RELATION_UPDATE_CHANNEL) return updatedRelation;
+      if (channel === CHARACTER_RELATION_RETIRE_CHANNEL) return retiredRelation;
+      if (channel === CHARACTER_RELATION_CREATE_CHANNEL) return relation;
+      if (channel === CHARACTER_EXTRACTION_LIST_CHANNEL) {
+        return { schemaVersion: 1, workId, candidates: [] };
+      }
+      if (channel === CHARACTER_EXTRACTION_RUN_CHANNEL) {
+        return { schemaVersion: 1, status: "login-required" };
+      }
+      if (channel === CHARACTER_GENERATION_LIST_CHANNEL) {
+        return { schemaVersion: 1, workId, candidates: [] };
+      }
+      if (channel === CHARACTER_GENERATION_RUN_CHANNEL) {
+        return { schemaVersion: 1, status: "login-required" };
+      }
       if (channel === CHARACTER_UPDATE_CHANNEL) return updated;
+      if (channel === CHARACTER_ADD_EVIDENCE_CHANNEL) return updated;
       if (channel === CHARACTER_RETIRE_CHANNEL) return retired;
       return character;
     });
@@ -2056,8 +2201,14 @@ describe("studio bridge contract", () => {
       schemaVersion: 1,
       workId,
       name: "윤서",
+      aliases: [],
       role: "",
       summary: "",
+      appearance: "",
+      personality: "",
+      speech: "",
+      goal: "",
+      conflict: "",
       note: "",
     } as const;
     const update = {
@@ -2073,19 +2224,127 @@ describe("studio bridge contract", () => {
       characterId,
       expectedRevision: 2,
     } as const;
+    const addEvidence = {
+      schemaVersion: 1,
+      workId,
+      characterId,
+      expectedRevision: 1,
+      documentId: entityId<"Document">(randomUUID()),
+      documentRevisionId: entityId<"DocumentRevision">(randomUUID()),
+      selection: { anchor: 2, head: 5 },
+    } as const;
+    const runExtraction = {
+      schemaVersion: 1,
+      requestId: entityId<"CharacterExtractionRequest">(randomUUID()),
+      workId,
+      conversationId: entityId<"AssistantConversation">(randomUUID()),
+      sourceRange: {
+        documentId: addEvidence.documentId,
+        documentRevisionId: addEvidence.documentRevisionId,
+        from: 2,
+        to: 5,
+      },
+    } as const;
+    const runGeneration = {
+      schemaVersion: 1,
+      requestId: entityId<"CharacterGenerationRequest">(randomUUID()),
+      workId,
+      brief: {
+        role: "탐정",
+        personality: "집요함",
+        relationships: "기록자와 협력",
+        genre: "미스터리",
+      },
+    } as const;
+    const createRelation = {
+      schemaVersion: 1,
+      workId,
+      fromCharacterId: characterId,
+      toCharacterId: otherCharacterId,
+      kind: "동료",
+      description: "",
+    } as const;
+    const updateRelation = {
+      schemaVersion: 1,
+      workId,
+      relationId,
+      expectedRevision: 1,
+      changes: { description: "서로를 신뢰한다." },
+    } as const;
+    const retireRelation = {
+      schemaVersion: 1,
+      workId,
+      relationId,
+      expectedRevision: 2,
+    } as const;
 
     await expect(bridge.characters.create(create)).resolves.toEqual(character);
     await expect(bridge.characters.list({ schemaVersion: 1, workId }))
       .resolves.toEqual(list);
     await expect(bridge.characters.update(update)).resolves.toEqual(updated);
+    await expect(bridge.characters.addEvidence(addEvidence)).resolves.toEqual(
+      updated,
+    );
     await expect(bridge.characters.retire(retire)).resolves.toEqual(retired);
+    await expect(bridge.characters.createRelation(createRelation)).resolves
+      .toEqual(relation);
+    await expect(bridge.characters.listRelations({ schemaVersion: 1, workId }))
+      .resolves.toEqual({ schemaVersion: 1, workId, relations: [relation] });
+    await expect(bridge.characters.updateRelation(updateRelation)).resolves
+      .toEqual(updatedRelation);
+    await expect(bridge.characters.retireRelation(retireRelation)).resolves
+      .toEqual(retiredRelation);
+    await expect(bridge.characters.runExtraction(runExtraction)).resolves.toEqual({
+      schemaVersion: 1,
+      status: "login-required",
+    });
+    await expect(bridge.characters.listExtractionCandidates({
+      schemaVersion: 1,
+      workId,
+    })).resolves.toEqual({ schemaVersion: 1, workId, candidates: [] });
+    await expect(bridge.characters.runGeneration(runGeneration)).resolves.toEqual({
+      schemaVersion: 1,
+      status: "login-required",
+    });
+    await expect(bridge.characters.listGenerationCandidates({
+      schemaVersion: 1,
+      workId,
+    })).resolves.toEqual({ schemaVersion: 1, workId, candidates: [] });
     expect(invoke).toHaveBeenCalledWith(CHARACTER_CREATE_CHANNEL, create);
     expect(invoke).toHaveBeenCalledWith(CHARACTER_LIST_CHANNEL, {
       schemaVersion: 1,
       workId,
     });
     expect(invoke).toHaveBeenCalledWith(CHARACTER_UPDATE_CHANNEL, update);
+    expect(invoke).toHaveBeenCalledWith(
+      CHARACTER_ADD_EVIDENCE_CHANNEL,
+      addEvidence,
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      CHARACTER_EXTRACTION_RUN_CHANNEL,
+      runExtraction,
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      CHARACTER_GENERATION_RUN_CHANNEL,
+      runGeneration,
+    );
     expect(invoke).toHaveBeenCalledWith(CHARACTER_RETIRE_CHANNEL, retire);
+    expect(invoke).toHaveBeenCalledWith(
+      CHARACTER_RELATION_CREATE_CHANNEL,
+      createRelation,
+    );
+    expect(invoke).toHaveBeenCalledWith(CHARACTER_RELATION_LIST_CHANNEL, {
+      schemaVersion: 1,
+      workId,
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      CHARACTER_RELATION_UPDATE_CHANNEL,
+      updateRelation,
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      CHARACTER_RELATION_RETIRE_CHANNEL,
+      retireRelation,
+    );
   });
 
   it("exposes exact Work-scoped lore commands on narrow channels", async () => {
@@ -3786,6 +4045,7 @@ describe("studio bridge contract", () => {
       note: "첫 주기",
     } as const;
     const phase = { schemaVersion: 1, workId, focusCycleId } as const;
+    const note = { ...phase, note: "장면 전환 확인" } as const;
 
     await expect(bridge.activity.getPomodoro(get)).resolves.toEqual(projection);
     await expect(
@@ -3794,6 +4054,7 @@ describe("studio bridge contract", () => {
     await expect(bridge.activity.pausePomodoro(phase)).resolves.toEqual(projection);
     await expect(bridge.activity.resumePomodoro(phase)).resolves.toEqual(projection);
     await expect(bridge.activity.reconcilePomodoro(phase)).resolves.toEqual(projection);
+    await expect(bridge.activity.updatePomodoroNote(note)).resolves.toEqual(projection);
     await expect(bridge.activity.stopPomodoro(phase)).resolves.toEqual(projection);
 
     expect(invoke).toHaveBeenCalledWith(ACTIVITY_GET_POMODORO_CHANNEL, get);
@@ -3804,6 +4065,7 @@ describe("studio bridge contract", () => {
     expect(invoke).toHaveBeenCalledWith(ACTIVITY_PAUSE_POMODORO_CHANNEL, phase);
     expect(invoke).toHaveBeenCalledWith(ACTIVITY_RESUME_POMODORO_CHANNEL, phase);
     expect(invoke).toHaveBeenCalledWith(ACTIVITY_RECONCILE_POMODORO_CHANNEL, phase);
+    expect(invoke).toHaveBeenCalledWith(ACTIVITY_UPDATE_POMODORO_NOTE_CHANNEL, note);
     expect(invoke).toHaveBeenCalledWith(ACTIVITY_STOP_POMODORO_CHANNEL, phase);
   });
 

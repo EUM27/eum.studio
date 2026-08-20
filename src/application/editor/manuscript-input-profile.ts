@@ -1,6 +1,15 @@
 export type ManuscriptAutoClosePair = {
+  readonly trigger?: string;
   readonly open: string;
   readonly close: string;
+};
+
+export type ManuscriptEvolutionCycle = {
+  readonly trigger: string;
+  readonly pairs: readonly Readonly<{
+    open: string;
+    close: string;
+  }>[];
 };
 
 export type ManuscriptTextReplacement = {
@@ -11,6 +20,7 @@ export type ManuscriptTextReplacement = {
 export type ManuscriptInputProfile = {
   readonly schemaVersion: 1;
   readonly autoClosePairs: readonly ManuscriptAutoClosePair[];
+  readonly evolutionCycles?: readonly ManuscriptEvolutionCycle[];
   readonly textReplacements: readonly ManuscriptTextReplacement[];
 };
 
@@ -40,18 +50,55 @@ function readAutoClosePairs(value: unknown): readonly ManuscriptAutoClosePair[] 
   const openingTokens = new Set<string>();
   const pairs = value.map((item, index) => {
     const record = readRecord(item, `autoClosePairs[${index}]`);
+    const open = readNonEmptyString(record, "open");
+    const trigger = record.trigger === undefined
+      ? undefined
+      : readNonEmptyString(record, "trigger");
     const pair = Object.freeze({
-      open: readNonEmptyString(record, "open"),
+      ...(trigger === undefined ? {} : { trigger }),
+      open,
       close: readNonEmptyString(record, "close"),
     });
-    if (openingTokens.has(pair.open)) {
+    const openingToken = trigger ?? open;
+    if (openingTokens.has(openingToken)) {
       throw new Error("autoClosePairs contains an ambiguous opening token");
     }
-    openingTokens.add(pair.open);
+    openingTokens.add(openingToken);
     return pair;
   });
 
   return Object.freeze(pairs);
+}
+
+function readEvolutionCycles(
+  value: unknown,
+): readonly ManuscriptEvolutionCycle[] {
+  if (!Array.isArray(value)) {
+    throw new Error("evolutionCycles must be an array");
+  }
+  const triggers = new Set<string>();
+  return Object.freeze(value.map((item, index) => {
+    const record = readRecord(item, `evolutionCycles[${index}]`);
+    const trigger = readNonEmptyString(record, "trigger");
+    if (triggers.has(trigger)) {
+      throw new Error("evolutionCycles contains an ambiguous trigger");
+    }
+    triggers.add(trigger);
+    if (!Array.isArray(record.pairs) || record.pairs.length === 0) {
+      throw new Error(`evolutionCycles[${index}].pairs must be a non-empty array`);
+    }
+    const pairs = record.pairs.map((pairValue, pairIndex) => {
+      const pair = readRecord(
+        pairValue,
+        `evolutionCycles[${index}].pairs[${pairIndex}]`,
+      );
+      return Object.freeze({
+        open: readNonEmptyString(pair, "open"),
+        close: readNonEmptyString(pair, "close"),
+      });
+    });
+    return Object.freeze({ trigger, pairs: Object.freeze(pairs) });
+  }));
 }
 
 function readTextReplacements(
@@ -86,9 +133,13 @@ export function parseManuscriptInputProfile(
     throw new Error("schemaVersion must be 1");
   }
 
+  const evolutionCycles = record.evolutionCycles === undefined
+    ? undefined
+    : readEvolutionCycles(record.evolutionCycles);
   return Object.freeze({
     schemaVersion: 1,
     autoClosePairs: readAutoClosePairs(record.autoClosePairs),
+    ...(evolutionCycles === undefined ? {} : { evolutionCycles }),
     textReplacements: readTextReplacements(record.textReplacements),
   });
 }

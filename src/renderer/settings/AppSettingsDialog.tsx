@@ -209,6 +209,7 @@ export function AppSettingsDialog({
                   </button>
                 )}
               </div>
+              <p>저장된 API 키로 음악을 검색하고 내장 YouTube 플레이어에서 재생합니다.</p>
               </div>
 
               {musicProfile !== null && workMusicSettings !== null && (

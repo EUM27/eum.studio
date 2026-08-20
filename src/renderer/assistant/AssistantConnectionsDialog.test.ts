@@ -9,6 +9,33 @@ import {
 } from "./AssistantConnectionsDialog";
 
 describe("AssistantConnectionsDialog", () => {
+  it("shows a distinct empty editor until the user starts a new connection", () => {
+    const markup = renderToStaticMarkup(createElement(
+      AssistantConnectionsDialog,
+      {
+        actionState: "idle",
+        connections: [],
+        connectorProfile: {
+          schemaVersion: 1,
+          connectors: [{
+            connectorKind: "eum-structured-json-v1",
+            displayName: "사용자 지정 구조화 JSON",
+            capabilities: ["vocabulary-lookup"],
+            credentialPolicy: "optional",
+            runtimeConfig: { endpoint: "required", model: "required" },
+          }],
+        },
+        error: null,
+        onClose: () => undefined,
+        onDelete: () => undefined,
+        onSave: () => undefined,
+      },
+    ));
+
+    expect(markup).toContain("연결을 선택하거나 새로 만드세요");
+    expect(markup).not.toContain('aria-label="연결 종류"');
+  });
+
   it("shows only user-defined connection metadata and credential status", () => {
     const secret = "must-not-render";
     const markup = renderToStaticMarkup(

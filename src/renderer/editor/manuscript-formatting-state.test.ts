@@ -13,6 +13,7 @@ import {
   readManuscriptEditorDocumentState,
   setManuscriptContentWidthEffect,
   setManuscriptFontFamilyEffect,
+  setManuscriptFontSizeEffect,
   setManuscriptHighlightColorEffect,
   setManuscriptLetterSpacingEffect,
   setManuscriptLineHeightEffect,
@@ -20,6 +21,8 @@ import {
   setManuscriptParagraphSpacingEffect,
   setManuscriptTextColorEffect,
   toggleManuscriptStyleEffect,
+  transactionChangesManuscriptDocumentFormatting,
+  transactionChangesManuscriptLayoutSettings,
 } from "./manuscript-formatting-state";
 
 function profile() {
@@ -52,11 +55,15 @@ function createState() {
 }
 
 describe("manuscript formatting state", () => {
-  it("applies font and emphasis to the exact selected characters", () => {
+  it("applies the font to the manuscript body and keeps emphasis on the exact selection", () => {
     const { formattingProfile, state } = createState();
     const fontFamilyId = formattingProfile.fontFamilies[1]?.id;
     if (fontFamilyId === undefined) {
       throw new Error("The test formatting profile needs a second font");
+    }
+    const fontSizePx = formattingProfile.fontSizesPx.at(-2);
+    if (fontSizePx === undefined) {
+      throw new Error("The test formatting profile needs another font size");
     }
 
     const next = state.update({
@@ -65,12 +72,16 @@ describe("manuscript formatting state", () => {
         toggleManuscriptStyleEffect.of("italic"),
         toggleManuscriptStyleEffect.of("underline"),
         setManuscriptFontFamilyEffect.of(fontFamilyId),
+        setManuscriptFontSizeEffect.of(fontSizePx),
         setManuscriptTextColorEffect.of("#7d2f2f"),
         setManuscriptHighlightColorEffect.of("#fff0a8"),
       ],
     }).state;
 
-    expect(readManuscriptEditorDocumentState(next).ranges).toEqual([
+    const documentState = readManuscriptEditorDocumentState(next);
+    expect(documentState.fontFamilyId).toBe(fontFamilyId);
+    expect(documentState.fontSizePx).toBe(fontSizePx);
+    expect(documentState.ranges).toEqual([
       {
         from: 1,
         to: 4,
@@ -78,7 +89,6 @@ describe("manuscript formatting state", () => {
           bold: true,
           italic: true,
           underline: true,
-          fontFamilyId,
           textColor: "#7d2f2f",
           highlightColor: "#fff0a8",
         },
@@ -144,5 +154,28 @@ describe("manuscript formatting state", () => {
       paragraphAlignments: [{ at: 0, alignment: "center" }],
       ranges: [{ from: 1, to: 4, style: { bold: true } }],
     });
+  });
+
+  it("separates Work layout changes from document-owned formatting changes", () => {
+    const { formattingProfile, state } = createState();
+    const layoutTransaction = state.update({
+      effects: setManuscriptContentWidthEffect.of(
+        formattingProfile.defaults.contentWidthPx +
+          formattingProfile.contentWidthRangePx.step,
+      ),
+    });
+    expect(transactionChangesManuscriptLayoutSettings(layoutTransaction))
+      .toBe(true);
+    expect(transactionChangesManuscriptDocumentFormatting(layoutTransaction))
+      .toBe(false);
+
+    const documentTransaction = state.update({
+      effects: setManuscriptParagraphAlignmentEffect.of("center"),
+    });
+    expect(transactionChangesManuscriptLayoutSettings(documentTransaction))
+      .toBe(false);
+    expect(
+      transactionChangesManuscriptDocumentFormatting(documentTransaction),
+    ).toBe(true);
   });
 });

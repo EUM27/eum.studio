@@ -254,7 +254,30 @@ CREATE TABLE IF NOT EXISTS app_settings (
   updated_at TEXT NOT NULL
 ) STRICT;
 
+CREATE TABLE IF NOT EXISTS work_manuscript_layout_settings (
+  work_id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  settings_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+) STRICT;
+
 CREATE TABLE IF NOT EXISTS work_music_settings (
+  work_id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  settings_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+    DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS work_inspiration_settings (
   work_id TEXT PRIMARY KEY,
   schema_version INTEGER NOT NULL CHECK (schema_version = 1),
   revision INTEGER NOT NULL CHECK (revision > 0),
@@ -347,7 +370,9 @@ CREATE TABLE IF NOT EXISTS assistant_context_permission_grants (
   work_id TEXT NOT NULL,
   conversation_id TEXT,
   capability TEXT NOT NULL
-    CHECK (capability IN ('vocabulary-lookup', 'lore-review')),
+    CHECK (capability IN (
+      'vocabulary-lookup', 'lore-review', 'character.extract', 'scene.extract'
+    )),
   destination_id TEXT NOT NULL,
   local_scope TEXT NOT NULL
     CHECK (local_scope IN ('none', 'selection', 'paragraph', 'scene', 'chapter', 'work')),
@@ -377,7 +402,9 @@ CREATE TABLE IF NOT EXISTS assistant_context_receipts (
   work_id TEXT NOT NULL,
   conversation_id TEXT NOT NULL,
   capability TEXT NOT NULL
-    CHECK (capability IN ('vocabulary-lookup', 'lore-review')),
+    CHECK (capability IN (
+      'vocabulary-lookup', 'lore-review', 'character.extract', 'scene.extract'
+    )),
   destination_id TEXT NOT NULL,
   read_ranges_json TEXT NOT NULL,
   transmitted_ranges_json TEXT NOT NULL,
@@ -1042,8 +1069,14 @@ CREATE TABLE IF NOT EXISTS characters (
   retired_at TEXT,
   work_id TEXT NOT NULL,
   name TEXT NOT NULL,
+  aliases_json TEXT NOT NULL,
   role TEXT NOT NULL,
   summary TEXT NOT NULL,
+  appearance TEXT NOT NULL,
+  personality TEXT NOT NULL,
+  speech TEXT NOT NULL,
+  goal TEXT NOT NULL,
+  conflict TEXT NOT NULL,
   note TEXT NOT NULL,
   UNIQUE (work_id, id),
   FOREIGN KEY (work_id)
@@ -1051,6 +1084,272 @@ CREATE TABLE IF NOT EXISTS characters (
     ON DELETE RESTRICT
     DEFERRABLE INITIALLY DEFERRED
 ) STRICT;
+
+CREATE TABLE IF NOT EXISTS character_evidence (
+  id TEXT PRIMARY KEY,
+  work_id TEXT NOT NULL,
+  character_id TEXT NOT NULL,
+  source_document_id TEXT NOT NULL,
+  source_anchor_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (work_id, character_id, source_anchor_id),
+  FOREIGN KEY (work_id, character_id)
+    REFERENCES characters (work_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, source_document_id, source_anchor_id)
+    REFERENCES anchors (work_id, document_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS character_relations (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  retirement_reason TEXT CHECK (
+    retirement_reason IN ('user', 'character-retired')
+  ),
+  work_id TEXT NOT NULL,
+  from_character_id TEXT NOT NULL,
+  to_character_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  description TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  CHECK ((retired_at IS NULL) = (retirement_reason IS NULL)),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, from_character_id)
+    REFERENCES characters (work_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, to_character_id)
+    REFERENCES characters (work_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS character_relations_work_active_idx
+  ON character_relations (
+    work_id,
+    from_character_id,
+    to_character_id,
+    retired_at
+  );
+
+CREATE TABLE IF NOT EXISTS assistant_character_extraction_candidates (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  request_id TEXT NOT NULL UNIQUE,
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  work_id TEXT NOT NULL,
+  source_document_id TEXT NOT NULL,
+  source_document_revision_id TEXT NOT NULL,
+  source_from INTEGER NOT NULL CHECK (source_from >= 0),
+  source_to INTEGER NOT NULL CHECK (source_to > source_from),
+  provider_id TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  prompt_version TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('ready', 'stale', 'completed')),
+  items_json TEXT NOT NULL,
+  context_receipt_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, source_document_id)
+    REFERENCES documents (work_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, context_receipt_id)
+    REFERENCES assistant_context_receipts (work_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS assistant_character_extraction_work_status_idx
+  ON assistant_character_extraction_candidates (work_id, status, updated_at);
+
+CREATE TABLE IF NOT EXISTS assistant_character_generation_candidates (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  request_id TEXT NOT NULL UNIQUE,
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  work_id TEXT NOT NULL,
+  brief_json TEXT NOT NULL,
+  provider_id TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  prompt_version TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('ready', 'completed')),
+  items_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS assistant_character_generation_work_status_idx
+  ON assistant_character_generation_candidates (work_id, status, updated_at);
+
+CREATE TABLE IF NOT EXISTS assistant_scene_extraction_candidates (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  request_id TEXT NOT NULL UNIQUE,
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  work_id TEXT NOT NULL,
+  source_document_id TEXT NOT NULL,
+  source_document_revision_id TEXT NOT NULL,
+  source_from INTEGER NOT NULL CHECK (source_from >= 0),
+  source_to INTEGER NOT NULL CHECK (source_to > source_from),
+  provider_id TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  prompt_version TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('ready', 'stale', 'completed')),
+  scenes_json TEXT NOT NULL,
+  boundaries_json TEXT NOT NULL,
+  context_receipt_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, source_document_id)
+    REFERENCES documents (work_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, context_receipt_id)
+    REFERENCES assistant_context_receipts (work_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS assistant_scene_extraction_work_status_idx
+  ON assistant_scene_extraction_candidates (work_id, status, updated_at);
+
+CREATE TABLE IF NOT EXISTS scene_annotations (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  work_id TEXT NOT NULL,
+  scene_key TEXT NOT NULL,
+  document_id TEXT NOT NULL,
+  document_revision_id TEXT NOT NULL,
+  source_candidate_id TEXT NOT NULL,
+  source_scene_item_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  pov_character_id TEXT,
+  location TEXT NOT NULL,
+  time TEXT NOT NULL,
+  character_ids_json TEXT NOT NULL,
+  goal TEXT NOT NULL,
+  conflict TEXT NOT NULL,
+  outcome TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  UNIQUE (work_id, scene_key),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, document_id, document_revision_id)
+    REFERENCES document_revisions (work_id, document_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, source_candidate_id)
+    REFERENCES assistant_scene_extraction_candidates (work_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, pov_character_id)
+    REFERENCES characters (work_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS scene_annotations_work_document_idx
+  ON scene_annotations (work_id, document_id, updated_at);
+
+CREATE TABLE IF NOT EXISTS scene_music_queue_candidates (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  request_id TEXT NOT NULL UNIQUE,
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  work_id TEXT NOT NULL,
+  scene_key TEXT NOT NULL,
+  scene_annotation_id TEXT NOT NULL,
+  scene_annotation_revision INTEGER NOT NULL
+    CHECK (scene_annotation_revision > 0),
+  provider_id TEXT NOT NULL,
+  query_text TEXT NOT NULL,
+  status TEXT NOT NULL
+    CHECK (status IN ('ready', 'selected', 'superseded')),
+  options_json TEXT NOT NULL,
+  selected_option_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  CHECK (
+    (status = 'ready' AND selected_option_id IS NULL)
+    OR
+    (status IN ('selected', 'superseded') AND selected_option_id IS NOT NULL)
+  ),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, scene_annotation_id)
+    REFERENCES scene_annotations (work_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS scene_music_queue_work_scene_status_idx
+  ON scene_music_queue_candidates (work_id, scene_key, status, updated_at);
+
+CREATE TABLE IF NOT EXISTS assistant_scene_draft_candidates (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  request_id TEXT NOT NULL UNIQUE,
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  work_id TEXT NOT NULL,
+  plot_thread_id TEXT NOT NULL,
+  plot_thread_revision INTEGER NOT NULL CHECK (plot_thread_revision > 0),
+  target_document_id TEXT NOT NULL,
+  target_document_revision_id TEXT NOT NULL,
+  insertion_offset INTEGER NOT NULL CHECK (insertion_offset >= 0),
+  provider_id TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  prompt_version TEXT NOT NULL CHECK (prompt_version = 'scene-draft-v1'),
+  context_json TEXT NOT NULL,
+  generated_text TEXT NOT NULL,
+  draft_text TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('ready', 'applied')),
+  applied_document_revision_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  CHECK (
+    (status = 'ready' AND applied_document_revision_id IS NULL)
+    OR
+    (status = 'applied' AND applied_document_revision_id IS NOT NULL)
+  ),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, plot_thread_id)
+    REFERENCES plot_threads (work_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, target_document_id, target_document_revision_id)
+    REFERENCES document_revisions (work_id, document_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, target_document_id, applied_document_revision_id)
+    REFERENCES document_revisions (work_id, document_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS assistant_scene_draft_work_plot_status_idx
+  ON assistant_scene_draft_candidates (
+    work_id,
+    plot_thread_id,
+    status,
+    updated_at
+  );
 
 CREATE TABLE IF NOT EXISTS lore_entries (
   id TEXT PRIMARY KEY,
@@ -3250,11 +3549,17 @@ function writeLedgerRecord(
             retired_at,
             work_id,
             name,
+            aliases_json,
             role,
             summary,
+            appearance,
+            personality,
+            speech,
+            goal,
+            conflict,
             note
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
           record.id,
@@ -3265,12 +3570,387 @@ function writeLedgerRecord(
           nullable(record.retiredAt),
           record.workId,
           record.name,
+          JSON.stringify(record.aliases),
           record.role,
           record.summary,
+          record.appearance,
+          record.personality,
+          record.speech,
+          record.goal,
+          record.conflict,
           record.note,
         ],
       );
       return;
+    case "characterUpdate": {
+      const result = database.prepare(`
+        UPDATE characters
+        SET
+          schema_version = ?,
+          revision = revision + 1,
+          updated_at = ?,
+          name = ?,
+          aliases_json = ?,
+          role = ?,
+          summary = ?,
+          appearance = ?,
+          personality = ?,
+          speech = ?,
+          goal = ?,
+          conflict = ?,
+          note = ?
+        WHERE
+          work_id = ?
+          AND id = ?
+          AND revision = ?
+          AND retired_at IS NULL
+      `).run(
+        record.schemaVersion,
+        record.updatedAt,
+        record.name,
+        JSON.stringify(record.aliases),
+        record.role,
+        record.summary,
+        record.appearance,
+        record.personality,
+        record.speech,
+        record.goal,
+        record.conflict,
+        record.note,
+        record.workId,
+        record.id,
+        record.expectedRevision,
+      ) as { readonly changes: number | bigint };
+      if (Number(result.changes) !== 1) {
+        throw new Error(`Character revision conflict: ${record.id}`);
+      }
+      return;
+    }
+    case "characterRetirement": {
+      const result = database.prepare(`
+        UPDATE characters
+        SET
+          revision = revision + 1,
+          updated_at = ?,
+          retired_at = ?
+        WHERE
+          work_id = ?
+          AND id = ?
+          AND revision = ?
+          AND retired_at IS NULL
+      `).run(
+        record.retiredAt,
+        record.retiredAt,
+        record.workId,
+        record.id,
+        record.expectedRevision,
+      ) as { readonly changes: number | bigint };
+      if (Number(result.changes) !== 1) {
+        throw new Error(`Character revision conflict: ${record.id}`);
+      }
+      return;
+    }
+    case "characterRelation":
+      runStatement(
+        database,
+        `
+          INSERT INTO character_relations (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            retirement_reason,
+            work_id,
+            from_character_id,
+            to_character_id,
+            kind,
+            description
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          nullable(record.retirementReason),
+          record.workId,
+          record.fromCharacterId,
+          record.toCharacterId,
+          record.relationKind,
+          record.description,
+        ],
+      );
+      return;
+    case "characterRelationUpdate": {
+      const result = database.prepare(`
+        UPDATE character_relations
+        SET
+          revision = revision + 1,
+          updated_at = ?,
+          kind = ?,
+          description = ?
+        WHERE
+          work_id = ?
+          AND id = ?
+          AND revision = ?
+          AND retired_at IS NULL
+      `).run(
+        record.updatedAt,
+        record.relationKind,
+        record.description,
+        record.workId,
+        record.id,
+        record.expectedRevision,
+      ) as { readonly changes: number | bigint };
+      if (Number(result.changes) !== 1) {
+        throw new Error(`Character relation revision conflict: ${record.id}`);
+      }
+      return;
+    }
+    case "characterRelationRetirement": {
+      const result = database.prepare(`
+        UPDATE character_relations
+        SET
+          revision = revision + 1,
+          updated_at = ?,
+          retired_at = ?,
+          retirement_reason = ?
+        WHERE
+          work_id = ?
+          AND id = ?
+          AND revision = ?
+          AND retired_at IS NULL
+      `).run(
+        record.retiredAt,
+        record.retiredAt,
+        record.retirementReason,
+        record.workId,
+        record.id,
+        record.expectedRevision,
+      ) as { readonly changes: number | bigint };
+      if (Number(result.changes) !== 1) {
+        throw new Error(`Character relation revision conflict: ${record.id}`);
+      }
+      return;
+    }
+    case "characterEvidence":
+      runStatement(
+        database,
+        `
+          INSERT INTO character_evidence (
+            id,
+            work_id,
+            character_id,
+            source_document_id,
+            source_anchor_id,
+            created_at
+          ) VALUES (?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.workId,
+          record.characterId,
+          record.sourceDocumentId,
+          record.sourceAnchorId,
+          record.createdAt,
+        ],
+      );
+      return;
+    case "characterExtractionCandidateDecision": {
+      const result = database.prepare(`
+        UPDATE assistant_character_extraction_candidates
+        SET
+          revision = revision + 1,
+          status = ?,
+          items_json = ?,
+          updated_at = ?
+        WHERE
+          work_id = ?
+          AND id = ?
+          AND revision = ?
+          AND status = 'ready'
+      `).run(
+        record.status,
+        JSON.stringify(record.items),
+        record.updatedAt,
+        record.workId,
+        record.id,
+        record.expectedRevision,
+      ) as { readonly changes: number | bigint };
+      if (Number(result.changes) !== 1) {
+        throw new Error(
+          `Character extraction Candidate revision conflict: ${record.id}`,
+        );
+      }
+      return;
+    }
+    case "characterGenerationCandidateDecision": {
+      const updated = database.prepare(`
+        UPDATE assistant_character_generation_candidates
+        SET
+          revision = revision + 1,
+          status = ?,
+          items_json = ?,
+          updated_at = ?
+        WHERE
+          work_id = ?
+          AND id = ?
+          AND revision = ?
+          AND status = 'ready'
+      `).run(
+        record.status,
+        JSON.stringify(record.items),
+        record.updatedAt,
+        record.workId,
+        record.id,
+        record.expectedRevision,
+      ) as { readonly changes: number | bigint };
+      if (Number(updated.changes) !== 1) {
+        throw new Error(
+          `Character generation Candidate revision conflict: ${record.id}`,
+        );
+      }
+      return;
+    }
+    case "sceneExtractionCandidateDecision": {
+      const result = database.prepare(`
+        UPDATE assistant_scene_extraction_candidates
+        SET
+          revision = revision + 1,
+          status = ?,
+          boundaries_json = ?,
+          updated_at = ?
+        WHERE
+          work_id = ?
+          AND id = ?
+          AND revision = ?
+          AND status = 'ready'
+      `).run(
+        record.status,
+        JSON.stringify(record.boundaries),
+        record.updatedAt,
+        record.workId,
+        record.id,
+        record.expectedRevision,
+      ) as { readonly changes: number | bigint };
+      if (Number(result.changes) !== 1) {
+        throw new Error(
+          `Scene extraction Candidate revision conflict: ${record.id}`,
+        );
+      }
+      return;
+    }
+    case "sceneAnnotation":
+      runStatement(
+        database,
+        `
+          INSERT INTO scene_annotations (
+            id, schema_version, revision, work_id, scene_key, document_id,
+            document_revision_id, source_candidate_id, source_scene_item_id,
+            title, summary, pov_character_id, location, time,
+            character_ids_json, goal, conflict, outcome, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.workId,
+          record.sceneKey,
+          record.documentId,
+          record.documentRevisionId,
+          record.sourceCandidateId,
+          record.sourceSceneItemId,
+          record.title,
+          record.summary,
+          nullable(record.povCharacterId),
+          record.location,
+          record.time,
+          JSON.stringify(record.characterIds),
+          record.goal,
+          record.conflict,
+          record.outcome,
+          record.createdAt,
+          record.updatedAt,
+        ],
+      );
+      return;
+    case "sceneAnnotationUpdate": {
+      const result = database.prepare(`
+        UPDATE scene_annotations
+        SET
+          revision = revision + 1,
+          document_id = ?,
+          document_revision_id = ?,
+          source_candidate_id = ?,
+          source_scene_item_id = ?,
+          title = ?,
+          summary = ?,
+          pov_character_id = ?,
+          location = ?,
+          time = ?,
+          character_ids_json = ?,
+          goal = ?,
+          conflict = ?,
+          outcome = ?,
+          updated_at = ?
+        WHERE work_id = ? AND id = ? AND revision = ?
+      `).run(
+        record.documentId,
+        record.documentRevisionId,
+        record.sourceCandidateId,
+        record.sourceSceneItemId,
+        record.title,
+        record.summary,
+        nullable(record.povCharacterId),
+        record.location,
+        record.time,
+        JSON.stringify(record.characterIds),
+        record.goal,
+        record.conflict,
+        record.outcome,
+        record.updatedAt,
+        record.workId,
+        record.id,
+        record.expectedRevision,
+      ) as { readonly changes: number | bigint };
+      if (Number(result.changes) !== 1) {
+        throw new Error(`Scene annotation revision conflict: ${record.id}`);
+      }
+      return;
+    }
+    case "sceneExtractionAnnotationCandidateDecision": {
+      const result = database.prepare(`
+        UPDATE assistant_scene_extraction_candidates
+        SET
+          revision = revision + 1,
+          status = ?,
+          scenes_json = ?,
+          updated_at = ?
+        WHERE
+          work_id = ?
+          AND id = ?
+          AND revision = ?
+          AND status = 'ready'
+      `).run(
+        record.status,
+        JSON.stringify(record.scenes),
+        record.updatedAt,
+        record.workId,
+        record.id,
+        record.expectedRevision,
+      ) as { readonly changes: number | bigint };
+      if (Number(result.changes) !== 1) {
+        throw new Error(
+          `Scene extraction Candidate revision conflict: ${record.id}`,
+        );
+      }
+      return;
+    }
     case "loreEntry":
       runStatement(
         database,

@@ -14,10 +14,30 @@ export type CharacterManagerActionState =
 
 export type CharacterDraft = Pick<
   CreateCharacterCommand,
-  "name" | "role" | "summary" | "note"
+  | "name"
+  | "aliases"
+  | "role"
+  | "summary"
+  | "appearance"
+  | "personality"
+  | "speech"
+  | "goal"
+  | "conflict"
+  | "note"
 >;
 
-function CharacterFields(input: {
+function parseAliases(value: string): readonly string[] {
+  return Object.freeze([
+    ...new Set(
+      value
+        .split(/[,\n]/u)
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0),
+    ),
+  ]);
+}
+
+export function CharacterProfileFields(input: {
   readonly actionState: CharacterManagerActionState;
   readonly character: CharacterProjection | null;
   readonly onCreate: (draft: CharacterDraft) => void;
@@ -28,8 +48,20 @@ function CharacterFields(input: {
   ) => void;
 }) {
   const [name, setName] = useState(input.character?.name ?? "");
+  const [aliases, setAliases] = useState(
+    input.character?.aliases.join(", ") ?? "",
+  );
   const [role, setRole] = useState(input.character?.role ?? "");
   const [summary, setSummary] = useState(input.character?.summary ?? "");
+  const [appearance, setAppearance] = useState(
+    input.character?.appearance ?? "",
+  );
+  const [personality, setPersonality] = useState(
+    input.character?.personality ?? "",
+  );
+  const [speech, setSpeech] = useState(input.character?.speech ?? "");
+  const [goal, setGoal] = useState(input.character?.goal ?? "");
+  const [conflict, setConflict] = useState(input.character?.conflict ?? "");
   const [note, setNote] = useState(input.character?.note ?? "");
   const character = input.character;
   const busy = input.actionState !== "idle";
@@ -40,11 +72,23 @@ function CharacterFields(input: {
       className="character-manager-fields"
       onSubmit={(event) => {
         event.preventDefault();
+        const profile = {
+          name,
+          aliases: parseAliases(aliases),
+          role,
+          summary,
+          appearance,
+          personality,
+          speech,
+          goal,
+          conflict,
+          note,
+        };
         if (character === null) {
-          input.onCreate({ name, role, summary, note });
+          input.onCreate(profile);
           return;
         }
-        input.onUpdate(character, { name, role, summary, note });
+        input.onUpdate(character, profile);
       }}
     >
       <label>
@@ -60,6 +104,17 @@ function CharacterFields(input: {
         />
       </label>
       <label>
+        <span>별칭</span>
+        <input
+          aria-label="인물 별칭"
+          disabled={busy}
+          name="aliases"
+          onChange={(event) => setAliases(event.target.value)}
+          placeholder="쉼표로 구분합니다"
+          value={aliases}
+        />
+      </label>
+      <label>
         <span>역할</span>
         <input
           aria-label="인물 역할"
@@ -68,6 +123,61 @@ function CharacterFields(input: {
           onChange={(event) => setRole(event.target.value)}
           placeholder="자유롭게 적습니다"
           value={role}
+        />
+      </label>
+      <label>
+        <span>외형</span>
+        <textarea
+          aria-label="인물 외형"
+          disabled={busy}
+          name="appearance"
+          onChange={(event) => setAppearance(event.target.value)}
+          rows={3}
+          value={appearance}
+        />
+      </label>
+      <label>
+        <span>성격·가치관</span>
+        <textarea
+          aria-label="인물 성격과 가치관"
+          disabled={busy}
+          name="personality"
+          onChange={(event) => setPersonality(event.target.value)}
+          rows={3}
+          value={personality}
+        />
+      </label>
+      <label>
+        <span>말투</span>
+        <textarea
+          aria-label="인물 말투"
+          disabled={busy}
+          name="speech"
+          onChange={(event) => setSpeech(event.target.value)}
+          rows={3}
+          value={speech}
+        />
+      </label>
+      <label>
+        <span>목표</span>
+        <textarea
+          aria-label="인물 목표"
+          disabled={busy}
+          name="goal"
+          onChange={(event) => setGoal(event.target.value)}
+          rows={2}
+          value={goal}
+        />
+      </label>
+      <label>
+        <span>갈등</span>
+        <textarea
+          aria-label="인물 갈등"
+          disabled={busy}
+          name="conflict"
+          onChange={(event) => setConflict(event.target.value)}
+          rows={2}
+          value={conflict}
         />
       </label>
       <label>
@@ -216,7 +326,7 @@ export function CharacterManagerDialog(input: {
           </section>
 
           <section aria-label="인물 상세 편집" className="character-manager-detail">
-            <CharacterFields
+            <CharacterProfileFields
               actionState={input.actionState}
               character={selectedCharacter}
               key={selectedCharacter?.characterId ?? "new-character"}

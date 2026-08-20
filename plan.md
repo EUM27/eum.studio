@@ -8,11 +8,11 @@
 
 현재 storage 결정: [POC-3 SQLite·blob·backup 결정](docs/poc-3-storage-decisions.md)
 
-마지막 갱신: 2026-08-16
+마지막 갱신: 2026-08-18
 
 ## 현재 Gate
 
-`POC-3 — SQLite·불변 blob·백업` 완료
+`정식 작업면 복원 Gate 13 — 별빛 서재 테마 전체 이주` 완료
 
 POC-3 완료 증거:
 
@@ -29,13 +29,167 @@ POC-3 완료 증거:
 - 개발 서버 없는 Windows Electron 설치본 main의 revision→checkpoint→backup→restore 폐회로
 - raw timing·p50·p95와 DB·blob·bundle·restore 크기 JSON 측정
 
-다음 활성 Gate: `없음 — 사건·플롯·장면 구조 모델 8단계 완료`
-
-병행 보류 Gate: `POC-M — 현행 데이터 이주 rehearsal`
+다음 활성 Gate: `POC-M — 현행 데이터 이주 rehearsal` 보류 상태 유지
 
 실사용 원고 저장: `GO`
 
 POC-3 완료: `GO`
+
+## 정식 작업면 복원
+
+- [x] Gate 1 — 인물 정식 작업면, 수동 CRUD, 별칭, 독립 관계, exact 원문 근거, 우측 조수의 GPT 인물 후보 검토
+- [x] Gate 2 — `플롯 목록 | 상세 | 사건 뽑기` 작업면, 별도 장면 탭, 편집기 하단 전체 폭 사건 레일 연결
+- [x] Gate 3 — `scene.extract` 후보·미리보기·승인 `SceneOverride` 적용
+- [x] Gate 4 — 모든 작업면 상단에 남는 YouTube 음악 미니 플레이어와 집중 세션 연결
+- [x] Gate 5 — GPT 인물 Candidate 기능을 로컬 `인물 뽑기`와 분리해 우측 조수 검토함으로 이동
+- [x] Gate 6 — 승인 전 Scene Candidate 정보를 정규 장면 주석과 분리하고 원고 위 분할선 미리보기 연결
+- [x] Gate 7 — 확정 장면 정보 기반 음악 큐 후보, 사용자 큐 선택, 선택된 큐의 집중 시작 재생 연결
+- [x] Gate 8 — 플롯으로 장면 초안 생성, Candidate 편집·삽입 위치/diff, exact revision 승인 삽입
+- [x] Gate 9 — 원 첨부 기준의 남은 GPT 작업면·음악 외부 상태 조건 완료 감사와 필요한 bounded Gate 확정
+- [x] Gate 10 — 잘못 추가한 Spotify 경로를 제거하고 기존 YouTube Data API 키 검색·마리나라 엔진 방식 IFrame 재생·실사용 키 검증
+- [x] Gate 11 — 레거시의 로컬 `인물 뽑기`·`사건 뽑기`, 편집기 하단 사건 레일, 상단 YouTube 플레이어 배치 복원
+- [x] Gate 12 — 지정 HTML의 사용자 기능 전체 대조·이주. Pomodoro/WritingSession 우선, 집중·수정금지·분석·입출력 순으로 실제 Electron 검증
+- [x] Gate 13 — 지정 HTML의 14개 테마 팔레트·선택기·저장/복원 코드를 현재 제품 셸 전역에 이식하고 실제 Electron 검증
+
+Gate 12 이주 기준:
+
+- 정확한 원본: `E:\_정리_20260506\02_백업_압축_기록\별빛서재 완성까지의 기록들\하씨_저장_문제__2___1_.html`
+- source SHA-256: `C4E7E9B01226B0E1440652C1FE081199C178268E410DFEDF9351B0DCF05762BF`
+- 원본 HTML·`localStorage` 구현을 복사하지 않고 현재 Work·Document·DocumentRevision·WritingSession·FocusCycle 원장과 typed bridge에 기능을 대응한다.
+- 기존 대응 완료: 작품/회차 CRUD, 자동 durable 저장·불변 revision·backup, 전체 원고 편집, 글꼴·크기·본문 폭·문단 정렬, 오늘/주간 목표, 기간·일별·연속·회차별 집필 기록, TXT·기록 JSON/CSV 내보내기, Pomodoro 작업/휴식·주기·pause/resume·복원.
+- [x] 항상 접근 가능한 접힌 집중 표시와 펼친 세션 피드백, 이번 집필·오늘 완료 세션·평균·최근 기록 표시
+- [x] 실행 중인 Pomodoro 작업 단계의 세션 메모 수정·SQLite 저장·단계 전환과 재실행 보존
+- [x] 원고를 가리지 않는 집중 모드 진입·이탈과 키보드 흐름
+- [x] 목표 글자 수 기반 수정금지 집필과 기존 원고 보호·진행 표시
+- [x] 문장 길이·반복 단어 히트맵과 원고 무변경 검증
+- [x] 상위 어휘·문장 길이·반복 밀도 분석을 현재 원고 파생 화면에 연결하고 최근 기록은 기존 WritingSession 기록 화면으로 유지
+- [x] 원고 데이터·서식 원본을 바꾸지 않는 밝은/어두운 화면 전환
+- [x] 사용자 선택 UTF-8 TXT 가져오기와 현재 원고 교체 전 미리보기·명시 적용
+- [x] 원본의 괄호 단계 전환·둥근 따옴표·말줄임표 입력을 번들 runtime manifest 기반 입력 규칙으로 대응
+
+Gate 12 현재 증거:
+
+- 승인 설계 checksum 11/11 일치, 원본 경로와 저장소 보존 사본 checksum 일치.
+- Pomodoro 계약·typed bridge·SQLite runtime·세션 패널 4개 파일 150개 검증 통과.
+- production Electron `runs and restores one Work Pomodoro lifecycle without music`에서 접힌 표시→펼치기→오늘 요약→실행 중 메모 저장→pause/resume→단계 전환→완전 재실행 복원 통과.
+- 관련 계약·typed bridge·SQLite runtime·renderer 단위/통합 12개 파일 173개, 전체 lint·typecheck·production build, `git diff --check`가 통과.
+- production Electron 집중 검증 7개를 한 worker에서 연속 실행해 Pomodoro 재실행·세션 메모, 집중 화면 Esc 왕복, 수정금지 원문 보호·끝 추가, 문장/반복 히트맵·분석 원고 불변, 번들 입력 규칙, 밝은/어두운 화면 전환, TXT 미리보기·경로 비노출·명시 적용·단일 undo/redo를 모두 통과.
+- 실제 사용자 백그라운드 앱의 최종 bundle에서 접힌 패널 380×49 CSS px와 검토 버튼 비겹침, 번들 둥근 따옴표·4개 괄호 cycle profile, TXT 가져오기 진입점을 확인하고 밝은 화면·디버그 포트 없는 숨김 실행 PID `44224`로 복원.
+
+Gate 13 이주 기준:
+
+- 정확한 원본: `E:\_정리_20260506\02_백업_압축_기록\별빛서재 완성까지의 기록들\별빛서재_테마수정완료.html`
+- source SHA-256: `B8A3071F42F8BCE60898EE0C478A088E3A652D441EE503FFF2EEF03690DB9E1D`
+- 원본의 라이트·크림·세피아·소프트·뉴트럴·베이지·포커스L·다크·미드나잇·그레이·소프트D·웜다크·노르딕·포커스D 순서와 표시명, 모든 색상·그림자·backdrop 값을 데이터형 테마 계약으로 그대로 보존한다.
+- 원본과 같은 상단 태양 아이콘·300px 2열 선택기를 사용하고, 선택값은 원본과 같은 `starlight_theme` 키로 저장·복원한다.
+- 현재 앱의 Work·Document·원고·WritingSession·FocusCycle·저장·백업·편집기 구조는 테마 선택에 의해 변경하지 않는다.
+
+Gate 13 현재 증거:
+
+- 승인 설계 checksum 11/11 일치, 원본 4,107줄·156,236 bytes의 작업 전후 SHA-256 일치.
+- 14개 테마 순서·표시명·swatch와 대표 light/dark/focus token, 등록 키 복원·CSS 변수 projection 단위 검증 3개 통과.
+- production Electron에서 상단 선택기 14개 표시→노르딕의 `#2e3440/#3b4252/#eceff4/#88c0d0` 계산값→완전 종료·재실행 복원→라이트·다크 빠른 전환을 통과.
+- 같은 production bundle에서 집중 화면 Escape 왕복과 테마 선택·재시작 2개 회귀를 함께 통과해 숨은 테마 그룹이 기존 context menu 보호 조건을 차단하지 않음을 확인.
+- 최종 production Electron 1 worker 연속 실행에서 Pomodoro 재실행·집중 화면·수정금지 집필·히트맵/분석·번들 입력 규칙·14개 테마·TXT 가져오기 7개가 모두 통과.
+- 실제 사용자 백그라운드 앱에서 300×412.667 CSS px 선택기, 14개 순서, 노르딕 계산값, 숨은 `[role="menu"]` 0개를 확인한 뒤 라이트 테마·디버그 포트 없는 PID `34208`로 복원.
+
+Gate 1–12의 아래 기록은 당시 구현 이력이다. 현재 보이는 화면과 사용자 동선은 Gate 13 상태가 우선한다.
+
+Gate 1 현재 상태:
+
+- 왼쪽 작업면 전환에 `캐릭터`를 추가하고 목록·검색·생성·편집·삭제, 별칭, 외형, 성격·가치관, 말투, 목표, 갈등, 메모, exact 원문 근거를 정식 가운데 작업면에 연결했다. 기존 우측 검토 레일의 수동 인물 관리 진입점은 그대로 보존했다.
+- `CharacterRelation`을 캐릭터 본문의 문자열 배열이 아닌 Work 소유 독립 원장으로 추가했다. 두 캐릭터의 같은 Work foreign key, 관계 revision, 자유 형식 종류·설명, 수정·soft retirement 이력을 저장하며 캐릭터 retirement transaction은 관련 활성 관계만 `character-retired` 사유로 비활성화하고 다른 캐릭터 원본은 바꾸지 않는다.
+- 공식 ChatGPT OAuth credential은 main process의 기존 암호화 저장소 밖으로 노출하지 않고, runtime manifest가 고른 provider·model·endpoint로 `character.extract` 작업만 실행한다. renderer는 exact selection 좌표·DocumentRevision만 명령에 넘기고 main이 실행 시점 원문을 읽는다.
+- GPT 결과는 canonical 캐릭터를 직접 쓰지 않고 provider/model/prompt version·문서 revision·exact quote 근거를 가진 Candidate로 저장한다. 사용자가 후보별 `새로 만들기`, 명시 필드 `기존 캐릭터와 합치기`, `제외`를 결정할 때만 한 transaction으로 적용하며 생성 뒤 원고가 바뀐 응답은 `stale`로 차단한다.
+- schema v5→v6은 캐릭터 프로필·근거·후보·`character.extract` 권한을, v6→v7은 독립 관계 원장을 checksum·receipt·foreign-key 검증과 함께 추가한다. 실행 중인 실제 `C:\Users\limoj\AppData\Roaming\이음 스튜디오\workspace-v1\workspace.sqlite3` 원본은 닫거나 쓰지 않았고, SQLite 온라인 백업 복사본의 6→7 이주에서 기존 수량 보존·관계 12열·foreign key 위반 0건을 확인했다.
+- 최신 production build의 실제 Electron E2E에서 exact 원고 선택→1회 외부 전송 승인→GPT 후보→새 캐릭터 승인·근거 저장→두 번째 캐릭터 수동 생성→독립 관계 생성→완전 재시작 뒤 후보·프로필·근거·관계 복원을 통과했다. 기존 수동 인물 생성·수정·작품 격리·재시작·삭제 E2E도 같은 build에서 통과했다.
+- `npm run lint`, `npm run typecheck`, production build, 관계 계약·migration·bridge·UI 72개, 관계 runtime 재시작 1개, 이전 schema 1·2·4 연쇄 이주 3개가 통과했다. 전체 Vitest는 175개 파일 중 174개, 684개 중 682개가 통과하고 1개가 skip됐으며, 변경 전부터 기록된 `studio-app-shell-layout.test.ts`의 표지 버튼 실제 `background: transparent`와 테스트의 `#ffffff` 기대 불일치 1개만 남아 있다.
+
+Gate 2 현재 상태:
+
+- 왼쪽 작업면 전환에 `플롯`을 추가하고 가운데 정식 작업면에 `플롯 보드 | 사건 레일 | 장면` 탭을 연결했다. 새 원본이나 복제 projection을 만들지 않고 기존 `PlotManagerDialog`의 보드 저장 동작, `EventRail`, `SceneList`를 같은 application/runtime projection으로 재사용한다.
+- 기존 플롯 관리 모달은 그대로 유지하고 같은 컴포넌트에 명시적인 embedded 표시만 추가했다. 플롯 생성·수정·삭제, fractional placement 이동·시간 지도, 사건 연결, exact 원문 출처, 장면 규칙·override 동작은 기존 typed command를 그대로 사용한다.
+- 플롯 작업면 컴포넌트·기존 보드·사건·장면 UI 집중 4개 파일 14개, `npm run lint`, `npm run typecheck`, production build가 통과했다. 전체 Vitest는 176개 파일 중 175개, 686개 중 684개가 통과하고 1개가 skip됐으며 같은 기존 홈 표지 버튼 기대 불일치 1개만 남아 있다.
+- 최신 production Electron에서 왼쪽 `플롯` 진입, 두 플롯 생성, 카드 순서 이동, 사건 레일·장면 탭 노출, 원고 복귀 뒤 본문 불변, 완전 재시작 뒤 이동 순서 복원을 통과했다.
+
+Gate 3 현재 상태:
+
+- `scene.extract`는 renderer가 원문을 payload에 넣지 않고 exact selection 좌표·DocumentRevision만 typed command로 넘긴다. main runtime이 승인된 범위를 실행 시점에 읽어 `p1`, `p2` 문단 ID와 본문만 공식 ChatGPT OAuth 작업 요청으로 전송한다.
+- GPT는 순서가 있고 겹치지 않는 `fromParagraphId`·`toParagraphId` 장면 후보만 strict schema로 반환한다. runtime은 현재 revision 문단 offset으로 다시 해석하고, 확정 캐릭터 이름·별칭의 정확한 단일 일치만 Candidate의 character ID로 연결한다.
+- 장면 제목·요약·장소·시간·인물·목표·갈등·결과와 인접 장면 경계를 승인 전 `assistant_scene_extraction_candidates`에 저장한다. UI는 장면 미리보기와 각 경계의 `분할 승인`·`앞 장면과 합치기`를 제공한다.
+- `분할 승인` 순간에만 exact point Anchor와 기존 `SceneOverride(split)`를 Candidate 결정과 같은 SQLite transaction에 저장한다. 제외는 정규 장면 원장을 바꾸지 않는다. 생성 뒤 원고 revision이 달라진 Candidate는 `stale`로 바꾸고 SceneOverride를 추가하지 않는다.
+- schema v7→v8은 `scene.extract` 권한·receipt 허용값과 scene Candidate 원장을 checksum·논리 전후 snapshot·receipt·foreign-key 검증으로 추가한다. 실행 중인 실사용 DB 원본은 쓰지 않고 온라인 백업 복사본의 6→7→8 연쇄 이주에서 기존 수량 보존, scene Candidate 18열, capability table 2개, foreign key 위반 0건을 확인했다.
+- 장면 contract·OAuth gateway·migration·bridge·UI 집중 5개 파일 73개, scene 승인·stale·재시작 runtime, 이전 schema 1→8 연쇄 이주 3개, `npm run lint`, `npm run typecheck`, production build가 통과했다. 전체 Vitest는 179개 파일 중 178개, 692개 중 690개가 통과하고 1개가 skip됐으며 같은 기존 홈 표지 버튼 기대 불일치 1개만 남아 있다.
+- 최신 production Electron에서 원고 선택 메뉴 `선택에서 장면 분석`→1회 외부 전송 승인→문단 3개·장면 2개 Candidate→경계 분할 승인→SceneProjection 2개→완전 재시작 뒤 Candidate·분할·장면 2개 복원을 통과했다. 같은 schema 8 build에서 플롯 탭·이동·원고 불변 회귀도 다시 통과했다.
+
+Gate 4 현재 상태:
+
+- 기존 YouTube Data API 연결 저장소를 음악 원본으로 사용한다. API 키는 Electron `safeStorage` 암호화 파일에만 있고 renderer·SQLite·작품 backup·로그로 보내지 않으며, main process 검색 클라이언트만 실행 시점에 읽는다.
+- 유튜브 검색 결과는 `videoId`·제목·채널·썸네일·watch URL projection으로 좁혀 장면 큐 Candidate에 저장한다. Spotify Client ID·OAuth·Premium·외부 재생 기기 경로는 제거했다.
+- 모든 원고·캐릭터·플롯 작업면의 하단 상태바에 현재 영상 제목·채널·이전/재생/일시정지/다음·음량·영상 표시·연결 상태와 현재 집중 시간을 표시한다. 사이드바와 우측 레일 상태에 의존하지 않는다.
+- 재생은 `D:\MarinaraEngine`의 검증된 방식과 같이 YouTube IFrame API를 한 번 로드하고 선택한 `videoId`를 `loadVideoById`로 전달한다. Electron `file://` renderer의 빈 Referer로 발생한 실제 YouTube 오류 153은 YouTube 요청에만 설정 manifest의 앱 식별 Referer를 넣어 해결했다.
+- 작품 음악 설정의 `autoPlayOnPomodoroStart`가 켜져 있고 현재 장면에 사용자가 명시 선택한 최신 큐가 있을 때만 Pomodoro 저장 성공 뒤 그 큐를 시작한다. 선택 큐가 없으면 음악 명령을 보내지 않는다.
+- YouTube 계약·main 검색·설정·mini player·bridge·runtime 집중 9개 파일 155개, `npm run lint`, `npm run typecheck`, production build가 통과했다. 전체 Vitest는 193개 파일 중 192개, 717개 중 715개가 통과하고 1개가 skip됐으며 동일한 기존 홈 표지 버튼 기대 불일치 1개만 남아 있다.
+
+Gate 5 현재 상태:
+
+- 캐릭터 작업면 헤더의 단일 추출 버튼을 `캐릭터 뽑기` 메뉴로 바꾸고 `원고에서 캐릭터 추출`과 `새 캐릭터 설정 생성`을 분리했다. 기존 exact selection 추출 권한·근거·stale 경로는 그대로 보존한다.
+- 새 설정 생성은 사용자가 직접 입력한 역할·성격·관계·장르 조건만 공식 ChatGPT OAuth main-process gateway에 보낸다. 원고 범위·가짜 근거·기존 캐릭터 원본을 전송하거나 생성하지 않는다.
+- GPT 결과는 별도 Work 소유 `CharacterGenerationCandidate`로 저장하며 정확한 이름·별칭 충돌 후보만 표시한다. 각 항목은 사용자가 `새로 만들기`, 명시 필드 `기존 캐릭터와 합치기`, `제외`를 결정할 때만 캐릭터 원장과 Candidate revision을 한 SQLite transaction에서 갱신한다.
+- schema v8→v9는 생성 조건·provider/model/prompt version·항목·결정 상태를 가진 `assistant_character_generation_candidates` 원장을 추가한다. 실제 사용자 DB를 최신 production 앱으로 정상 실행·종료해 8→9 이주했으며 작품 3개와 기존 캐릭터/추출/관계/장면 수량 보존, migration 논리 checksum 전후 동일, 신규 13열, foreign key 위반 0건을 확인했다.
+- 캐릭터 생성 계약·OAuth gateway·typed bridge·UI·migration 5개 파일 73개와 runtime 생성→승인→완전 재시작 1개가 통과했다. 전체 Vitest는 185개 파일 중 184개, 700개 중 698개가 통과하고 1개가 skip됐으며, 변경 전부터 기록된 `studio-app-shell-layout.test.ts`의 표지 버튼 실제 `background: transparent`와 테스트의 `#ffffff` 기대 불일치 1개만 남아 있다.
+- 최신 production Electron의 fake ChatGPT OAuth 경계에서 `캐릭터 뽑기` 메뉴→사용자 조건 4필드 전송→Candidate 상태에서 캐릭터 목록 불변→명시 승인→프로필 생성→완전 재시작 뒤 생성 Candidate·프로필 복원을 기존 캐릭터 추출·관계·장면 추출·YouTube 미니 플레이어 회귀와 함께 통과했다.
+
+Gate 6 현재 상태:
+
+- 장면을 별도 저장 원본으로 만들지 않고 기존 `SceneProjection.sceneKey`에만 Work 소유 `SceneAnnotation`을 연결했다. 주석은 exact Document·DocumentRevision, 원본 Scene Candidate·item, 제목·요약·시점 인물·장소·시간·인물·목표·갈등·결과와 revision을 보존한다.
+- Scene Candidate의 각 장면에는 `pending | approved | excluded` 주석 결정 상태를 두고, 모든 분할·병합 경계를 먼저 결정한 뒤 현재 resolved SceneProjection 범위와 일치하는 장면만 승인한다. 사용자 승인 전에는 SceneOverride·SceneAnnotation을 만들지 않고, 원고 revision이 달라지면 기존 stale 경계와 같은 방식으로 차단한다.
+- pending Candidate 경계는 원고 밖 임의 overlay가 아니라 CodeMirror block decoration으로 표시한다. `원고에서 분할선 미리보기`로 exact 회차·offset을 열며, 승인하면 decoration이 사라지고 원고가 편집되면 `docChanged`에서 즉시 제거된다. 원고 본문·selection·undo·저장 transaction은 바꾸지 않는다.
+- 승인한 주석은 플롯 작업면과 기존 SceneList의 정규 장면 카드에만 표시한다. Candidate 메타데이터를 승인 전 정규 장면 정보처럼 노출하지 않으며, 범위가 맞지 않는 후보는 annotation 저장을 거부한다.
+- schema v9→v10은 기존 scene Candidate item을 주석 검토 `pending`으로 무손실 변환하고 20열 `scene_annotations` 원장·4개 작품 소유 FK를 추가한다. 실제 사용자 DB를 최신 production 앱으로 정상 실행·종료해 9→10 이주했으며 작품 3개와 기존 수량 보존, migration 논리 checksum 전후 동일, foreign key 위반 0건을 확인했다.
+- 장면 주석 계약·migration·CodeMirror preview·검토 UI·SceneList·bridge 집중 7개 파일 77개와 runtime 경계 승인→주석 2건 승인→완전 재시작 1개가 통과했다. 전체 Vitest는 188개 파일 중 187개, 704개 중 702개가 통과하고 1개가 skip됐으며 동일한 기존 홈 표지 버튼 기대 불일치 1개만 남아 있다.
+- 최신 production Electron에서 장면 Candidate→승인 전 원고 분할선 1개 표시→경계 승인 후 분할선 제거→두 장면 정보 명시 승인→정규 장면 카드 주석 2건→완전 재시작 뒤 Candidate 완료 상태·SceneAnnotation·장면 카드 복원을 기존 캐릭터 추출·설정 생성·관계·YouTube 미니 플레이어 회귀와 함께 통과했다.
+
+Gate 7 현재 상태:
+
+- 음악 검색은 승인된 `SceneAnnotation`의 Work·`sceneKey`·annotation ID·revision과 현재 resolved `SceneProjection`이 모두 일치할 때만 시작한다. 장면 카드에 확정 제목·장소·시간·목표·갈등·결과로 만든 검색어를 먼저 표시하며, 사용자가 확인·수정해 누른 exact 문자열만 main-process YouTube Data API 검색 adapter로 보낸다. 검색 결과를 GPT나 다른 AI 입력으로 보내지 않는다.
+- 검색 결과는 자동 재생하지 않고 Work 소유 `SceneMusicQueueCandidate`로 저장한다. runtime profile의 `searchLimit`·`tracksPerOption`으로 후보 큐를 묶고, 사용자가 정확한 Candidate revision과 option ID의 `이 큐 선택`을 실행할 때만 같은 장면의 이전 선택을 `superseded`로 바꾸고 새 큐를 한 SQLite transaction에서 `selected`로 승격한다.
+- 장면 카드의 `선택 큐 재생`과 Pomodoro 시작은 `selected`이면서 현재 annotation revision과 일치하는 큐의 YouTube `videoId`만 IFrame player에 보낸다. 검색·후보 표시·큐 선택 자체는 재생 요청을 만들지 않는다. 선택 큐가 없으면 집중 시작은 음악 명령을 보내지 않는다.
+- schema v10→v11은 15열 `scene_music_queue_candidates`와 Work·SceneAnnotation 소유 FK, scene/status index를 추가한다. 닫힌 실제 사용자 DB `C:\Users\limoj\AppData\Roaming\이음 스튜디오\workspace-v1\workspace.sqlite3`에 단일 migration transaction을 적용해 `user_version`·identity 11, 작품 3개·장면 주석 0개 유지, 신규 Candidate 0개, FK 위반 0개, receipt 논리 checksum 전후 동일을 확인했다.
+- 큐 계약·YouTube 검색/videoId 재생 adapter·migration·장면 카드와 scene 승인→검색→2개 큐 후보→명시 선택→원고 변경 stale→완전 재시작 runtime, bridge 집중 검증이 통과했다.
+- 최신 production Electron 경계에서 선택 큐 없는 집중 시작 재생 0회, 검색 뒤 재생 0회, 큐 선택 뒤 재생 0회, 명시 재생의 첫 `videoId`, 다음 곡의 두 번째 `videoId`, 일시정지, 같은 장면의 집중 시작에서 선택 큐 첫 `videoId` 재로드를 확인했다. 완전 재시작 뒤 검색 query·선택 Candidate·선택 option 복원도 기존 캐릭터 추출·생성·관계·장면 추출·주석·미니 플레이어 회귀와 함께 통과했다.
+
+Gate 8 현재 상태:
+
+- 원 첨부의 `장면 뽑기` 두 번째 동작인 `플롯으로 장면 초안 생성`을 복원했다. 레거시에는 실행 가능한 구현이 없고 승인 설계만 있었으므로 파일을 복사하지 않고 현재 `PlotThread`·`PlotEventLink`·Character·Lore·DocumentRevision 계약으로 새로 연결했다.
+- 플롯 카드에서 현재 연결 사건은 자동으로, 캐릭터·설정은 사용자가 이번 요청에서 명시 선택한 항목만 context snapshot에 넣는다. GPT에는 ID·revision·원고 본문을 보내지 않고 승인된 표시 필드만 공식 ChatGPT OAuth main-process gateway로 전송한다. provider/model/prompt version과 exact input snapshot·대상 DocumentRevision·삽입 offset을 Work 소유 Candidate에 저장한다.
+- GPT 결과는 원고를 직접 수정하지 않는다. 별도 Candidate 편집기에서 초안 원문을 수정·저장하고 대상 회차·offset과 `+` insertion diff를 확인한 뒤 `이 위치에 삽입`을 누른 경우에만 기존 CodeMirror transaction→ChangeBatch→durable revision 경로를 사용한다. runtime은 base revision의 정확한 offset에 Candidate 텍스트만 추가된 직계 자식 revision인지 다시 materialize해 확인한 뒤에만 Candidate를 `applied`로 기록한다.
+- 삽입 저장 뒤 Candidate 완료 기록이 끊겨도 현재 revision이 exact insertion인지 재검증해 `inserted` 상태로 보여주고 중복 삽입 대신 완료 기록만 재개한다. 생성 뒤 플롯 revision·연결 사건·선택 캐릭터·설정·대상 원고가 달라지면 `stale`로 차단하며 `현재 원고와 비교`·`다시 생성`·후보 보관 경로를 제공한다.
+- schema v11→v12는 20열 `assistant_scene_draft_candidates`와 Work·PlotThread·base/applied DocumentRevision FK를 추가한다. 닫힌 실제 사용자 DB `C:\Users\limoj\AppData\Roaming\이음 스튜디오\workspace-v1\workspace.sqlite3`에 단일 migration transaction을 적용해 `user_version`·identity 12, 작품 3개·기존 음악 큐 0개 유지, 신규 Candidate 0개, FK 위반 0개, receipt 논리 checksum 전후 동일을 확인했다.
+- 계약·OAuth payload·migration·Candidate UI·bridge 집중 5개 파일 75개와 생성→편집→exact 삽입→applied→재시작 및 플롯 변경 stale runtime 1개, `npm run lint`, `npm run typecheck`, production build가 통과했다. 전체 Vitest는 193개 파일 중 192개, 716개 중 714개가 통과하고 1개가 skip됐으며 동일한 기존 홈 표지 버튼 기대 불일치 1개만 남아 있다.
+- 최신 production Electron에서 첫 회차의 캐릭터 추출·설정 생성·관계·장면 구분/주석·음악 큐를 유지한 채 두 번째 회차를 사용자 생성하고, 플롯→연결 사건→명시 선택 캐릭터만 GPT 전송→Candidate 상태에서 원고 불변→초안 편집→0자 위치 diff→명시 삽입→durable 저장→완전 재시작 뒤 `원고 반영됨` Candidate와 정확한 원고 복원을 통과했다.
+
+Gate 9 완료 감사:
+
+- 원 첨부 마지막의 12개 완료 기준을 현재 source·runtime tests·production Electron E2E와 항목별로 다시 대조했다. 왼쪽 캐릭터/플롯 작업면, 연결/미연결 GPT 안내, 승인 전 canonical 불변, 플롯 이동 시 원고·anchor 불변, anchorless 미작성 사건, AI stale 차단, Work 전환 초기화, 승인 전 장면 경계 preview, 하단 실제 플레이어, 큐 선택 전 재생 0회, 접힌 사이드바에서도 곡·집중 시간 유지까지 현재 증거가 있다.
+- `character.patch`, `plot.expand`, `plot.check`, 기본 재생 기기 선택, 유휴 임계값 같은 항목은 원문에서 capability·설정 예시 또는 후속 권장으로 제시됐지만 활성 목표의 네 사용자 기능과 마지막 완료 기준에는 정확한 명령·상태 전이가 지정되지 않았다. Change-Control 규칙에 따라 임의 동작·기본값·유휴 시간·외부 기기 전환을 추가하지 않았다.
+- 원 첨부의 Spotify 전제는 사용자의 2026-08-18 정정으로 폐기했다. 음악 완료 기준은 기존 YouTube Data API 연결과 마리나라 엔진 방식의 내장 IFrame player를 사용하도록 Gate 10에서 다시 검증했다.
+
+Gate 10 현재 상태:
+
+- `D:\MarinaraEngine\packages\server\src\routes\youtube.routes.ts`의 main/server 검색 경계와 `packages\client\src\components\chat\YouTubePlayer.tsx`의 IFrame API 로드·`loadVideoById`·재생/일시정지·음량 방식을 읽기 전용 구현 원본으로 사용했다.
+- 사용자 연결 원본 `C:\Users\limoj\AppData\Roaming\이음 스튜디오\youtube-music-connection-v1\connection.json`은 길이 189 bytes·수정 시각 `2026-08-13T14:12:39.662688Z` 그대로 유지한 채 production 검색 모듈로 실제 YouTube 결과를 받았다. 키 값은 renderer·출력·로그에 노출하지 않았다.
+- 첫 실제 IFrame smoke에서 YouTube 오류 153을 재현했고, 원인은 `file://` renderer의 빈 HTTP Referer였다. 설정 manifest의 `playerReferer`를 YouTube·YouTube nocookie 요청에만 main-process `webRequest.onBeforeSendHeaders`로 넣은 뒤 실제 IFrame 준비가 `ready: true`, `errorCode: null`로 통과했다.
+- production Electron 통합 E2E는 검색·큐 선택까지 재생 0회, 명시 재생 `queue-video-4`, 다음 곡 `queue-video-5`, 일시정지, 선택 큐의 집중 시작 재로드, GPT 캐릭터·장면·장면 초안 회귀와 완전 재시작 복원을 2.0분에 통과했다.
+
+Gate 11 현재 상태:
+
+- 읽기 전용 이주 원본 `D:\eum.editor`의 인물·플롯 화면과 하단 `Structure Rail`, 상단 `MusicMiniPlayer`를 다시 대조했다. 인물·사건 뽑기는 GPT 호출이 아니라 로컬 랜덤 도구라는 기존 동작을 복원했다.
+- 인물 화면은 목록·확정 상세·오른쪽 `인물 뽑기`, 플롯 화면은 목록·확정 상세·오른쪽 `사건 뽑기` 3열이다. 분류값과 카드 풀은 `config/inspiration-draw.json` manifest에서 읽고, 작품별 사용자 키워드는 `work_inspiration_settings` 원장에 revision과 함께 저장한다.
+- GPT 인물 추출·기존 Candidate 검토는 뽑기 UI에서 제거하고 편집기 우측 `조수` 탭으로 옮겼다. 로컬 뽑기는 GPT 로그인·권한·Candidate 상태의 영향을 받지 않는다.
+- 사건 레일은 플롯 탭과 우측 검토 레일에서 제거하고 앱 그리드 3행, 편집기 바로 아래 전체 폭에 portal로 배치했다. 원고 순서·미배치 사건을 같은 폭 카드로 표시하고, exact source 카드만 원고 이동을 요청한다.
+- YouTube 플레이어는 하단 상태줄에서 상단 bar로 옮겼다. main-process 검색은 마리나라 엔진과 같이 Shorts·밈류 제외 검색어, embeddable 영상, 중·장시간 우선 검색과 fallback을 사용하고 renderer는 IFrame API `loadVideoById`만 사용한다.
+- `npm run typecheck`, production build, 영감 뽑기·Work별 키워드 재시작·YouTube 검색·인물/플롯 UI 집중 Vitest가 통과했다. production Electron E2E는 로컬 인물 뽑기와 GPT 장면 분리, 플롯 목록·사건 뽑기와 키워드 재시작 복원, 편집기 하단 사건 레일 exact 이동·재시작 복원의 세 경로를 통과했다.
 
 ## 사건·플롯·장면 구조 모델
 
