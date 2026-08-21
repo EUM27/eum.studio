@@ -25,6 +25,7 @@ export function VersionPanel(input: {
     | "comparing-snapshot";
   readonly documentRevisions: readonly DocumentRevisionProjection[];
   readonly error: string | null;
+  readonly highlightedRevisionId: EntityId<"DocumentRevision"> | null;
   readonly onCompareSnapshot: (snapshotId: EntityId<"WorkSnapshot">) => void;
   readonly onCreateSnapshot: (event: FormEvent<HTMLFormElement>) => void;
   readonly onRefresh: () => void;
@@ -52,9 +53,23 @@ export function VersionPanel(input: {
         ) : (
           <ul>
             {input.documentRevisions.map((revision) => (
-              <li key={revision.revisionId}>
+              <li
+                data-completed-revision={
+                  revision.revisionId === input.highlightedRevisionId
+                    ? "true"
+                    : undefined
+                }
+                key={revision.revisionId}
+              >
                 <div className="version-history-entry">
-                  <strong>{revision.isCurrent ? "현재 버전" : formatVersionTimestamp(revision.createdAt)}</strong>
+                  <strong>
+                    {revision.isCurrent
+                      ? "현재 버전"
+                      : formatVersionTimestamp(revision.createdAt)}
+                    {revision.revisionId === input.highlightedRevisionId
+                      ? " · 완료 당시 버전"
+                      : ""}
+                  </strong>
                   <span>{revision.length}자</span>
                   {!revision.isCurrent && (
                     <button

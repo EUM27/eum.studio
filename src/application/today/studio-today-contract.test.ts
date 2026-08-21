@@ -34,6 +34,7 @@ describe("Studio Today projection", () => {
                 completed: true,
                 completedAt: "2026-08-21T12:00:00.000Z",
                 completedDocumentRevisionId: revisionA,
+                state: "current",
               },
             ],
             episodeProgress: {

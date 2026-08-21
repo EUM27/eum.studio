@@ -197,6 +197,7 @@ import type {
 } from "../application/activity/work-records-preferences";
 import type { WorkCalendarProjection } from "../application/schedule/work-calendar-contract";
 import type {
+  DocumentRevisionContentProjection,
   DocumentRevisionProjection,
   WorkSnapshotProjection,
 } from "../application/revisions/work-version-contract";
@@ -414,6 +415,7 @@ import {
   type WorkSection,
 } from "./navigation/studio-location";
 import { WorkHeader } from "./workspace/WorkHeader";
+import { DocumentCompletionControl } from "./workspace/DocumentCompletionControl";
 import { useDialogDismiss } from "./dialog/useDialogDismiss";
 import { StructureWorkspace } from "./workspace/StructureWorkspace";
 import { ReviewWorkspace } from "./workspace/ReviewWorkspace";
@@ -433,6 +435,7 @@ import { WorkRecordsPanel } from "./review/WorkRecordsPanel";
 import { ManuscriptReviewPanel } from "./review/ManuscriptReviewPanel";
 import { CandidateInboxPanel } from "./review/CandidateInboxPanel";
 import { VersionPanel } from "./review/VersionPanel";
+import { DocumentRevisionPreviewDialog } from "./review/DocumentRevisionPreviewDialog";
 import { WorkScheduleDashboard } from "./schedule/WorkScheduleDashboard";
 import {
   deriveWorkScheduleSummary,
@@ -987,6 +990,11 @@ export type ManuscriptWorkspaceHandle = {
   ) => Promise<WorkspaceCatalogProjection>;
   readonly prepareForMain: () => Promise<WorkspaceCatalogProjection>;
   readonly openSchedule: () => void;
+  readonly openCompletedRevision: (
+    workId: EntityId<"Work">,
+    documentId: EntityId<"Document">,
+    revisionId: EntityId<"DocumentRevision">,
+  ) => Promise<WorkspaceCatalogProjection>;
 };
 
 function RenameTitleForm({
@@ -1797,6 +1805,8 @@ export const App = forwardRef<
   const focusModeSessionPendingRef = useRef<Promise<void>>(Promise.resolve());
   const focusModeSessionAttemptedRef = useRef(false);
   const pomodoroReconcilePendingRef = useRef(false);
+  const pomodoroResumePendingRef = useRef(false);
+  const resumePausedPomodoroOnInputRef = useRef<() => void>(() => undefined);
   const pendingFragmentSourceRef = useRef<PendingFragmentSource | null>(null);
   const pendingForeshadowPointSourceRef =
     useRef<PendingForeshadowPointSource | null>(null);
@@ -2110,6 +2120,14 @@ export const App = forwardRef<
   const [documentRevisions, setDocumentRevisions] = useState<
     readonly DocumentRevisionProjection[]
   >([]);
+  const [highlightedDocumentRevisionId, setHighlightedDocumentRevisionId] =
+    useState<EntityId<"DocumentRevision"> | null>(null);
+  const [documentRevisionPreview, setDocumentRevisionPreview] = useState<
+    Readonly<{
+      documentTitle: string;
+      projection: DocumentRevisionContentProjection;
+    }> | null
+  >(null);
   const [workSnapshots, setWorkSnapshots] = useState<
     readonly WorkSnapshotProjection[]
   >([]);
@@ -3160,7 +3178,18 @@ export const App = forwardRef<
   const activeDocumentSummary = activeWork?.documents.find(
     (document) => document.documentId === activeDocument?.documentId,
   );
-  const setActiveDocumentCompletion = useCallback(async (): Promise<void> => {
+  const refreshCatalogAfterDocumentCompletion = useCallback(
+    async (): Promise<void> => {
+      const catalog = await window.eumStudio.workspace.getCatalog();
+      setRuntime((current) =>
+        current.status === "ready" ? { ...current, catalog } : current
+      );
+      onCatalogChange?.(catalog);
+      onScheduleChange?.();
+    },
+    [onCatalogChange, onScheduleChange],
+  );
+  const completeActiveDocument = useCallback(async (): Promise<void> => {
     if (
       runtime.status !== "ready" ||
       activeDocument === undefined ||
@@ -3183,37 +3212,96 @@ export const App = forwardRef<
       const durableRevisionId = queue.getCurrentRevisionId(
         activeDocument.documentId,
       );
-      await window.eumStudio.workspace.setDocumentCompletion({
+      await window.eumStudio.workspace.completeDocument({
         schemaVersion: 1,
         workId: activeDocument.workId,
         documentId: activeDocument.documentId,
         expectedCompletionRevision: activeDocumentSummary.completion.revision,
         expectedDocumentRevisionId: durableRevisionId,
-        completed: activeDocumentSummary.completion.state !== "current",
       });
-      const catalog = await window.eumStudio.workspace.getCatalog();
-      setRuntime((current) =>
-        current.status === "ready" ? { ...current, catalog } : current
-      );
-      onCatalogChange?.(catalog);
-      onScheduleChange?.();
+      await refreshCatalogAfterDocumentCompletion();
     } catch {
-      setWorkspaceActionError(
-        activeDocumentSummary.completion.state === "current"
-          ? "회차 완료를 취소하지 못했습니다. 원고 저장 상태를 확인해 주세요."
-          : "원고를 저장한 뒤 회차 완료를 기록하지 못했습니다.",
-      );
+      setWorkspaceActionError("원고를 저장한 뒤 회차 완료를 기록하지 못했습니다.");
     } finally {
       setWorkspaceActionState("idle");
     }
   }, [
     activeDocument,
     activeDocumentSummary,
-    onCatalogChange,
-    onScheduleChange,
+    refreshCatalogAfterDocumentCompletion,
     runtime.status,
     workspaceActionState,
   ]);
+  const clearActiveDocumentCompletion = useCallback(async (): Promise<void> => {
+    if (
+      runtime.status !== "ready" ||
+      activeDocument === undefined ||
+      activeDocumentSummary === undefined ||
+      activeDocumentSummary.completion.state === "incomplete" ||
+      workspaceActionState !== "idle"
+    ) {
+      return;
+    }
+    setWorkspaceActionState("setting-document-completion");
+    setWorkspaceActionError(null);
+    try {
+      await window.eumStudio.workspace.clearDocumentCompletion({
+        schemaVersion: 1,
+        workId: activeDocument.workId,
+        documentId: activeDocument.documentId,
+        expectedCompletionRevision: activeDocumentSummary.completion.revision,
+      });
+      await refreshCatalogAfterDocumentCompletion();
+    } catch {
+      setWorkspaceActionError("회차 완료를 취소하지 못했습니다.");
+    } finally {
+      setWorkspaceActionState("idle");
+    }
+  }, [
+    activeDocument,
+    activeDocumentSummary,
+    refreshCatalogAfterDocumentCompletion,
+    runtime.status,
+    workspaceActionState,
+  ]);
+  const loadDocumentRevisionPreview = useCallback(async (
+    workId: EntityId<"Work">,
+    documentId: EntityId<"Document">,
+    revisionId: EntityId<"DocumentRevision">,
+    documentTitle: string,
+  ): Promise<void> => {
+    setVersionActionError(null);
+    try {
+      const projection = await window.eumStudio.version.readDocumentRevision({
+        schemaVersion: 1,
+        workId,
+        documentId,
+        revisionId,
+      });
+      setHighlightedDocumentRevisionId(revisionId);
+      setDocumentRevisionPreview({ documentTitle, projection });
+    } catch {
+      setVersionActionError("완료 당시 원고 버전을 불러오지 못했습니다.");
+    }
+  }, []);
+  const openActiveDocumentCompletedRevision = useCallback(() => {
+    const revisionId = activeDocumentSummary?.completion
+      .completedDocumentRevisionId;
+    if (
+      revisionId === null ||
+      revisionId === undefined ||
+      activeDocument === undefined ||
+      activeDocumentSummary === undefined
+    ) {
+      return;
+    }
+    void loadDocumentRevisionPreview(
+      activeDocument.workId,
+      activeDocument.documentId,
+      revisionId,
+      activeDocumentSummary.title,
+    );
+  }, [activeDocument, activeDocumentSummary, loadDocumentRevisionPreview]);
   const preserveCurrentWorkLocation = useCallback(() => {
     if (workSection === "structure") {
       setWorkReturnLocation({ section: "structure", tab: structureTab });
@@ -6294,6 +6382,7 @@ export const App = forwardRef<
       if (transaction.changes.length === 0) {
         return;
       }
+      resumePausedPomodoroOnInputRef.current();
       setForwardWriting((current) => {
         if (
           current === null ||
@@ -6515,10 +6604,12 @@ export const App = forwardRef<
     if (
       activeDocument === undefined ||
       activePomodoroPhase?.state !== "paused" ||
-      activityActionState !== "idle"
+      activityActionState !== "idle" ||
+      pomodoroResumePendingRef.current
     ) {
       return;
     }
+    pomodoroResumePendingRef.current = true;
     preparePomodoroPhaseAlertSound();
     setActivityActionState("resuming-focus");
     setActivityActionError(null);
@@ -6537,6 +6628,7 @@ export const App = forwardRef<
     } catch {
       setActivityActionError("집중 타이머를 재개하지 못했습니다.");
     } finally {
+      pomodoroResumePendingRef.current = false;
       setActivityActionState("idle");
     }
   }, [
@@ -6544,6 +6636,19 @@ export const App = forwardRef<
     activePomodoroPhase,
     activityActionState,
   ]);
+  useEffect(() => {
+    resumePausedPomodoroOnInputRef.current = () => {
+      if (
+        activePomodoroPhase?.state === "paused" &&
+        activePomodoroPhase.phase === "work"
+      ) {
+        void resumePomodoro();
+      }
+    };
+    return () => {
+      resumePausedPomodoroOnInputRef.current = () => undefined;
+    };
+  }, [activePomodoroPhase, resumePomodoro]);
 
   const savePomodoroNote = useCallback(async (note: string) => {
     if (
@@ -7747,6 +7852,35 @@ export const App = forwardRef<
     if (activeWorkId !== null) setShowSchedule(true);
   }, [activeWorkId]);
 
+  const openCompletedRevision = useCallback(
+    async (
+      workId: EntityId<"Work">,
+      documentId: EntityId<"Document">,
+      revisionId: EntityId<"DocumentRevision">,
+    ): Promise<WorkspaceCatalogProjection> => {
+      const catalog = await activateWorkspaceLocation({
+        schemaVersion: 1,
+        workId,
+        documentId,
+      });
+      setHighlightedDocumentRevisionId(revisionId);
+      setReviewTab("versions");
+      setWorkSection("review");
+      const documentTitle = catalog.works
+        .find((work) => work.workId === workId)
+        ?.documents.find((document) => document.documentId === documentId)
+        ?.title ?? "회차";
+      await loadDocumentRevisionPreview(
+        workId,
+        documentId,
+        revisionId,
+        documentTitle,
+      );
+      return catalog;
+    },
+    [activateWorkspaceLocation, loadDocumentRevisionPreview],
+  );
+
   const closeSchedule = useCallback(() => {
     setShowSchedule(false);
     setScheduleRefreshRevision((current) => current + 1);
@@ -7775,6 +7909,7 @@ export const App = forwardRef<
       activateLocation: activateWorkspaceLocation,
       createWork,
       moveDocument,
+      openCompletedRevision,
       openSchedule,
       renameWork,
       retireDocument,
@@ -7785,6 +7920,7 @@ export const App = forwardRef<
       activateWorkspaceLocation,
       createWork,
       moveDocument,
+      openCompletedRevision,
       openSchedule,
       prepareForMain,
       renameWork,
@@ -7834,6 +7970,35 @@ export const App = forwardRef<
         .catch(() => undefined);
     },
     [activateWorkspaceLocation, runtime],
+  );
+  const openDocumentFromSchedule = useCallback(
+    (documentId: EntityId<"Document">) => {
+      closeSchedule();
+      setWorkSection("write");
+      activateDocumentById(documentId);
+    },
+    [activateDocumentById, closeSchedule],
+  );
+  const openCompletedRevisionFromSchedule = useCallback(
+    async (
+      documentId: EntityId<"Document">,
+      revisionId: EntityId<"DocumentRevision">,
+    ): Promise<void> => {
+      if (runtime.status !== "ready" || runtime.catalog.activeWorkId === null) {
+        return;
+      }
+      const documentTitle = runtime.catalog.works
+        .find((work) => work.workId === runtime.catalog.activeWorkId)
+        ?.documents.find((document) => document.documentId === documentId)
+        ?.title ?? "회차";
+      await loadDocumentRevisionPreview(
+        runtime.catalog.activeWorkId,
+        documentId,
+        revisionId,
+        documentTitle,
+      );
+    },
+    [loadDocumentRevisionPreview, runtime],
   );
   const captureFragment = useCallback(
     async (kindId: string) => {
@@ -12279,6 +12444,7 @@ export const App = forwardRef<
               actionState={versionActionState}
               documentRevisions={documentRevisions}
               error={versionActionError}
+              highlightedRevisionId={highlightedDocumentRevisionId}
               onCompareSnapshot={(snapshotId) => {
                 void compareWorkSnapshot(snapshotId);
               }}
@@ -12393,35 +12559,19 @@ export const App = forwardRef<
                 {workSection === "write" && (
                   <>
                     {activeDocumentSummary !== undefined && (
-                      <button
-                        aria-label={
-                          activeDocumentSummary.completion.state === "current"
-                            ? "회차 완료 취소"
-                            : activeDocumentSummary.completion.state ===
-                                "edited-after-completion"
-                              ? "회차 다시 완료"
-                              : "회차 완료"
-                        }
-                        className="work-header-completion"
-                        data-completion-state={activeDocumentSummary.completion.state}
-                        disabled={workspaceActionState !== "idle"}
-                        onClick={() => {
-                          void setActiveDocumentCompletion();
+                      <DocumentCompletionControl
+                        busy={workspaceActionState !== "idle"}
+                        completion={activeDocumentSummary.completion}
+                        onClear={() => {
+                          void clearActiveDocumentCompletion();
                         }}
-                        title={
-                          activeDocumentSummary.completion.completedAt ?? undefined
+                        onComplete={() => {
+                          void completeActiveDocument();
+                        }}
+                        onOpenCompletedRevision={
+                          openActiveDocumentCompletedRevision
                         }
-                        type="button"
-                      >
-                        {workspaceActionState === "setting-document-completion"
-                          ? "저장 중"
-                          : activeDocumentSummary.completion.state === "current"
-                            ? "✓ 완료"
-                            : activeDocumentSummary.completion.state ===
-                                "edited-after-completion"
-                              ? "△ 다시 완료"
-                              : "○ 완료"}
-                      </button>
+                      />
                     )}
                     <ManuscriptCount telemetryStore={telemetryStore} />
                   </>
@@ -14230,6 +14380,13 @@ export const App = forwardRef<
               </button>
               <WorkScheduleDashboard
                 key={`${activeWork.workId}:${scheduleSettingsRevision}`}
+                onOpenCompletedRevision={(documentId, revisionId) => {
+                  void openCompletedRevisionFromSchedule(
+                    documentId,
+                    revisionId,
+                  );
+                }}
+                onOpenDocument={openDocumentFromSchedule}
                 settingsRevision={scheduleSettingsRevision}
                 work={activeWork}
               />
@@ -14259,6 +14416,13 @@ export const App = forwardRef<
               setWorkSnapshotComparison(null);
             }}
             projection={workSnapshotComparison}
+          />
+        )}
+        {documentRevisionPreview !== null && (
+          <DocumentRevisionPreviewDialog
+            documentTitle={documentRevisionPreview.documentTitle}
+            onClose={() => setDocumentRevisionPreview(null)}
+            projection={documentRevisionPreview.projection}
           />
         )}
         {showForwardWritingDialog && activeDocument !== undefined && (
@@ -14428,7 +14592,7 @@ export const App = forwardRef<
               results={musicLibraryResults}
               searching={musicLibraryActionState === "searching"}
             />,
-            musicPlayerHost,
+            musicPlayerHost?.closest<HTMLElement>(".studio-app-shell"),
           )
         )}
         {assistantChatDialogOpen && (

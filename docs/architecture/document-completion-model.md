@@ -94,15 +94,23 @@ updatedAt = null
 renderer는 완료 시각·날짜·시간대를 보내지 않는다.
 
 ```ts
-type SetDocumentCompletionCommand = {
+type CompleteDocumentCommand = {
   schemaVersion: 1;
   workId: EntityId<"Work">;
   documentId: EntityId<"Document">;
   expectedCompletionRevision: number;
   expectedDocumentRevisionId: EntityId<"DocumentRevision">;
-  completed: boolean;
+};
+
+type ClearDocumentCompletionCommand = {
+  schemaVersion: 1;
+  workId: EntityId<"Work">;
+  documentId: EntityId<"Document">;
+  expectedCompletionRevision: number;
 };
 ```
+
+완료 취소는 원고 revision을 승인하는 명령이 아니므로 `expectedDocumentRevisionId`를 요구하지 않는다. 두 명령은 같은 완료 원장의 optimistic revision만 공유한다.
 
 활성 회차 완료 순서는 다음으로 고정한다.
 
@@ -148,6 +156,8 @@ type WorkCalendarOccurrence =
 
 완료 occurrence의 결정적 ID는 `document-completion:${documentId}`다. 완료 취소 시 사라지고, 재완료 시 같은 occurrence가 새 `completedDate`로 이동한다. `WorkScheduleItem`이나 가짜 `itemId`를 생성하지 않는다.
 
+완료 occurrence는 완료 revision과 현재 manuscript revision을 비교해 `current | edited-after-completion` 상태도 함께 전달한다. 달력·오늘·헤더의 완료 항목은 현재 회차 열기와 완료 당시 불변 revision 보기를 별도 동작으로 제공한다.
+
 ## 7. D-DAY 호환
 
 기존 `episodeCount`와 `episodeNumber`는 글자 수 기반 추정 방식으로 그대로 보존한다. 기존 항목을 자동 변환하지 않는다.
@@ -174,6 +184,7 @@ type ExplicitCompletionWorkload =
 - 기존 문서에서 완료 상태를 추정하거나 backfill하지 않는다.
 - schema migration 뒤 기존 문서는 행 없음·미완료 projection이다.
 - 완료 상태 테이블은 SQLite DB snapshot에 포함되어 기존 backup·restore 경계를 그대로 따른다.
+- 작품별 완료 날짜 범위 조회는 `work_id, completed_date WHERE completed_at IS NOT NULL` partial index를 사용한다.
 - 문서를 보관해도 완료 행은 복구를 위해 보존하고 일반 카탈로그·달력 projection에서 제외한다.
 - 첫 배포에는 append-only 완료 이력과 과거 날짜 보정, 일괄 완료를 넣지 않는다.
 

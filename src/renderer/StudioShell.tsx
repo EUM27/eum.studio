@@ -13,9 +13,7 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronRight,
-  ChevronUp,
   Download,
-  FileText,
   Home,
   MoreHorizontal,
   PanelLeftClose,
@@ -182,8 +180,6 @@ function WorkCard({
   onRetire,
   onToggleFavorite,
   onSelectCover,
-  onRetireDocument,
-  onMoveDocument,
   schedule,
 }: {
   readonly work: WorkspaceWorkSummary;
@@ -202,20 +198,9 @@ function WorkCard({
   readonly onRename: (work: WorkspaceWorkSummary) => void;
   readonly onToggleFavorite: (work: WorkspaceWorkSummary) => void;
   readonly onSelectCover: (work: WorkspaceWorkSummary) => void;
-  readonly onRetireDocument: (
-    work: WorkspaceWorkSummary,
-    document: WorkspaceWorkSummary["documents"][number],
-  ) => void;
-  readonly onMoveDocument: (
-    work: WorkspaceWorkSummary,
-    document: WorkspaceWorkSummary["documents"][number],
-    direction: "earlier" | "later",
-  ) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-
   return (
-    <article className={expanded ? "library-work-card is-expanded" : "library-work-card"}>
+    <article className="library-work-card">
       <header>
         <div className="work-cover-column">
           <button
@@ -315,76 +300,33 @@ function WorkCard({
                 </span>
               )}
           </button>
-          <button
-            aria-expanded={expanded}
-            aria-label={`${work.title} 회차 목록 ${expanded ? "닫기" : "열기"}`}
-            className="work-expand-button"
-            disabled={disabled}
-            onClick={() => setExpanded((current) => !current)}
-            type="button"
+          <select
+            aria-label={`${work.title} 회차 선택`}
+            className="work-document-select"
+            disabled={disabled || work.documents.length === 0}
+            onChange={(event) => {
+              const document = work.documents.find(
+                (candidate) => candidate.documentId === event.currentTarget.value,
+              );
+              if (document !== undefined) {
+                onOpen(work.workId, document.documentId);
+              }
+            }}
+            value={activeDocumentId ?? ""}
           >
-            <FileText aria-hidden="true" size={14} />
-            <span>{work.documents.length}개 회차</span>
-            {expanded ? (
-              <ChevronUp aria-hidden="true" size={14} />
-            ) : (
-              <ChevronDown aria-hidden="true" size={14} />
-            )}
-          </button>
+            <option disabled value="">
+              {work.documents.length === 0
+                ? "회차 없음"
+                : `${work.documents.length}개 회차`}
+            </option>
+            {work.documents.map((document) => (
+              <option key={document.documentId} value={document.documentId}>
+                {document.title}
+              </option>
+            ))}
+          </select>
         </div>
       </header>
-      {expanded && <div className="document-list" aria-label={`${work.title} 회차 목록`}>
-        {work.documents.map((document, index) => (
-          <div className="document-list-entry" key={document.documentId}>
-            <button
-              className={
-                document.documentId === activeDocumentId
-                  ? "document-list-item is-active"
-                  : "document-list-item"
-              }
-              disabled={disabled}
-              onClick={() => onOpen(work.workId, document.documentId)}
-              type="button"
-            >
-              <FileText aria-hidden="true" size={15} />
-              <span>{document.title}</span>
-              <ChevronRight aria-hidden="true" size={14} />
-            </button>
-            <div className="document-move-actions">
-              <button
-                aria-label={`${work.title} ${document.title} 앞으로 이동`}
-                className="document-move-button"
-                disabled={disabled || index === 0}
-                onClick={() => onMoveDocument(work, document, "earlier")}
-                title="앞으로 이동"
-                type="button"
-              >
-                <ChevronUp aria-hidden="true" size={14} />
-              </button>
-              <button
-                aria-label={`${work.title} ${document.title} 뒤로 이동`}
-                className="document-move-button"
-                disabled={disabled || index === work.documents.length - 1}
-                onClick={() => onMoveDocument(work, document, "later")}
-                title="뒤로 이동"
-                type="button"
-              >
-                <ChevronDown aria-hidden="true" size={14} />
-              </button>
-            </div>
-            <button
-              aria-label={`${work.title} ${document.title} 회차 삭제`}
-              className="document-retire-button"
-              disabled={disabled}
-              onClick={() => onRetireDocument(work, document)}
-              title="회차 삭제"
-              type="button"
-            >
-              <Trash2 aria-hidden="true" size={14} />
-            </button>
-          </div>
-        ))}
-      </div>}
     </article>
   );
 }
@@ -402,14 +344,13 @@ function MainDashboard({
   onOpenBackup,
   onOpenImport,
   onOpenPublishing,
+  onOpenCompletedRevision,
   onOpenSchedule,
   onOpen,
   onRename,
   onRetire,
   onToggleFavorite,
   onSelectCover,
-  onRetireDocument,
-  onMoveDocument,
 }: {
   readonly catalog: WorkspaceCatalogProjection;
   readonly favoriteWorkIds: readonly EntityId<"Work">[];
@@ -423,6 +364,11 @@ function MainDashboard({
   readonly onOpenBackup: () => void;
   readonly onOpenImport: () => void;
   readonly onOpenPublishing: () => void;
+  readonly onOpenCompletedRevision: (
+    work: WorkspaceWorkSummary,
+    documentId: EntityId<"Document">,
+    revisionId: EntityId<"DocumentRevision">,
+  ) => void;
   readonly onOpenSchedule: (work: WorkspaceWorkSummary) => void;
   readonly onOpen: (
     workId: WorkspaceWorkSummary["workId"],
@@ -572,6 +518,7 @@ function MainDashboard({
         onOpenDocument={(work, documentId) =>
           onOpen(work.workId, documentId)
         }
+        onOpenCompletedRevision={onOpenCompletedRevision}
         onOpenSchedule={onOpenSchedule}
         schedules={schedules}
       />
@@ -700,10 +647,8 @@ function MainDashboard({
                 key={work.workId}
                 onOpen={onOpen}
                 onOpenSchedule={onOpenSchedule}
-                onMoveDocument={onMoveDocument}
                 onRename={onRename}
                 onRetire={onRetire}
-                onRetireDocument={onRetireDocument}
                 onToggleFavorite={onToggleFavorite}
                 onSelectCover={onSelectCover}
                 schedule={scheduleProjection === undefined
@@ -2579,6 +2524,38 @@ export function StudioShell() {
     workspaceRef.current?.openSchedule();
   }, [catalog, openLocation]);
 
+  const openCompletedRevision = useCallback(
+    async (
+      work: WorkspaceWorkSummary,
+      documentId: EntityId<"Document">,
+      revisionId: EntityId<"DocumentRevision">,
+    ): Promise<void> => {
+      if (
+        catalogState.status !== "ready" ||
+        workspaceRef.current === null ||
+        actionState !== "idle"
+      ) {
+        return;
+      }
+      setActionState("opening");
+      setActionError(null);
+      try {
+        const nextCatalog = await workspaceRef.current.openCompletedRevision(
+          work.workId,
+          documentId,
+          revisionId,
+        );
+        acceptCatalog(nextCatalog);
+        setActivePage("workspace");
+      } catch {
+        setActionError("완료 당시 버전을 열지 못했습니다.");
+      } finally {
+        setActionState("idle");
+      }
+    },
+    [acceptCatalog, actionState, catalogState.status],
+  );
+
   const returnToMain = useCallback(() => {
     if (actionState !== "idle") {
       return;
@@ -3200,6 +3177,9 @@ export function StudioShell() {
                 setShowImportRehearsal(true);
               }}
               onOpenPublishing={openPublishingPartners}
+              onOpenCompletedRevision={(work, documentId, revisionId) => {
+                void openCompletedRevision(work, documentId, revisionId);
+              }}
               onOpenSchedule={(work) => {
                 void openWorkSchedule(work);
               }}

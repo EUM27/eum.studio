@@ -2,24 +2,31 @@ import { describe, expect, it } from "vitest";
 
 import {
   deriveDocumentCompletionDate,
+  parseClearDocumentCompletionCommand,
+  parseCompleteDocumentCommand,
+  parseDocumentCompletionOccurrence,
   parseDocumentCompletionProjection,
-  parseSetDocumentCompletionCommand,
 } from "./document-completion";
 
 describe("Document completion contract", () => {
   it("parses an explicit completion command and a current completion projection", () => {
-    expect(parseSetDocumentCompletionCommand({
+    expect(parseCompleteDocumentCommand({
       schemaVersion: 1,
       workId: "work-1",
       documentId: "document-1",
       expectedCompletionRevision: 0,
       expectedDocumentRevisionId: "revision-1",
-      completed: true,
     })).toMatchObject({
       expectedCompletionRevision: 0,
       expectedDocumentRevisionId: "revision-1",
-      completed: true,
     });
+
+    expect(parseClearDocumentCompletionCommand({
+      schemaVersion: 1,
+      workId: "work-1",
+      documentId: "document-1",
+      expectedCompletionRevision: 1,
+    })).toMatchObject({ expectedCompletionRevision: 1 });
 
     expect(parseDocumentCompletionProjection({
       schemaVersion: 1,
@@ -100,5 +107,47 @@ describe("Document completion contract", () => {
       updatedAt: completedAt,
     });
     expect(stored.completedDate).toBe("2026-08-22");
+  });
+
+  it("rejects impossible dates, non-IANA zones, and local timestamps", () => {
+    expect(() => parseDocumentCompletionProjection({
+      schemaVersion: 1,
+      workId: "work-1",
+      documentId: "document-1",
+      revision: 1,
+      completedAt: "2026-08-21T15:30:00.000Z",
+      completedDate: "2026-02-31",
+      completedTimeZone: "Asia/Seoul",
+      completedDocumentRevisionId: "revision-1",
+      state: "current",
+      updatedAt: "2026-08-21T15:30:00.000Z",
+    })).toThrow("real calendar date");
+
+    expect(() => deriveDocumentCompletionDate(
+      "2026-08-21T15:30:00.000Z",
+      "Not/A_Time_Zone",
+    )).toThrow("valid IANA time zone");
+
+    expect(() => deriveDocumentCompletionDate(
+      "2026-08-21T15:30:00",
+      "Asia/Seoul",
+    )).toThrow("absolute instant");
+  });
+
+  it("parses the current-versus-edited state on a completion occurrence", () => {
+    expect(parseDocumentCompletionOccurrence({
+      occurrenceId: "document-completion:document-1",
+      workId: "work-1",
+      documentId: "document-1",
+      documentTitle: "1화",
+      kind: "document-completion",
+      label: "1화 완료",
+      date: "2026-08-21",
+      time: null,
+      completed: true,
+      completedAt: "2026-08-21T15:30:00.000Z",
+      completedDocumentRevisionId: "revision-1",
+      state: "edited-after-completion",
+    })).toMatchObject({ state: "edited-after-completion" });
   });
 });

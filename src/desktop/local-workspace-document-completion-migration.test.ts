@@ -116,6 +116,12 @@ describe("local Document completion migration", () => {
         expect(migrated.prepare(`
           SELECT COUNT(*) AS count FROM document_completion_status
         `).get()).toEqual({ count: 0 });
+        expect(migrated.prepare(`
+          SELECT COUNT(*) AS count
+          FROM pragma_index_list('document_completion_status')
+          WHERE name = 'document_completion_status_work_date'
+            AND partial = 1
+        `).get()).toEqual({ count: 1 });
         expect(migrated.prepare("SELECT title FROM works WHERE id = ?").get(workId))
           .toEqual({ title: "작품" });
         expect(migrated.prepare("SELECT title FROM documents WHERE id = ?").get(documentId))

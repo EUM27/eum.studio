@@ -12,6 +12,11 @@ export function TodaySchedulePanel(input: {
     work: WorkspaceWorkSummary,
     documentId: EntityId<"Document">,
   ) => void;
+  readonly onOpenCompletedRevision: (
+    work: WorkspaceWorkSummary,
+    documentId: EntityId<"Document">,
+    revisionId: EntityId<"DocumentRevision">,
+  ) => void;
   readonly onOpenSchedule: (work: WorkspaceWorkSummary) => void;
   readonly schedules: ReadonlyArray<Readonly<{
     work: WorkspaceWorkSummary;
@@ -83,17 +88,37 @@ export function TodaySchedulePanel(input: {
             if (occurrence.kind !== "document-completion") return null;
             return (
               <li key={`${work.workId}:${occurrence.occurrenceId}`}>
-                <button
-                  disabled={input.disabled}
-                  onClick={() =>
-                    input.onOpenDocument(work, occurrence.documentId)
-                  }
-                  type="button"
-                >
+                <div className="today-completion-entry">
                   <span>{work.title}</span>
                   <strong>✓ {occurrence.documentTitle}</strong>
-                  <small>완료</small>
-                </button>
+                  <small>
+                    {occurrence.state === "current"
+                      ? "완료 당시 원고와 같음"
+                      : "완료 후 수정됨"}
+                  </small>
+                  <div className="today-completion-actions">
+                    <button
+                      disabled={input.disabled}
+                      onClick={() =>
+                        input.onOpenDocument(work, occurrence.documentId)
+                      }
+                      type="button"
+                    >
+                      현재 회차 열기
+                    </button>
+                    <button
+                      disabled={input.disabled}
+                      onClick={() => input.onOpenCompletedRevision(
+                        work,
+                        occurrence.documentId,
+                        occurrence.completedDocumentRevisionId,
+                      )}
+                      type="button"
+                    >
+                      완료 당시 버전 보기
+                    </button>
+                  </div>
+                </div>
               </li>
             );
           })}

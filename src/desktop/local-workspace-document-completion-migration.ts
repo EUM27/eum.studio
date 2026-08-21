@@ -55,6 +55,14 @@ const MIGRATION_STATEMENTS = Object.freeze([
         ON DELETE RESTRICT
     ) STRICT
   `,
+  `
+    CREATE INDEX document_completion_status_work_date
+    ON document_completion_status (
+      work_id,
+      completed_date
+    )
+    WHERE completed_at IS NOT NULL
+  `,
 ]);
 
 const VERIFICATION_QUERY = `
@@ -73,6 +81,12 @@ const VERIFICATION_QUERY = `
     ) AS completion_count,
     (
       SELECT COUNT(*)
+      FROM pragma_index_list('document_completion_status')
+      WHERE name = 'document_completion_status_work_date'
+        AND partial = 1
+    ) AS date_index_count,
+    (
+      SELECT COUNT(*)
       FROM pragma_foreign_key_check
     ) AS foreign_key_violation_count
 `;
@@ -82,6 +96,7 @@ const VERIFICATION_ROWS = Object.freeze([
     column_count: 9,
     foreign_key_count: 3,
     completion_count: 0,
+    date_index_count: 1,
     foreign_key_violation_count: 0,
   }),
 ]);
@@ -128,7 +143,7 @@ export const DOCUMENT_COMPLETION_MIGRATION_DEFINITION_BYTES = Buffer.from(
 );
 
 const MIGRATION_DEFINITION_CHECKSUM =
-  "8ac105b191fba714e6f27a7e428bdf3fc80093a722c87e320ca663dd604c0ffe";
+  "c4ea03e0414cb0eba06a219e2aa583e323f37b82504783f4d507613886a76295";
 
 const MIGRATION_STEP: NodeSqliteMigrationCatalogStep = Object.freeze({
   migrationId: MIGRATION_ID,

@@ -176,11 +176,13 @@ import {
   VERSION_CREATE_WORK_SNAPSHOT_CHANNEL,
   VERSION_COMPARE_WORK_SNAPSHOT_CHANNEL,
   VERSION_LIST_DOCUMENT_REVISIONS_CHANNEL,
+  VERSION_READ_DOCUMENT_REVISION_CHANNEL,
   VERSION_LIST_WORK_SNAPSHOTS_CHANNEL,
   VERSION_RESTORE_DOCUMENT_REVISION_CHANNEL,
   WORKSPACE_FAVORITES_CHANNEL,
+  WORKSPACE_CLEAR_DOCUMENT_COMPLETION_CHANNEL,
+  WORKSPACE_COMPLETE_DOCUMENT_CHANNEL,
   WORKSPACE_GET_DOCUMENT_COMPLETION_CHANNEL,
-  WORKSPACE_SET_DOCUMENT_COMPLETION_CHANNEL,
   WORKSPACE_COVERS_CHANNEL,
   WORKSPACE_SELECT_COVER_CHANNEL,
   WORKSPACE_RENAME_DOCUMENT_CHANNEL,
@@ -243,7 +245,7 @@ function incompleteDocumentCompletion(
 }
 
 describe("studio bridge contract", () => {
-  it("uses typed Document completion query and mutation channels", async () => {
+  it("uses separate typed Document completion query, complete, and clear channels", async () => {
     const workId = entityId<"Work">(randomUUID());
     const documentId = entityId<"Document">(randomUUID());
     const documentRevisionId = entityId<"DocumentRevision">(randomUUID());
@@ -267,13 +269,18 @@ describe("studio bridge contract", () => {
       workId,
       documentId,
     })).resolves.toEqual(projection);
-    await expect(bridge.workspace.setDocumentCompletion({
+    await expect(bridge.workspace.completeDocument({
       schemaVersion: 1,
       workId,
       documentId,
       expectedCompletionRevision: 0,
       expectedDocumentRevisionId: documentRevisionId,
-      completed: true,
+    })).resolves.toEqual(projection);
+    await expect(bridge.workspace.clearDocumentCompletion({
+      schemaVersion: 1,
+      workId,
+      documentId,
+      expectedCompletionRevision: 1,
     })).resolves.toEqual(projection);
     expect(invoke).toHaveBeenNthCalledWith(
       1,
@@ -282,14 +289,23 @@ describe("studio bridge contract", () => {
     );
     expect(invoke).toHaveBeenNthCalledWith(
       2,
-      WORKSPACE_SET_DOCUMENT_COMPLETION_CHANNEL,
+      WORKSPACE_COMPLETE_DOCUMENT_CHANNEL,
       {
         schemaVersion: 1,
         workId,
         documentId,
         expectedCompletionRevision: 0,
         expectedDocumentRevisionId: documentRevisionId,
-        completed: true,
+      },
+    );
+    expect(invoke).toHaveBeenNthCalledWith(
+      3,
+      WORKSPACE_CLEAR_DOCUMENT_COMPLETION_CHANNEL,
+      {
+        schemaVersion: 1,
+        workId,
+        documentId,
+        expectedCompletionRevision: 1,
       },
     );
   });
@@ -795,6 +811,7 @@ describe("studio bridge contract", () => {
           completed: true as const,
           completedAt: timestamp,
           completedDocumentRevisionId: "revision-a",
+          state: "current" as const,
         },
         ...projection.occurrences,
       ],
@@ -4290,9 +4307,17 @@ describe("studio bridge contract", () => {
         characterDelta: 0,
       }],
     } as const;
+    const revisionContent = {
+      schemaVersion: 1 as const,
+      revision: revisionList.revisions[0],
+      text: "완료 당시 원고",
+    };
     const invoke = vi.fn(async (channel) => {
       if (channel === VERSION_LIST_DOCUMENT_REVISIONS_CHANNEL) {
         return revisionList;
+      }
+      if (channel === VERSION_READ_DOCUMENT_REVISION_CHANNEL) {
+        return revisionContent;
       }
       if (channel === VERSION_RESTORE_DOCUMENT_REVISION_CHANNEL) {
         return restoreResult;
@@ -4313,6 +4338,12 @@ describe("studio bridge contract", () => {
       documentId,
       targetRevisionId: revisionId,
     } as const;
+    const readRevision = {
+      schemaVersion: 1,
+      workId,
+      documentId,
+      revisionId,
+    } as const;
     const createSnapshot = {
       schemaVersion: 1,
       workId,
@@ -4329,6 +4360,9 @@ describe("studio bridge contract", () => {
       bridge.version.listDocumentRevisions(listRevisions),
     ).resolves.toEqual(revisionList);
     await expect(
+      bridge.version.readDocumentRevision(readRevision),
+    ).resolves.toEqual(revisionContent);
+    await expect(
       bridge.version.restoreDocumentRevision(restore),
     ).resolves.toEqual(restoreResult);
     await expect(
@@ -4343,6 +4377,10 @@ describe("studio bridge contract", () => {
     expect(invoke).toHaveBeenCalledWith(
       VERSION_LIST_DOCUMENT_REVISIONS_CHANNEL,
       listRevisions,
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      VERSION_READ_DOCUMENT_REVISION_CHANNEL,
+      readRevision,
     );
     expect(invoke).toHaveBeenCalledWith(
       VERSION_RESTORE_DOCUMENT_REVISION_CHANNEL,

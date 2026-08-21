@@ -35,7 +35,6 @@ describe("studio home layout", () => {
     );
     const coverActions = ruleFor(".studio-app-shell .work-cover-actions");
     const actions = ruleFor(".studio-app-shell .work-card-actions");
-    const expandButton = ruleFor(".studio-app-shell .work-expand-button");
     const metadata = ruleFor(".studio-app-shell .continue-description");
 
     expect(homeShell).toContain("--eum-sidebar-width: 72px");
@@ -52,15 +51,34 @@ describe("studio home layout", () => {
     expect(coverImage).toContain("object-fit: cover");
     expect(favorite).toContain("top:");
     expect(favorite).toContain("left:");
-    expect(coverButtons).toContain("background: #ffffff");
-    expect(coverButtons).toContain("border: 1px solid var(--eum-line)");
+    expect(coverButtons).toContain("background: transparent");
+    expect(coverButtons).toContain("border: 0");
     expect(coverButtons).toContain("box-shadow: none");
-    expect(coverButtons).toContain("width: 28px");
-    expect(coverButtons).toContain("height: 28px");
+    expect(coverButtons).toContain("width: 24px");
+    expect(coverButtons).toContain("height: 24px");
     expect(coverActions).toContain("bottom:");
     expect(coverActions).toContain("left:");
     expect(actions).toContain("grid-column: 2");
-    expect(expandButton).toContain("white-space: nowrap");
     expect(metadata).toContain("white-space: nowrap");
+  });
+
+  it("styles the home document selector as a native dropdown", () => {
+    const documentSelect = ruleFor(".studio-app-shell .work-document-select");
+
+    expect(documentSelect).toContain("width: 150px");
+    expect(documentSelect).toContain("font: inherit");
+    expect(documentSelect).toContain("cursor: pointer");
+  });
+
+  it("uses the full app width for the centered manuscript focus screen", () => {
+    const focusShell = ruleFor(
+      ".studio-app-shell.is-editor:has(.writing-workspace-focus-mode[data-work-section])",
+    );
+    const focusWorkspace = ruleFor(
+      ".studio-app-shell.is-editor:has(.writing-workspace-focus-mode[data-work-section])\n  > .workspace",
+    );
+
+    expect(focusShell).toContain("--eum-sidebar-width: 0px");
+    expect(focusWorkspace).toContain("grid-column: 1 / -1");
   });
 });

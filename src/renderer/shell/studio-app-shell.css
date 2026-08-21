@@ -1080,13 +1080,22 @@ textarea {
   color: #8d6464;
 }
 
-.studio-app-shell .work-expand-button {
+.studio-app-shell .work-document-select {
+  width: 150px;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 28px 0 10px;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
   color: var(--eum-accent-strong);
   background: var(--eum-accent-soft) !important;
+  font: inherit;
   white-space: nowrap;
+  cursor: pointer;
 }
 
-.studio-app-shell .work-expand-button:hover:not(:disabled) {
+.studio-app-shell .work-document-select:hover:not(:disabled) {
   border-color: var(--eum-accent-border);
   background: color-mix(in srgb, var(--eum-accent-soft) 72%, #ffffff) !important;
 }
@@ -3570,6 +3579,92 @@ textarea {
   cursor: default;
 }
 
+.studio-app-shell .work-header-completion-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.studio-app-shell .work-header-completion-status {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  color: var(--eum-text-muted);
+  background: var(--eum-panel);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.studio-app-shell
+  .work-header-completion-status[data-completion-state="current"] {
+  color: var(--eum-accent-strong);
+  border-color: var(--eum-accent-border);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell
+  .work-header-completion-status[data-completion-state="edited-after-completion"] {
+  color: var(--eum-accent);
+}
+
+.studio-app-shell .work-header-completion-more {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  color: var(--eum-text-muted);
+  background: var(--eum-panel);
+  cursor: pointer;
+}
+
+.studio-app-shell .work-header-completion-menu {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 158px;
+  padding: 5px;
+  border: 1px solid var(--eum-line);
+  border-radius: 9px;
+  background: var(--eum-panel);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 12%);
+}
+
+.studio-app-shell .work-header-completion-menu button {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--eum-text);
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.studio-app-shell .work-header-completion-menu button:hover {
+  background: color-mix(in srgb, var(--eum-text) 7%, var(--eum-panel));
+}
+
+.studio-app-shell .work-header-completion-menu button.is-destructive {
+  color: #a34f4f;
+}
+
+.studio-app-shell .version-history-list li[data-completed-revision="true"] {
+  border-color: var(--eum-accent-border);
+  background: var(--eum-accent-soft);
+}
+
 .studio-app-shell .work-header-work-title,
 .studio-app-shell .work-header h2 {
   overflow: hidden;
@@ -3867,7 +3962,8 @@ textarea {
   list-style: none;
 }
 
-.studio-app-shell .today-schedule-panel li button {
+.studio-app-shell .today-schedule-panel li > button,
+.studio-app-shell .today-completion-entry {
   display: grid;
   width: 100%;
   min-height: 36px;
@@ -3880,6 +3976,28 @@ textarea {
   color: var(--eum-text);
   background: var(--eum-bg);
   text-align: left;
+  cursor: pointer;
+}
+
+.studio-app-shell .today-completion-entry {
+  cursor: default;
+}
+
+.studio-app-shell .today-completion-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  gap: 6px;
+}
+
+.studio-app-shell .today-completion-actions button,
+.studio-app-shell .schedule-document-completion-actions button {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--eum-line);
+  border-radius: 6px;
+  color: var(--eum-text-muted);
+  background: var(--eum-panel);
+  font-size: 10px;
   cursor: pointer;
 }
 
@@ -4099,6 +4217,10 @@ textarea {
   --eum-topbar-height: 0px;
 }
 
+.studio-app-shell.is-editor:has(.writing-workspace-focus-mode[data-work-section]) {
+  --eum-sidebar-width: 0px;
+}
+
 .studio-app-shell:has(.writing-workspace-focus-mode) > .app-topbar,
 .studio-app-shell:has(.writing-workspace-focus-mode) > .sidebar,
 .studio-app-shell:has(.writing-workspace-focus-mode) > .studio-event-rail-host,
@@ -4112,6 +4234,11 @@ textarea {
 }
 
 .studio-app-shell:has(.writing-workspace-focus-mode) > .workspace {
+  grid-column: 1 / -1;
+}
+
+.studio-app-shell.is-editor:has(.writing-workspace-focus-mode[data-work-section])
+  > .workspace {
   grid-column: 1 / -1;
 }
 
@@ -6039,6 +6166,58 @@ textarea {
   border: 1px solid #ded7e7;
   border-radius: 0.75rem;
   background: #faf7fc;
+}
+
+.studio-app-shell .schedule-document-completion-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+}
+
+.studio-app-shell .document-revision-preview-dialog {
+  display: grid;
+  width: min(760px, calc(100vw - 48px));
+  max-height: calc(100dvh - 48px);
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--eum-line);
+  border-radius: 11px;
+  color: var(--eum-text);
+  background: var(--eum-panel);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 18%);
+}
+
+.studio-app-shell .document-revision-preview-dialog > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--eum-line);
+}
+
+.studio-app-shell .document-revision-preview-dialog h2,
+.studio-app-shell .document-revision-preview-dialog header p {
+  margin: 0;
+}
+
+.studio-app-shell .document-revision-preview-dialog header > div > p:last-child {
+  margin-top: 4px;
+  color: var(--eum-text-muted);
+  font-size: 11px;
+}
+
+.studio-app-shell .document-revision-preview-dialog pre {
+  min-height: 0;
+  margin: 0;
+  overflow: auto;
+  padding: 26px clamp(22px, 7vw, 72px);
+  color: var(--eum-text);
+  background: var(--eum-bg);
+  font: 15px/1.9 "MaruBuri", serif;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .studio-app-shell .schedule-completion-fact-mark {
@@ -9818,7 +9997,7 @@ textarea {
     .work-cover,
     .resume-strip-action,
     .library-tabs > .is-active,
-    .work-expand-button,
+    .work-document-select,
     .workspace-section-navigation button.is-active,
     .document-tree-open.is-active,
     .bottom-event-card.is-current

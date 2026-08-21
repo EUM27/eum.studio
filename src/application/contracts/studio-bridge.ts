@@ -115,12 +115,14 @@ import {
   type WorkspaceCatalogProjection,
 } from "../workspace/workspace-contract";
 import {
+  parseClearDocumentCompletionCommand,
+  parseCompleteDocumentCommand,
   parseDocumentCompletionProjection,
   parseGetDocumentCompletionCommand,
-  parseSetDocumentCompletionCommand,
+  type ClearDocumentCompletionCommand,
+  type CompleteDocumentCommand,
   type DocumentCompletionProjection,
   type GetDocumentCompletionCommand,
-  type SetDocumentCompletionCommand,
 } from "../workspace/document-completion";
 import {
   parseSetWorkFavoriteCommand,
@@ -805,6 +807,7 @@ import {
 import {
   parseCreateWorkSnapshotCommand,
   parseDocumentRevisionListProjection,
+  parseDocumentRevisionContentProjection,
   parseListDocumentRevisionsCommand,
   parseListWorkSnapshotsCommand,
   parseRestoreDocumentRevisionCommand,
@@ -813,12 +816,15 @@ import {
   parseWorkSnapshotProjection,
   type CreateWorkSnapshotCommand,
   type DocumentRevisionListProjection,
+  type DocumentRevisionContentProjection,
   type ListDocumentRevisionsCommand,
+  type ReadDocumentRevisionCommand,
   type ListWorkSnapshotsCommand,
   type RestoreDocumentRevisionCommand,
   type RestoreDocumentRevisionResult,
   type WorkSnapshotListProjection,
   type WorkSnapshotProjection,
+  parseReadDocumentRevisionCommand,
 } from "../revisions/work-version-contract";
 import {
   parseCompareWorkSnapshotCommand,
@@ -884,8 +890,10 @@ export const WORKSPACE_CATALOG_CHANNEL =
   "studio:workspace:get-catalog";
 export const WORKSPACE_GET_DOCUMENT_COMPLETION_CHANNEL =
   "studio:workspace:get-document-completion";
-export const WORKSPACE_SET_DOCUMENT_COMPLETION_CHANNEL =
-  "studio:workspace:set-document-completion";
+export const WORKSPACE_COMPLETE_DOCUMENT_CHANNEL =
+  "studio:workspace:complete-document";
+export const WORKSPACE_CLEAR_DOCUMENT_COMPLETION_CHANNEL =
+  "studio:workspace:clear-document-completion";
 export const WORKSPACE_FAVORITES_CHANNEL =
   "studio:workspace:get-favorites";
 export const WORKSPACE_SET_FAVORITE_CHANNEL =
@@ -1274,6 +1282,8 @@ export const SCENE_MUSIC_QUEUE_SELECT_CHANNEL =
   "studio:music:scene-queue-select";
 export const VERSION_LIST_DOCUMENT_REVISIONS_CHANNEL =
   "studio:version:list-document-revisions";
+export const VERSION_READ_DOCUMENT_REVISION_CHANNEL =
+  "studio:version:read-document-revision";
 export const VERSION_RESTORE_DOCUMENT_REVISION_CHANNEL =
   "studio:version:restore-document-revision";
 export const VERSION_CREATE_WORK_SNAPSHOT_CHANNEL =
@@ -1318,8 +1328,11 @@ export type StudioBridge = {
     getDocumentCompletion: (
       command: GetDocumentCompletionCommand,
     ) => Promise<DocumentCompletionProjection>;
-    setDocumentCompletion: (
-      command: SetDocumentCompletionCommand,
+    completeDocument: (
+      command: CompleteDocumentCommand,
+    ) => Promise<DocumentCompletionProjection>;
+    clearDocumentCompletion: (
+      command: ClearDocumentCompletionCommand,
     ) => Promise<DocumentCompletionProjection>;
     getFavorites: () => Promise<WorkFavoritesProjection>;
     setFavorite: (
@@ -1934,6 +1947,9 @@ export type StudioBridge = {
     listDocumentRevisions: (
       command: ListDocumentRevisionsCommand,
     ) => Promise<DocumentRevisionListProjection>;
+    readDocumentRevision: (
+      command: ReadDocumentRevisionCommand,
+    ) => Promise<DocumentRevisionContentProjection>;
     restoreDocumentRevision: (
       command: RestoreDocumentRevisionCommand,
     ) => Promise<RestoreDocumentRevisionResult>;
@@ -2030,7 +2046,8 @@ export type BridgeInvoke = (
     | typeof MANUSCRIPT_COMPLETE_CLOSE_REQUEST_CHANNEL
     | typeof WORKSPACE_CATALOG_CHANNEL
     | typeof WORKSPACE_GET_DOCUMENT_COMPLETION_CHANNEL
-    | typeof WORKSPACE_SET_DOCUMENT_COMPLETION_CHANNEL
+    | typeof WORKSPACE_COMPLETE_DOCUMENT_CHANNEL
+    | typeof WORKSPACE_CLEAR_DOCUMENT_COMPLETION_CHANNEL
     | typeof WORKSPACE_FAVORITES_CHANNEL
     | typeof WORKSPACE_SET_FAVORITE_CHANNEL
     | typeof WORKSPACE_COVERS_CHANNEL
@@ -2225,6 +2242,7 @@ export type BridgeInvoke = (
     | typeof SCENE_MUSIC_QUEUE_LIST_CHANNEL
     | typeof SCENE_MUSIC_QUEUE_SELECT_CHANNEL
     | typeof VERSION_LIST_DOCUMENT_REVISIONS_CHANNEL
+    | typeof VERSION_READ_DOCUMENT_REVISION_CHANNEL
     | typeof VERSION_RESTORE_DOCUMENT_REVISION_CHANNEL
     | typeof VERSION_CREATE_WORK_SNAPSHOT_CHANNEL
     | typeof VERSION_LIST_WORK_SNAPSHOTS_CHANNEL
@@ -2538,16 +2556,28 @@ export function createStudioBridge(
           throw new Error("Invalid Document completion projection");
         }
       },
-      setDocumentCompletion: async (input) => {
-        const command = parseSetDocumentCompletionCommand(input);
+      completeDocument: async (input) => {
+        const command = parseCompleteDocumentCommand(input);
         const value = await invoke(
-          WORKSPACE_SET_DOCUMENT_COMPLETION_CHANNEL,
+          WORKSPACE_COMPLETE_DOCUMENT_CHANNEL,
           command,
         );
         try {
           return parseDocumentCompletionProjection(value);
         } catch {
-          throw new Error("Invalid saved Document completion projection");
+          throw new Error("Invalid completed Document projection");
+        }
+      },
+      clearDocumentCompletion: async (input) => {
+        const command = parseClearDocumentCompletionCommand(input);
+        const value = await invoke(
+          WORKSPACE_CLEAR_DOCUMENT_COMPLETION_CHANNEL,
+          command,
+        );
+        try {
+          return parseDocumentCompletionProjection(value);
+        } catch {
+          throw new Error("Invalid cleared Document completion projection");
         }
       },
       getFavorites: async () => {
@@ -4516,6 +4546,18 @@ export function createStudioBridge(
           return parseDocumentRevisionListProjection(value);
         } catch {
           throw new Error("Invalid Document revision list");
+        }
+      },
+      readDocumentRevision: async (input) => {
+        const command = parseReadDocumentRevisionCommand(input);
+        const value = await invoke(
+          VERSION_READ_DOCUMENT_REVISION_CHANNEL,
+          command,
+        );
+        try {
+          return parseDocumentRevisionContentProjection(value);
+        } catch {
+          throw new Error("Invalid Document revision content");
         }
       },
       restoreDocumentRevision: async (input) => {

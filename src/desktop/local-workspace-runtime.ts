@@ -87,16 +87,20 @@ import type {
 } from "../application/revisions/revision-store";
 import {
   parseCreateWorkSnapshotCommand,
+  parseDocumentRevisionContentProjection,
   parseDocumentRevisionListProjection,
   parseListDocumentRevisionsCommand,
   parseListWorkSnapshotsCommand,
+  parseReadDocumentRevisionCommand,
   parseRestoreDocumentRevisionCommand,
   parseRestoreDocumentRevisionResult,
   parseWorkSnapshotListProjection,
   type CreateWorkSnapshotCommand,
+  type DocumentRevisionContentProjection,
   type DocumentRevisionListProjection,
   type ListDocumentRevisionsCommand,
   type ListWorkSnapshotsCommand,
+  type ReadDocumentRevisionCommand,
   type RestoreDocumentRevisionCommand,
   type RestoreDocumentRevisionResult,
   type WorkSnapshotListProjection,
@@ -869,13 +873,15 @@ import {
   type WorkFavoritesProjection,
 } from "../application/workspace/work-favorites";
 import {
+  parseClearDocumentCompletionCommand,
+  parseCompleteDocumentCommand,
   deriveDocumentCompletionDate,
   parseDocumentCompletionProjection,
   parseGetDocumentCompletionCommand,
-  parseSetDocumentCompletionCommand,
+  type ClearDocumentCompletionCommand,
+  type CompleteDocumentCommand,
   type DocumentCompletionProjection,
   type GetDocumentCompletionCommand,
-  type SetDocumentCompletionCommand,
 } from "../application/workspace/document-completion";
 import {
   parseSaveWorkCoverCommand,
@@ -1519,7 +1525,8 @@ export type LocalWorkspaceRuntime =
   ManuscriptRuntimeCoordinator & {
     getWorkspaceCatalog(): WorkspaceCatalogProjection;
     getDocumentCompletion(value: unknown): Promise<DocumentCompletionProjection>;
-    setDocumentCompletion(value: unknown): Promise<DocumentCompletionProjection>;
+    completeDocument(value: unknown): Promise<DocumentCompletionProjection>;
+    clearDocumentCompletion(value: unknown): Promise<DocumentCompletionProjection>;
     getWorkFavorites(): WorkFavoritesProjection;
     setWorkFavorite(value: unknown): Promise<WorkFavoritesProjection>;
     getWorkCovers(): WorkCoversProjection;
@@ -1785,6 +1792,9 @@ export type LocalWorkspaceRuntime =
     listDocumentRevisions(
       value: unknown,
     ): Promise<DocumentRevisionListProjection>;
+    readDocumentRevision(
+      value: unknown,
+    ): Promise<DocumentRevisionContentProjection>;
     restoreDocumentRevision(
       value: unknown,
     ): Promise<RestoreDocumentRevisionResult>;
@@ -1883,6 +1893,9 @@ export type LocalWorkspaceRuntimeOptions = {
   readonly studioDisplayName: string;
   readonly locale: string;
   readonly timezone: string;
+  readonly documentCompletionClock?: Readonly<{
+    now(): string;
+  }>;
   readonly batchingPolicy:
     ManuscriptBatchingPolicy;
   readonly formattingProfile: ManuscriptFormattingProfile;
@@ -4097,8 +4110,8 @@ class DefaultLocalWorkspaceRuntime
     });
   }
 
-  #setDocumentCompletionSerially(
-    command: SetDocumentCompletionCommand,
+  #completeDocumentSerially(
+    command: CompleteDocumentCommand,
   ): DocumentCompletionProjection {
     const target = this.#documentTargets.get(command.documentId);
     if (target === undefined || target.workId !== command.workId) {
@@ -4106,6 +4119,7 @@ class DefaultLocalWorkspaceRuntime
         `Work/document boundary violation: ${command.workId}/${command.documentId}`,
       );
     }
+    let completion: DocumentCompletionProjection;
     this.#database.exec("BEGIN IMMEDIATE");
     try {
       const ownershipRows = this.#database.prepare(`
@@ -4150,22 +4164,11 @@ class DefaultLocalWorkspaceRuntime
           `Document completion revision conflict: expected ${command.expectedCompletionRevision}, current ${current.revision}`,
         );
       }
-      if (
-        command.completed &&
-        current.completedDocumentRevisionId === durableRevisionId
-      ) {
-        this.#database.exec("COMMIT");
-        this.#updateCatalogDocumentCompletion(target, current);
-        return current;
-      }
-      if (!command.completed && current.completedAt === null) {
-        this.#database.exec("COMMIT");
-        this.#updateCatalogDocumentCompletion(target, current);
-        return current;
-      }
-
-      const updatedAt = new Date().toISOString();
-      if (command.completed) {
+      if (current.completedDocumentRevisionId === durableRevisionId) {
+        completion = current;
+      } else {
+        const updatedAt = this.#options.documentCompletionClock?.now() ??
+          new Date().toISOString();
         const completedDate = deriveDocumentCompletionDate(
           updatedAt,
           this.#options.timezone,
@@ -4217,7 +4220,44 @@ class DefaultLocalWorkspaceRuntime
             throw new Error(`Document completion changed: ${command.documentId}`);
           }
         }
+        completion = this.#getDocumentCompletionSerially(command);
+      }
+      this.#database.exec("COMMIT");
+    } catch (error) {
+      try {
+        this.#database.exec("ROLLBACK");
+      } catch {
+        // Preserve the original transaction error.
+      }
+      throw error;
+    }
+    this.#updateCatalogDocumentCompletion(target, completion);
+    return completion;
+  }
+
+  #clearDocumentCompletionSerially(
+    command: ClearDocumentCompletionCommand,
+  ): DocumentCompletionProjection {
+    const target = this.#documentTargets.get(command.documentId);
+    if (target === undefined || target.workId !== command.workId) {
+      throw new Error(
+        `Work/document boundary violation: ${command.workId}/${command.documentId}`,
+      );
+    }
+    let completion: DocumentCompletionProjection;
+    this.#database.exec("BEGIN IMMEDIATE");
+    try {
+      const current = this.#getDocumentCompletionSerially(command);
+      if (current.revision !== command.expectedCompletionRevision) {
+        throw new Error(
+          `Document completion revision conflict: expected ${command.expectedCompletionRevision}, current ${current.revision}`,
+        );
+      }
+      if (current.completedAt === null) {
+        completion = current;
       } else {
+        const updatedAt = this.#options.documentCompletionClock?.now() ??
+          new Date().toISOString();
         const updated = this.#database.prepare(`
           UPDATE document_completion_status
           SET
@@ -4237,13 +4277,17 @@ class DefaultLocalWorkspaceRuntime
         if (Number(updated.changes) !== 1) {
           throw new Error(`Document completion changed: ${command.documentId}`);
         }
+        completion = this.#getDocumentCompletionSerially(command);
       }
       this.#database.exec("COMMIT");
     } catch (error) {
-      this.#database.exec("ROLLBACK");
+      try {
+        this.#database.exec("ROLLBACK");
+      } catch {
+        // Preserve the original transaction error.
+      }
       throw error;
     }
-    const completion = this.#getDocumentCompletionSerially(command);
     this.#updateCatalogDocumentCompletion(target, completion);
     return completion;
   }
@@ -4324,14 +4368,30 @@ class DefaultLocalWorkspaceRuntime
     );
   }
 
-  setDocumentCompletion(
+  completeDocument(
     value: unknown,
   ): Promise<DocumentCompletionProjection> {
     this.#assertOpen();
-    const command = parseSetDocumentCompletionCommand(value);
+    const command = parseCompleteDocumentCommand(value);
     const execution = this.#createPending.then(async () => {
       await this.#savePending;
-      return this.#setDocumentCompletionSerially(command);
+      return this.#completeDocumentSerially(command);
+    });
+    this.#createPending = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    return execution;
+  }
+
+  clearDocumentCompletion(
+    value: unknown,
+  ): Promise<DocumentCompletionProjection> {
+    this.#assertOpen();
+    const command = parseClearDocumentCompletionCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#clearDocumentCompletionSerially(command);
     });
     this.#createPending = execution.then(
       () => undefined,
@@ -5903,6 +5963,16 @@ class DefaultLocalWorkspaceRuntime
     const command = parseListDocumentRevisionsCommand(value);
     return Promise.all([this.#createPending, this.#savePending]).then(() =>
       this.#listDocumentRevisionsSerially(command),
+    );
+  }
+
+  readDocumentRevision(
+    value: unknown,
+  ): Promise<DocumentRevisionContentProjection> {
+    this.#assertOpen();
+    const command = parseReadDocumentRevisionCommand(value);
+    return Promise.all([this.#createPending, this.#savePending]).then(() =>
+      this.#readDocumentRevisionSerially(command)
     );
   }
 
@@ -11257,11 +11327,16 @@ class DefaultLocalWorkspaceRuntime
           d.title AS "documentTitle",
           dc.completed_at AS "completedAt",
           dc.completed_date AS "completedDate",
-          dc.completed_document_revision_id AS "completedDocumentRevisionId"
+          dc.completed_document_revision_id AS "completedDocumentRevisionId",
+          m.current_revision_id AS "currentDocumentRevisionId"
         FROM document_completion_status AS dc
         JOIN documents AS d
           ON d.work_id = dc.work_id
           AND d.id = dc.document_id
+        JOIN manuscripts AS m
+          ON m.work_id = d.work_id
+          AND m.document_id = d.id
+          AND m.id = d.manuscript_id
         JOIN works AS w
           ON w.id = dc.work_id
         WHERE
@@ -11288,6 +11363,20 @@ class DefaultLocalWorkspaceRuntime
           "documentTitle",
           "Document completion occurrence row",
         );
+        const completedDocumentRevisionId = entityId<"DocumentRevision">(
+          readRequiredString(
+            row,
+            "completedDocumentRevisionId",
+            "Document completion occurrence row",
+          ),
+        );
+        const currentDocumentRevisionId = entityId<"DocumentRevision">(
+          readRequiredString(
+            row,
+            "currentDocumentRevisionId",
+            "Document completion occurrence row",
+          ),
+        );
         return {
           occurrenceId: `document-completion:${documentId}`,
           workId: command.workId,
@@ -11307,13 +11396,10 @@ class DefaultLocalWorkspaceRuntime
             "completedAt",
             "Document completion occurrence row",
           ),
-          completedDocumentRevisionId: entityId<"DocumentRevision">(
-            readRequiredString(
-              row,
-              "completedDocumentRevisionId",
-              "Document completion occurrence row",
-            ),
-          ),
+          completedDocumentRevisionId,
+          state: completedDocumentRevisionId === currentDocumentRevisionId
+            ? "current" as const
+            : "edited-after-completion" as const,
         };
       });
     return parseWorkCalendarProjection({
@@ -12152,6 +12238,25 @@ class DefaultLocalWorkspaceRuntime
       workId: command.workId,
       documentId: command.documentId,
       revisions,
+    });
+  }
+
+  async #readDocumentRevisionSerially(
+    command: ReadDocumentRevisionCommand,
+  ): Promise<DocumentRevisionContentProjection> {
+    const revisions = this.#listDocumentRevisionsSerially(command);
+    const revision = revisions.revisions.find(
+      (candidate) => candidate.revisionId === command.revisionId,
+    );
+    if (revision === undefined) {
+      throw new Error(
+        `DocumentRevision is outside its Document: ${command.revisionId}`,
+      );
+    }
+    return parseDocumentRevisionContentProjection({
+      schemaVersion: 1,
+      revision,
+      text: await this.#revisionStore.materialize(command.revisionId),
     });
   }
 

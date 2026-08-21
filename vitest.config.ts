@@ -8,6 +8,15 @@ export default defineConfig({
       "tests/unit/**/*.test.ts",
       "tests/evidence/**/*.test.ts",
     ],
+    exclude: [
+      "**/node_modules/**",
+      "dist-tests/**",
+      "dist-electron/**",
+      "dist-renderer/**",
+      "release/**",
+      ".tmp/**",
+    ],
+    maxWorkers: 4,
     passWithNoTests: false,
   },
 });

@@ -27,6 +27,7 @@ import type {
 } from "../../application/schedule/work-schedule-contract";
 import type { WorkCalendarProjection } from "../../application/schedule/work-calendar-contract";
 import type { WorkEpisodeCharacterProgress } from "../../application/settings/app-settings";
+import type { EntityId } from "../../domain/writing";
 
 const DAY_MS = 86_400_000;
 
@@ -69,7 +70,6 @@ export function buildCalendarMonth(monthKey: string): {
   if (first.getUTCFullYear() !== year || first.getUTCMonth() !== monthIndex) {
     throw new Error("Calendar month must be real");
   }
-  const last = new Date(Date.UTC(year, monthIndex + 1, 0));
   const gridStart = new Date(first.getTime() - first.getUTCDay() * DAY_MS);
   const cells = Array.from({ length: 42 }, (_, index) => {
     const value = new Date(gridStart.getTime() + index * DAY_MS);
@@ -80,7 +80,10 @@ export function buildCalendarMonth(monthKey: string): {
     });
   });
   return Object.freeze({
-    range: Object.freeze({ from: utcDateKey(first), to: utcDateKey(last) }),
+    range: Object.freeze({
+      from: cells[0]?.date ?? utcDateKey(first),
+      to: cells[41]?.date ?? utcDateKey(first),
+    }),
     cells: Object.freeze(cells),
   });
 }
@@ -100,6 +103,17 @@ function shiftMonth(monthKey: string, amount: number): string {
     Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + amount, 1),
   );
   return utcDateKey(shifted).slice(0, 7);
+}
+
+export function moveCalendarMonth(
+  monthKey: string,
+  amount: number,
+): Readonly<{ monthKey: string; selectedDate: string }> {
+  const nextMonthKey = shiftMonth(monthKey, amount);
+  return Object.freeze({
+    monthKey: nextMonthKey,
+    selectedDate: `${nextMonthKey}-01`,
+  });
 }
 
 function monthLabel(monthKey: string): string {
@@ -139,13 +153,13 @@ function workloadSummary(workload: WorkScheduleDdayWorkload): string {
     case "totalCharacters":
       return `총 ${workload.targetCharacters.toLocaleString()}자`;
     case "episodeCount":
-      return `추가 ${workload.targetEpisodeCount.toLocaleString()}회차 · 기준 ${workload.baselineCompletedCount.toLocaleString()}회차`;
+      return `추가 ${workload.targetEpisodeCount.toLocaleString()}회차 · 기준 ${workload.baselineCompletedCount.toLocaleString()}회차 · 글자 수 기준`;
     case "episodeNumber":
       return `${workload.targetEpisodeNumber.toLocaleString()}화까지 · 글자 수 기준`;
     case "additionalCompletedDocuments":
-      return `추가 완료 ${workload.targetCount.toLocaleString()}회차 · 기준 ${workload.baselineCompletedCount.toLocaleString()}회차`;
+      return `추가 완료 ${workload.targetCount.toLocaleString()}회차 · 기준 ${workload.baselineCompletedCount.toLocaleString()}회차 · 완료 체크 기준`;
     case "totalCompletedDocuments":
-      return `총 완료 ${workload.targetCount.toLocaleString()}회차`;
+      return `총 완료 ${workload.targetCount.toLocaleString()}회차 · 완료 체크 기준`;
   }
 }
 
@@ -500,9 +514,16 @@ function ScheduleItemDialog({
 }
 
 export function WorkScheduleDashboard({
+  onOpenCompletedRevision,
+  onOpenDocument,
   work,
   settingsRevision,
 }: {
+  readonly onOpenCompletedRevision?: (
+    documentId: EntityId<"Document">,
+    revisionId: EntityId<"DocumentRevision">,
+  ) => void;
+  readonly onOpenDocument?: (documentId: EntityId<"Document">) => void;
   readonly work: WorkspaceWorkSummary;
   readonly settingsRevision: number;
 }) {
@@ -532,11 +553,13 @@ export function WorkScheduleDashboard({
       .then(
         (value) => {
           if (requestIdRef.current !== requestId) return;
+          setError(null);
           setProjection(value);
           setLoading(false);
         },
         (reason: unknown) => {
           if (requestIdRef.current !== requestId) return;
+          setProjection(null);
           setError(
             reason instanceof Error ? reason.message : "일정을 불러오지 못했습니다.",
           );
@@ -684,7 +707,7 @@ export function WorkScheduleDashboard({
           <p>{work.title}의 일정만 표시합니다.</p>
           {projection !== null && (
             <p className="schedule-episode-basis">
-              1회 완료 기준 {projection.episodeProgress.defaultEpisodeCharacters.toLocaleString()}자
+              글자 수 환산 1회차 기준 {projection.episodeProgress.defaultEpisodeCharacters.toLocaleString()}자
             </p>
           )}
         </div>
@@ -707,9 +730,12 @@ export function WorkScheduleDashboard({
             <button
               aria-label="이전 달"
               onClick={() => {
+                const next = moveCalendarMonth(monthKey, -1);
+                setProjection(null);
                 setLoading(true);
                 setError(null);
-                setMonthKey((value) => shiftMonth(value, -1));
+                setMonthKey(next.monthKey);
+                setSelectedDate(next.selectedDate);
               }}
               type="button"
             >
@@ -719,9 +745,12 @@ export function WorkScheduleDashboard({
             <button
               aria-label="다음 달"
               onClick={() => {
+                const next = moveCalendarMonth(monthKey, 1);
+                setProjection(null);
                 setLoading(true);
                 setError(null);
-                setMonthKey((value) => shiftMonth(value, 1));
+                setMonthKey(next.monthKey);
+                setSelectedDate(next.selectedDate);
               }}
               type="button"
             >
@@ -750,6 +779,7 @@ export function WorkScheduleDashboard({
                   onClick={() => {
                     setSelectedDate(cell.date);
                     if (!cell.inMonth) {
+                      setProjection(null);
                       setLoading(true);
                       setError(null);
                       setMonthKey(cell.date.slice(0, 7));
@@ -796,7 +826,32 @@ export function WorkScheduleDashboard({
                     </span>
                     <div className="schedule-agenda-content">
                       <strong>{occurrence.label}</strong>
-                      <span>회차 완료</span>
+                      <span>
+                        {occurrence.state === "current"
+                          ? "완료 당시 원고와 같음"
+                          : "완료 후 수정됨"}
+                      </span>
+                      <div className="schedule-document-completion-actions">
+                        <button
+                          disabled={actionBusy || onOpenDocument === undefined}
+                          onClick={() => onOpenDocument?.(occurrence.documentId)}
+                          type="button"
+                        >
+                          현재 {occurrence.documentTitle} 열기
+                        </button>
+                        <button
+                          disabled={
+                            actionBusy || onOpenCompletedRevision === undefined
+                          }
+                          onClick={() => onOpenCompletedRevision?.(
+                            occurrence.documentId,
+                            occurrence.completedDocumentRevisionId,
+                          )}
+                          type="button"
+                        >
+                          완료 당시 버전 보기
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ) : (

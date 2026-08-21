@@ -217,12 +217,14 @@ import {
   VERSION_CREATE_WORK_SNAPSHOT_CHANNEL,
   VERSION_COMPARE_WORK_SNAPSHOT_CHANNEL,
   VERSION_LIST_DOCUMENT_REVISIONS_CHANNEL,
+  VERSION_READ_DOCUMENT_REVISION_CHANNEL,
   VERSION_LIST_WORK_SNAPSHOTS_CHANNEL,
   VERSION_RESTORE_DOCUMENT_REVISION_CHANNEL,
   WORKSPACE_ACTIVATE_LOCATION_CHANNEL,
   WORKSPACE_CATALOG_CHANNEL,
+  WORKSPACE_CLEAR_DOCUMENT_COMPLETION_CHANNEL,
+  WORKSPACE_COMPLETE_DOCUMENT_CHANNEL,
   WORKSPACE_GET_DOCUMENT_COMPLETION_CHANNEL,
-  WORKSPACE_SET_DOCUMENT_COMPLETION_CHANNEL,
   WORKSPACE_FAVORITES_CHANNEL,
   WORKSPACE_SET_FAVORITE_CHANNEL,
   WORKSPACE_COVERS_CHANNEL,
@@ -689,9 +691,11 @@ import {
   parseDocumentRevisionListProjection,
   parseListDocumentRevisionsCommand,
   parseListWorkSnapshotsCommand,
+  parseReadDocumentRevisionCommand,
   parseRestoreDocumentRevisionCommand,
   parseWorkSnapshotListProjection,
   type DocumentRevisionListProjection,
+  type DocumentRevisionContentProjection,
   type RestoreDocumentRevisionResult,
   type WorkSnapshotListProjection,
   type WorkSnapshotProjection,
@@ -757,8 +761,9 @@ import {
   type WorkspaceCatalogProjection,
 } from "../application/workspace/workspace-contract";
 import {
+  parseClearDocumentCompletionCommand,
+  parseCompleteDocumentCommand,
   parseGetDocumentCompletionCommand,
-  parseSetDocumentCompletionCommand,
   type DocumentCompletionProjection,
 } from "../application/workspace/document-completion";
 import {
@@ -889,7 +894,8 @@ type ApplicationRuntime = {
   ): Promise<WorkManuscriptLayoutSettingsProjection>;
   getWorkspaceCatalog(): WorkspaceCatalogProjection;
   getDocumentCompletion(value: unknown): Promise<DocumentCompletionProjection>;
-  setDocumentCompletion(value: unknown): Promise<DocumentCompletionProjection>;
+  completeDocument(value: unknown): Promise<DocumentCompletionProjection>;
+  clearDocumentCompletion(value: unknown): Promise<DocumentCompletionProjection>;
   getWorkFavorites(): WorkFavoritesProjection;
   setWorkFavorite(value: unknown): Promise<WorkFavoritesProjection>;
   getWorkCovers(): WorkCoversProjection;
@@ -1120,6 +1126,7 @@ type ApplicationRuntime = {
     value: unknown,
   ): Promise<AssistantSettingReviewResult>;
   listDocumentRevisions(value: unknown): Promise<DocumentRevisionListProjection>;
+  readDocumentRevision(value: unknown): Promise<DocumentRevisionContentProjection>;
   restoreDocumentRevision(value: unknown): Promise<RestoreDocumentRevisionResult>;
   createWorkSnapshot(value: unknown): Promise<WorkSnapshotProjection>;
   listWorkSnapshots(value: unknown): Promise<WorkSnapshotListProjection>;
@@ -1916,8 +1923,10 @@ async function registerApplicationHandlers(): Promise<void> {
         localRuntime.getWorkspaceCatalog(),
       getDocumentCompletion: (value) =>
         localRuntime.getDocumentCompletion(value),
-      setDocumentCompletion: (value) =>
-        localRuntime.setDocumentCompletion(value),
+      completeDocument: (value) =>
+        localRuntime.completeDocument(value),
+      clearDocumentCompletion: (value) =>
+        localRuntime.clearDocumentCompletion(value),
       getWorkFavorites: () =>
         localRuntime.getWorkFavorites(),
       setWorkFavorite: (value) =>
@@ -2290,6 +2299,8 @@ async function registerApplicationHandlers(): Promise<void> {
         localRuntime.runAssistantSettingReview(value),
       listDocumentRevisions: (value) =>
         localRuntime.listDocumentRevisions(value),
+      readDocumentRevision: (value) =>
+        localRuntime.readDocumentRevision(value),
       restoreDocumentRevision: (value) =>
         localRuntime.restoreDocumentRevision(value),
       createWorkSnapshot: (value) =>
@@ -2420,10 +2431,16 @@ async function registerApplicationHandlers(): Promise<void> {
         }
         return document.completion;
       },
-      setDocumentCompletion: async (value) => {
-        parseSetDocumentCompletionCommand(value);
+      completeDocument: async (value) => {
+        parseCompleteDocumentCommand(value);
         throw new Error(
           "Document completion is unavailable in a configured manuscript runtime",
+        );
+      },
+      clearDocumentCompletion: async (value) => {
+        parseClearDocumentCompletionCommand(value);
+        throw new Error(
+          "Document completion clearing is unavailable in a configured manuscript runtime",
         );
       },
       getWorkFavorites: () => configuredWorkFavorites,
@@ -3780,6 +3797,12 @@ async function registerApplicationHandlers(): Promise<void> {
           documentId: command.documentId,
           revisions: [],
         });
+        },
+      readDocumentRevision: async (value) => {
+        parseReadDocumentRevisionCommand(value);
+        throw new Error(
+          "Document revision content is unavailable in a configured manuscript runtime",
+        );
       },
       restoreDocumentRevision: async () => {
         throw new Error(
@@ -4008,11 +4031,20 @@ async function registerApplicationHandlers(): Promise<void> {
     },
   );
   ipcMain.handle(
-    WORKSPACE_SET_DOCUMENT_COMPLETION_CHANNEL,
+    WORKSPACE_COMPLETE_DOCUMENT_CHANNEL,
     (event, value: unknown) => {
       assertTrustedRendererSender(event);
-      return applicationRuntime.setDocumentCompletion(
-        parseSetDocumentCompletionCommand(value),
+      return applicationRuntime.completeDocument(
+        parseCompleteDocumentCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    WORKSPACE_CLEAR_DOCUMENT_COMPLETION_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.clearDocumentCompletion(
+        parseClearDocumentCompletionCommand(value),
       );
     },
   );
@@ -5788,6 +5820,15 @@ async function registerApplicationHandlers(): Promise<void> {
       assertTrustedRendererSender(event);
       return applicationRuntime.listDocumentRevisions(
         parseListDocumentRevisionsCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    VERSION_READ_DOCUMENT_REVISION_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.readDocumentRevision(
+        parseReadDocumentRevisionCommand(value),
       );
     },
   );

@@ -933,7 +933,11 @@ describe("local workspace runtime", () => {
     const rootDirectoryPath = await mkdtemp(
       path.join(tmpdir(), "eum-studio-document-completion-"),
     );
-    const options = createOptions(rootDirectoryPath);
+    const completionInstant = "2026-01-31T15:30:00.000Z";
+    const options = {
+      ...createOptions(rootDirectoryPath),
+      documentCompletionClock: { now: () => completionInstant },
+    } satisfies LocalWorkspaceRuntimeOptions;
     let runtime = await openLocalWorkspaceRuntime(options);
 
     try {
@@ -949,29 +953,28 @@ describe("local workspace runtime", () => {
       });
       expect(initial).toMatchObject({ revision: 0, state: "incomplete" });
 
-      const completed = await runtime.setDocumentCompletion({
+      const completed = await runtime.completeDocument({
         schemaVersion: 1,
         workId: created.workId,
         documentId: created.documentId,
         expectedCompletionRevision: 0,
         expectedDocumentRevisionId: created.revisionId,
-        completed: true,
       });
       expect(completed).toMatchObject({
         revision: 1,
+        completedAt: completionInstant,
+        completedDate: "2026-02-01",
         completedTimeZone: "Asia/Seoul",
         completedDocumentRevisionId: created.revisionId,
         state: "current",
       });
-      expect(completed.completedDate).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
 
-      await expect(runtime.setDocumentCompletion({
+      await expect(runtime.completeDocument({
         schemaVersion: 1,
         workId: created.workId,
         documentId: created.documentId,
         expectedCompletionRevision: 1,
         expectedDocumentRevisionId: created.revisionId,
-        completed: true,
       })).resolves.toEqual(completed);
 
       const insertedText = "완료 뒤 수정";
@@ -1002,13 +1005,12 @@ describe("local workspace runtime", () => {
         completion: { revision: 1, state: "edited-after-completion" },
       });
 
-      const recompleted = await runtime.setDocumentCompletion({
+      const recompleted = await runtime.completeDocument({
         schemaVersion: 1,
         workId: created.workId,
         documentId: created.documentId,
         expectedCompletionRevision: 1,
         expectedDocumentRevisionId: savedRevisionId,
-        completed: true,
       });
       expect(recompleted).toMatchObject({
         revision: 2,
@@ -1016,13 +1018,11 @@ describe("local workspace runtime", () => {
         state: "current",
       });
 
-      const cancelled = await runtime.setDocumentCompletion({
+      const cancelled = await runtime.clearDocumentCompletion({
         schemaVersion: 1,
         workId: created.workId,
         documentId: created.documentId,
         expectedCompletionRevision: 2,
-        expectedDocumentRevisionId: savedRevisionId,
-        completed: false,
       });
       expect(cancelled).toMatchObject({
         revision: 3,
@@ -1032,13 +1032,11 @@ describe("local workspace runtime", () => {
         completedDocumentRevisionId: null,
         state: "incomplete",
       });
-      await expect(runtime.setDocumentCompletion({
+      await expect(runtime.clearDocumentCompletion({
         schemaVersion: 1,
         workId: created.workId,
         documentId: created.documentId,
         expectedCompletionRevision: 3,
-        expectedDocumentRevisionId: savedRevisionId,
-        completed: false,
       })).resolves.toEqual(cancelled);
 
       const profiles = createLocalWorkspaceStorageProfiles(rootDirectoryPath);
@@ -1086,13 +1084,12 @@ describe("local workspace runtime", () => {
         title: "백업 작품",
         firstDocumentTitle: "완료 회차",
       });
-      const completed = await source.setDocumentCompletion({
+      const completed = await source.completeDocument({
         schemaVersion: 1,
         workId: created.workId,
         documentId: created.documentId,
         expectedCompletionRevision: 0,
         expectedDocumentRevisionId: created.revisionId,
-        completed: true,
       });
       await source.createBackupBundle(bundleRoot);
       await source.restoreBackupBundle(bundleRoot, restoredRoot);
@@ -1110,6 +1107,175 @@ describe("local workspace runtime", () => {
       source.close();
       restored?.close();
       await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects stale completion and manuscript revisions while allowing clear after manuscript edits", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-document-completion-conflicts-"),
+    );
+    const runtime = await openLocalWorkspaceRuntime(
+      createOptions(rootDirectoryPath),
+    );
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "완료 충돌 작품",
+        firstDocumentTitle: "1화",
+      });
+      const firstCompletion = await runtime.completeDocument({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        expectedCompletionRevision: 0,
+        expectedDocumentRevisionId: created.revisionId,
+      });
+
+      await expect(runtime.clearDocumentCompletion({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        expectedCompletionRevision: 0,
+      })).rejects.toThrow("completion revision conflict");
+
+      const insertedText = "완료 후 바뀐 원고";
+      const saveReceipt = await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: created.workId,
+        documentId: created.documentId,
+        baseRevisionId: created.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: insertedText.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText }],
+      }));
+      if (!("revisionId" in saveReceipt)) {
+        throw new Error("Expected a durable local revision receipt");
+      }
+
+      await expect(runtime.completeDocument({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        expectedCompletionRevision: firstCompletion.revision,
+        expectedDocumentRevisionId: created.revisionId,
+      })).rejects.toThrow("Document revision conflict");
+
+      await expect(runtime.clearDocumentCompletion({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        expectedCompletionRevision: firstCompletion.revision,
+      })).resolves.toMatchObject({ state: "incomplete", revision: 2 });
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("serializes two completion requests into one success and one revision conflict", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-document-completion-concurrency-"),
+    );
+    const runtime = await openLocalWorkspaceRuntime(
+      createOptions(rootDirectoryPath),
+    );
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "완료 동시성 작품",
+        firstDocumentTitle: "1화",
+      });
+      const command = {
+        schemaVersion: 1 as const,
+        workId: created.workId,
+        documentId: created.documentId,
+        expectedCompletionRevision: 0,
+        expectedDocumentRevisionId: created.revisionId,
+      };
+      const results = await Promise.allSettled([
+        runtime.completeDocument(command),
+        runtime.completeDocument(command),
+      ]);
+
+      expect(results.filter((result) => result.status === "fulfilled"))
+        .toHaveLength(1);
+      expect(results.filter((result) => result.status === "rejected"))
+        .toHaveLength(1);
+      await expect(runtime.getDocumentCompletion({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+      })).resolves.toMatchObject({ revision: 1, state: "current" });
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps a committed completion and preserves a post-commit catalog error", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-document-completion-post-commit-"),
+    );
+    const runtime = await openLocalWorkspaceRuntime(
+      createOptions(rootDirectoryPath),
+    );
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "완료 커밋 작품",
+        firstDocumentTitle: "1화",
+      });
+      const completed = await runtime.completeDocument({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        expectedCompletionRevision: 0,
+        expectedDocumentRevisionId: created.revisionId,
+      });
+      const catalogWorks = runtime.getWorkspaceCatalog().works;
+      const originalMap = Array.prototype.map;
+      Object.defineProperty(Array.prototype, "map", {
+        configurable: true,
+        writable: true,
+        value: function mapWithCatalogFailure<T, U>(
+          this: T[],
+          callback: (value: T, index: number, array: T[]) => U,
+          thisArg?: unknown,
+        ): U[] {
+          if (this as unknown === catalogWorks) {
+            throw new Error("catalog projection failed");
+          }
+          return originalMap.call(this, callback, thisArg) as U[];
+        },
+      });
+      try {
+        await expect(runtime.completeDocument({
+          schemaVersion: 1,
+          workId: created.workId,
+          documentId: created.documentId,
+          expectedCompletionRevision: completed.revision,
+          expectedDocumentRevisionId: created.revisionId,
+        })).rejects.toThrow("catalog projection failed");
+      } finally {
+        Object.defineProperty(Array.prototype, "map", {
+          configurable: true,
+          writable: true,
+          value: originalMap,
+        });
+      }
+
+      await expect(runtime.getDocumentCompletion({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+      })).resolves.toMatchObject({ revision: 1, state: "current" });
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
     }
   });
 
@@ -8487,7 +8653,7 @@ describe("local workspace runtime", () => {
       });
 
       const workDurationMs = 160;
-      const breakDurationMs = 140;
+      const breakDurationMs = 2_000;
       const workCycleCount = 2;
       const started = await runtime.configureAndStartPomodoro({
         schemaVersion: 1,
@@ -8827,6 +8993,15 @@ describe("local workspace runtime", () => {
       expect(
         beforeRestore.revisions.find((revision) => revision.isCurrent),
       ).toMatchObject({ revisionId: secondReceipt.revisionId });
+      await expect(runtime.readDocumentRevision({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        revisionId: firstReceipt.revisionId,
+      })).resolves.toMatchObject({
+        revision: { revisionId: firstReceipt.revisionId },
+        text: firstText,
+      });
 
       const restored = await runtime.restoreDocumentRevision({
         schemaVersion: 1,
@@ -8928,21 +9103,19 @@ describe("local workspace runtime", () => {
         title: "작품 B",
         firstDocumentTitle: "2화",
       });
-      const firstCompletion = await runtime.setDocumentCompletion({
+      const firstCompletion = await runtime.completeDocument({
         schemaVersion: 1,
         workId: first.workId,
         documentId: first.documentId,
         expectedCompletionRevision: 0,
         expectedDocumentRevisionId: first.revisionId,
-        completed: true,
       });
-      const secondCompletion = await runtime.setDocumentCompletion({
+      const secondCompletion = await runtime.completeDocument({
         schemaVersion: 1,
         workId: second.workId,
         documentId: second.documentId,
         expectedCompletionRevision: 0,
         expectedDocumentRevisionId: second.revisionId,
-        completed: true,
       });
       if (
         firstCompletion.completedDate === null ||
@@ -9010,13 +9183,12 @@ describe("local workspace runtime", () => {
         title: "달력 합성 작품",
         firstDocumentTitle: "5화",
       });
-      const completed = await runtime.setDocumentCompletion({
+      const completed = await runtime.completeDocument({
         schemaVersion: 1,
         workId: created.workId,
         documentId: created.documentId,
         expectedCompletionRevision: 0,
         expectedDocumentRevisionId: created.revisionId,
-        completed: true,
       });
       if (completed.completedDate === null) {
         throw new Error("Expected a completed calendar date");
@@ -9056,17 +9228,49 @@ describe("local workspace runtime", () => {
             documentTitle: "5화",
             label: "5화 완료",
             completedDocumentRevisionId: created.revisionId,
+            state: "current",
           }),
         ]),
       );
 
-      await runtime.setDocumentCompletion({
+      const editedText = "완료 이후 수정";
+      const editedReceipt = await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: created.workId,
+        documentId: created.documentId,
+        baseRevisionId: created.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: editedText.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: editedText }],
+      }));
+      if (!("revisionId" in editedReceipt)) {
+        throw new Error("Expected a durable local revision receipt");
+      }
+      const afterEdit = await runtime.listWorkCalendar({
+        schemaVersion: 1,
+        workId: created.workId,
+        range: {
+          from: completed.completedDate,
+          to: completed.completedDate,
+        },
+      });
+      expect(afterEdit.occurrences).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          kind: "document-completion",
+          documentId: created.documentId,
+          state: "edited-after-completion",
+        }),
+      ]));
+
+      await runtime.clearDocumentCompletion({
         schemaVersion: 1,
         workId: created.workId,
         documentId: created.documentId,
         expectedCompletionRevision: completed.revision,
-        expectedDocumentRevisionId: created.revisionId,
-        completed: false,
       });
       const afterCancel = await runtime.listWorkCalendar({
         schemaVersion: 1,

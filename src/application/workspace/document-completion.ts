@@ -6,12 +6,13 @@ export function deriveDocumentCompletionDate(
   completedAt: string,
   timeZone: string,
 ): string {
-  const date = new Date(completedAt);
-  if (!Number.isFinite(date.getTime())) {
-    throw new Error("Document completion timestamp must be an absolute instant");
-  }
-  const formatter = new Intl.DateTimeFormat("en", {
+  const date = new Date(instant(completedAt, "Document completion timestamp"));
+  const validTimeZone = readIanaTimeZone(
     timeZone,
+    "Document completion timeZone",
+  );
+  const formatter = new Intl.DateTimeFormat("en", {
+    timeZone: validTimeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -55,10 +56,13 @@ export type GetDocumentCompletionCommand = {
   readonly documentId: EntityId<"Document">;
 };
 
-export type SetDocumentCompletionCommand = GetDocumentCompletionCommand & {
+export type CompleteDocumentCommand = GetDocumentCompletionCommand & {
   readonly expectedCompletionRevision: number;
   readonly expectedDocumentRevisionId: EntityId<"DocumentRevision">;
-  readonly completed: boolean;
+};
+
+export type ClearDocumentCompletionCommand = GetDocumentCompletionCommand & {
+  readonly expectedCompletionRevision: number;
 };
 
 export type DocumentCompletionOccurrence = {
@@ -73,6 +77,7 @@ export type DocumentCompletionOccurrence = {
   readonly completed: true;
   readonly completedAt: string;
   readonly completedDocumentRevisionId: EntityId<"DocumentRevision">;
+  readonly state: Exclude<DocumentCompletionState, "incomplete">;
 };
 
 function record(value: unknown, label: string): Record<string, unknown> {
@@ -124,6 +129,33 @@ function instant(value: unknown, label: string): string {
   return new Date(value).toISOString();
 }
 
+export function readRealDateKey(value: unknown, label: string): string {
+  if (typeof value !== "string" || !DATE_KEY.test(value)) {
+    throw new Error(`${label} must be YYYY-MM-DD`);
+  }
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (
+    !Number.isFinite(date.getTime()) ||
+    date.toISOString().slice(0, 10) !== value
+  ) {
+    throw new Error(`${label} must be a real calendar date`);
+  }
+  return value;
+}
+
+export function readIanaTimeZone(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`${label} must be a non-empty IANA time zone`);
+  }
+  const timeZone = value.trim();
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone }).format(0);
+  } catch {
+    throw new Error(`${label} must be a valid IANA time zone`);
+  }
+  return timeZone;
+}
+
 export function parseGetDocumentCompletionCommand(
   value: unknown,
 ): GetDocumentCompletionCommand {
@@ -146,10 +178,10 @@ export function parseGetDocumentCompletionCommand(
   });
 }
 
-export function parseSetDocumentCompletionCommand(
+export function parseCompleteDocumentCommand(
   value: unknown,
-): SetDocumentCompletionCommand {
-  const input = record(value, "SetDocumentCompletionCommand");
+): CompleteDocumentCommand {
+  const input = record(value, "CompleteDocumentCommand");
   exact(
     input,
     [
@@ -158,32 +190,56 @@ export function parseSetDocumentCompletionCommand(
       "documentId",
       "expectedCompletionRevision",
       "expectedDocumentRevisionId",
-      "completed",
     ],
-    "SetDocumentCompletionCommand",
+    "CompleteDocumentCommand",
   );
   if (input.schemaVersion !== 1) {
-    throw new Error("SetDocumentCompletionCommand.schemaVersion must be 1");
-  }
-  if (typeof input.completed !== "boolean") {
-    throw new Error("SetDocumentCompletionCommand.completed must be a boolean");
+    throw new Error("CompleteDocumentCommand.schemaVersion must be 1");
   }
   return Object.freeze({
     schemaVersion: 1,
-    workId: identity<"Work">(input.workId, "SetDocumentCompletionCommand.workId"),
+    workId: identity<"Work">(input.workId, "CompleteDocumentCommand.workId"),
     documentId: identity<"Document">(
       input.documentId,
-      "SetDocumentCompletionCommand.documentId",
+      "CompleteDocumentCommand.documentId",
     ),
     expectedCompletionRevision: nonNegativeInteger(
       input.expectedCompletionRevision,
-      "SetDocumentCompletionCommand.expectedCompletionRevision",
+      "CompleteDocumentCommand.expectedCompletionRevision",
     ),
     expectedDocumentRevisionId: identity<"DocumentRevision">(
       input.expectedDocumentRevisionId,
-      "SetDocumentCompletionCommand.expectedDocumentRevisionId",
+      "CompleteDocumentCommand.expectedDocumentRevisionId",
     ),
-    completed: input.completed,
+  });
+}
+
+export function parseClearDocumentCompletionCommand(
+  value: unknown,
+): ClearDocumentCompletionCommand {
+  const input = record(value, "ClearDocumentCompletionCommand");
+  exact(
+    input,
+    ["schemaVersion", "workId", "documentId", "expectedCompletionRevision"],
+    "ClearDocumentCompletionCommand",
+  );
+  if (input.schemaVersion !== 1) {
+    throw new Error("ClearDocumentCompletionCommand.schemaVersion must be 1");
+  }
+  return Object.freeze({
+    schemaVersion: 1,
+    workId: identity<"Work">(
+      input.workId,
+      "ClearDocumentCompletionCommand.workId",
+    ),
+    documentId: identity<"Document">(
+      input.documentId,
+      "ClearDocumentCompletionCommand.documentId",
+    ),
+    expectedCompletionRevision: nonNegativeInteger(
+      input.expectedCompletionRevision,
+      "ClearDocumentCompletionCommand.expectedCompletionRevision",
+    ),
   });
 }
 
@@ -244,9 +300,18 @@ export function parseDocumentCompletionProjection(
   if (revision === 0 && !allNull) {
     throw new Error("DocumentCompletionProjection revision 0 must be incomplete");
   }
-  if (allPresent && !DATE_KEY.test(input.completedDate as string)) {
-    throw new Error("DocumentCompletionProjection.completedDate must be YYYY-MM-DD");
-  }
+  const completedDate = allNull
+    ? null
+    : readRealDateKey(
+        input.completedDate,
+        "DocumentCompletionProjection.completedDate",
+      );
+  const completedTimeZone = allNull
+    ? null
+    : readIanaTimeZone(
+        input.completedTimeZone,
+        "DocumentCompletionProjection.completedTimeZone",
+      );
   return Object.freeze({
     schemaVersion: 1,
     workId: identity<"Work">(input.workId, "DocumentCompletionProjection.workId"),
@@ -258,8 +323,8 @@ export function parseDocumentCompletionProjection(
     completedAt: allNull
       ? null
       : instant(input.completedAt, "DocumentCompletionProjection.completedAt"),
-    completedDate: allNull ? null : input.completedDate as string,
-    completedTimeZone: allNull ? null : input.completedTimeZone as string,
+    completedDate,
+    completedTimeZone,
     completedDocumentRevisionId: allNull
       ? null
       : identity<"DocumentRevision">(
@@ -291,6 +356,7 @@ export function parseDocumentCompletionOccurrence(
       "completed",
       "completedAt",
       "completedDocumentRevisionId",
+      "state",
     ],
     "DocumentCompletionOccurrence",
   );
@@ -299,6 +365,9 @@ export function parseDocumentCompletionOccurrence(
   }
   if (input.time !== null || input.completed !== true) {
     throw new Error("DocumentCompletionOccurrence must be an untimed completed fact");
+  }
+  if (input.state !== "current" && input.state !== "edited-after-completion") {
+    throw new Error("DocumentCompletionOccurrence.state is invalid");
   }
   const workId = identity<"Work">(input.workId, "DocumentCompletionOccurrence.workId");
   const documentId = identity<"Document">(
@@ -313,8 +382,7 @@ export function parseDocumentCompletionOccurrence(
     input.documentTitle.trim().length === 0 ||
     typeof input.label !== "string" ||
     input.label.trim().length === 0 ||
-    typeof input.date !== "string" ||
-    !DATE_KEY.test(input.date)
+    typeof input.date !== "string"
   ) {
     throw new Error("DocumentCompletionOccurrence text or date is invalid");
   }
@@ -325,7 +393,7 @@ export function parseDocumentCompletionOccurrence(
     documentTitle: input.documentTitle.trim(),
     kind: "document-completion",
     label: input.label.trim(),
-    date: input.date,
+    date: readRealDateKey(input.date, "DocumentCompletionOccurrence.date"),
     time: null,
     completed: true,
     completedAt: instant(input.completedAt, "DocumentCompletionOccurrence.completedAt"),
@@ -333,5 +401,6 @@ export function parseDocumentCompletionOccurrence(
       input.completedDocumentRevisionId,
       "DocumentCompletionOccurrence.completedDocumentRevisionId",
     ),
+    state: input.state,
   });
 }

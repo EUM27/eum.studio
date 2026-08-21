@@ -50,6 +50,7 @@ describe("TodaySchedulePanel", () => {
         completed: true,
         completedAt: "2026-08-21T01:00:00.000Z",
         completedDocumentRevisionId: entityId<"DocumentRevision">("revision-1"),
+        state: "current",
       }],
       episodeProgress: {
         defaultEpisodeCharacters: 1,
@@ -64,6 +65,7 @@ describe("TodaySchedulePanel", () => {
     const markup = renderToStaticMarkup(createElement(TodaySchedulePanel, {
       disabled: false,
       onOpenCalendar: vi.fn(),
+      onOpenCompletedRevision: vi.fn(),
       onOpenDocument: vi.fn(),
       onOpenSchedule: vi.fn(),
       schedules: [{ work, projection }],

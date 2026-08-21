@@ -50,6 +50,7 @@ describe("Work calendar contract", () => {
           completed: true,
           completedAt: "2026-08-21T12:00:00.000Z",
           completedDocumentRevisionId: "revision-a",
+          state: "current",
         },
       ],
       episodeProgress: {
@@ -89,6 +90,7 @@ describe("Work calendar contract", () => {
             completed: true,
             completedAt: "2026-08-21T12:00:00.000Z",
             completedDocumentRevisionId: "revision-a",
+            state: "current",
           },
         ],
         episodeProgress: {

@@ -5,14 +5,15 @@ import {
   formatDdayDistance,
   formatDdayProgress,
   localDateKey,
+  moveCalendarMonth,
 } from "./WorkScheduleDashboard";
 
 describe("Work schedule dashboard calendar", () => {
   it("builds a complete six-week month grid and exact storage range", () => {
     const calendar = buildCalendarMonth("2026-08");
     expect(calendar.range).toEqual({
-      from: "2026-08-01",
-      to: "2026-08-31",
+      from: "2026-07-26",
+      to: "2026-09-05",
     });
     expect(calendar.cells).toHaveLength(42);
     expect(calendar.cells[0]).toEqual({
@@ -21,6 +22,17 @@ describe("Work schedule dashboard calendar", () => {
       inMonth: false,
     });
     expect(calendar.cells[41]?.date).toBe("2026-09-05");
+  });
+
+  it("moves the visible month and selected date together", () => {
+    expect(moveCalendarMonth("2026-08", 1)).toEqual({
+      monthKey: "2026-09",
+      selectedDate: "2026-09-01",
+    });
+    expect(moveCalendarMonth("2026-01", -1)).toEqual({
+      monthKey: "2025-12",
+      selectedDate: "2025-12-01",
+    });
   });
 
   it("formats local dates and D-DAY distance without timezone inference", () => {

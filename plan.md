@@ -12,7 +12,7 @@
 
 ## 현재 Gate
 
-`정보구조 IA-1~IA-4 기능 연결 회귀 복구 — 실제 생성·닫기·드래그·테마·재실행 검증 완료`
+`회차 완료 조건부 승인 후속 — 병합 전 P0·P1 수정과 패키징 앱 검증 완료`
 
 회차 완료 현재 상태:
 
@@ -23,6 +23,17 @@
 - [x] DC-5~DC-6 — 일정 원장과 완료 원장을 중복 저장 없이 합성하는 `WorkCalendarProjection`과 읽기 전용 완료 occurrence.
 - [x] DC-7~DC-8 — 기존 글자 수 D-DAY 모드 보존, 명시 완료 기준 두 모드와 모든 작품의 `StudioTodayProjection`.
 
+조건부 승인 후속 상태:
+
+- [x] 완료와 완료 취소를 `CompleteDocumentCommand`·`ClearDocumentCompletionCommand`로 분리하고, 취소에서 불필요한 원고 revision 조건을 제거했다.
+- [x] DB `COMMIT` 뒤 catalog 갱신을 transaction catch 밖으로 옮겨, 커밋 후 오류가 `ROLLBACK` 오류로 덮이지 않게 했다.
+- [x] 완료 상태를 파괴적 토글에서 `✓ 완료됨` 상태·`다시 완료`·별도 `완료 취소` 메뉴로 분리했다.
+- [x] 완료 occurrence에 `current | edited-after-completion` 상태를 합성하고, 헤더·달력·오늘에서 완료 당시 불변 revision 본문을 읽기 전용으로 연다.
+- [x] 완료 날짜·절대 시각·IANA 시간대를 엄격히 검증하고 완료 날짜 partial index를 추가했다.
+- [x] 달력 조회를 실제 42칸 범위로 넓히고, 월 이동 시 선택 날짜를 함께 옮기며, 조회 실패 시 이전 projection을 비운다.
+- [x] 기존 회차 수 D-DAY는 `글자 수 기준`, 명시 완료 모드는 `완료 체크 기준`으로 구분했다.
+- [x] 기본 `npm test` 명령과 명시적 탐색 제외·Windows 안정 worker 수를 설정했다.
+
 회차 완료 현재 증거:
 
 - schema 13 실사용 DB의 온라인 백업 복사본을 14로 이주해 작품 3·문서 31·revision 23,591·투고처 1 수량과 논리 checksum을 보존하고, 완료 원장 0건·foreign key 위반 0건을 확인했다. 실행 중인 실사용 DB 원본은 쓰지 않았다.
@@ -32,6 +43,9 @@
 - 기존 `episodeCount`·`episodeNumber`는 글자 수 기준 의미를 유지하고, 신규 `additionalCompletedDocuments`·`totalCompletedDocuments`만 명시 완료 원장 개수를 사용한다.
 - production Electron에서 저장되지 않은 원고 입력 직후 완료→달력 읽기 전용 표시→전역 오늘의 정확한 작품·회차 열기→완료 취소 시 제거→완전 재시작 원고와 미완료 상태 복원을 통과했다.
 - 최신 실제 앱을 기본 사용자 데이터 경로로 정상 기동해 `user_version`·storage identity 14, 활성 작품 1·문서 31 보존, 완료 원장 0건, foreign key 위반 0건을 확인했다. 13→14 migration receipt의 논리 checksum은 전후 `a095a916…09cb`로 일치한다.
+- post-COMMIT catalog 오류, stale 완료/원고 revision, 동시 완료 두 요청, 수정 뒤 완료 취소, 42칸 범위·월 이동, 불변 revision 본문 읽기와 날짜 경계를 집중 검증했다.
+- `npm run lint`, `npm run typecheck`, `npm run build`, 기본 `npm test` 226개 파일·799개 통과·1개 skip이 통과했다.
+- production Electron에서 완료 durable flush→달력/오늘→완료 당시 본문 보기·닫기→수정 후 재완료→메뉴 취소→재실행을 통과했다.
 
 IA 패키징 후속 회귀 복구:
 
@@ -67,7 +81,7 @@ IA 실제 기능별 예시와 복원 증거:
 - `npm run lint`, `npm run typecheck`, renderer/electron production build가 통과했다.
 - 관련 Vitest 6개 파일 88개와 사건 순서 runtime 재실행 검증 1개가 통과했다.
 - production Electron E2E는 공통 IA 작업면/새 플롯/실제 투고 기록, 원고 분석 닫기, 선곡목록 한 줄과 홈 음악 창, 승격 작업면 전체 다크 테마, 사건 마우스 드래그와 재실행 복원 5개가 통과했다.
-- 전체 local runtime 묶음에서는 기존 동시각 Pomodoro 복원 검증 1개가 `break` 대신 `work`를 고르는 선행 불일치로 남았다. 이번 IA 변경과 무관한 기존 항목이며 이 작업에서 수정하지 않았다.
+- 140ms 휴식 시간이 런타임 재개 전에 만료되던 Pomodoro 복원 검증은 제품 동작을 바꾸지 않고 테스트 시간 여유만 늘려 전체 병렬 실행에서도 안정화했다.
 
 이전 현재 Gate: `정보구조 개편 IA-1~IA-4 — 작품 공통 셸·구조·검토·일정 노출` 완료
 
@@ -85,10 +99,10 @@ IA-1~IA-4 완료 증거:
 
 - 승인 설계 manifest의 checksum 11/11 일치를 다시 확인하고, 데이터 schema·SQLite migration·정규 원장은 변경하지 않았다.
 - `npm run lint`, `npm run typecheck`, production renderer/electron build가 통과했다.
-- 기존부터 기록된 `studio-app-shell-layout.test.ts`의 표지 버튼 실제 `background: transparent`와 테스트의 `#ffffff` 기대 불일치 1개를 제외한 Vitest 218개 파일, 771개 검증이 통과했고 1개가 skip됐다.
+- 현재 투명 표지 버튼 계약과 레이아웃 검증을 일치시켰고, 기본 Vitest 226개 파일·799개 검증이 통과했으며 1개가 skip됐다.
 - production Electron에서 공통 헤더·두 번째 새 플롯·원고 mount/selection/undo 보존, 작품 격리, 일정 CRUD, 집필 기록 내보내기, 구조 개요 원문 이동, 플롯·사건·장면·복선·별빛·후보·버전의 재시작 회귀를 통과했다.
 
-다음 회차 완료 Gate: 없음. DC-0~DC-8 전체 회귀 검증과 실사용 앱 안전 재시작만 남음.
+다음 회차 완료 Gate: 없음. 조건부 승인 지적과 DC-0~DC-8 회귀 검증을 마쳐 병합 가능한 상태다.
 
 이전 현재 Gate: `정식 작업면 복원 Gate 13 — 별빛 서재 테마 전체 이주` 완료
 

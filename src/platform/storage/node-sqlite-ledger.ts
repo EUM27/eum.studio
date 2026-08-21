@@ -846,6 +846,13 @@ CREATE TABLE IF NOT EXISTS document_completion_status (
     ON DELETE RESTRICT
 ) STRICT;
 
+CREATE INDEX IF NOT EXISTS document_completion_status_work_date
+ON document_completion_status (
+  work_id,
+  completed_date
+)
+WHERE completed_at IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS manuscripts (
   id TEXT PRIMARY KEY,
   work_id TEXT NOT NULL,

@@ -13,6 +13,10 @@ export type RestoreDocumentRevisionCommand = ListDocumentRevisionsCommand & {
   readonly targetRevisionId: EntityId<"DocumentRevision">;
 };
 
+export type ReadDocumentRevisionCommand = ListDocumentRevisionsCommand & {
+  readonly revisionId: EntityId<"DocumentRevision">;
+};
+
 export type CreateWorkSnapshotCommand = {
   readonly schemaVersion: 1;
   readonly workId: EntityId<"Work">;
@@ -42,6 +46,12 @@ export type DocumentRevisionListProjection = {
   readonly workId: EntityId<"Work">;
   readonly documentId: EntityId<"Document">;
   readonly revisions: readonly DocumentRevisionProjection[];
+};
+
+export type DocumentRevisionContentProjection = {
+  readonly schemaVersion: 1;
+  readonly revision: DocumentRevisionProjection;
+  readonly text: string;
 };
 
 export type RestoreDocumentRevisionResult = {
@@ -189,6 +199,25 @@ export function parseRestoreDocumentRevisionCommand(
   });
 }
 
+export function parseReadDocumentRevisionCommand(
+  value: unknown,
+): ReadDocumentRevisionCommand {
+  const label = "ReadDocumentRevisionCommand";
+  const input = record(value, label);
+  exact(
+    input,
+    ["schemaVersion", "workId", "documentId", "revisionId"],
+    label,
+  );
+  schema(input, label);
+  return Object.freeze({
+    schemaVersion: 1,
+    workId: id<"Work">(input, "workId", label),
+    documentId: id<"Document">(input, "documentId", label),
+    revisionId: id<"DocumentRevision">(input, "revisionId", label),
+  });
+}
+
 export function parseCreateWorkSnapshotCommand(
   value: unknown,
 ): CreateWorkSnapshotCommand {
@@ -281,6 +310,23 @@ export function parseDocumentRevisionListProjection(
     }),
   );
   return Object.freeze({ schemaVersion: 1, workId, documentId, revisions });
+}
+
+export function parseDocumentRevisionContentProjection(
+  value: unknown,
+): DocumentRevisionContentProjection {
+  const label = "DocumentRevisionContentProjection";
+  const input = record(value, label);
+  exact(input, ["schemaVersion", "revision", "text"], label);
+  schema(input, label);
+  if (typeof input.text !== "string") {
+    throw new Error(`${label}.text must be a string`);
+  }
+  return Object.freeze({
+    schemaVersion: 1,
+    revision: parseDocumentRevisionProjection(input.revision),
+    text: input.text,
+  });
 }
 
 export function parseRestoreDocumentRevisionResult(

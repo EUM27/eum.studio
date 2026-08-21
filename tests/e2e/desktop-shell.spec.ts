@@ -1457,11 +1457,8 @@ test("uses one collapsible left sidebar without stretching main controls", async
       hasText: workTitle,
     });
     await workCard
-      .getByRole("button", { name: `${workTitle} 작품 열기`, exact: true })
-      .click();
-    await workCard
-      .getByRole("button", { name: documentTitle, exact: true })
-      .click();
+      .getByRole("combobox", { name: `${workTitle} 회차 선택`, exact: true })
+      .selectOption({ label: documentTitle });
     await expect(page.getByRole("textbox", { name: "원고" })).toBeVisible();
 
     await page.setViewportSize({ width: 1344, height: 900 });
@@ -2969,6 +2966,97 @@ test("creates the first local Work and reopens its saved manuscript after restar
     );
   } finally {
     await electronApp.close();
+    await removeVerifiedTemporaryDirectory(directory);
+  }
+});
+
+test("automatically resumes a restored paused work timer on manuscript input", async () => {
+  test.setTimeout(90_000);
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "eum-studio-pomodoro-auto-resume-e2e-"),
+  );
+  const workTitle = `자동재개-${randomUUID().slice(0, 8)}`;
+  const documentTitle = `회차-${randomUUID().slice(0, 8)}`;
+  const runtimeEnvironment = {
+    ...process.env,
+    EUM_STUDIO_TEST_EPHEMERAL_WORKSPACE: "0",
+    EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH: directory,
+    EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+  };
+  const electronArguments = [
+    ".",
+    `--user-data-dir=${path.join(directory, "electron-user-data")}`,
+  ];
+  let electronApp = await electron.launch({
+    args: electronArguments,
+    cwd: process.cwd(),
+    env: runtimeEnvironment,
+  });
+
+  try {
+    let page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page
+      .getByRole("button", { name: "작품 만들기", exact: true })
+      .click();
+    const createWorkDialog = page.getByRole("dialog", {
+      name: "새 작품 만들기",
+    });
+    await createWorkDialog.getByLabel("작품 제목").fill(workTitle);
+    await createWorkDialog.getByLabel("첫 회차 제목").fill(documentTitle);
+    await createWorkDialog
+      .getByRole("button", { name: "작품 만들기", exact: true })
+      .click();
+    const workIdValue = await page
+      .getByTestId("current-work")
+      .getAttribute("title");
+    if (workIdValue === null) throw new Error("Expected Work identity");
+    const workId = entityId<"Work">(workIdValue);
+
+    await page.getByRole("button", { name: "집중 시작", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "집중 타이머 설정" });
+    await dialog.getByLabel("작업 시간(분)").fill("1");
+    await dialog.getByLabel("휴식 시간(분)").fill("1");
+    await dialog.getByLabel("작업 주기").fill("1");
+    await dialog.getByRole("button", { name: "시작", exact: true }).click();
+
+    await electronApp.close();
+    electronApp = await electron.launch({
+      args: electronArguments,
+      cwd: process.cwd(),
+      env: runtimeEnvironment,
+    });
+    page = await openStudioWorkspace(electronApp);
+    const timer = page.getByTestId("pomodoro-timer");
+    await expect(timer.getByRole("button", { name: "재개", exact: true }))
+      .toBeVisible();
+    await expect.poll(() => page.evaluate(
+      (targetWorkId) => window.eumStudio.activity.getPomodoro({
+        schemaVersion: 1,
+        workId: targetWorkId,
+      }),
+      workId,
+    )).toMatchObject({
+      status: "paused",
+      activePhase: { phase: "work", state: "paused" },
+    });
+
+    await page.getByRole("textbox", { name: "원고" })
+      .pressSequentially("첫 입력 자동 재개");
+    await expect.poll(() => page.evaluate(
+      (targetWorkId) => window.eumStudio.activity.getPomodoro({
+        schemaVersion: 1,
+        workId: targetWorkId,
+      }),
+      workId,
+    )).toMatchObject({
+      status: "running",
+      activePhase: { phase: "work", state: "running" },
+    });
+    await expect(timer.getByRole("button", { name: "일시정지", exact: true }))
+      .toBeVisible();
+  } finally {
+    await electronApp.close().catch(() => undefined);
     await removeVerifiedTemporaryDirectory(directory);
   }
 });
@@ -5787,10 +5875,7 @@ test("flushes the active manuscript before explicit completion and restores comp
     let manuscript = page.getByRole("textbox", { name: "원고" });
     await manuscript.pressSequentially(firstText);
     await page.getByRole("button", { name: "회차 완료", exact: true }).click();
-    await expect(page.getByRole("button", {
-      name: "회차 완료 취소",
-      exact: true,
-    })).toBeVisible();
+    await expect(page.getByText("✓ 완료됨", { exact: true })).toBeVisible();
     await expect(page.getByTestId("save-state")).toHaveText("저장됨");
     await expect(page.locator(".document-completion-mark").first())
       .toHaveText("✓");
@@ -5818,6 +5903,17 @@ test("flushes the active manuscript before explicit completion and restores comp
     await expect(
       scheduleDialog.getByText(`${documentTitle} 완료`, { exact: true }),
     ).toBeVisible();
+    await scheduleDialog.getByRole("button", {
+      name: "완료 당시 버전 보기",
+      exact: true,
+    }).click();
+    const completedRevisionDialog = page.getByRole("dialog", {
+      name: "완료 당시 버전",
+    });
+    await expect(completedRevisionDialog).toContainText(firstText);
+    await completedRevisionDialog.getByRole("button", {
+      name: "완료 당시 버전 닫기",
+    }).click();
     await expect(
       scheduleDialog.getByRole("button", {
         name: `${documentTitle} 완료 취소`,
@@ -5836,27 +5932,26 @@ test("flushes the active manuscript before explicit completion and restores comp
     const todayCompletions = page.locator(".today-completion-list");
     await expect(todayCompletions.getByText(documentTitle, { exact: false }))
       .toBeVisible();
-    await todayCompletions.getByRole("button").filter({
-      hasText: documentTitle,
-    }).click();
+    await todayCompletions.locator("li", { hasText: documentTitle })
+      .getByRole("button", { name: "현재 회차 열기", exact: true })
+      .click();
     await expect(page.getByTestId("manuscript-title")).toHaveText(documentTitle);
     manuscript = page.getByRole("textbox", { name: "원고" });
 
     await manuscript.pressSequentially(editedText);
     await expect(page.getByTestId("save-state")).toHaveText("저장됨");
-    await expect(page.getByRole("button", {
-      name: "회차 다시 완료",
-      exact: true,
-    })).toBeVisible();
+    await expect(page.getByText("△ 완료 후 수정됨", { exact: true }))
+      .toBeVisible();
     await expect(page.locator(".document-completion-mark").first())
       .toHaveText("△");
 
-    await page.getByRole("button", { name: "회차 다시 완료", exact: true }).click();
-    await expect(page.getByRole("button", {
-      name: "회차 완료 취소",
+    await page.getByRole("button", { name: "다시 완료", exact: true }).click();
+    await expect(page.getByText("✓ 완료됨", { exact: true })).toBeVisible();
+    await page.getByRole("button", {
+      name: "회차 완료 메뉴 열기",
       exact: true,
-    })).toBeVisible();
-    await page.getByRole("button", { name: "회차 완료 취소", exact: true }).click();
+    }).click();
+    await page.getByRole("menuitem", { name: "완료 취소", exact: true }).click();
     await expect(page.getByRole("button", { name: "회차 완료", exact: true }))
       .toBeVisible();
     await expect(page.locator(".document-completion-mark").first())
@@ -11260,9 +11355,12 @@ test("retires an episode while preserving its manuscript data", async () => {
     const emptyWorkCard = window
       .locator("article.library-work-card")
       .filter({ hasText: workTitle });
-    await expect(
-      emptyWorkCard.getByText("0개 회차", { exact: false }),
-    ).toBeVisible();
+    const emptyDocumentSelect = emptyWorkCard.getByRole("combobox", {
+      name: `${workTitle} 회차 선택`,
+      exact: true,
+    });
+    await expect(emptyDocumentSelect).toBeDisabled();
+    await expect(emptyDocumentSelect.locator("option")).toHaveText(["회차 없음"]);
     await expect(
       window.getByRole("button", {
         name: `${workTitle} 이어쓰기`,
@@ -11695,6 +11793,101 @@ test("keeps the document sidebar and review overlay independent without hiding w
     await expect(reviewRail).toBeVisible();
   } finally {
     await electronApp.close();
+  }
+});
+
+test("opens a home work episode from the native document dropdown", async () => {
+  test.setTimeout(60_000);
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "eum-studio-home-document-select-e2e-"),
+  );
+  const documentProfile = createDocumentSwitchProfile("첫 회차 원고");
+  const electronApp = await electron.launch({
+    args: [".", `--user-data-dir=${path.join(directory, "electron-user-data")}`],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      EUM_STUDIO_MANUSCRIPT_DOCUMENT_PROFILE: JSON.stringify(documentProfile),
+      EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+    },
+  });
+
+  try {
+    const page = await openStudioWorkspace(electronApp);
+    await openStudioHome(page);
+    const documentSelect = page.locator(".work-document-select");
+    await expect(documentSelect).toHaveCount(1);
+    await expect(documentSelect).toHaveValue(
+      documentProfile.documents[0].documentId,
+    );
+    await expect(documentSelect.locator("option")).toHaveCount(3);
+    await expect(page.locator(".document-list")).toHaveCount(0);
+
+    await documentSelect.selectOption(documentProfile.documents[1].documentId);
+    await expect(page.getByTestId("current-document")).toHaveText(
+      documentProfile.documents[1].label,
+    );
+    await expect(page.getByRole("textbox", { name: "원고" })).toBeVisible();
+  } finally {
+    await electronApp.close().catch(() => undefined);
+    await removeVerifiedTemporaryDirectory(directory);
+  }
+});
+
+test("centers the manuscript surface in the focus screen", async () => {
+  test.setTimeout(60_000);
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "eum-studio-focus-center-e2e-"),
+  );
+  const electronApp = await electron.launch({
+    args: [".", `--user-data-dir=${path.join(directory, "electron-user-data")}`],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      EUM_STUDIO_MANUSCRIPT_DOCUMENT_PROFILE: JSON.stringify(
+        createDocumentSwitchProfile("중앙 원고"),
+      ),
+      EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+    },
+  });
+
+  try {
+    const window = await openStudioWorkspace(electronApp);
+    await window
+      .getByRole("button", { name: "집중 화면 시작", exact: true })
+      .click();
+    await expect(window.locator(".writing-workspace-focus-mode")).toBeVisible();
+
+    const focusLayout = await window.evaluate(() => {
+      const shell = document.querySelector<HTMLElement>(".studio-app-shell");
+      const workspace = document.querySelector<HTMLElement>(".workspace");
+      const content = document.querySelector<HTMLElement>(
+        ".manuscript-editor .cm-content",
+      );
+      if (shell === null || workspace === null || content === null) {
+        throw new Error("The manuscript focus layout is incomplete");
+      }
+      const shellBounds = shell.getBoundingClientRect();
+      const workspaceBounds = workspace.getBoundingClientRect();
+      const contentBounds = content.getBoundingClientRect();
+      return {
+        contentCenterDelta:
+          contentBounds.left + contentBounds.width / 2 -
+          (shellBounds.left + shellBounds.width / 2),
+        sidebarWidth: getComputedStyle(shell)
+          .getPropertyValue("--eum-sidebar-width")
+          .trim(),
+        workspaceLeftDelta: workspaceBounds.left - shellBounds.left,
+        workspaceRightDelta: shellBounds.right - workspaceBounds.right,
+      };
+    });
+    expect(focusLayout.sidebarWidth).toBe("0px");
+    expect(Math.abs(focusLayout.workspaceLeftDelta)).toBeLessThan(1);
+    expect(Math.abs(focusLayout.workspaceRightDelta)).toBeLessThan(1);
+    expect(Math.abs(focusLayout.contentCenterDelta)).toBeLessThan(1);
+  } finally {
+    await electronApp.close().catch(() => undefined);
+    await removeVerifiedTemporaryDirectory(directory);
   }
 });
 
@@ -12394,6 +12587,31 @@ test("keeps the playlist entry on one top-bar row at the 150-percent CSS viewpor
       exact: true,
     });
     await expect(musicDialog).toBeVisible();
+    const playAll = musicDialog.getByRole("button", {
+      name: "전체 재생",
+      exact: true,
+    });
+    await expect(playAll).toBeVisible();
+    const dialogLayout = await musicDialog.evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      const playAllButton = Array.from(element.querySelectorAll("button")).find(
+        (button) => button.textContent?.trim() === "전체 재생",
+      );
+      const playAllBounds = playAllButton?.getBoundingClientRect();
+      return {
+        bottom: bounds.bottom,
+        playAllBottom: playAllBounds?.bottom ?? Number.NaN,
+        playAllTop: playAllBounds?.top ?? Number.NaN,
+        top: bounds.top,
+        viewportHeight: window.innerHeight,
+      };
+    });
+    expect(dialogLayout.top).toBeGreaterThanOrEqual(0);
+    expect(dialogLayout.bottom).toBeLessThanOrEqual(dialogLayout.viewportHeight);
+    expect(dialogLayout.playAllTop).toBeGreaterThanOrEqual(0);
+    expect(dialogLayout.playAllBottom).toBeLessThanOrEqual(
+      dialogLayout.viewportHeight,
+    );
     const backdrop = page.locator(".music-library-backdrop");
     const backdropBounds = await backdrop.boundingBox();
     if (backdropBounds === null) {
