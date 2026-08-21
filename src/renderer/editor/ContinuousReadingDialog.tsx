@@ -5,6 +5,7 @@ import {
   type ContinuousReadingLocation,
   type ContinuousReadingSession,
 } from "../../application/editor/continuous-reading-progress";
+import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
 function sameLocation(
   left: ContinuousReadingLocation | null,
@@ -73,6 +74,24 @@ export function ContinuousReadingDialog(input: {
     "idle" | "saving" | "saved" | "closing"
   >("idle");
   const [error, setError] = useState<string | null>(null);
+  const closeDialog = () => {
+    const container = scrollRef.current;
+    const location = container === null ? null : readVisibleLocation(container);
+    setError(null);
+    setActionState("closing");
+    void input.onClose(location).catch((closeError: unknown) => {
+      setError(
+        closeError instanceof Error
+          ? closeError.message
+          : "읽기 위치를 저장하지 못했습니다.",
+      );
+      setActionState("idle");
+    });
+  };
+  const onBackdropPointerDown = useDialogDismiss({
+    disabled: actionState === "closing",
+    onClose: closeDialog,
+  });
   const visibleDocuments = useMemo(
     () => input.session.documents.slice(0, loadedCount),
     [input.session.documents, loadedCount],
@@ -161,7 +180,11 @@ export function ContinuousReadingDialog(input: {
   );
 
   return (
-    <div className="dialog-backdrop continuous-reading-backdrop" role="presentation">
+    <div
+      className="dialog-backdrop continuous-reading-backdrop"
+      onPointerDown={onBackdropPointerDown}
+      role="presentation"
+    >
       <section
         aria-labelledby={headingId}
         aria-modal="true"
@@ -190,21 +213,7 @@ export function ContinuousReadingDialog(input: {
             <button
               aria-label="연속 읽기 닫기"
               disabled={actionState === "closing"}
-              onClick={() => {
-                const container = scrollRef.current;
-                const location =
-                  container === null ? null : readVisibleLocation(container);
-                setError(null);
-                setActionState("closing");
-                void input.onClose(location).catch((closeError: unknown) => {
-                  setError(
-                    closeError instanceof Error
-                      ? closeError.message
-                      : "읽기 위치를 저장하지 못했습니다.",
-                  );
-                  setActionState("idle");
-                });
-              }}
+              onClick={closeDialog}
               type="button"
             >
               ×

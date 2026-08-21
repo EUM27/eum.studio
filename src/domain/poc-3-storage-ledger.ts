@@ -243,6 +243,26 @@ export type Poc3EventBlockRecord =
       string;
   };
 
+export type Poc3EventBlockOutlineMoveRecord = {
+  readonly kind: "eventBlockOutlineMove";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly outlineOrderKey: string;
+  readonly updatedAt: string;
+};
+
+export type Poc3EventBlockOutlineRebalanceRecord = {
+  readonly kind: "eventBlockOutlineRebalance";
+  readonly workId: string;
+  readonly updatedAt: string;
+  readonly events: readonly {
+    readonly id: string;
+    readonly expectedRevision: number;
+    readonly outlineOrderKey: string;
+  }[];
+};
+
 export type Poc3EventSourceRecord =
   Poc3LedgerRecordMeta & {
     readonly kind: "eventSource";
@@ -982,6 +1002,8 @@ export type Poc3LedgerRecord =
   | Poc3SceneEventOverrideRecord
   | Poc3SceneEventOverrideRetirementRecord
   | Poc3EventBlockRecord
+  | Poc3EventBlockOutlineMoveRecord
+  | Poc3EventBlockOutlineRebalanceRecord
   | Poc3EventSourceRecord
   | Poc3EventSourceRetirementRecord
   | Poc3FragmentRecord

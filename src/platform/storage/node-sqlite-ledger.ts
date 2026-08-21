@@ -803,6 +803,49 @@ CREATE TABLE IF NOT EXISTS document_revisions (
     ON DELETE RESTRICT
 ) STRICT;
 
+CREATE TABLE IF NOT EXISTS document_completion_status (
+  work_id TEXT NOT NULL,
+  document_id TEXT NOT NULL,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  completed_at TEXT,
+  completed_date TEXT,
+  completed_time_zone TEXT,
+  completed_document_revision_id TEXT,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (work_id, document_id),
+  CHECK (
+    (
+      completed_at IS NULL AND
+      completed_date IS NULL AND
+      completed_time_zone IS NULL AND
+      completed_document_revision_id IS NULL
+    ) OR (
+      completed_at IS NOT NULL AND
+      completed_date IS NOT NULL AND
+      completed_time_zone IS NOT NULL AND
+      completed_document_revision_id IS NOT NULL
+    )
+  ),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, document_id)
+    REFERENCES documents (work_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (
+    work_id,
+    document_id,
+    completed_document_revision_id
+  )
+    REFERENCES document_revisions (
+      work_id,
+      document_id,
+      id
+    )
+    ON DELETE RESTRICT
+) STRICT;
+
 CREATE TABLE IF NOT EXISTS manuscripts (
   id TEXT PRIMARY KEY,
   work_id TEXT NOT NULL,
@@ -3398,6 +3441,56 @@ function writeLedgerRecord(
           ),
         ],
       );
+      return;
+    case "eventBlockOutlineMove":
+      {
+        const moved = database.prepare(`
+          UPDATE event_blocks
+          SET
+            revision = revision + 1,
+            updated_at = ?,
+            order_key = ?
+          WHERE
+            id = ?
+            AND work_id = ?
+            AND revision = ?
+            AND retired_at IS NULL
+        `).run(
+          record.updatedAt,
+          record.outlineOrderKey,
+          record.id,
+          record.workId,
+          record.expectedRevision,
+        ) as { readonly changes: number | bigint };
+        if (Number(moved.changes) !== 1) {
+          throw new Error(`EventBlock revision conflict: ${record.id}`);
+        }
+      }
+      return;
+    case "eventBlockOutlineRebalance":
+      for (const event of record.events) {
+        const moved = database.prepare(`
+          UPDATE event_blocks
+          SET
+            revision = revision + 1,
+            updated_at = ?,
+            order_key = ?
+          WHERE
+            id = ?
+            AND work_id = ?
+            AND revision = ?
+            AND retired_at IS NULL
+        `).run(
+          record.updatedAt,
+          event.outlineOrderKey,
+          event.id,
+          record.workId,
+          event.expectedRevision,
+        ) as { readonly changes: number | bigint };
+        if (Number(moved.changes) !== 1) {
+          throw new Error(`EventBlock revision conflict: ${event.id}`);
+        }
+      }
       return;
     case "eventSource":
       {

@@ -355,6 +355,7 @@ export function PlotManagerDialog(input: {
   readonly utility?: ReactNode;
 }) {
   const [query, setQuery] = useState("");
+  const [draftRevision, setDraftRevision] = useState(0);
   const [eventBlockId, setEventBlockId] = useState("");
   const [eventRole, setEventRole] = useState<PlotEventLinkRole>("primary");
   const [boardView, setBoardView] = useState<"sequence" | "time-map">(
@@ -379,6 +380,7 @@ export function PlotManagerDialog(input: {
     PlotPlacementProjection["plotPlacementId"] | null
   >(null);
   const actionState = input.actionState;
+  const onClose = input.onClose;
   const onMovePlacement = input.onMovePlacement;
   const onSetStoryTime = input.onSetStoryTime;
   const busy = actionState !== "idle" || dropPending;
@@ -874,11 +876,15 @@ export function PlotManagerDialog(input: {
 
   useEffect(() => {
     const cancelWithEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
       if (
-        event.key !== "Escape" ||
-        (pointerDragRef.current === null &&
-          storyTimePointerDragRef.current === null)
+        pointerDragRef.current === null &&
+        storyTimePointerDragRef.current === null
       ) {
+        if (embedded || busy || onClose === undefined) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        onClose();
         return;
       }
       event.preventDefault();
@@ -887,7 +893,7 @@ export function PlotManagerDialog(input: {
     };
     document.addEventListener("keydown", cancelWithEscape);
     return () => document.removeEventListener("keydown", cancelWithEscape);
-  }, [clearPointerDrag, clearStoryTimePointerDrag]);
+  }, [busy, clearPointerDrag, clearStoryTimePointerDrag, embedded, onClose]);
   useEffect(
     () => () => {
       pointerDragRef.current = null;
@@ -907,6 +913,15 @@ export function PlotManagerDialog(input: {
           ? "plot-manager-embedded-host"
           : "dialog-backdrop character-manager-backdrop plot-manager-backdrop"
       }
+      onPointerDown={(event) => {
+        if (
+          !embedded &&
+          !busy &&
+          event.target === event.currentTarget
+        ) {
+          onClose?.();
+        }
+      }}
       role={embedded ? undefined : "presentation"}
     >
       <section
@@ -962,7 +977,10 @@ export function PlotManagerDialog(input: {
               />
               <button
                 disabled={busy}
-                onClick={() => input.onSelect(null)}
+                onClick={() => {
+                  input.onSelect(null);
+                  setDraftRevision((current) => current + 1);
+                }}
                 type="button"
               >
                 새 플롯
@@ -1403,7 +1421,7 @@ export function PlotManagerDialog(input: {
           >
             <PlotFields
               actionState={input.actionState}
-              key={selectedPlot?.plotThreadId ?? "new-plot"}
+              key={selectedPlot?.plotThreadId ?? `new-plot-${draftRevision}`}
               onCreate={input.onCreate}
               onRetire={input.onRetire}
               onUpdate={input.onUpdate}

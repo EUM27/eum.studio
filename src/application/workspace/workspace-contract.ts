@@ -2,6 +2,10 @@ import {
   entityId,
   type EntityId,
 } from "../../domain/writing";
+import {
+  parseDocumentCompletionProjection,
+  type DocumentCompletionProjection,
+} from "./document-completion";
 
 export const UNTITLED_DOCUMENT_TITLE = "제목없음";
 
@@ -10,6 +14,7 @@ export type WorkspaceDocumentSummary = {
   readonly title: string;
   readonly currentRevisionId: EntityId<"DocumentRevision">;
   readonly folderId: EntityId<"DocumentFolder"> | null;
+  readonly completion: DocumentCompletionProjection;
 };
 
 export type WorkspaceDocumentFolderSummary = {
@@ -782,7 +787,7 @@ export function parseWorkspaceCatalogProjection(
       );
       assertOnlyFields(
         document,
-        ["documentId", "title", "currentRevisionId", "folderId"],
+        ["documentId", "title", "currentRevisionId", "folderId", "completion"],
         `WorkspaceCatalogProjection.works[${workIndex}].documents[${documentIndex}]`,
       );
       const documentId = readIdentity<"Document">(
@@ -802,17 +807,48 @@ export function parseWorkspaceCatalogProjection(
           `Workspace Document folder must belong to the same Work: ${documentId}`,
         );
       }
+      const currentRevisionId = readIdentity<"DocumentRevision">(
+        document.currentRevisionId,
+        `WorkspaceCatalogProjection.works[${workIndex}].documents[${documentIndex}].currentRevisionId`,
+      );
+      const completion = parseDocumentCompletionProjection(
+        document.completion ?? {
+          schemaVersion: 1,
+          workId,
+          documentId,
+          revision: 0,
+          completedAt: null,
+          completedDate: null,
+          completedTimeZone: null,
+          completedDocumentRevisionId: null,
+          state: "incomplete",
+          updatedAt: null,
+        },
+      );
+      if (completion.workId !== workId || completion.documentId !== documentId) {
+        throw new Error(
+          `Workspace completion must belong to its Work and Document: ${documentId}`,
+        );
+      }
+      const expectedState = completion.completedDocumentRevisionId === null
+        ? "incomplete"
+        : completion.completedDocumentRevisionId === currentRevisionId
+          ? "current"
+          : "edited-after-completion";
+      if (completion.state !== expectedState) {
+        throw new Error(
+          `Workspace completion state does not match the current revision: ${documentId}`,
+        );
+      }
       return Object.freeze({
         documentId,
         title: readNonEmptyTrimmedText(
           document.title,
           `WorkspaceCatalogProjection.works[${workIndex}].documents[${documentIndex}].title`,
         ),
-        currentRevisionId: readIdentity<"DocumentRevision">(
-          document.currentRevisionId,
-          `WorkspaceCatalogProjection.works[${workIndex}].documents[${documentIndex}].currentRevisionId`,
-        ),
+        currentRevisionId,
         folderId,
+        completion,
       });
     });
     return Object.freeze({

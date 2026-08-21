@@ -12,6 +12,7 @@ import {
   type ManuscriptPreflightSettings,
   type ManuscriptPreflightSettingsProjection,
 } from "../../application/editor/manuscript-preflight";
+import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
 const FINDING_LABELS: Readonly<Record<ManuscriptPreflightFindingKind, string>> =
   Object.freeze({
@@ -62,6 +63,10 @@ export function ManuscriptPreflightDialog(input: {
     useState(false);
   const [action, setAction] = useState<DialogAction>("idle");
   const [message, setMessage] = useState<string | null>(null);
+  const onBackdropPointerDown = useDialogDismiss({
+    disabled: action !== "idle",
+    onClose: input.onClose,
+  });
   const selectionRange = input.selection;
   const targetRange = useMemo<ManuscriptPreflightRange>(
     () =>
@@ -161,7 +166,11 @@ export function ManuscriptPreflightDialog(input: {
   };
 
   return (
-    <div className="dialog-backdrop manuscript-preflight-backdrop" role="presentation">
+    <div
+      className="dialog-backdrop manuscript-preflight-backdrop"
+      onPointerDown={onBackdropPointerDown}
+      role="presentation"
+    >
       <section
         aria-labelledby="manuscript-preflight-heading"
         aria-modal="true"

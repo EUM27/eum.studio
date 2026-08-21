@@ -2,6 +2,7 @@ import type {
   WorkSnapshotComparisonProjection,
   WorkSnapshotDocumentComparisonStatus,
 } from "../../application/revisions/work-snapshot-comparison";
+import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
 const STATUS_LABELS: Readonly<
   Record<WorkSnapshotDocumentComparisonStatus, string>
@@ -31,8 +32,13 @@ export function WorkSnapshotComparisonDialog(input: {
   readonly onClose: () => void;
 }) {
   const { projection } = input;
+  const onBackdropPointerDown = useDialogDismiss({ onClose: input.onClose });
   return (
-    <div className="dialog-backdrop snapshot-comparison-backdrop" role="presentation">
+    <div
+      className="dialog-backdrop snapshot-comparison-backdrop"
+      onPointerDown={onBackdropPointerDown}
+      role="presentation"
+    >
       <section
         aria-labelledby="snapshot-comparison-heading"
         aria-modal="true"

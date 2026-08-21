@@ -5,6 +5,7 @@ import type {
   CreateCharacterCommand,
   UpdateCharacterCommand,
 } from "../../application/characters/character-contract";
+import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
 export type CharacterManagerActionState =
   | "idle"
@@ -244,7 +245,12 @@ export function CharacterManagerDialog(input: {
   readonly selectedCharacterId: string | null;
 }) {
   const [query, setQuery] = useState("");
+  const [draftRevision, setDraftRevision] = useState(0);
   const busy = input.actionState !== "idle";
+  const onBackdropPointerDown = useDialogDismiss({
+    disabled: busy,
+    onClose: input.onClose,
+  });
   const selectedCharacter = input.characters.find(
     (character) => character.characterId === input.selectedCharacterId,
   ) ?? null;
@@ -258,7 +264,11 @@ export function CharacterManagerDialog(input: {
       );
 
   return (
-    <div className="dialog-backdrop character-manager-backdrop" role="presentation">
+    <div
+      className="dialog-backdrop character-manager-backdrop"
+      onPointerDown={onBackdropPointerDown}
+      role="presentation"
+    >
       <section
         aria-labelledby="character-manager-heading"
         aria-modal="true"
@@ -294,7 +304,10 @@ export function CharacterManagerDialog(input: {
               />
               <button
                 disabled={busy}
-                onClick={() => input.onSelect(null)}
+                onClick={() => {
+                  input.onSelect(null);
+                  setDraftRevision((current) => current + 1);
+                }}
                 type="button"
               >
                 새 인물
@@ -329,7 +342,7 @@ export function CharacterManagerDialog(input: {
             <CharacterProfileFields
               actionState={input.actionState}
               character={selectedCharacter}
-              key={selectedCharacter?.characterId ?? "new-character"}
+              key={selectedCharacter?.characterId ?? `new-character-${draftRevision}`}
               onCreate={input.onCreate}
               onRetire={input.onRetire}
               onUpdate={input.onUpdate}

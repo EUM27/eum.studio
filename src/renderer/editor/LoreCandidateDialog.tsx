@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
 import type {
   LoreCandidateProjection,
@@ -62,11 +63,12 @@ function proposalTitle(
     ?? "변경 대상 별빛";
 }
 
-export function LoreCandidateDialog(input: {
+export type LoreCandidateDialogProps = {
   readonly actionState: LoreCandidateActionState;
   readonly canCapture: boolean;
   readonly candidates: readonly LoreCandidateProjection[];
   readonly documentLabels: Readonly<Record<string, string>>;
+  readonly embedded?: boolean;
   readonly entries: readonly LoreEntryProjection[];
   readonly error: string | null;
   readonly onApprove: (candidate: LoreCandidateProjection) => void;
@@ -74,7 +76,14 @@ export function LoreCandidateDialog(input: {
   readonly onCreate: (draft: LoreCandidateDraft) => void;
   readonly onOpenEvidence: (candidate: LoreCandidateProjection) => void;
   readonly onReject: (candidate: LoreCandidateProjection) => void;
-}) {
+};
+
+export type LoreCandidateContentProps = Omit<
+  LoreCandidateDialogProps,
+  "embedded" | "onClose"
+>;
+
+export function LoreCandidateDialog(input: LoreCandidateDialogProps) {
   const [proposalKind, setProposalKind] = useState<"create" | "update">("create");
   const [targetLoreEntryId, setTargetLoreEntryId] = useState(
     input.entries[0]?.loreEntryId ?? "",
@@ -86,6 +95,11 @@ export function LoreCandidateDialog(input: {
   const [enabled, setEnabled] = useState(true);
   const [reason, setReason] = useState("");
   const busy = input.actionState !== "idle";
+  const onBackdropPointerDown = useDialogDismiss({
+    active: !input.embedded,
+    disabled: busy,
+    onClose: input.onClose,
+  });
   const selectedEntry = input.entries.find(
     (entry) => entry.loreEntryId === targetLoreEntryId,
   ) ?? input.entries[0] ?? null;
@@ -108,13 +122,16 @@ export function LoreCandidateDialog(input: {
     setEnabled(entry.enabled);
   };
 
-  return (
-    <div className="dialog-backdrop lore-candidate-backdrop" role="presentation">
+  const candidateContent = (
       <section
         aria-labelledby="lore-candidate-heading"
-        aria-modal="true"
-        className="lore-candidate-dialog"
-        role="dialog"
+        aria-modal={input.embedded ? undefined : "true"}
+        className={
+          input.embedded
+            ? "lore-candidate-dialog lore-candidate-content"
+            : "lore-candidate-dialog"
+        }
+        role={input.embedded ? "region" : "dialog"}
       >
         <header className="lore-candidate-header">
           <div>
@@ -122,15 +139,17 @@ export function LoreCandidateDialog(input: {
             <h2 id="lore-candidate-heading">별빛 검토함</h2>
             <p>승인 전에는 확정 별빛을 바꾸지 않습니다.</p>
           </div>
-          <button
-            aria-label="별빛 검토함 닫기"
-            className="dialog-close"
-            disabled={busy}
-            onClick={input.onClose}
-            type="button"
-          >
-            ×
-          </button>
+          {!input.embedded && (
+            <button
+              aria-label="별빛 검토함 닫기"
+              className="dialog-close"
+              disabled={busy}
+              onClick={input.onClose}
+              type="button"
+            >
+              ×
+            </button>
+          )}
         </header>
 
         <div className="lore-candidate-body">
@@ -342,6 +361,18 @@ export function LoreCandidateDialog(input: {
         </div>
         {input.error !== null && <p className="dialog-error" role="alert">{input.error}</p>}
       </section>
+  );
+  return input.embedded ? candidateContent : (
+    <div
+      className="dialog-backdrop lore-candidate-backdrop"
+      onPointerDown={onBackdropPointerDown}
+      role="presentation"
+    >
+      {candidateContent}
     </div>
   );
+}
+
+export function LoreCandidateContent(input: LoreCandidateContentProps) {
+  return <LoreCandidateDialog {...input} embedded onClose={() => undefined} />;
 }

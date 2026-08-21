@@ -24,6 +24,21 @@ import {
   parseWorkspaceCatalogProjection,
 } from "./workspace-contract";
 
+function incompleteCompletion(workId: string, documentId: string) {
+  return {
+    schemaVersion: 1 as const,
+    workId,
+    documentId,
+    revision: 0,
+    completedAt: null,
+    completedDate: null,
+    completedTimeZone: null,
+    completedDocumentRevisionId: null,
+    state: "incomplete" as const,
+    updatedAt: null,
+  };
+}
+
 describe("workspace contract", () => {
   it("uses the exact untitled label for blank first and additional Document titles", () => {
     const workId = randomUUID();
@@ -247,6 +262,7 @@ describe("workspace contract", () => {
                 title: firstDocumentTitle,
                 currentRevisionId: revisionId,
                 folderId: null,
+                completion: incompleteCompletion(workId, documentId),
               },
             ],
           },
@@ -269,6 +285,7 @@ describe("workspace contract", () => {
               title: firstDocumentTitle,
               currentRevisionId: revisionId,
               folderId: null,
+              completion: incompleteCompletion(workId, documentId),
             },
           ],
         },
@@ -301,6 +318,7 @@ describe("workspace contract", () => {
           title: "1화",
           currentRevisionId: revisionId,
           folderId: childFolderId,
+          completion: incompleteCompletion(workId, documentId),
         }],
       }],
       activeWorkId: workId,

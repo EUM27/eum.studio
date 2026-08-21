@@ -24,8 +24,8 @@ import type {
   WorkScheduleItemInput,
   WorkScheduleItemProjection,
   WorkScheduleOccurrence,
-  WorkScheduleProjection,
 } from "../../application/schedule/work-schedule-contract";
+import type { WorkCalendarProjection } from "../../application/schedule/work-calendar-contract";
 import type { WorkEpisodeCharacterProgress } from "../../application/settings/app-settings";
 
 const DAY_MS = 86_400_000;
@@ -141,13 +141,18 @@ function workloadSummary(workload: WorkScheduleDdayWorkload): string {
     case "episodeCount":
       return `추가 ${workload.targetEpisodeCount.toLocaleString()}회차 · 기준 ${workload.baselineCompletedCount.toLocaleString()}회차`;
     case "episodeNumber":
-      return `${workload.targetEpisodeNumber.toLocaleString()}화까지`;
+      return `${workload.targetEpisodeNumber.toLocaleString()}화까지 · 글자 수 기준`;
+    case "additionalCompletedDocuments":
+      return `추가 완료 ${workload.targetCount.toLocaleString()}회차 · 기준 ${workload.baselineCompletedCount.toLocaleString()}회차`;
+    case "totalCompletedDocuments":
+      return `총 완료 ${workload.targetCount.toLocaleString()}회차`;
   }
 }
 
 export function formatDdayProgress(
   workload: WorkScheduleDdayWorkload,
   progress: WorkEpisodeCharacterProgress,
+  completedDocumentCount = 0,
 ): string | null {
   switch (workload.mode) {
     case "none":
@@ -183,6 +188,23 @@ export function formatDdayProgress(
         ? `완료 ${completed.toLocaleString()}/${workload.targetEpisodeNumber.toLocaleString()}회차 · 목표 달성`
         : `완료 ${completed.toLocaleString()}/${workload.targetEpisodeNumber.toLocaleString()}회차 · ${remaining.toLocaleString()}회차 남음`;
     }
+    case "additionalCompletedDocuments": {
+      const completed = Math.min(
+        workload.targetCount,
+        Math.max(0, completedDocumentCount - workload.baselineCompletedCount),
+      );
+      const remaining = workload.targetCount - completed;
+      return remaining === 0
+        ? `추가 완료 ${completed.toLocaleString()}/${workload.targetCount.toLocaleString()}회차 · 목표 달성`
+        : `추가 완료 ${completed.toLocaleString()}/${workload.targetCount.toLocaleString()}회차 · ${remaining.toLocaleString()}회차 남음`;
+    }
+    case "totalCompletedDocuments": {
+      const completed = Math.min(workload.targetCount, completedDocumentCount);
+      const remaining = workload.targetCount - completed;
+      return remaining === 0
+        ? `완료 ${completed.toLocaleString()}/${workload.targetCount.toLocaleString()}회차 · 목표 달성`
+        : `완료 ${completed.toLocaleString()}/${workload.targetCount.toLocaleString()}회차 · ${remaining.toLocaleString()}회차 남음`;
+    }
   }
 }
 
@@ -195,6 +217,7 @@ type EditorState = {
 function ScheduleItemDialog({
   state,
   initialDate,
+  completedDocumentCount,
   busy,
   error,
   onClose,
@@ -203,6 +226,7 @@ function ScheduleItemDialog({
 }: {
   readonly state: EditorState;
   readonly initialDate: string;
+  readonly completedDocumentCount: number;
   readonly busy: boolean;
   readonly error: string | null;
   readonly onClose: () => void;
@@ -229,18 +253,35 @@ function ScheduleItemDialog({
         ? String(initialWorkload.targetEpisodeCount)
         : initialWorkload.mode === "episodeNumber"
           ? String(initialWorkload.targetEpisodeNumber)
-          : "",
+          : initialWorkload.mode === "additionalCompletedDocuments" ||
+              initialWorkload.mode === "totalCompletedDocuments"
+            ? String(initialWorkload.targetCount)
+            : "",
   );
   const [baseline, setBaseline] = useState(
     initialWorkload.mode === "episodeCount"
       ? String(initialWorkload.baselineCompletedCount)
-      : "",
+      : initialWorkload.mode === "additionalCompletedDocuments"
+        ? String(initialWorkload.baselineCompletedCount)
+        : String(completedDocumentCount),
   );
   const [validationError, setValidationError] = useState<string | null>(null);
   const title =
     state.mode === "edit"
       ? `${state.kind === "task" ? "일정" : state.kind === "routine" ? "루틴" : "D-DAY"} 수정`
       : `${state.kind === "task" ? "일정" : state.kind === "routine" ? "루틴" : "D-DAY"} 추가`;
+
+  useEffect(() => {
+    if (busy) return;
+    const closeWithEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      onClose();
+    };
+    window.addEventListener("keydown", closeWithEscape);
+    return () => window.removeEventListener("keydown", closeWithEscape);
+  }, [busy, onClose]);
 
   function submit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
@@ -279,6 +320,18 @@ function ScheduleItemDialog({
       workload = { mode: "totalCharacters", targetCharacters: numericTarget };
     } else if (workloadMode === "episodeNumber") {
       workload = { mode: "episodeNumber", targetEpisodeNumber: numericTarget };
+    } else if (workloadMode === "totalCompletedDocuments") {
+      workload = { mode: "totalCompletedDocuments", targetCount: numericTarget };
+    } else if (workloadMode === "additionalCompletedDocuments") {
+      if (!Number.isSafeInteger(numericBaseline) || numericBaseline < 0) {
+        setValidationError("기준 완료 회차는 0 이상의 정수여야 합니다.");
+        return;
+      }
+      workload = {
+        mode: "additionalCompletedDocuments",
+        targetCount: numericTarget,
+        baselineCompletedCount: numericBaseline,
+      };
     } else {
       if (!Number.isSafeInteger(numericBaseline) || numericBaseline < 0) {
         setValidationError("기준 완료 회차는 0 이상의 정수여야 합니다.");
@@ -300,7 +353,13 @@ function ScheduleItemDialog({
   }
 
   return (
-    <div className="dialog-backdrop schedule-dialog-backdrop" role="presentation">
+    <div
+      className="dialog-backdrop schedule-dialog-backdrop"
+      onPointerDown={(event) => {
+        if (!busy && event.target === event.currentTarget) onClose();
+      }}
+      role="presentation"
+    >
       <section
         aria-labelledby="schedule-item-dialog-title"
         aria-modal="true"
@@ -361,9 +420,11 @@ function ScheduleItemDialog({
                   value={workloadMode}
                 >
                   <option value="none">목표값 없음</option>
-                  <option value="episodeCount">추가 회차 수</option>
-                  <option value="episodeNumber">목표 화수</option>
                   <option value="totalCharacters">총 글자 수</option>
+                  <option value="additionalCompletedDocuments">추가 완료 회차 수</option>
+                  <option value="totalCompletedDocuments">총 완료 회차 수</option>
+                  <option value="episodeCount">글자 수 기준 · 추가 회차 수</option>
+                  <option value="episodeNumber">글자 수 기준 · 목표 화수</option>
                 </select>
               </label>
               {workloadMode !== "none" && (
@@ -373,7 +434,9 @@ function ScheduleItemDialog({
                       ? "목표 글자 수"
                       : workloadMode === "episodeNumber"
                         ? "목표 화수"
-                        : "추가할 회차 수"}
+                        : workloadMode === "totalCompletedDocuments"
+                          ? "목표 완료 회차"
+                          : "추가할 회차 수"}
                   </span>
                   <input
                     disabled={busy}
@@ -397,6 +460,11 @@ function ScheduleItemDialog({
                     value={baseline}
                   />
                 </label>
+              )}
+              {workloadMode === "additionalCompletedDocuments" && (
+                <p className="schedule-explicit-baseline">
+                  기준 완료 회차 {baseline || "0"}개
+                </p>
               )}
             </div>
           )}
@@ -441,7 +509,7 @@ export function WorkScheduleDashboard({
   const today = localDateKey();
   const [monthKey, setMonthKey] = useState(today.slice(0, 7));
   const [selectedDate, setSelectedDate] = useState(today);
-  const [projection, setProjection] = useState<WorkScheduleProjection | null>(
+  const [projection, setProjection] = useState<WorkCalendarProjection | null>(
     null,
   );
   const [loading, setLoading] = useState(true);
@@ -456,7 +524,7 @@ export function WorkScheduleDashboard({
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
     void window.eumStudio.schedule
-      .listWork({
+      .listCalendar({
         schemaVersion: 1,
         workId: work.workId,
         range: calendar.range,
@@ -714,35 +782,56 @@ export function WorkScheduleDashboard({
             <p className="schedule-empty">이 날짜에는 일정이 없습니다.</p>
           ) : (
             <div className="schedule-agenda-list">
-              {selectedOccurrences.map((occurrence) => (
-                <div className={occurrence.completed ? "is-completed" : ""} key={occurrence.occurrenceId}>
-                  <button
-                    aria-label={`${occurrence.label} ${occurrence.completed ? "완료 취소" : "완료"}`}
-                    className="schedule-completion-button"
-                    disabled={actionBusy}
-                    onClick={() => toggleCompletion(occurrence)}
-                    type="button"
+              {selectedOccurrences.map((occurrence) =>
+                occurrence.kind === "document-completion" ? (
+                  <div
+                    className="is-completed schedule-document-completion"
+                    key={occurrence.occurrenceId}
                   >
-                    {occurrence.completed && <Check aria-hidden="true" size={13} />}
-                  </button>
-                  <button
-                    className="schedule-agenda-content"
-                    onClick={() => {
-                      const item = items.find(
-                        (candidate) => candidate.itemId === occurrence.itemId,
-                      );
-                      if (item !== undefined) openEdit(item);
-                    }}
-                    type="button"
-                  >
-                    <strong>{occurrence.label}</strong>
-                    <span>
-                      {occurrence.kind === "routine" ? "루틴" : "일정"}
-                      {occurrence.time === null ? "" : ` · ${occurrence.time}`}
+                    <span
+                      aria-hidden="true"
+                      className="schedule-completion-button schedule-completion-fact-mark"
+                    >
+                      <Check size={13} />
                     </span>
-                  </button>
-                </div>
-              ))}
+                    <div className="schedule-agenda-content">
+                      <strong>{occurrence.label}</strong>
+                      <span>회차 완료</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    className={occurrence.completed ? "is-completed" : ""}
+                    key={occurrence.occurrenceId}
+                  >
+                    <button
+                      aria-label={`${occurrence.label} ${occurrence.completed ? "완료 취소" : "완료"}`}
+                      className="schedule-completion-button"
+                      disabled={actionBusy}
+                      onClick={() => toggleCompletion(occurrence)}
+                      type="button"
+                    >
+                      {occurrence.completed && <Check aria-hidden="true" size={13} />}
+                    </button>
+                    <button
+                      className="schedule-agenda-content"
+                      onClick={() => {
+                        const item = items.find(
+                          (candidate) => candidate.itemId === occurrence.itemId,
+                        );
+                        if (item !== undefined) openEdit(item);
+                      }}
+                      type="button"
+                    >
+                      <strong>{occurrence.label}</strong>
+                      <span>
+                        {occurrence.kind === "routine" ? "루틴" : "일정"}
+                        {occurrence.time === null ? "" : ` · ${occurrence.time}`}
+                      </span>
+                    </button>
+                  </div>
+                ),
+              )}
               {selectedDdays.map((item) => (
                 <button className="schedule-day-dday" key={item.itemId} onClick={() => openEdit(item)} type="button">
                   <strong>{item.label}</strong>
@@ -776,11 +865,13 @@ export function WorkScheduleDashboard({
                     formatDdayProgress(
                       item.workload,
                       projection.episodeProgress,
+                      projection.completedDocumentCount,
                     ) !== null && (
                       <small className="schedule-dday-progress">
                         {formatDdayProgress(
                           item.workload,
                           projection.episodeProgress,
+                          projection.completedDocumentCount,
                         )}
                       </small>
                     )}
@@ -797,6 +888,7 @@ export function WorkScheduleDashboard({
       {editor !== null && (
         <ScheduleItemDialog
           busy={actionBusy}
+          completedDocumentCount={projection?.completedDocumentCount ?? 0}
           error={error}
           initialDate={selectedDate}
           onClose={() => {

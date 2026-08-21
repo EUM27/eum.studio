@@ -185,12 +185,15 @@ import {
   SCENE_MUSIC_QUEUE_LIST_CHANNEL,
   SCENE_MUSIC_QUEUE_SELECT_CHANNEL,
   SCHEDULE_CREATE_ITEM_CHANNEL,
+  SCHEDULE_LIST_CALENDAR_CHANNEL,
+  SCHEDULE_LIST_TODAY_CHANNEL,
   SCHEDULE_LIST_WORK_CHANNEL,
   SCHEDULE_RETIRE_ITEM_CHANNEL,
   SCHEDULE_SET_COMPLETION_CHANNEL,
   SCHEDULE_UPDATE_ITEM_CHANNEL,
   STRUCTURE_CREATE_ANCHORLESS_EVENT_CHANNEL,
   STRUCTURE_CREATE_EVENT_BLOCK_CHANNEL,
+  STRUCTURE_MOVE_EVENT_BLOCK_CHANNEL,
   STRUCTURE_CREATE_SCENE_OVERRIDE_CHANNEL,
   STRUCTURE_LINK_EVENT_SOURCE_CHANNEL,
   STRUCTURE_LIST_EVENT_BLOCKS_CHANNEL,
@@ -218,6 +221,8 @@ import {
   VERSION_RESTORE_DOCUMENT_REVISION_CHANNEL,
   WORKSPACE_ACTIVATE_LOCATION_CHANNEL,
   WORKSPACE_CATALOG_CHANNEL,
+  WORKSPACE_GET_DOCUMENT_COMPLETION_CHANNEL,
+  WORKSPACE_SET_DOCUMENT_COMPLETION_CHANNEL,
   WORKSPACE_FAVORITES_CHANNEL,
   WORKSPACE_SET_FAVORITE_CHANNEL,
   WORKSPACE_COVERS_CHANNEL,
@@ -245,6 +250,7 @@ import {
   parseEventBlockListProjection,
   parseLinkEventSourceCommand,
   parseListEventBlocksCommand,
+  parseMoveEventBlockCommand,
   parseReplaceEventSourceCommand,
   parseRetireEventSourceCommand,
   type EventBlockListProjection,
@@ -578,6 +584,15 @@ import {
   type WorkScheduleProjection,
 } from "../application/schedule/work-schedule-contract";
 import {
+  parseWorkCalendarProjection,
+  type WorkCalendarProjection,
+} from "../application/schedule/work-calendar-contract";
+import {
+  parseGetStudioTodayCommand,
+  projectStudioToday,
+  type StudioTodayProjection,
+} from "../application/today/studio-today-contract";
+import {
   parseGetWorkQuickMemoCommand,
   parseSaveWorkQuickMemoCommand,
   type WorkQuickMemoProjection,
@@ -742,6 +757,11 @@ import {
   type WorkspaceCatalogProjection,
 } from "../application/workspace/workspace-contract";
 import {
+  parseGetDocumentCompletionCommand,
+  parseSetDocumentCompletionCommand,
+  type DocumentCompletionProjection,
+} from "../application/workspace/document-completion";
+import {
   parseSetWorkFavoriteCommand,
   parseWorkFavoritesProjection,
   type WorkFavoritesProjection,
@@ -868,6 +888,8 @@ type ApplicationRuntime = {
     value: unknown,
   ): Promise<WorkManuscriptLayoutSettingsProjection>;
   getWorkspaceCatalog(): WorkspaceCatalogProjection;
+  getDocumentCompletion(value: unknown): Promise<DocumentCompletionProjection>;
+  setDocumentCompletion(value: unknown): Promise<DocumentCompletionProjection>;
   getWorkFavorites(): WorkFavoritesProjection;
   setWorkFavorite(value: unknown): Promise<WorkFavoritesProjection>;
   getWorkCovers(): WorkCoversProjection;
@@ -888,6 +910,7 @@ type ApplicationRuntime = {
   captureWorkspaceResume(value: unknown): Promise<ManuscriptResumeCheckpointProjection>;
   createEventBlock(value: unknown): Promise<EventBlockProjection>;
   createAnchorlessEvent(value: unknown): Promise<EventBlockProjection>;
+  moveEventBlock(value: unknown): Promise<EventBlockListProjection>;
   linkEventSource(value: unknown): Promise<EventSourceProjection>;
   replaceEventSource(value: unknown): Promise<EventSourceProjection>;
   retireEventSource(value: unknown): Promise<EventSourceProjection>;
@@ -1033,6 +1056,8 @@ type ApplicationRuntime = {
     value: unknown,
   ): Promise<WorkContinuousReadingProgressProjection>;
   listWorkSchedule(value: unknown): Promise<WorkScheduleProjection>;
+  listWorkCalendar(value: unknown): Promise<WorkCalendarProjection>;
+  getStudioToday(value: unknown): Promise<StudioTodayProjection>;
   createWorkScheduleItem(value: unknown): Promise<WorkScheduleItemProjection>;
   updateWorkScheduleItem(value: unknown): Promise<WorkScheduleItemProjection>;
   retireWorkScheduleItem(value: unknown): Promise<void>;
@@ -1889,6 +1914,10 @@ async function registerApplicationHandlers(): Promise<void> {
         localRuntime.saveWorkManuscriptLayoutSettings(value),
       getWorkspaceCatalog: () =>
         localRuntime.getWorkspaceCatalog(),
+      getDocumentCompletion: (value) =>
+        localRuntime.getDocumentCompletion(value),
+      setDocumentCompletion: (value) =>
+        localRuntime.setDocumentCompletion(value),
       getWorkFavorites: () =>
         localRuntime.getWorkFavorites(),
       setWorkFavorite: (value) =>
@@ -1929,6 +1958,8 @@ async function registerApplicationHandlers(): Promise<void> {
         localRuntime.createEventBlock(value),
       createAnchorlessEvent: (value) =>
         localRuntime.createAnchorlessEvent(value),
+      moveEventBlock: (value) =>
+        localRuntime.moveEventBlock(value),
       linkEventSource: (value) =>
         localRuntime.linkEventSource(value),
       replaceEventSource: (value) =>
@@ -2188,6 +2219,10 @@ async function registerApplicationHandlers(): Promise<void> {
         localRuntime.saveContinuousReadingProgress(value),
       listWorkSchedule: (value) =>
         localRuntime.listWorkSchedule(value),
+      listWorkCalendar: (value) =>
+        localRuntime.listWorkCalendar(value),
+      getStudioToday: (value) =>
+        localRuntime.getStudioToday(value),
       createWorkScheduleItem: (value) =>
         localRuntime.createWorkScheduleItem(value),
       updateWorkScheduleItem: (value) =>
@@ -2370,6 +2405,27 @@ async function registerApplicationHandlers(): Promise<void> {
         return projection;
       },
       getWorkspaceCatalog: () => workspaceCatalog,
+      getDocumentCompletion: async (value) => {
+        const command = parseGetDocumentCompletionCommand(value);
+        const work = workspaceCatalog.works.find(
+          (candidate) => candidate.workId === command.workId,
+        );
+        const document = work?.documents.find(
+          (candidate) => candidate.documentId === command.documentId,
+        );
+        if (document === undefined) {
+          throw new Error(
+            `Work/document boundary violation: ${command.workId}/${command.documentId}`,
+          );
+        }
+        return document.completion;
+      },
+      setDocumentCompletion: async (value) => {
+        parseSetDocumentCompletionCommand(value);
+        throw new Error(
+          "Document completion is unavailable in a configured manuscript runtime",
+        );
+      },
       getWorkFavorites: () => configuredWorkFavorites,
       setWorkFavorite: async (value) => {
         const command = parseSetWorkFavoriteCommand(value);
@@ -2507,6 +2563,11 @@ async function registerApplicationHandlers(): Promise<void> {
       createAnchorlessEvent: async () => {
         throw new Error(
           "Anchorless EventBlock creation is unavailable in a configured manuscript runtime",
+        );
+      },
+      moveEventBlock: async () => {
+        throw new Error(
+          "EventBlock movement is unavailable in a configured manuscript runtime",
         );
       },
       linkEventSource: async () => {
@@ -3461,6 +3522,66 @@ async function registerApplicationHandlers(): Promise<void> {
           }),
         });
       },
+      listWorkCalendar: async (value) => {
+        const command = parseListWorkScheduleCommand(value);
+        if (
+          !workspaceCatalog.works.some(
+            (work) => work.workId === command.workId,
+          )
+        ) {
+          throw new Error(`Unknown Work: ${command.workId}`);
+        }
+        return parseWorkCalendarProjection({
+          schemaVersion: 1,
+          workId: command.workId,
+          range: command.range,
+          items: [],
+          occurrences: [],
+          completedDocumentCount: 0,
+          episodeProgress: deriveWorkEpisodeCharacterProgress({
+            workId: command.workId,
+            defaultEpisodeCharacters:
+              appSettingsProfile.defaultEpisodeCharacters.defaultValue,
+            documents: documentProfile.documents
+              .filter((document) => document.workId === command.workId)
+              .map((document) => ({
+                workId: document.workId,
+                documentId: document.documentId,
+                text: document.initialText,
+              })),
+          }),
+        });
+      },
+      getStudioToday: async (value) => {
+        const command = parseGetStudioTodayCommand(value);
+        return projectStudioToday({
+          date: command.date,
+          works: workspaceCatalog.works.map((work) => ({
+            workId: work.workId,
+            workTitle: work.title,
+            calendar: parseWorkCalendarProjection({
+              schemaVersion: 1,
+              workId: work.workId,
+              range: { from: command.date, to: command.date },
+              items: [],
+              occurrences: [],
+              completedDocumentCount: 0,
+              episodeProgress: deriveWorkEpisodeCharacterProgress({
+                workId: work.workId,
+                defaultEpisodeCharacters:
+                  appSettingsProfile.defaultEpisodeCharacters.defaultValue,
+                documents: documentProfile.documents
+                  .filter((document) => document.workId === work.workId)
+                  .map((document) => ({
+                    workId: document.workId,
+                    documentId: document.documentId,
+                    text: document.initialText,
+                  })),
+              }),
+            }),
+          })),
+        });
+      },
       createWorkScheduleItem: async () => {
         throw new Error(
           "Work schedule persistence is unavailable in a configured manuscript runtime",
@@ -3877,6 +3998,24 @@ async function registerApplicationHandlers(): Promise<void> {
   ipcMain.handle(WORKSPACE_CATALOG_CHANNEL, () => {
     return applicationRuntime.getWorkspaceCatalog();
   });
+  ipcMain.handle(
+    WORKSPACE_GET_DOCUMENT_COMPLETION_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.getDocumentCompletion(
+        parseGetDocumentCompletionCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    WORKSPACE_SET_DOCUMENT_COMPLETION_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.setDocumentCompletion(
+        parseSetDocumentCompletionCommand(value),
+      );
+    },
+  );
   ipcMain.handle(WORKSPACE_FAVORITES_CHANNEL, () => {
     return applicationRuntime.getWorkFavorites();
   });
@@ -4061,6 +4200,15 @@ async function registerApplicationHandlers(): Promise<void> {
       assertTrustedRendererSender(event);
       return applicationRuntime.createAnchorlessEvent(
         parseCreateAnchorlessEventCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    STRUCTURE_MOVE_EVENT_BLOCK_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.moveEventBlock(
+        parseMoveEventBlockCommand(value),
       );
     },
   );
@@ -5190,6 +5338,24 @@ async function registerApplicationHandlers(): Promise<void> {
       assertTrustedRendererSender(event);
       return applicationRuntime.listWorkSchedule(
         parseListWorkScheduleCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    SCHEDULE_LIST_CALENDAR_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.listWorkCalendar(
+        parseListWorkScheduleCommand(value),
+      );
+    },
+  );
+  ipcMain.handle(
+    SCHEDULE_LIST_TODAY_CHANNEL,
+    (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      return applicationRuntime.getStudioToday(
+        parseGetStudioTodayCommand(value),
       );
     },
   );

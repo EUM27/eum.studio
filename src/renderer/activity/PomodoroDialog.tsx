@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 
 import type { PomodoroSettings } from "../../application/activity/pomodoro-contract";
+import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
 export type PomodoroDialogSubmitValue = PomodoroSettings & {
   readonly note: string;
@@ -26,6 +27,10 @@ export function PomodoroDialog(input: {
     input.settings?.autoAdvance ?? false,
   );
   const [note, setNote] = useState("");
+  const onBackdropPointerDown = useDialogDismiss({
+    disabled: input.submitting,
+    onClose: input.onCancel,
+  });
   const parsedWorkMinutes = Number(workMinutes);
   const parsedBreakMinutes = Number(breakMinutes);
   const parsedWorkCycleCount = Number(workCycleCount);
@@ -55,7 +60,11 @@ export function PomodoroDialog(input: {
   };
 
   return (
-    <div className="dialog-backdrop" role="presentation">
+    <div
+      className="dialog-backdrop"
+      onPointerDown={onBackdropPointerDown}
+      role="presentation"
+    >
       <section
         aria-labelledby="pomodoro-dialog-heading"
         aria-modal="true"

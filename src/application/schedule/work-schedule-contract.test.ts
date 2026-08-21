@@ -91,6 +91,23 @@ describe("work schedule contract", () => {
       targetEpisodeCount: 37,
       baselineCompletedCount: 12,
     });
+    expect(
+      parseWorkScheduleDdayWorkload({
+        mode: "additionalCompletedDocuments",
+        targetCount: 10,
+        baselineCompletedCount: 5,
+      }),
+    ).toEqual({
+      mode: "additionalCompletedDocuments",
+      targetCount: 10,
+      baselineCompletedCount: 5,
+    });
+    expect(
+      parseWorkScheduleDdayWorkload({
+        mode: "totalCompletedDocuments",
+        targetCount: 20,
+      }),
+    ).toEqual({ mode: "totalCompletedDocuments", targetCount: 20 });
     expect(() =>
       parseCreateWorkScheduleItemCommand({
         schemaVersion: 1,

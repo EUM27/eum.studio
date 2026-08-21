@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
 export function ForwardWritingGoalDialog(input: {
   readonly onCancel: () => void;
@@ -8,9 +9,14 @@ export function ForwardWritingGoalDialog(input: {
   const parsedGoal = Number(goal);
   const canStart =
     goal.length > 0 && Number.isSafeInteger(parsedGoal) && parsedGoal > 0;
+  const onBackdropPointerDown = useDialogDismiss({ onClose: input.onCancel });
 
   return (
-    <div className="dialog-backdrop" role="presentation">
+    <div
+      className="dialog-backdrop"
+      onPointerDown={onBackdropPointerDown}
+      role="presentation"
+    >
       <section
         aria-labelledby="forward-writing-goal-heading"
         aria-modal="true"

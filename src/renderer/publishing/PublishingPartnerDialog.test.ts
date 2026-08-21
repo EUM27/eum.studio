@@ -58,6 +58,18 @@ const works = Object.freeze([{
     title: "1화",
     currentRevisionId: entityId<"DocumentRevision">("revision-b"),
     folderId: null,
+    completion: Object.freeze({
+      schemaVersion: 1,
+      workId,
+      documentId: entityId<"Document">("document-a"),
+      revision: 0,
+      completedAt: null,
+      completedDate: null,
+      completedTimeZone: null,
+      completedDocumentRevisionId: null,
+      state: "incomplete" as const,
+      updatedAt: null,
+    }),
   }]),
 }]);
 

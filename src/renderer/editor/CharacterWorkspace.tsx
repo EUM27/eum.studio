@@ -555,6 +555,7 @@ export function CharacterWorkspace(input: {
   readonly selection: CharacterWorkspaceSelection | null;
 }) {
   const [query, setQuery] = useState("");
+  const [draftRevision, setDraftRevision] = useState(0);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const selectedCharacter = input.characters.find(
     (character) => character.characterId === input.selectedCharacterId,
@@ -582,7 +583,10 @@ export function CharacterWorkspace(input: {
             <strong>인물 목록</strong>
             <button
               disabled={busy}
-              onClick={() => input.onSelect(null)}
+              onClick={() => {
+                input.onSelect(null);
+                setDraftRevision((current) => current + 1);
+              }}
               type="button"
             >
               <Plus aria-hidden="true" size={13} />
@@ -631,7 +635,10 @@ export function CharacterWorkspace(input: {
           <CharacterProfileFields
             actionState={input.actionState}
             character={selectedCharacter}
-            key={selectedCharacter?.characterId ?? "new-character-workspace"}
+            key={
+              selectedCharacter?.characterId ??
+              `new-character-workspace-${draftRevision}`
+            }
             onCreate={input.onCreate}
             onRetire={input.onRetire}
             onUpdate={input.onUpdate}

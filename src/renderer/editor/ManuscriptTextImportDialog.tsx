@@ -1,4 +1,5 @@
 import type { ManuscriptTextImportResult } from "../../application/editor/manuscript-text-import";
+import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
 type SelectedImport = Extract<
   ManuscriptTextImportResult,
@@ -14,8 +15,16 @@ export function ManuscriptTextImportDialog(input: {
   readonly onClose: () => void;
   readonly stale: boolean;
 }) {
+  const onBackdropPointerDown = useDialogDismiss({
+    disabled: input.applying,
+    onClose: input.onClose,
+  });
   return (
-    <div className="dialog-backdrop manuscript-import-backdrop" role="presentation">
+    <div
+      className="dialog-backdrop manuscript-import-backdrop"
+      onPointerDown={onBackdropPointerDown}
+      role="presentation"
+    >
       <section
         aria-labelledby="manuscript-import-heading"
         aria-modal="true"

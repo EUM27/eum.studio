@@ -12,6 +12,7 @@ import type {
 } from "../../application/music/work-music-settings";
 import type { YouTubeMusicConnectionStatus } from "../../application/music/youtube-music-connection";
 import type { ChatGptOAuthConnectionStatus } from "../../application/assistant/chatgpt-oauth";
+import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
 export type AppSettingsSaveValue = {
   readonly defaultEpisodeCharacters: number;
@@ -79,6 +80,7 @@ export function AppSettingsDialog({
   );
   const [validationError, setValidationError] = useState<string | null>(null);
   const busy = actionState !== "idle";
+  useDialogDismiss({ disabled: actionState === "saving", onClose });
 
   function submit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();

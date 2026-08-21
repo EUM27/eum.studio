@@ -60,6 +60,24 @@ describe("Work schedule dashboard calendar", () => {
         progress,
       ),
     ).toBe("완료 2/3회차 · 1회차 남음");
+    expect(
+      formatDdayProgress(
+        {
+          mode: "additionalCompletedDocuments",
+          targetCount: 10,
+          baselineCompletedCount: 5,
+        },
+        progress,
+        8,
+      ),
+    ).toBe("추가 완료 3/10회차 · 7회차 남음");
+    expect(
+      formatDdayProgress(
+        { mode: "totalCompletedDocuments", targetCount: 20 },
+        progress,
+        8,
+      ),
+    ).toBe("완료 8/20회차 · 12회차 남음");
     expect(formatDdayProgress({ mode: "none" }, progress)).toBeNull();
   });
 });

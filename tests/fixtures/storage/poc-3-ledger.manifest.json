@@ -48,6 +48,7 @@
     "assistant_vocabulary_suggestion_candidates",
     "blob_manifests",
     "characters",
+    "document_completion_status",
     "document_folders",
     "document_revision_editor_states",
     "document_revisions",

@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react";
 
 import type { AssistantChatMessage } from "../../application/assistant/assistant-chat";
 import type { ChatGptOAuthConnectionStatus } from "../../application/assistant/chatgpt-oauth";
+import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
 export function AssistantChatDialog(input: {
   readonly actionState: "idle" | "sending";
@@ -16,6 +17,10 @@ export function AssistantChatDialog(input: {
 }) {
   const [message, setMessage] = useState("");
   const connected = input.oauthStatus?.connected === true;
+  const onBackdropPointerDown = useDialogDismiss({
+    disabled: input.actionState !== "idle",
+    onClose: input.onClose,
+  });
 
   function submit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
@@ -28,7 +33,10 @@ export function AssistantChatDialog(input: {
   }
 
   return (
-    <div className="dialog-backdrop assistant-chat-backdrop">
+    <div
+      className="dialog-backdrop assistant-chat-backdrop"
+      onPointerDown={onBackdropPointerDown}
+    >
       <section aria-label="GPT 조수 대화" className="assistant-chat-dialog" role="dialog">
         <header>
           <div>

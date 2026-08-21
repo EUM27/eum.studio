@@ -10,6 +10,7 @@ import {
 import {
   Archive,
   Building2,
+  CalendarDays,
   ChevronDown,
   ChevronRight,
   ChevronUp,
@@ -37,17 +38,6 @@ import type {
   WorkCoverProjection,
 } from "../application/workspace/work-covers";
 import type {
-  WorkActivityProjection,
-} from "../application/activity/work-activity-contract";
-import type {
-  WorkRecordsGoals,
-  WorkRecordsGoalsProjection,
-} from "../application/activity/work-records-preferences";
-import type {
-  WorkReadthroughEntry,
-  WorkReadthroughProjection,
-} from "../application/activity/work-readthrough-calculator";
-import type {
   LocalWorkspaceBackupStatusProjection,
 } from "../application/storage/local-workspace-backup-contract";
 import type {
@@ -58,8 +48,6 @@ import {
   type ManuscriptWorkspaceHandle,
   type ManuscriptResumePreview,
 } from "./App";
-import { WorkRecordsDialog } from "./records/WorkRecordsDialog";
-import { WorkScheduleDashboard } from "./schedule/WorkScheduleDashboard";
 import {
   QUICK_TOOL_CREATE_WORK_COMMAND_ID,
   QUICK_TOOL_MAIN_COMMAND_ID,
@@ -155,6 +143,15 @@ import {
   type PublishingSourceDraft,
   type PublishingSubmissionDraft,
 } from "./publishing/PublishingPartnerDialog";
+import type { WorkCalendarProjection } from "../application/schedule/work-calendar-contract";
+import {
+  deriveWorkScheduleSummary,
+  localDateKey,
+} from "./schedule/work-schedule-summary";
+import type { WorkHeaderScheduleSummary } from "./workspace/WorkHeader";
+import type { WorkOperationsSection } from "./workspace/WorkOperationsWorkspace";
+import { TodaySchedulePanel } from "./today/TodaySchedulePanel";
+import { useDialogDismiss } from "./dialog/useDialogDismiss";
 
 type CatalogState =
   | { readonly status: "loading" }
@@ -180,12 +177,14 @@ function WorkCard({
   cover,
   disabled,
   onOpen,
+  onOpenSchedule,
   onRename,
   onRetire,
   onToggleFavorite,
   onSelectCover,
   onRetireDocument,
   onMoveDocument,
+  schedule,
 }: {
   readonly work: WorkspaceWorkSummary;
   readonly activeDocumentId:
@@ -193,10 +192,12 @@ function WorkCard({
   readonly favorite: boolean;
   readonly cover: WorkCoverProjection | null;
   readonly disabled: boolean;
+  readonly schedule: WorkHeaderScheduleSummary | null;
   readonly onOpen: (
     workId: WorkspaceWorkSummary["workId"],
     documentId: WorkspaceWorkSummary["documents"][number]["documentId"] | null,
   ) => void;
+  readonly onOpenSchedule: (work: WorkspaceWorkSummary) => void;
   readonly onRetire: (work: WorkspaceWorkSummary) => void;
   readonly onRename: (work: WorkspaceWorkSummary) => void;
   readonly onToggleFavorite: (work: WorkspaceWorkSummary) => void;
@@ -297,6 +298,24 @@ function WorkCard({
         </button>
         <div className="work-card-actions">
           <button
+            aria-label={`${work.title} 일정 열기`}
+            className="work-schedule-summary"
+            disabled={disabled}
+            onClick={() => onOpenSchedule(work)}
+            type="button"
+          >
+            <CalendarDays aria-hidden="true" size={14} />
+            <span>{`오늘 ${schedule?.todayCount ?? 0}`}</span>
+            {schedule?.nearestDday !== null &&
+              schedule?.nearestDday !== undefined && (
+                <span title={schedule.nearestDday.label}>
+                  {schedule.nearestDday.days === 0
+                    ? "D-DAY"
+                    : `D-${schedule.nearestDday.days}`}
+                </span>
+              )}
+          </button>
+          <button
             aria-expanded={expanded}
             aria-label={`${work.title} 회차 목록 ${expanded ? "닫기" : "열기"}`}
             className="work-expand-button"
@@ -374,16 +393,16 @@ function MainDashboard({
   catalog,
   favoriteWorkIds,
   workCovers,
-  activityByWork,
   resumePreview,
+  scheduleByWork,
   busy,
   backupBusy,
   importBusy,
-  settingsRevision,
   error,
   onOpenBackup,
   onOpenImport,
   onOpenPublishing,
+  onOpenSchedule,
   onOpen,
   onRename,
   onRetire,
@@ -395,16 +414,16 @@ function MainDashboard({
   readonly catalog: WorkspaceCatalogProjection;
   readonly favoriteWorkIds: readonly EntityId<"Work">[];
   readonly workCovers: readonly WorkCoverProjection[];
-  readonly activityByWork: Readonly<Record<string, WorkActivityProjection>>;
   readonly resumePreview: ManuscriptResumePreview | null;
+  readonly scheduleByWork: Readonly<Record<string, WorkCalendarProjection>>;
   readonly busy: boolean;
   readonly error: string | null;
   readonly backupBusy: boolean;
   readonly importBusy: boolean;
-  readonly settingsRevision: number;
   readonly onOpenBackup: () => void;
   readonly onOpenImport: () => void;
   readonly onOpenPublishing: () => void;
+  readonly onOpenSchedule: (work: WorkspaceWorkSummary) => void;
   readonly onOpen: (
     workId: WorkspaceWorkSummary["workId"],
     documentId: WorkspaceWorkSummary["documents"][number]["documentId"] | null,
@@ -425,31 +444,7 @@ function MainDashboard({
 }) {
   const [query, setQuery] = useState("");
   const [workView, setWorkView] = useState<"all" | "favorites">("all");
-  const [showSchedule, setShowSchedule] = useState(false);
   const [showLibraryTools, setShowLibraryTools] = useState(false);
-  const recordsRequestIdRef = useRef(0);
-  const [recordsNowMs, setRecordsNowMs] = useState<number | null>(null);
-  const [recordsGoals, setRecordsGoals] =
-    useState<WorkRecordsGoalsProjection | null>(null);
-  const [recordsGoalActionState, setRecordsGoalActionState] = useState<
-    "loading" | "idle" | "saving"
-  >("idle");
-  const [recordsGoalError, setRecordsGoalError] = useState<string | null>(null);
-  const [readthroughSettings, setReadthroughSettings] =
-    useState<WorkReadthroughProjection | null>(null);
-  const [readthroughActionState, setReadthroughActionState] = useState<
-    "loading" | "idle" | "saving"
-  >("idle");
-  const [readthroughError, setReadthroughError] = useState<string | null>(null);
-  const [recordsExportActionState, setRecordsExportActionState] = useState<
-    "idle" | "exporting-json" | "exporting-csv"
-  >("idle");
-  const [recordsExportError, setRecordsExportError] = useState<string | null>(
-    null,
-  );
-  const [recordsExportMessage, setRecordsExportMessage] = useState<
-    string | null
-  >(null);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const favoriteWorkIdSet = useMemo(
     () => new Set(favoriteWorkIds),
@@ -483,8 +478,6 @@ function MainDashboard({
   const activeDocument = activeWork?.documents.find(
     (document) => document.documentId === catalog.activeDocumentId,
   );
-  const activeActivity =
-    activeWork === undefined ? undefined : activityByWork[activeWork.workId];
   const activeResumePreview =
     activeWork !== undefined &&
     activeDocument !== undefined &&
@@ -492,6 +485,10 @@ function MainDashboard({
     resumePreview.documentId === activeDocument.documentId
       ? resumePreview
       : null;
+  const schedules = catalog.works.flatMap((work) => {
+    const projection = scheduleByWork[work.workId];
+    return projection === undefined ? [] : [{ work, projection }];
+  });
 
   return (
     <div
@@ -565,6 +562,20 @@ function MainDashboard({
         </section>
       )}
 
+      <TodaySchedulePanel
+        disabled={busy}
+        onOpenCalendar={
+          activeWork === undefined
+            ? null
+            : () => onOpenSchedule(activeWork)
+        }
+        onOpenDocument={(work, documentId) =>
+          onOpen(work.workId, documentId)
+        }
+        onOpenSchedule={onOpenSchedule}
+        schedules={schedules}
+      />
+
       <section className="library-section" aria-labelledby="library-heading">
         <header className="library-heading-row">
           <div className="library-title-group">
@@ -614,70 +625,6 @@ function MainDashboard({
             </button>
             {showLibraryTools && (
               <div aria-label="작품 도구" className="library-tools-menu" role="menu">
-                {activeWork !== undefined && (
-                  <button
-                    className="schedule-button"
-                    disabled={busy}
-                    onClick={() => {
-                      setShowLibraryTools(false);
-                      setShowSchedule(true);
-                    }}
-                    role="menuitem"
-                    type="button"
-                  >
-                    일정
-                  </button>
-                )}
-                {activeWork !== undefined && activeActivity !== undefined && (
-                  <button
-                    disabled={busy}
-                    onClick={() => {
-                      setShowLibraryTools(false);
-                      const requestId = recordsRequestIdRef.current + 1;
-                      recordsRequestIdRef.current = requestId;
-                      setRecordsNowMs(Date.now());
-                      setRecordsGoals(null);
-                      setRecordsGoalError(null);
-                      setRecordsGoalActionState("loading");
-                      setReadthroughSettings(null);
-                      setReadthroughError(null);
-                      setReadthroughActionState("loading");
-                      void Promise.all([
-                        window.eumStudio.activity.getRecordsGoals({
-                          schemaVersion: 1,
-                          workId: activeWork.workId,
-                        }),
-                        window.eumStudio.activity.getReadthrough({
-                          schemaVersion: 1,
-                          workId: activeWork.workId,
-                        }),
-                      ]).then(
-                        ([goals, readthrough]) => {
-                          if (recordsRequestIdRef.current !== requestId) return;
-                          setRecordsGoals(goals);
-                          setRecordsGoalActionState("idle");
-                          setReadthroughSettings(readthrough);
-                          setReadthroughActionState("idle");
-                        },
-                        (loadError: unknown) => {
-                          if (recordsRequestIdRef.current !== requestId) return;
-                          const message =
-                            loadError instanceof Error
-                              ? loadError.message
-                              : "집필 기록 설정을 불러오지 못했습니다.";
-                          setRecordsGoalError(message);
-                          setRecordsGoalActionState("idle");
-                          setReadthroughError(message);
-                          setReadthroughActionState("idle");
-                        },
-                      );
-                    }}
-                    role="menuitem"
-                    type="button"
-                  >
-                    집필 기록
-                  </button>
-                )}
                 <button
                   className="backup-button"
                   disabled={busy || backupBusy}
@@ -738,8 +685,10 @@ function MainDashboard({
           </p>
         ) : (
           <div className="library-work-list">
-            {filteredWorks.map((work) => (
-              <WorkCard
+            {filteredWorks.map((work) => {
+              const scheduleProjection = scheduleByWork[work.workId];
+              return (
+                <WorkCard
                 activeDocumentId={
                   work.workId === catalog.activeWorkId
                     ? catalog.activeDocumentId
@@ -750,186 +699,24 @@ function MainDashboard({
                 cover={workCoverById.get(work.workId) ?? null}
                 key={work.workId}
                 onOpen={onOpen}
+                onOpenSchedule={onOpenSchedule}
                 onMoveDocument={onMoveDocument}
                 onRename={onRename}
                 onRetire={onRetire}
                 onRetireDocument={onRetireDocument}
                 onToggleFavorite={onToggleFavorite}
                 onSelectCover={onSelectCover}
+                schedule={scheduleProjection === undefined
+                  ? null
+                  : deriveWorkScheduleSummary(scheduleProjection)}
                 work={work}
-              />
-            ))}
+                />
+              );
+            })}
           </div>
         )}
       </section>
 
-      {showSchedule && activeWork !== undefined && (
-        <div className="dialog-backdrop" role="presentation">
-          <section
-            aria-label="작업 일정"
-            aria-modal="true"
-            className="workspace-tool-dialog"
-            role="dialog"
-          >
-            <button
-              aria-label="작업 일정 닫기"
-              className="dialog-close workspace-tool-dialog-close"
-              onClick={() => setShowSchedule(false)}
-              type="button"
-            >
-              <X aria-hidden="true" size={17} />
-            </button>
-            <WorkScheduleDashboard
-              key={activeWork.workId}
-              settingsRevision={settingsRevision}
-              work={activeWork}
-            />
-          </section>
-        </div>
-      )}
-
-      {recordsNowMs !== null &&
-        activeWork !== undefined &&
-        activeActivity !== undefined && (
-          <WorkRecordsDialog
-            activity={activeActivity}
-            busy={busy || recordsExportActionState !== "idle"}
-            error={null}
-            exportActionState={recordsExportActionState}
-            exportError={recordsExportError}
-            exportMessage={recordsExportMessage}
-            goalActionState={recordsGoalActionState}
-            goalError={recordsGoalError}
-            goalSettings={recordsGoals}
-            nowMs={recordsNowMs}
-            onClose={() => {
-              recordsRequestIdRef.current += 1;
-              setRecordsNowMs(null);
-              setRecordsGoals(null);
-              setRecordsGoalError(null);
-              setRecordsGoalActionState("idle");
-              setReadthroughSettings(null);
-              setReadthroughError(null);
-              setReadthroughActionState("idle");
-              setRecordsExportActionState("idle");
-              setRecordsExportError(null);
-              setRecordsExportMessage(null);
-            }}
-            onExport={({ format, fromDate, toDate }) => {
-              setRecordsExportError(null);
-              setRecordsExportMessage(null);
-              setRecordsExportActionState(`exporting-${format}`);
-              const requestId = recordsRequestIdRef.current + 1;
-              recordsRequestIdRef.current = requestId;
-              void window.eumStudio.activity
-                .exportRecords({
-                  schemaVersion: 1,
-                  workId: activeWork.workId,
-                  format,
-                  fromDate,
-                  toDate,
-                })
-                .then(
-                  (result) => {
-                    if (recordsRequestIdRef.current !== requestId) return;
-                    setRecordsExportMessage(
-                      result.status === "cancelled"
-                        ? "기록 내보내기를 취소했습니다."
-                        : `${result.sessionCount}개 세션을 내보냈습니다.`,
-                    );
-                    setRecordsExportActionState("idle");
-                  },
-                  (exportError: unknown) => {
-                    if (recordsRequestIdRef.current !== requestId) return;
-                    setRecordsExportError(
-                      exportError instanceof Error
-                        ? exportError.message
-                        : "집필 기록을 내보내지 못했습니다.",
-                    );
-                    setRecordsExportActionState("idle");
-                  },
-                );
-            }}
-            onOpenDocument={(documentId) => {
-              recordsRequestIdRef.current += 1;
-              setRecordsNowMs(null);
-              setRecordsGoals(null);
-              setRecordsGoalError(null);
-              setRecordsGoalActionState("idle");
-              setReadthroughSettings(null);
-              setReadthroughError(null);
-              setReadthroughActionState("idle");
-              setRecordsExportActionState("idle");
-              setRecordsExportError(null);
-              setRecordsExportMessage(null);
-              onOpen(activeWork.workId, documentId);
-            }}
-            onSaveGoals={(goals: WorkRecordsGoals) => {
-              if (recordsGoals === null) return;
-              setRecordsGoalError(null);
-              setRecordsGoalActionState("saving");
-              const requestId = recordsRequestIdRef.current + 1;
-              recordsRequestIdRef.current = requestId;
-              void window.eumStudio.activity
-                .saveRecordsGoals({
-                  schemaVersion: 1,
-                  workId: activeWork.workId,
-                  expectedRevision: recordsGoals.revision,
-                  goals,
-                })
-                .then(
-                  (projection) => {
-                    if (recordsRequestIdRef.current !== requestId) return;
-                    setRecordsGoals(projection);
-                    setRecordsGoalActionState("idle");
-                  },
-                  (saveError: unknown) => {
-                    if (recordsRequestIdRef.current !== requestId) return;
-                    setRecordsGoalError(
-                      saveError instanceof Error
-                        ? saveError.message
-                        : "집필 목표를 저장하지 못했습니다.",
-                    );
-                    setRecordsGoalActionState("idle");
-                  },
-                );
-            }}
-            onSaveReadthrough={(entries: readonly WorkReadthroughEntry[]) => {
-              if (readthroughSettings === null) return;
-              setReadthroughError(null);
-              setReadthroughActionState("saving");
-              const requestId = recordsRequestIdRef.current + 1;
-              recordsRequestIdRef.current = requestId;
-              void window.eumStudio.activity
-                .saveReadthrough({
-                  schemaVersion: 1,
-                  workId: activeWork.workId,
-                  expectedRevision: readthroughSettings.revision,
-                  entries,
-                })
-                .then(
-                  (projection) => {
-                    if (recordsRequestIdRef.current !== requestId) return;
-                    setReadthroughSettings(projection);
-                    setReadthroughActionState("idle");
-                  },
-                  (saveError: unknown) => {
-                    if (recordsRequestIdRef.current !== requestId) return;
-                    setReadthroughError(
-                      saveError instanceof Error
-                        ? saveError.message
-                        : "연독률을 저장하지 못했습니다.",
-                    );
-                    setReadthroughActionState("idle");
-                  },
-                );
-            }}
-            readthroughActionState={readthroughActionState}
-            readthroughError={readthroughError}
-            readthroughSettings={readthroughSettings}
-            work={activeWork}
-          />
-        )}
     </div>
   );
 }
@@ -951,8 +738,16 @@ function BackupDialog({
 }) {
   const busy = actionState !== "idle";
   const summary = status?.lastVerified ?? null;
+  const onBackdropPointerDown = useDialogDismiss({
+    disabled: busy,
+    onClose: onCancel,
+  });
   return (
-    <div className="dialog-backdrop" role="presentation">
+    <div
+      className="dialog-backdrop"
+      onPointerDown={onBackdropPointerDown}
+      role="presentation"
+    >
       <section
         aria-labelledby="backup-heading"
         aria-modal="true"
@@ -1047,8 +842,16 @@ function ImportRehearsalDialog({
   readonly onCancel: () => void;
   readonly onRun: () => void;
 }) {
+  const onBackdropPointerDown = useDialogDismiss({
+    disabled: running,
+    onClose: onCancel,
+  });
   return (
-    <div className="dialog-backdrop" role="presentation">
+    <div
+      className="dialog-backdrop"
+      onPointerDown={onBackdropPointerDown}
+      role="presentation"
+    >
       <section
         aria-labelledby="import-rehearsal-heading"
         aria-modal="true"
@@ -1158,6 +961,10 @@ function CreateWorkDialog({
   const canSubmit =
     title.trim().length > 0 &&
     !submitting;
+  const onBackdropPointerDown = useDialogDismiss({
+    disabled: submitting,
+    onClose: onCancel,
+  });
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1167,7 +974,11 @@ function CreateWorkDialog({
   };
 
   return (
-    <div className="dialog-backdrop" role="presentation">
+    <div
+      className="dialog-backdrop"
+      onPointerDown={onBackdropPointerDown}
+      role="presentation"
+    >
       <section
         aria-labelledby="create-work-heading"
         aria-modal="true"
@@ -1256,6 +1067,10 @@ function RenameWorkDialog({
 }) {
   const [title, setTitle] = useState(work.title);
   const canSubmit = title.trim().length > 0 && !submitting;
+  const onBackdropPointerDown = useDialogDismiss({
+    disabled: submitting,
+    onClose: onCancel,
+  });
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1263,7 +1078,11 @@ function RenameWorkDialog({
   };
 
   return (
-    <div className="dialog-backdrop" role="presentation">
+    <div
+      className="dialog-backdrop"
+      onPointerDown={onBackdropPointerDown}
+      role="presentation"
+    >
       <section
         aria-labelledby="rename-work-heading"
         aria-modal="true"
@@ -1433,6 +1252,12 @@ export function StudioShell() {
   const [showBackup, setShowBackup] = useState(false);
   const [showImportRehearsal, setShowImportRehearsal] = useState(false);
   const [showPublishingPartners, setShowPublishingPartners] = useState(false);
+  const [publishingInitialSection, setPublishingInitialSection] = useState<
+    "submissions" | "contracts" | "settlements"
+  >("submissions");
+  const [publishingWorkScopeId, setPublishingWorkScopeId] = useState<
+    EntityId<"Work"> | null
+  >(null);
   const [actionState, setActionState] = useState<
     | "idle"
     | "opening"
@@ -1446,9 +1271,10 @@ export function StudioShell() {
     | "selecting-cover"
   >("idle");
   const [actionError, setActionError] = useState<string | null>(null);
-  const [activityByWork, setActivityByWork] = useState<
-    Readonly<Record<string, WorkActivityProjection>>
+  const [scheduleByWork, setScheduleByWork] = useState<
+    Readonly<Record<string, WorkCalendarProjection>>
   >({});
+  const [scheduleRefreshRevision, setScheduleRefreshRevision] = useState(0);
   const [backupStatus, setBackupStatus] = useState<
     LocalWorkspaceBackupStatusProjection | null
   >(null);
@@ -1620,7 +1446,12 @@ export function StudioShell() {
     }
   }, []);
 
-  const openPublishingPartners = useCallback(() => {
+  const openPublishingPartners = useCallback((
+    section: WorkOperationsSection = "submissions",
+    workId: EntityId<"Work"> | null = null,
+  ) => {
+    setPublishingInitialSection(section);
+    setPublishingWorkScopeId(workId);
     setShowPublishingPartners(true);
     setPublishingPartnerActionState("loading");
     setPublishingPartnerError(null);
@@ -1628,23 +1459,23 @@ export function StudioShell() {
       window.eumStudio.publishingPartners.list({ schemaVersion: 1 }),
       window.eumStudio.publishingSubmissions.list({
         schemaVersion: 1,
-        workId: null,
+        workId,
       }),
       window.eumStudio.publishingContracts.list({
         schemaVersion: 1,
-        workId: null,
+        workId,
       }),
       window.eumStudio.publishingPublications.list({
         schemaVersion: 1,
-        workId: null,
+        workId,
       }),
       window.eumStudio.publishingSettlements.list({
         schemaVersion: 1,
-        workId: null,
+        workId,
       }),
       window.eumStudio.publishingPayments.list({
         schemaVersion: 1,
-        workId: null,
+        workId,
       }),
       window.eumStudio.publishingSources.list({ schemaVersion: 1 }),
       window.eumStudio.publishingMailCandidates.list({ schemaVersion: 1 }),
@@ -2609,7 +2440,7 @@ export function StudioShell() {
       let disposed = false;
       queueMicrotask(() => {
         if (!disposed) {
-          setActivityByWork({});
+          setScheduleByWork({});
         }
       });
       return () => {
@@ -2617,23 +2448,20 @@ export function StudioShell() {
       };
     }
     let disposed = false;
-    void Promise.all(
-      catalog.works.map((work) =>
-        window.eumStudio.activity.listWork({
-          schemaVersion: 1,
-          workId: work.workId,
-        }),
-      ),
-    ).then(
-      (projections) => {
+    const today = localDateKey();
+    void window.eumStudio.schedule.listToday({
+      schemaVersion: 1,
+      date: today,
+    }).then(
+      (projection) => {
         if (!disposed) {
-          setActivityByWork(
+          setScheduleByWork(
             Object.freeze(
               Object.fromEntries(
-                projections.map((projection) => [
-                  projection.workId,
-                  projection,
-                ]),
+                projection.works.map((work) => [
+                  work.workId,
+                  work.calendar,
+                ] as const),
               ),
             ),
           );
@@ -2641,14 +2469,14 @@ export function StudioShell() {
       },
       () => {
         if (!disposed) {
-          setActivityByWork({});
+          setScheduleByWork({});
         }
       },
     );
     return () => {
       disposed = true;
     };
-  }, [catalog]);
+  }, [catalog, scheduleRefreshRevision]);
 
   const acceptCatalog = useCallback(
     (nextCatalog: WorkspaceCatalogProjection) => {
@@ -2740,6 +2568,16 @@ export function StudioShell() {
     },
     [acceptCatalog, actionState, catalogState.status],
   );
+
+  const openWorkSchedule = useCallback(async (work: WorkspaceWorkSummary) => {
+    await openLocation(
+      work.workId,
+      work.workId === catalog?.activeWorkId
+        ? catalog.activeDocumentId
+        : (work.documents[0]?.documentId ?? null),
+    );
+    workspaceRef.current?.openSchedule();
+  }, [catalog, openLocation]);
 
   const returnToMain = useCallback(() => {
     if (actionState !== "idle") {
@@ -3344,7 +3182,6 @@ export function StudioShell() {
           )}
           {activePage === "main" && catalog !== null && (
             <MainDashboard
-              activityByWork={activityByWork}
               backupBusy={backupActionState !== "idle"}
               busy={busy}
               catalog={catalog}
@@ -3353,7 +3190,7 @@ export function StudioShell() {
               workCovers={workCovers}
               importBusy={importRehearsalRunning}
               resumePreview={resumePreview}
-              settingsRevision={appSettingsScheduleRevision}
+              scheduleByWork={scheduleByWork}
               onOpenBackup={() => {
                 setShowBackup(true);
                 void loadBackupStatus();
@@ -3363,6 +3200,9 @@ export function StudioShell() {
                 setShowImportRehearsal(true);
               }}
               onOpenPublishing={openPublishingPartners}
+              onOpenSchedule={(work) => {
+                void openWorkSchedule(work);
+              }}
               onOpen={(workId, documentId) => {
                 void openLocation(workId, documentId);
               }}
@@ -3388,12 +3228,18 @@ export function StudioShell() {
                 eventRailHost={eventRailHost}
                 musicPlayerHost={musicPlayerHost}
                 onCatalogChange={acceptCatalog}
+                onOpenPublishing={openPublishingPartners}
                 onOpenSettings={openAppSettings}
+                onReturnToWorks={returnToMain}
                 onResumePreviewChange={setResumePreview}
+                onScheduleChange={() => {
+                  setScheduleRefreshRevision((current) => current + 1);
+                }}
                 focusModePreferences={focusModePreferences}
                 onFocusModePreferencesChange={changeFocusModePreferences}
                 onThemeChange={changeTheme}
                 ref={workspaceRef}
+                scheduleSettingsRevision={appSettingsScheduleRevision}
                 theme={theme}
                 youtubeMusicConnectionStatus={youtubeMusicConnectionStatus}
               />
@@ -3473,6 +3319,8 @@ export function StudioShell() {
           assistantConnections={publishingAssistantConnections}
           contracts={publishingContracts}
           error={publishingPartnerError}
+          initialSection={publishingInitialSection}
+          workScopeId={publishingWorkScopeId}
           onClose={() => {
             if (publishingPartnerActionState === "idle") {
               setShowPublishingPartners(false);
@@ -3532,7 +3380,13 @@ export function StudioShell() {
           selectedSourceId={selectedPublishingSourceId}
           selectedSubmissionId={selectedPublishingSubmissionId}
           submissions={publishingSubmissions}
-          works={catalog.works}
+          works={
+            publishingWorkScopeId === null
+              ? catalog.works
+              : catalog.works.filter(
+                  (work) => work.workId === publishingWorkScopeId,
+                )
+          }
         />
       )}
       {showBackup && (

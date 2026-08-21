@@ -8,11 +8,89 @@
 
 현재 storage 결정: [POC-3 SQLite·blob·backup 결정](docs/poc-3-storage-decisions.md)
 
-마지막 갱신: 2026-08-18
+마지막 갱신: 2026-08-21
 
 ## 현재 Gate
 
-`정식 작업면 복원 Gate 13 — 별빛 서재 테마 전체 이주` 완료
+`정보구조 IA-1~IA-4 기능 연결 회귀 복구 — 실제 생성·닫기·드래그·테마·재실행 검증 완료`
+
+회차 완료 현재 상태:
+
+- [x] DC-0 — 첨부 설계 SHA-256과 승인 설계 manifest 11/11을 확인하고, `Document`·`ScheduleItem`과 분리된 완료 원장, 완료 시각·로컬 날짜·시간대·완료 revision, 상태 전이, 안전 저장 순서, 달력 projection과 D-DAY 호환 규칙을 [ADR](docs/architecture/document-completion-model.md)로 고정했다.
+- [x] DC-1 — `document_completion_status` SQLite 원장과 13→14 migration, 소유권·revision·backup/restore 검증.
+- [x] DC-2 — 완료/취소 application 명령, optimistic concurrency, catalog completion summary, typed bridge.
+- [x] DC-3~DC-4 — 원고 입력 잠금·durable flush 뒤 완료 저장과 회차 트리 `○/✓/△`, 공통 헤더 동작.
+- [x] DC-5~DC-6 — 일정 원장과 완료 원장을 중복 저장 없이 합성하는 `WorkCalendarProjection`과 읽기 전용 완료 occurrence.
+- [x] DC-7~DC-8 — 기존 글자 수 D-DAY 모드 보존, 명시 완료 기준 두 모드와 모든 작품의 `StudioTodayProjection`.
+
+회차 완료 현재 증거:
+
+- schema 13 실사용 DB의 온라인 백업 복사본을 14로 이주해 작품 3·문서 31·revision 23,591·투고처 1 수량과 논리 checksum을 보존하고, 완료 원장 0건·foreign key 위반 0건을 확인했다. 실행 중인 실사용 DB 원본은 쓰지 않았다.
+- 완료 시 현재 원고 durable revision을 먼저 확정하고, 저장 실패 시 완료 명령이 실행되지 않는 경계를 renderer·runtime·typed bridge에 연결했다. 완료→수정 후 `△`→다시 완료→취소와 재실행 복원을 검증했다.
+- 달력은 `WorkScheduleItem`을 만들지 않고 일정 occurrence와 `document-completion:{documentId}` occurrence를 application에서 합성한다. 완료 취소 뒤 완료 occurrence만 사라지고 기존 일정은 유지된다.
+- 완료 날짜는 완료 당시 시간대와 함께 저장하며 한국 자정, 월말, 연말, 뉴욕 DST 전환, 현재 시간대 변경 후에도 저장 날짜를 재해석하지 않는 검증을 통과했다.
+- 기존 `episodeCount`·`episodeNumber`는 글자 수 기준 의미를 유지하고, 신규 `additionalCompletedDocuments`·`totalCompletedDocuments`만 명시 완료 원장 개수를 사용한다.
+- production Electron에서 저장되지 않은 원고 입력 직후 완료→달력 읽기 전용 표시→전역 오늘의 정확한 작품·회차 열기→완료 취소 시 제거→완전 재시작 원고와 미완료 상태 복원을 통과했다.
+- 최신 실제 앱을 기본 사용자 데이터 경로로 정상 기동해 `user_version`·storage identity 14, 활성 작품 1·문서 31 보존, 완료 원장 0건, foreign key 위반 0건을 확인했다. 13→14 migration receipt의 논리 checksum은 전후 `a095a916…09cb`로 일치한다.
+
+IA 패키징 후속 회귀 복구:
+
+- [x] 개요·복선·별빛·집필 기록·후보 검토함의 embedded 옛 모달 배경·글자·테두리를 현재 Starlight 테마 토큰에 연결했다.
+- [x] 작품 구조 개요의 회차 목록을 자르지 않으면서 작업면 내부 가로 넘침을 제거하고, 다른 구조 탭과 쓰기 작업면으로 즉시 전환되도록 유지했다.
+- [x] 1080 CSS px 이하에서 음악 미니 플레이어의 4번째 `선곡·목록` 항목이 둘째 줄로 밀리던 grid 정의를 한 줄 4열로 바로잡았다.
+- [x] 항목이 0건일 때 `새 플롯`·`인물 추가`·`새 별빛`·투고 운영의 모든 `새 …` 버튼이 같은 `null` 선택만 반복하던 동작을 새 빈 draft remount와 첫 입력 포커스로 바꿨다.
+- [x] production Electron에서 960 CSS px 상단 음악 바 좌표와 `white-space: nowrap`, 14개 테마와 새 작업면 5종, 개요 가로 폭, 새 플롯·새 투고처 생성, 작업면 이탈을 통과했다.
+- [x] 실제 Windows `device-scale-factor=1.5` 사용자 창을 window handle로 다시 렌더링해 `선곡·목록`이 상단 한 줄에 남고, 새 전역 오늘 패널이 현재 어두운 테마를 그대로 사용하는 것을 확인했다.
+- [x] 노르딕 테마에서 구조 7개·검토 4개·운영·투고·일정·일정 추가·오늘을 실제 Electron으로 순회해 가시 요소의 밝은 배경 계산값이 0개임을 확인했다.
+- [x] 실제 사용자 데이터 창의 `focus-dark-theme` 일정 화면을 직접 열어 밝은 배경 계산값 0개와 어두운 달력·오늘 일정·D-DAY 패널을 확인한 뒤 검사 포트 없이 일반 실행으로 복원했다.
+
+IA 실제 기능 연결 복구:
+
+- [x] 홈 `오늘 할 일`의 달력 아이콘을 현재 작품 일정 명령에 연결하고, 작품 이동 뒤 실제 일정 창이 열리도록 했다.
+- [x] 모든 modal backdrop에 `X`·`Esc`·바깥 클릭 닫기 계약을 연결했다. 중첩 일정 편집기는 `Esc` 한 번에 안쪽 창만 닫고 바깥 일정 창을 유지한다.
+- [x] 편집기 하단 사건 카드를 마우스로 드래그해 `EventBlock.outlineOrderKey`를 이동하는 typed 명령·bridge·SQLite transaction을 추가했다. 원고 Anchor 순서와 PlotPlacement 순서는 바꾸지 않는다.
+- [x] 기존 timestamp JSON 사건 순서는 첫 수동 이동 때 한 transaction으로 fractional key에 재배치하고, 이후 이동·새 사건 추가·재실행에서 같은 순서를 유지한다.
+- [x] 작품 운영 진입은 현재 작품으로 query 범위를 고정하고 `투고·투고처`, `계약·발행`, `정산·입금`만 각각 노출한다. 투고 화면에 입금·정산·작업실 조수가 함께 나타나지 않는다.
+- [x] 작품 운영의 새 기록 form은 현재 작품을 미리 선택하며, 투고처·투고/봉인·계약·발행·정산·입금이 각각 기존 독립 원장 명령으로 저장된다.
+- [x] 오른쪽 `조수` 탭에서 현재 선택으로 별빛 Candidate를 만들고 정식 `후보 검토함`으로 이동할 수 있게, 구형 숨은 작품 탭에 남아 있던 진입점을 복원했다.
+- [x] 전역 상단 음악 플레이어에서 연 재생목록 창을 숨은 작품 작업면 밖의 실제 상단 host에 portal해 홈에서도 표시·테마·닫기가 동작하도록 했다.
+
+IA 실제 기능별 예시와 복원 증거:
+
+- 실제 기본 사용자 원장을 `workspace-v1/codex-backups/before-full-feature-pass-20260821-192837.sqlite3`로 먼저 복사 보관했다.
+- 실제 작품의 정식 화면에서 `[기능 확인]` 플롯·사건·인물·복선·별빛·별빛-복선 연결·승인 전 후보·파편·장면 분할·작품 스냅샷을 각각 1건 만들었다.
+- 집필 기록 화면에서 오늘/주간 집중·글자 목표와 1·2회차 연독률 예시를 저장했다.
+- 작품 운영의 각 독립 화면에서 `[기능 확인]` 투고처·투고 기록/불변 봉인·계약·발행·정산서·입금을 각각 1건 만들었다.
+- 일정 화면에서 `[기능 확인] 오늘 일정`, `집필 루틴`, `투고 마감` D-DAY를 각각 1건 만들었다.
+- 실제 앱을 반복 종료·재실행한 뒤 위 행과 사건 순서 `줄리안 통화사건 → 햄버거 참사 → [기능 확인] 예시 사건`을 SQLite 원장과 정식 화면에서 다시 확인했다.
+- 실제 `focus-dark-theme`에서 구조·일정·음악 창 배경/글자색을 확인했고, 선곡·목록 버튼은 960 CSS px에서 `nowrap`, 25px 높이로 한 줄을 유지했다.
+- `npm run lint`, `npm run typecheck`, renderer/electron production build가 통과했다.
+- 관련 Vitest 6개 파일 88개와 사건 순서 runtime 재실행 검증 1개가 통과했다.
+- production Electron E2E는 공통 IA 작업면/새 플롯/실제 투고 기록, 원고 분석 닫기, 선곡목록 한 줄과 홈 음악 창, 승격 작업면 전체 다크 테마, 사건 마우스 드래그와 재실행 복원 5개가 통과했다.
+- 전체 local runtime 묶음에서는 기존 동시각 Pomodoro 복원 검증 1개가 `break` 대신 `work`를 고르는 선행 불일치로 남았다. 이번 IA 변경과 무관한 기존 항목이며 이 작업에서 수정하지 않았다.
+
+이전 현재 Gate: `정보구조 개편 IA-1~IA-4 — 작품 공통 셸·구조·검토·일정 노출` 완료
+
+IA-1~IA-4 현재 상태:
+
+- [x] 작품 안에서 항상 같은 위치에 `쓰기 | 구조 | 검토 | 운영` 공통 헤더를 표시하고, 작품 목록 복귀·작품명·일정 요약·달력 진입점을 한곳에 고정했다.
+- [x] `구조`에 `개요 | 플롯 | 사건 | 장면 | 인물 | 복선 | 별빛` 정식 작업면을 연결했다. 기존 원장과 명령을 그대로 사용하며 모달 콘텐츠는 embedded content로 재사용한다.
+- [x] `검토`에 `집필 기록 | 원고 점검 | 후보 검토함 | 버전` 정식 작업면을 연결했다. 후보 승인 전 canonical 원본 불변과 기록·구조·후보에서 원고로 돌아오는 정확 범위 선택을 유지한다.
+- [x] 쓰기 오른쪽 검사기는 `현재 | 조수`만 노출한다. 작품 전체 구조·버전 관리의 구형 레일 항목은 새 정식 작업면에서만 접근하며 실제 제거는 IA-8 이후로 남긴다.
+- [x] 일정은 작품 헤더에서 한 번에 열고, 작품 카드의 오늘 건수·가장 가까운 D-DAY와 홈의 작품별 오늘 일정 projection으로 노출한다. 일정과 집필 기록은 작품 `…` 메뉴에서 제거했다.
+- [x] `새 플롯`은 좁은 786×538 패키징 Electron에서도 첫 플롯 생성 뒤 두 번째 플롯을 연속 생성·선택하고 재시작 뒤 복원한다.
+- [x] 작품 전환 시 다른 작품의 section/tab 상태가 섞이지 않고, 버전 복원 중에는 작품 작업면 이동을 막아 durable 복원이 끝난 뒤 이동한다.
+
+IA-1~IA-4 완료 증거:
+
+- 승인 설계 manifest의 checksum 11/11 일치를 다시 확인하고, 데이터 schema·SQLite migration·정규 원장은 변경하지 않았다.
+- `npm run lint`, `npm run typecheck`, production renderer/electron build가 통과했다.
+- 기존부터 기록된 `studio-app-shell-layout.test.ts`의 표지 버튼 실제 `background: transparent`와 테스트의 `#ffffff` 기대 불일치 1개를 제외한 Vitest 218개 파일, 771개 검증이 통과했고 1개가 skip됐다.
+- production Electron에서 공통 헤더·두 번째 새 플롯·원고 mount/selection/undo 보존, 작품 격리, 일정 CRUD, 집필 기록 내보내기, 구조 개요 원문 이동, 플롯·사건·장면·복선·별빛·후보·버전의 재시작 회귀를 통과했다.
+
+다음 회차 완료 Gate: 없음. DC-0~DC-8 전체 회귀 검증과 실사용 앱 안전 재시작만 남음.
+
+이전 현재 Gate: `정식 작업면 복원 Gate 13 — 별빛 서재 테마 전체 이주` 완료
 
 POC-3 완료 증거:
 
@@ -29,7 +107,7 @@ POC-3 완료 증거:
 - 개발 서버 없는 Windows Electron 설치본 main의 revision→checkpoint→backup→restore 폐회로
 - raw timing·p50·p95와 DB·blob·bundle·restore 크기 JSON 측정
 
-다음 활성 Gate: `POC-M — 현행 데이터 이주 rehearsal` 보류 상태 유지
+별도 보류 Gate: `POC-M — 현행 데이터 이주 rehearsal` 보류 상태 유지
 
 실사용 원고 저장: `GO`
 

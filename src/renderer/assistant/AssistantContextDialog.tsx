@@ -9,6 +9,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
 import {
   ASSISTANT_CAPABILITIES,
@@ -227,6 +228,10 @@ export function AssistantContextDialog(input: {
     input.connections.find((connection) =>
       connection.connectionId === reviewConnectionId
     ) ?? input.connections[0] ?? null;
+  const onBackdropPointerDown = useDialogDismiss({
+    disabled: busy,
+    onClose: input.onClose,
+  });
 
   function submit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
@@ -241,7 +246,11 @@ export function AssistantContextDialog(input: {
   }
 
   return (
-    <div className="dialog-backdrop assistant-context-backdrop" role="presentation">
+    <div
+      className="dialog-backdrop assistant-context-backdrop"
+      onPointerDown={onBackdropPointerDown}
+      role="presentation"
+    >
       <section
         aria-labelledby="assistant-context-title"
         aria-modal="true"

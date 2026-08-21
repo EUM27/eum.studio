@@ -9,6 +9,7 @@ import {
   type WorkRecordsGoalProgress,
   type WorkRecordsGoalsProjection,
 } from "../../application/activity/work-records-preferences";
+import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
 function localDateKey(timestamp: string): string {
   const date = new Date(timestamp);
@@ -121,9 +122,17 @@ export function DailyGoalDialog(input: {
       dailyCharacters: readGoal(formData, "dailyCharacters"),
     });
   };
+  const onBackdropPointerDown = useDialogDismiss({
+    disabled: input.saving,
+    onClose: input.onClose,
+  });
 
   return (
-    <div className="dialog-backdrop daily-goal-backdrop" role="presentation">
+    <div
+      className="dialog-backdrop daily-goal-backdrop"
+      onPointerDown={onBackdropPointerDown}
+      role="presentation"
+    >
       <section
         aria-labelledby="daily-goal-heading"
         aria-modal="true"

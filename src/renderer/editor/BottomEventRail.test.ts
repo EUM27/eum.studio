@@ -59,6 +59,8 @@ describe("BottomEventRail", () => {
     const markup = renderToStaticMarkup(createElement(BottomEventRail, {
       activeDocumentId: documentId,
       cursorOffset: 12,
+      eventBusy: false,
+      onMoveEvent: vi.fn(),
       onOpenSource: vi.fn(),
       projection,
     }));
@@ -66,6 +68,8 @@ describe("BottomEventRail", () => {
     expect(markup).toContain('aria-label="사건 레일"');
     expect(markup).toContain('aria-label="사건 레일 접기"');
     expect(markup).toContain('aria-current="location"');
+    expect(markup).toContain('data-event-block-id="event-a"');
+    expect(markup).toContain('draggable="true"');
     expect(markup).toContain("닫힌 문");
     expect(markup).toContain("1화 · 1");
     expect(markup).not.toContain("플롯 순서");
@@ -75,6 +79,8 @@ describe("BottomEventRail", () => {
     const markup = renderToStaticMarkup(createElement(BottomEventRail, {
       activeDocumentId: documentId,
       cursorOffset: 12,
+      eventBusy: false,
+      onMoveEvent: vi.fn(),
       onOpenSource: vi.fn(),
       projection: {
         ...projection,

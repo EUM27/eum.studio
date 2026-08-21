@@ -2,6 +2,7 @@ import { BarChart3, Repeat2, Ruler, Tags } from "lucide-react";
 import { useMemo } from "react";
 
 import { analyzeManuscriptText } from "./manuscript-analysis";
+import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
 export function ManuscriptAnalysisDialog(input: {
   readonly documentTitle: string;
@@ -12,9 +13,14 @@ export function ManuscriptAnalysisDialog(input: {
     () => analyzeManuscriptText(input.manuscript),
     [input.manuscript],
   );
+  const onBackdropPointerDown = useDialogDismiss({ onClose: input.onClose });
 
   return (
-    <div className="dialog-backdrop manuscript-analysis-backdrop" role="presentation">
+    <div
+      className="dialog-backdrop manuscript-analysis-backdrop"
+      onPointerDown={onBackdropPointerDown}
+      role="presentation"
+    >
       <section
         aria-labelledby="manuscript-analysis-heading"
         aria-modal="true"

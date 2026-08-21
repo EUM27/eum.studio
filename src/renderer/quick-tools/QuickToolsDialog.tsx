@@ -14,6 +14,7 @@ import {
   StickyNote,
   X,
 } from "lucide-react";
+import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
 import type {
   WorkQuickMemoProjection,
@@ -145,6 +146,10 @@ export function QuickToolsDialog(input: {
       : null;
   const memoChanged =
     memoProjection !== null && memoDraft !== memoProjection.text;
+  const onBackdropPointerDown = useDialogDismiss({
+    disabled: input.disabled,
+    onClose: input.onClose,
+  });
 
   useEffect(() => {
     if (activeWork === null) {
@@ -276,7 +281,11 @@ export function QuickToolsDialog(input: {
   };
 
   return (
-    <div className="dialog-backdrop quick-tools-backdrop" role="presentation">
+    <div
+      className="dialog-backdrop quick-tools-backdrop"
+      onPointerDown={onBackdropPointerDown}
+      role="presentation"
+    >
       <section
         aria-labelledby="quick-tools-heading"
         aria-modal="true"

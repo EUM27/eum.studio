@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { KeyRound, Plus, Trash2, X } from "lucide-react";
+import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
 import type {
   AssistantConnectionProjection,
@@ -98,9 +99,17 @@ export function AssistantConnectionsDialog(input: {
       }),
     });
   }
+  const onBackdropPointerDown = useDialogDismiss({
+    disabled: busy,
+    onClose: input.onClose,
+  });
 
   return (
-    <div className="dialog-backdrop assistant-connections-backdrop" role="presentation">
+    <div
+      className="dialog-backdrop assistant-connections-backdrop"
+      onPointerDown={onBackdropPointerDown}
+      role="presentation"
+    >
       <section
         aria-labelledby="assistant-connections-title"
         aria-modal="true"

@@ -5,6 +5,7 @@ import type {
   FragmentShelfProfile,
   UpdateFragmentCommand,
 } from "../../application/fragments/fragment-contract";
+import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
 export type FragmentShelfActionState =
   | "idle"
@@ -52,6 +53,10 @@ export function FragmentShelfDialog(input: {
   const [kindFilter, setKindFilter] = useState("all");
   const [query, setQuery] = useState("");
   const busy = input.actionState !== "idle";
+  const onBackdropPointerDown = useDialogDismiss({
+    disabled: busy,
+    onClose: input.onClose,
+  });
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const visibleFragments = useMemo(
     () =>
@@ -78,7 +83,11 @@ export function FragmentShelfDialog(input: {
   );
 
   return (
-    <div className="dialog-backdrop fragment-shelf-backdrop" role="presentation">
+    <div
+      className="dialog-backdrop fragment-shelf-backdrop"
+      onPointerDown={onBackdropPointerDown}
+      role="presentation"
+    >
       <section
         aria-labelledby="fragment-shelf-heading"
         aria-modal="true"

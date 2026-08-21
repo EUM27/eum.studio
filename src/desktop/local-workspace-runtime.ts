@@ -290,6 +290,16 @@ import {
   type WorkScheduleProjection,
 } from "../application/schedule/work-schedule-contract";
 import {
+  parseWorkCalendarProjection,
+  type WorkCalendarProjection,
+} from "../application/schedule/work-calendar-contract";
+import {
+  parseGetStudioTodayCommand,
+  projectStudioToday,
+  type GetStudioTodayCommand,
+  type StudioTodayProjection,
+} from "../application/today/studio-today-contract";
+import {
   parseGetWorkQuickMemoCommand,
   parseSaveWorkQuickMemoCommand,
   parseWorkQuickMemoProjection,
@@ -350,6 +360,7 @@ import {
   parseEventSourceProjection,
   parseLinkEventSourceCommand,
   parseListEventBlocksCommand,
+  parseMoveEventBlockCommand,
   parseReplaceEventSourceCommand,
   parseRetireEventSourceCommand,
   type CreateAnchorlessEventCommand,
@@ -359,9 +370,14 @@ import {
   type EventSourceProjection,
   type LinkEventSourceCommand,
   type ListEventBlocksCommand,
+  type MoveEventBlockCommand,
   type ReplaceEventSourceCommand,
   type RetireEventSourceCommand,
 } from "../application/structure/event-block-contract";
+import {
+  compareEventOutlineOrderKeys,
+  isFractionalEventOutlineOrderKey,
+} from "../application/structure/event-outline-order";
 import {
   deriveEventRailProjection,
   parseListEventRailCommand,
@@ -853,6 +869,15 @@ import {
   type WorkFavoritesProjection,
 } from "../application/workspace/work-favorites";
 import {
+  deriveDocumentCompletionDate,
+  parseDocumentCompletionProjection,
+  parseGetDocumentCompletionCommand,
+  parseSetDocumentCompletionCommand,
+  type DocumentCompletionProjection,
+  type GetDocumentCompletionCommand,
+  type SetDocumentCompletionCommand,
+} from "../application/workspace/document-completion";
+import {
   parseSaveWorkCoverCommand,
   parseWorkCoverProjection,
   parseWorkCoversProjection,
@@ -938,6 +963,9 @@ import {
 import {
   migrateLocalWorkspaceManuscriptLayoutIfNeeded,
 } from "./local-workspace-manuscript-layout-migration";
+import {
+  migrateLocalWorkspaceDocumentCompletionIfNeeded,
+} from "./local-workspace-document-completion-migration";
 
 type NodeSqliteStatement = {
   all(
@@ -985,6 +1013,12 @@ type StoredDocumentRow = {
   readonly manuscriptId: EntityId<"Manuscript">;
   readonly currentRevisionId:
     EntityId<"DocumentRevision">;
+  readonly completionRevision: number | null;
+  readonly completionCompletedAt: string | null;
+  readonly completionCompletedDate: string | null;
+  readonly completionCompletedTimeZone: string | null;
+  readonly completionDocumentRevisionId: EntityId<"DocumentRevision"> | null;
+  readonly completionUpdatedAt: string | null;
 };
 
 type StoredDocumentFolderRow = {
@@ -1484,6 +1518,8 @@ type StoredFocusPolicyRow = {
 export type LocalWorkspaceRuntime =
   ManuscriptRuntimeCoordinator & {
     getWorkspaceCatalog(): WorkspaceCatalogProjection;
+    getDocumentCompletion(value: unknown): Promise<DocumentCompletionProjection>;
+    setDocumentCompletion(value: unknown): Promise<DocumentCompletionProjection>;
     getWorkFavorites(): WorkFavoritesProjection;
     setWorkFavorite(value: unknown): Promise<WorkFavoritesProjection>;
     getWorkCovers(): WorkCoversProjection;
@@ -1512,6 +1548,7 @@ export type LocalWorkspaceRuntime =
     ): Promise<ManuscriptResumeCheckpointProjection>;
     createEventBlock(value: unknown): Promise<EventBlockProjection>;
     createAnchorlessEvent(value: unknown): Promise<EventBlockProjection>;
+    moveEventBlock(value: unknown): Promise<EventBlockListProjection>;
     linkEventSource(value: unknown): Promise<EventSourceProjection>;
     replaceEventSource(value: unknown): Promise<EventSourceProjection>;
     retireEventSource(value: unknown): Promise<EventSourceProjection>;
@@ -1652,6 +1689,8 @@ export type LocalWorkspaceRuntime =
       value: unknown,
     ): Promise<WorkContinuousReadingProgressProjection>;
     listWorkSchedule(value: unknown): Promise<WorkScheduleProjection>;
+    listWorkCalendar(value: unknown): Promise<WorkCalendarProjection>;
+    getStudioToday(value: unknown): Promise<StudioTodayProjection>;
     createWorkScheduleItem(value: unknown): Promise<WorkScheduleItemProjection>;
     updateWorkScheduleItem(value: unknown): Promise<WorkScheduleItemProjection>;
     retireWorkScheduleItem(value: unknown): Promise<void>;
@@ -1944,7 +1983,7 @@ export type LocalWorkspaceRuntimeOptions = {
   readonly backupProfile: LocalWorkspaceBackupProfile;
 };
 
-export const LOCAL_WORKSPACE_LEDGER_SCHEMA_VERSION = 13;
+export const LOCAL_WORKSPACE_LEDGER_SCHEMA_VERSION = 14;
 export const LOCAL_WORKSPACE_LEDGER_CHECKSUM_IDENTITY =
   "eum-studio-ledger-sha256-v1";
 export const LOCAL_WORKSPACE_MANUSCRIPT_CODEC_IDENTITY =
@@ -1972,7 +2011,13 @@ SELECT
   d.order_key AS "documentOrderKey",
   d.folder_id AS "folderId",
   d.manuscript_id AS "manuscriptId",
-  m.current_revision_id AS "currentRevisionId"
+  m.current_revision_id AS "currentRevisionId",
+  dc.revision AS "completionRevision",
+  dc.completed_at AS "completionCompletedAt",
+  dc.completed_date AS "completionCompletedDate",
+  dc.completed_time_zone AS "completionCompletedTimeZone",
+  dc.completed_document_revision_id AS "completionDocumentRevisionId",
+  dc.updated_at AS "completionUpdatedAt"
 FROM works AS w
 JOIN documents AS d
   ON d.work_id = w.id
@@ -1980,6 +2025,9 @@ JOIN manuscripts AS m
   ON m.id = d.manuscript_id
   AND m.work_id = w.id
   AND m.document_id = d.id
+LEFT JOIN document_completion_status AS dc
+  ON dc.work_id = w.id
+  AND dc.document_id = d.id
 WHERE
   w.retired_at IS NULL
   AND d.retired_at IS NULL
@@ -3984,6 +4032,251 @@ class DefaultLocalWorkspaceRuntime
     }
   }
 
+  #getDocumentCompletionSerially(
+    command: GetDocumentCompletionCommand,
+  ): DocumentCompletionProjection {
+    const target = this.#documentTargets.get(command.documentId);
+    if (target === undefined || target.workId !== command.workId) {
+      throw new Error(
+        `Work/document boundary violation: ${command.workId}/${command.documentId}`,
+      );
+    }
+    const rows = this.#database.prepare(`
+      SELECT
+        revision,
+        completed_at AS "completedAt",
+        completed_date AS "completedDate",
+        completed_time_zone AS "completedTimeZone",
+        completed_document_revision_id AS "completedDocumentRevisionId",
+        updated_at AS "updatedAt"
+      FROM document_completion_status
+      WHERE work_id = ? AND document_id = ?
+    `).all(command.workId, command.documentId);
+    if (rows.length > 1) {
+      throw new Error(`Document completion identity is ambiguous: ${command.documentId}`);
+    }
+    if (rows.length === 0) {
+      return parseDocumentCompletionProjection({
+        schemaVersion: 1,
+        workId: command.workId,
+        documentId: command.documentId,
+        revision: 0,
+        completedAt: null,
+        completedDate: null,
+        completedTimeZone: null,
+        completedDocumentRevisionId: null,
+        state: "incomplete",
+        updatedAt: null,
+      });
+    }
+    const row = rows[0] ?? {};
+    const completedDocumentRevisionId = readNullableIdentity<"DocumentRevision">(
+      row,
+      "completedDocumentRevisionId",
+      "Document completion row",
+    );
+    return parseDocumentCompletionProjection({
+      schemaVersion: 1,
+      workId: command.workId,
+      documentId: command.documentId,
+      revision: readRequiredInteger(row, "revision", "Document completion row"),
+      completedAt: readNullableString(row, "completedAt", "Document completion row"),
+      completedDate: readNullableString(row, "completedDate", "Document completion row"),
+      completedTimeZone: readNullableString(
+        row,
+        "completedTimeZone",
+        "Document completion row",
+      ),
+      completedDocumentRevisionId,
+      state: completedDocumentRevisionId === null
+        ? "incomplete"
+        : completedDocumentRevisionId === target.currentRevisionId
+          ? "current"
+          : "edited-after-completion",
+      updatedAt: readRequiredString(row, "updatedAt", "Document completion row"),
+    });
+  }
+
+  #setDocumentCompletionSerially(
+    command: SetDocumentCompletionCommand,
+  ): DocumentCompletionProjection {
+    const target = this.#documentTargets.get(command.documentId);
+    if (target === undefined || target.workId !== command.workId) {
+      throw new Error(
+        `Work/document boundary violation: ${command.workId}/${command.documentId}`,
+      );
+    }
+    this.#database.exec("BEGIN IMMEDIATE");
+    try {
+      const ownershipRows = this.#database.prepare(`
+        SELECT m.current_revision_id AS "currentRevisionId"
+        FROM documents AS d
+        JOIN works AS w
+          ON w.id = d.work_id
+        JOIN manuscripts AS m
+          ON m.work_id = d.work_id
+          AND m.document_id = d.id
+          AND m.id = d.manuscript_id
+        WHERE
+          d.work_id = ?
+          AND d.id = ?
+          AND w.retired_at IS NULL
+          AND d.retired_at IS NULL
+          AND d.archived_at IS NULL
+      `).all(command.workId, command.documentId);
+      if (ownershipRows.length !== 1) {
+        throw new Error(
+          `Document is unavailable for completion: ${command.documentId}`,
+        );
+      }
+      const durableRevisionId = entityId<"DocumentRevision">(
+        readRequiredString(
+          ownershipRows[0] ?? {},
+          "currentRevisionId",
+          "Document completion ownership row",
+        ),
+      );
+      if (
+        durableRevisionId !== command.expectedDocumentRevisionId ||
+        target.currentRevisionId !== command.expectedDocumentRevisionId
+      ) {
+        throw new Error(
+          `Document revision conflict: expected ${command.expectedDocumentRevisionId}, current ${durableRevisionId}`,
+        );
+      }
+      const current = this.#getDocumentCompletionSerially(command);
+      if (current.revision !== command.expectedCompletionRevision) {
+        throw new Error(
+          `Document completion revision conflict: expected ${command.expectedCompletionRevision}, current ${current.revision}`,
+        );
+      }
+      if (
+        command.completed &&
+        current.completedDocumentRevisionId === durableRevisionId
+      ) {
+        this.#database.exec("COMMIT");
+        this.#updateCatalogDocumentCompletion(target, current);
+        return current;
+      }
+      if (!command.completed && current.completedAt === null) {
+        this.#database.exec("COMMIT");
+        this.#updateCatalogDocumentCompletion(target, current);
+        return current;
+      }
+
+      const updatedAt = new Date().toISOString();
+      if (command.completed) {
+        const completedDate = deriveDocumentCompletionDate(
+          updatedAt,
+          this.#options.timezone,
+        );
+        if (current.revision === 0) {
+          this.#database.prepare(`
+            INSERT INTO document_completion_status (
+              work_id,
+              document_id,
+              schema_version,
+              revision,
+              completed_at,
+              completed_date,
+              completed_time_zone,
+              completed_document_revision_id,
+              updated_at
+            ) VALUES (?, ?, 1, 1, ?, ?, ?, ?, ?)
+          `).run(
+            command.workId,
+            command.documentId,
+            updatedAt,
+            completedDate,
+            this.#options.timezone,
+            durableRevisionId,
+            updatedAt,
+          );
+        } else {
+          const updated = this.#database.prepare(`
+            UPDATE document_completion_status
+            SET
+              revision = revision + 1,
+              completed_at = ?,
+              completed_date = ?,
+              completed_time_zone = ?,
+              completed_document_revision_id = ?,
+              updated_at = ?
+            WHERE work_id = ? AND document_id = ? AND revision = ?
+          `).run(
+            updatedAt,
+            completedDate,
+            this.#options.timezone,
+            durableRevisionId,
+            updatedAt,
+            command.workId,
+            command.documentId,
+            current.revision,
+          );
+          if (Number(updated.changes) !== 1) {
+            throw new Error(`Document completion changed: ${command.documentId}`);
+          }
+        }
+      } else {
+        const updated = this.#database.prepare(`
+          UPDATE document_completion_status
+          SET
+            revision = revision + 1,
+            completed_at = NULL,
+            completed_date = NULL,
+            completed_time_zone = NULL,
+            completed_document_revision_id = NULL,
+            updated_at = ?
+          WHERE work_id = ? AND document_id = ? AND revision = ?
+        `).run(
+          updatedAt,
+          command.workId,
+          command.documentId,
+          current.revision,
+        );
+        if (Number(updated.changes) !== 1) {
+          throw new Error(`Document completion changed: ${command.documentId}`);
+        }
+      }
+      this.#database.exec("COMMIT");
+    } catch (error) {
+      this.#database.exec("ROLLBACK");
+      throw error;
+    }
+    const completion = this.#getDocumentCompletionSerially(command);
+    this.#updateCatalogDocumentCompletion(target, completion);
+    return completion;
+  }
+
+  #updateCatalogDocumentCompletion(
+    target: MutableDocumentSaveTarget,
+    completion = this.#getDocumentCompletionSerially({
+      schemaVersion: 1,
+      workId: target.workId,
+      documentId: target.documentId,
+    }),
+  ): void {
+    this.#catalog = parseWorkspaceCatalogProjection({
+      ...this.#catalog,
+      works: this.#catalog.works.map((work) =>
+        work.workId === target.workId
+          ? {
+              ...work,
+              documents: work.documents.map((document) =>
+                document.documentId === target.documentId
+                  ? {
+                      ...document,
+                      currentRevisionId: target.currentRevisionId,
+                      completion,
+                    }
+                  : document
+              ),
+            }
+          : work
+      ),
+    });
+  }
+
   #getPreflightProfile(): ManuscriptPreflightProfile {
     const profile = this.#options.preflightProfile;
     if (profile === undefined) {
@@ -4019,6 +4312,32 @@ class DefaultLocalWorkspaceRuntime
   getWorkspaceCatalog(): WorkspaceCatalogProjection {
     this.#assertOpen();
     return this.#catalog;
+  }
+
+  getDocumentCompletion(
+    value: unknown,
+  ): Promise<DocumentCompletionProjection> {
+    this.#assertOpen();
+    const command = parseGetDocumentCompletionCommand(value);
+    return Promise.all([this.#createPending, this.#savePending]).then(() =>
+      this.#getDocumentCompletionSerially(command)
+    );
+  }
+
+  setDocumentCompletion(
+    value: unknown,
+  ): Promise<DocumentCompletionProjection> {
+    this.#assertOpen();
+    const command = parseSetDocumentCompletionCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#setDocumentCompletionSerially(command);
+    });
+    this.#createPending = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    return execution;
   }
 
   getWorkFavorites(): WorkFavoritesProjection {
@@ -4298,6 +4617,20 @@ class DefaultLocalWorkspaceRuntime
     const execution = this.#createPending.then(async () => {
       await this.#savePending;
       return this.#createAnchorlessEventSerially(command);
+    });
+    this.#createPending = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    return execution;
+  }
+
+  moveEventBlock(value: unknown): Promise<EventBlockListProjection> {
+    this.#assertOpen();
+    const command = parseMoveEventBlockCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#moveEventBlockSerially(command);
     });
     this.#createPending = execution.then(
       () => undefined,
@@ -5668,6 +6001,22 @@ class DefaultLocalWorkspaceRuntime
     const command = parseListWorkScheduleCommand(value);
     return Promise.all([this.#createPending, this.#savePending]).then(() =>
       this.#listWorkScheduleSerially(command),
+    );
+  }
+
+  listWorkCalendar(value: unknown): Promise<WorkCalendarProjection> {
+    this.#assertOpen();
+    const command = parseListWorkScheduleCommand(value);
+    return Promise.all([this.#createPending, this.#savePending]).then(() =>
+      this.#listWorkCalendarSerially(command),
+    );
+  }
+
+  getStudioToday(value: unknown): Promise<StudioTodayProjection> {
+    this.#assertOpen();
+    const command = parseGetStudioTodayCommand(value);
+    return Promise.all([this.#createPending, this.#savePending]).then(() =>
+      this.#getStudioTodaySerially(command),
     );
   }
 
@@ -10878,6 +11227,119 @@ class DefaultLocalWorkspaceRuntime
     });
   }
 
+  #listWorkCalendarSerially(
+    command: ListWorkScheduleCommand,
+  ): WorkCalendarProjection {
+    const schedule = this.#listWorkScheduleSerially(command);
+    const completedDocumentCount = readRequiredInteger(
+      this.#database.prepare(`
+        SELECT COUNT(*) AS count
+        FROM document_completion_status AS dc
+        JOIN documents AS d
+          ON d.work_id = dc.work_id
+          AND d.id = dc.document_id
+        JOIN works AS w
+          ON w.id = dc.work_id
+        WHERE
+          dc.work_id = ?
+          AND dc.completed_at IS NOT NULL
+          AND w.retired_at IS NULL
+          AND d.retired_at IS NULL
+          AND d.archived_at IS NULL
+      `).all(command.workId)[0] ?? {},
+      "count",
+      "Completed Document count row",
+    );
+    const completionOccurrences = this.#database
+      .prepare(`
+        SELECT
+          dc.document_id AS "documentId",
+          d.title AS "documentTitle",
+          dc.completed_at AS "completedAt",
+          dc.completed_date AS "completedDate",
+          dc.completed_document_revision_id AS "completedDocumentRevisionId"
+        FROM document_completion_status AS dc
+        JOIN documents AS d
+          ON d.work_id = dc.work_id
+          AND d.id = dc.document_id
+        JOIN works AS w
+          ON w.id = dc.work_id
+        WHERE
+          dc.work_id = ?
+          AND dc.completed_at IS NOT NULL
+          AND dc.completed_date >= ?
+          AND dc.completed_date <= ?
+          AND w.retired_at IS NULL
+          AND d.retired_at IS NULL
+          AND d.archived_at IS NULL
+        ORDER BY dc.completed_date, dc.completed_at, dc.document_id
+      `)
+      .all(command.workId, command.range.from, command.range.to)
+      .map((row) => {
+        const documentId = entityId<"Document">(
+          readRequiredString(
+            row,
+            "documentId",
+            "Document completion occurrence row",
+          ),
+        );
+        const documentTitle = readRequiredString(
+          row,
+          "documentTitle",
+          "Document completion occurrence row",
+        );
+        return {
+          occurrenceId: `document-completion:${documentId}`,
+          workId: command.workId,
+          documentId,
+          documentTitle,
+          kind: "document-completion" as const,
+          label: `${documentTitle} 완료`,
+          date: readRequiredString(
+            row,
+            "completedDate",
+            "Document completion occurrence row",
+          ),
+          time: null,
+          completed: true,
+          completedAt: readRequiredString(
+            row,
+            "completedAt",
+            "Document completion occurrence row",
+          ),
+          completedDocumentRevisionId: entityId<"DocumentRevision">(
+            readRequiredString(
+              row,
+              "completedDocumentRevisionId",
+              "Document completion occurrence row",
+            ),
+          ),
+        };
+      });
+    return parseWorkCalendarProjection({
+      ...schedule,
+      occurrences: [...schedule.occurrences, ...completionOccurrences],
+      completedDocumentCount,
+    });
+  }
+
+  #getStudioTodaySerially(
+    command: GetStudioTodayCommand,
+  ): StudioTodayProjection {
+    return projectStudioToday({
+      date: command.date,
+      works: this.#catalog.works.map((work) => ({
+        workId: work.workId,
+        workTitle: work.title,
+        calendar: this.#listWorkCalendarSerially({
+          schemaVersion: 1,
+          workId: work.workId,
+          range: { from: command.date, to: command.date },
+        }),
+      })),
+    });
+  }
+
   #createWorkScheduleItemSerially(
     command: CreateWorkScheduleItemCommand,
   ): WorkScheduleItemProjection {
@@ -12682,7 +13144,11 @@ class DefaultLocalWorkspaceRuntime
         workId: command.workId,
         title: command.title,
         ...(command.note.length === 0 ? {} : { note: command.note }),
-        outlineOrderKey: JSON.stringify([createdAt, eventBlockId]),
+        outlineOrderKey: this.#nextEventOutlineOrderKey(
+          command.workId,
+          createdAt,
+          eventBlockId,
+        ),
         collapsed: false,
       });
       transaction.write({
@@ -12725,7 +13191,11 @@ class DefaultLocalWorkspaceRuntime
         workId: command.workId,
         title: command.title,
         ...(command.note.length === 0 ? {} : { note: command.note }),
-        outlineOrderKey: JSON.stringify([createdAt, eventBlockId]),
+        outlineOrderKey: this.#nextEventOutlineOrderKey(
+          command.workId,
+          createdAt,
+          eventBlockId,
+        ),
         collapsed: false,
       });
     });
@@ -12740,6 +13210,157 @@ class DefaultLocalWorkspaceRuntime
       throw new Error(`Stored EventBlock is missing: ${eventBlockId}`);
     }
     return created;
+  }
+
+  #nextEventOutlineOrderKey(
+    workId: EntityId<"Work">,
+    createdAt: string,
+    eventBlockId: EntityId<"EventBlock">,
+  ): string {
+    const events = readStoredEventBlockRows(this.#database, workId);
+    if (events.length === 0) return "0/1";
+    if (events.every((event) =>
+      isFractionalEventOutlineOrderKey(event.outlineOrderKey)
+    )) {
+      return createOrderKeyBetween(events.at(-1)?.outlineOrderKey ?? null, null);
+    }
+    return JSON.stringify([createdAt, eventBlockId]);
+  }
+
+  async #moveEventBlockSerially(
+    command: MoveEventBlockCommand,
+  ): Promise<EventBlockListProjection> {
+    if (!this.#catalog.works.some((work) => work.workId === command.workId)) {
+      throw new Error(`Unknown Work: ${command.workId}`);
+    }
+    const events = [...readStoredEventBlockRows(this.#database, command.workId)];
+    const current = events.find(
+      (event) => event.eventBlockId === command.eventBlockId,
+    );
+    if (current === undefined || current.retiredAt !== null) {
+      throw new Error(`Unknown active EventBlock: ${command.eventBlockId}`);
+    }
+    if (current.revision !== command.expectedRevision) {
+      throw new Error(`EventBlock revision conflict: ${command.eventBlockId}`);
+    }
+    if (
+      command.beforeEventBlockId === command.eventBlockId ||
+      command.afterEventBlockId === command.eventBlockId
+    ) {
+      throw new Error("EventBlock cannot be its own move neighbor");
+    }
+
+    const remaining = events.filter(
+      (event) => event.eventBlockId !== command.eventBlockId,
+    );
+    const beforeIndex = command.beforeEventBlockId === undefined
+      ? -1
+      : remaining.findIndex(
+          (event) => event.eventBlockId === command.beforeEventBlockId,
+        );
+    const afterIndex = command.afterEventBlockId === undefined
+      ? -1
+      : remaining.findIndex(
+          (event) => event.eventBlockId === command.afterEventBlockId,
+        );
+    if (command.beforeEventBlockId !== undefined && beforeIndex < 0) {
+      throw new Error(
+        `Move predecessor is outside the Work: ${command.beforeEventBlockId}`,
+      );
+    }
+    if (command.afterEventBlockId !== undefined && afterIndex < 0) {
+      throw new Error(
+        `Move successor is outside the Work: ${command.afterEventBlockId}`,
+      );
+    }
+    if (
+      command.beforeEventBlockId !== undefined &&
+      command.afterEventBlockId !== undefined &&
+      beforeIndex + 1 !== afterIndex
+    ) {
+      throw new Error("Move neighbors are not adjacent in the Event outline");
+    }
+    if (
+      command.beforeEventBlockId !== undefined &&
+      command.afterEventBlockId === undefined &&
+      beforeIndex !== remaining.length - 1
+    ) {
+      throw new Error("Move predecessor is not the final EventBlock");
+    }
+    if (
+      command.beforeEventBlockId === undefined &&
+      command.afterEventBlockId !== undefined &&
+      afterIndex !== 0
+    ) {
+      throw new Error("Move successor is not the first EventBlock");
+    }
+    if (
+      command.beforeEventBlockId === undefined &&
+      command.afterEventBlockId === undefined &&
+      remaining.length !== 0
+    ) {
+      throw new Error("Move without neighbors requires an empty Event outline");
+    }
+
+    const insertionIndex = command.beforeEventBlockId === undefined
+      ? 0
+      : beforeIndex + 1;
+    const ordered = [...remaining];
+    ordered.splice(insertionIndex, 0, current);
+    if (ordered.every((event, index) =>
+      event.eventBlockId === events[index]?.eventBlockId
+    )) {
+      return this.#listEventBlocksSerially({
+        schemaVersion: 1,
+        workId: command.workId,
+      });
+    }
+
+    const updatedAt = new Date().toISOString();
+    const allFractional = events.every((event) =>
+      isFractionalEventOutlineOrderKey(event.outlineOrderKey)
+    );
+    const previous = ordered[insertionIndex - 1] ?? null;
+    const next = ordered[insertionIndex + 1] ?? null;
+    const orderKey = allFractional
+      ? createOrderKeyBetween(
+          previous?.outlineOrderKey ?? null,
+          next?.outlineOrderKey ?? null,
+        )
+      : null;
+    if (
+      orderKey !== null &&
+      orderKey.length <= this.#options.defaults.plotBoard.orderKeyLengthLimit
+    ) {
+      await this.#ledger.transaction(async (transaction: StorageTransaction) => {
+        transaction.write({
+          kind: "eventBlockOutlineMove",
+          id: current.eventBlockId,
+          workId: command.workId,
+          expectedRevision: command.expectedRevision,
+          outlineOrderKey: orderKey,
+          updatedAt,
+        });
+      });
+    } else {
+      const rebalancedKeys = createRebalancedOrderKeys(ordered.length);
+      await this.#ledger.transaction(async (transaction: StorageTransaction) => {
+        transaction.write({
+          kind: "eventBlockOutlineRebalance",
+          workId: command.workId,
+          updatedAt,
+          events: ordered.map((event, index) => ({
+            id: event.eventBlockId,
+            expectedRevision: event.revision,
+            outlineOrderKey: rebalancedKeys[index] as string,
+          })),
+        });
+      });
+    }
+    return this.#listEventBlocksSerially({
+      schemaVersion: 1,
+      workId: command.workId,
+    });
   }
 
   async #linkEventSourceSerially(
@@ -18088,7 +18709,11 @@ class DefaultLocalWorkspaceRuntime
         workId: command.workId,
         title: plotBeat.title,
         ...(plotBeat.summary.length === 0 ? {} : { note: plotBeat.summary }),
-        outlineOrderKey: JSON.stringify([createdAt, eventBlockId]),
+        outlineOrderKey: this.#nextEventOutlineOrderKey(
+          command.workId,
+          createdAt,
+          eventBlockId,
+        ),
         collapsed: false,
       });
       if (sourceRange !== null && eventSourceId !== null) {
@@ -19070,6 +19695,7 @@ class DefaultLocalWorkspaceRuntime
           : document,
       ),
     });
+    this.#updateCatalogDocumentCompletion(target);
   }
 
   async #renameWorkSerially(
@@ -20139,6 +20765,36 @@ function readStoredDocumentRows(
             label,
           ),
         ),
+        completionRevision: readNullableInteger(
+          row,
+          "completionRevision",
+          label,
+        ),
+        completionCompletedAt: readNullableString(
+          row,
+          "completionCompletedAt",
+          label,
+        ),
+        completionCompletedDate: readNullableString(
+          row,
+          "completionCompletedDate",
+          label,
+        ),
+        completionCompletedTimeZone: readNullableString(
+          row,
+          "completionCompletedTimeZone",
+          label,
+        ),
+        completionDocumentRevisionId: readNullableIdentity<"DocumentRevision">(
+          row,
+          "completionDocumentRevisionId",
+          label,
+        ),
+        completionUpdatedAt: readNullableString(
+          row,
+          "completionUpdatedAt",
+          label,
+        ),
       };
       }),
   );
@@ -20249,7 +20905,12 @@ function readStoredEventBlockRows(
       .map((row, index) => parseStoredEventBlockRow(
         row,
         `EventBlock rows[${index}]`,
-      )),
+      ))
+      .sort((left, right) =>
+        compareEventOutlineOrderKeys(
+          left.outlineOrderKey,
+          right.outlineOrderKey,
+        ) || left.eventBlockId.localeCompare(right.eventBlockId)),
   );
 }
 
@@ -23795,6 +24456,7 @@ async function loadWorkspaceState(
         readonly currentRevisionId:
           EntityId<"DocumentRevision">;
         readonly folderId: EntityId<"DocumentFolder"> | null;
+        readonly completion: DocumentCompletionProjection;
       }>;
     }
   >();
@@ -23828,6 +24490,22 @@ async function loadWorkspaceState(
       title: row.documentTitle,
       currentRevisionId: row.currentRevisionId,
       folderId: row.folderId,
+      completion: parseDocumentCompletionProjection({
+        schemaVersion: 1,
+        workId: row.workId,
+        documentId: row.documentId,
+        revision: row.completionRevision ?? 0,
+        completedAt: row.completionCompletedAt,
+        completedDate: row.completionCompletedDate,
+        completedTimeZone: row.completionCompletedTimeZone,
+        completedDocumentRevisionId: row.completionDocumentRevisionId,
+        state: row.completionDocumentRevisionId === null
+          ? "incomplete"
+          : row.completionDocumentRevisionId === row.currentRevisionId
+            ? "current"
+            : "edited-after-completion",
+        updatedAt: row.completionUpdatedAt,
+      }),
     });
   }
   const works = [...worksById.values()];
@@ -24157,6 +24835,9 @@ export async function openLocalWorkspaceRuntime(
     profiles.ledgerProfile,
   );
   await migrateLocalWorkspaceManuscriptLayoutIfNeeded(
+    profiles.ledgerProfile,
+  );
+  await migrateLocalWorkspaceDocumentCompletionIfNeeded(
     profiles.ledgerProfile,
   );
   const ledger = await openNodeSqliteLedger(profiles.ledgerProfile);

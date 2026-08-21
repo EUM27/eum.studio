@@ -115,6 +115,14 @@ import {
   type WorkspaceCatalogProjection,
 } from "../workspace/workspace-contract";
 import {
+  parseDocumentCompletionProjection,
+  parseGetDocumentCompletionCommand,
+  parseSetDocumentCompletionCommand,
+  type DocumentCompletionProjection,
+  type GetDocumentCompletionCommand,
+  type SetDocumentCompletionCommand,
+} from "../workspace/document-completion";
+import {
   parseSetWorkFavoriteCommand,
   parseWorkFavoritesProjection,
   type SetWorkFavoriteCommand,
@@ -136,6 +144,7 @@ import {
   parseEventSourceProjection,
   parseLinkEventSourceCommand,
   parseListEventBlocksCommand,
+  parseMoveEventBlockCommand,
   parseReplaceEventSourceCommand,
   parseRetireEventSourceCommand,
   type CreateAnchorlessEventCommand,
@@ -145,6 +154,7 @@ import {
   type EventSourceProjection,
   type LinkEventSourceCommand,
   type ListEventBlocksCommand,
+  type MoveEventBlockCommand,
   type ReplaceEventSourceCommand,
   type RetireEventSourceCommand,
 } from "../structure/event-block-contract";
@@ -643,6 +653,16 @@ import {
   type WorkScheduleProjection,
 } from "../schedule/work-schedule-contract";
 import {
+  parseWorkCalendarProjection,
+  type WorkCalendarProjection,
+} from "../schedule/work-calendar-contract";
+import {
+  parseGetStudioTodayCommand,
+  parseStudioTodayProjection,
+  type GetStudioTodayCommand,
+  type StudioTodayProjection,
+} from "../today/studio-today-contract";
+import {
   parseGetWorkQuickMemoCommand,
   parseSaveWorkQuickMemoCommand,
   parseWorkQuickMemoProjection,
@@ -862,6 +882,10 @@ export const MANUSCRIPT_COMPLETE_CLOSE_REQUEST_CHANNEL =
   "studio:editor:complete-manuscript-close-request";
 export const WORKSPACE_CATALOG_CHANNEL =
   "studio:workspace:get-catalog";
+export const WORKSPACE_GET_DOCUMENT_COMPLETION_CHANNEL =
+  "studio:workspace:get-document-completion";
+export const WORKSPACE_SET_DOCUMENT_COMPLETION_CHANNEL =
+  "studio:workspace:set-document-completion";
 export const WORKSPACE_FAVORITES_CHANNEL =
   "studio:workspace:get-favorites";
 export const WORKSPACE_SET_FAVORITE_CHANNEL =
@@ -902,6 +926,8 @@ export const STRUCTURE_CREATE_EVENT_BLOCK_CHANNEL =
   "studio:structure:create-event-block";
 export const STRUCTURE_CREATE_ANCHORLESS_EVENT_CHANNEL =
   "studio:structure:create-anchorless-event";
+export const STRUCTURE_MOVE_EVENT_BLOCK_CHANNEL =
+  "studio:structure:move-event-block";
 export const STRUCTURE_LINK_EVENT_SOURCE_CHANNEL =
   "studio:structure:link-event-source";
 export const STRUCTURE_REPLACE_EVENT_SOURCE_CHANNEL =
@@ -1164,6 +1190,10 @@ export const ACTIVITY_STOP_POMODORO_CHANNEL =
   "studio:activity:stop-pomodoro";
 export const SCHEDULE_LIST_WORK_CHANNEL =
   "studio:schedule:list-work";
+export const SCHEDULE_LIST_CALENDAR_CHANNEL =
+  "studio:schedule:list-calendar";
+export const SCHEDULE_LIST_TODAY_CHANNEL =
+  "studio:schedule:list-today";
 export const SCHEDULE_CREATE_ITEM_CHANNEL =
   "studio:schedule:create-item";
 export const SCHEDULE_UPDATE_ITEM_CHANNEL =
@@ -1285,6 +1315,12 @@ export type StudioBridge = {
   };
   workspace: {
     getCatalog: () => Promise<WorkspaceCatalogProjection>;
+    getDocumentCompletion: (
+      command: GetDocumentCompletionCommand,
+    ) => Promise<DocumentCompletionProjection>;
+    setDocumentCompletion: (
+      command: SetDocumentCompletionCommand,
+    ) => Promise<DocumentCompletionProjection>;
     getFavorites: () => Promise<WorkFavoritesProjection>;
     setFavorite: (
       command: SetWorkFavoriteCommand,
@@ -1343,6 +1379,9 @@ export type StudioBridge = {
     createAnchorlessEvent: (
       command: CreateAnchorlessEventCommand,
     ) => Promise<EventBlockProjection>;
+    moveEventBlock: (
+      command: MoveEventBlockCommand,
+    ) => Promise<EventBlockListProjection>;
     linkEventSource: (
       command: LinkEventSourceCommand,
     ) => Promise<EventSourceProjection>;
@@ -1778,6 +1817,12 @@ export type StudioBridge = {
     listWork: (
       command: ListWorkScheduleCommand,
     ) => Promise<WorkScheduleProjection>;
+    listCalendar: (
+      command: ListWorkScheduleCommand,
+    ) => Promise<WorkCalendarProjection>;
+    listToday: (
+      command: GetStudioTodayCommand,
+    ) => Promise<StudioTodayProjection>;
     createItem: (
       command: CreateWorkScheduleItemCommand,
     ) => Promise<WorkScheduleItemProjection>;
@@ -1984,6 +2029,8 @@ export type BridgeInvoke = (
     | typeof MANUSCRIPT_APPLY_STARTUP_RECOVERY_CHANNEL
     | typeof MANUSCRIPT_COMPLETE_CLOSE_REQUEST_CHANNEL
     | typeof WORKSPACE_CATALOG_CHANNEL
+    | typeof WORKSPACE_GET_DOCUMENT_COMPLETION_CHANNEL
+    | typeof WORKSPACE_SET_DOCUMENT_COMPLETION_CHANNEL
     | typeof WORKSPACE_FAVORITES_CHANNEL
     | typeof WORKSPACE_SET_FAVORITE_CHANNEL
     | typeof WORKSPACE_COVERS_CHANNEL
@@ -2004,6 +2051,7 @@ export type BridgeInvoke = (
     | typeof WORKSPACE_CAPTURE_RESUME_CHANNEL
     | typeof STRUCTURE_CREATE_EVENT_BLOCK_CHANNEL
     | typeof STRUCTURE_CREATE_ANCHORLESS_EVENT_CHANNEL
+    | typeof STRUCTURE_MOVE_EVENT_BLOCK_CHANNEL
     | typeof STRUCTURE_LINK_EVENT_SOURCE_CHANNEL
     | typeof STRUCTURE_REPLACE_EVENT_SOURCE_CHANNEL
     | typeof STRUCTURE_RETIRE_EVENT_SOURCE_CHANNEL
@@ -2135,6 +2183,8 @@ export type BridgeInvoke = (
     | typeof ACTIVITY_UPDATE_POMODORO_NOTE_CHANNEL
     | typeof ACTIVITY_STOP_POMODORO_CHANNEL
     | typeof SCHEDULE_LIST_WORK_CHANNEL
+    | typeof SCHEDULE_LIST_CALENDAR_CHANNEL
+    | typeof SCHEDULE_LIST_TODAY_CHANNEL
     | typeof SCHEDULE_CREATE_ITEM_CHANNEL
     | typeof SCHEDULE_UPDATE_ITEM_CHANNEL
     | typeof SCHEDULE_RETIRE_ITEM_CHANNEL
@@ -2476,6 +2526,30 @@ export function createStudioBridge(
           throw new Error("Invalid workspace catalog");
         }
       },
+      getDocumentCompletion: async (input) => {
+        const command = parseGetDocumentCompletionCommand(input);
+        const value = await invoke(
+          WORKSPACE_GET_DOCUMENT_COMPLETION_CHANNEL,
+          command,
+        );
+        try {
+          return parseDocumentCompletionProjection(value);
+        } catch {
+          throw new Error("Invalid Document completion projection");
+        }
+      },
+      setDocumentCompletion: async (input) => {
+        const command = parseSetDocumentCompletionCommand(input);
+        const value = await invoke(
+          WORKSPACE_SET_DOCUMENT_COMPLETION_CHANNEL,
+          command,
+        );
+        try {
+          return parseDocumentCompletionProjection(value);
+        } catch {
+          throw new Error("Invalid saved Document completion projection");
+        }
+      },
       getFavorites: async () => {
         const value = await invoke(WORKSPACE_FAVORITES_CHANNEL);
         try {
@@ -2700,6 +2774,18 @@ export function createStudioBridge(
           return parseEventBlockProjection(value);
         } catch {
           throw new Error("Invalid anchorless EventBlock creation result");
+        }
+      },
+      moveEventBlock: async (input) => {
+        const command = parseMoveEventBlockCommand(input);
+        const value = await invoke(
+          STRUCTURE_MOVE_EVENT_BLOCK_CHANNEL,
+          command,
+        );
+        try {
+          return parseEventBlockListProjection(value);
+        } catch {
+          throw new Error("Invalid EventBlock move result");
         }
       },
       linkEventSource: async (input) => {
@@ -4001,6 +4087,24 @@ export function createStudioBridge(
           return parseWorkScheduleProjection(value);
         } catch {
           throw new Error("Invalid Work schedule projection");
+        }
+      },
+      listCalendar: async (input) => {
+        const command = parseListWorkScheduleCommand(input);
+        const value = await invoke(SCHEDULE_LIST_CALENDAR_CHANNEL, command);
+        try {
+          return parseWorkCalendarProjection(value);
+        } catch {
+          throw new Error("Invalid Work calendar projection");
+        }
+      },
+      listToday: async (input) => {
+        const command = parseGetStudioTodayCommand(input);
+        const value = await invoke(SCHEDULE_LIST_TODAY_CHANNEL, command);
+        try {
+          return parseStudioTodayProjection(value);
+        } catch {
+          throw new Error("Invalid Studio Today projection");
         }
       },
       createItem: async (input) => {

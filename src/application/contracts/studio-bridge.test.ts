@@ -151,12 +151,15 @@ import {
   APP_SETTINGS_GET_CHANNEL,
   APP_SETTINGS_SAVE_CHANNEL,
   SCHEDULE_CREATE_ITEM_CHANNEL,
+  SCHEDULE_LIST_CALENDAR_CHANNEL,
+  SCHEDULE_LIST_TODAY_CHANNEL,
   SCHEDULE_LIST_WORK_CHANNEL,
   SCHEDULE_RETIRE_ITEM_CHANNEL,
   SCHEDULE_SET_COMPLETION_CHANNEL,
   SCHEDULE_UPDATE_ITEM_CHANNEL,
   STRUCTURE_CREATE_ANCHORLESS_EVENT_CHANNEL,
   STRUCTURE_CREATE_EVENT_BLOCK_CHANNEL,
+  STRUCTURE_MOVE_EVENT_BLOCK_CHANNEL,
   STRUCTURE_CREATE_SCENE_OVERRIDE_CHANNEL,
   STRUCTURE_LINK_EVENT_SOURCE_CHANNEL,
   STRUCTURE_LIST_EVENT_BLOCKS_CHANNEL,
@@ -176,6 +179,8 @@ import {
   VERSION_LIST_WORK_SNAPSHOTS_CHANNEL,
   VERSION_RESTORE_DOCUMENT_REVISION_CHANNEL,
   WORKSPACE_FAVORITES_CHANNEL,
+  WORKSPACE_GET_DOCUMENT_COMPLETION_CHANNEL,
+  WORKSPACE_SET_DOCUMENT_COMPLETION_CHANNEL,
   WORKSPACE_COVERS_CHANNEL,
   WORKSPACE_SELECT_COVER_CHANNEL,
   WORKSPACE_RENAME_DOCUMENT_CHANNEL,
@@ -201,7 +206,7 @@ import {
   createApplyStartupRecoveryCommand,
 } from "../persistence/startup-recovery-contract";
 import type { StartupRecoveryCandidate } from "../persistence/prepare-startup-recovery";
-import { entityId } from "../../domain/writing";
+import { entityId, type EntityId } from "../../domain/writing";
 import {
   createDefaultManuscriptPreflightSettings,
   parseManuscriptPreflightProfile,
@@ -219,7 +224,76 @@ function createStudioBridge(
   );
 }
 
+function incompleteDocumentCompletion(
+  workId: EntityId<"Work">,
+  documentId: EntityId<"Document">,
+) {
+  return {
+    schemaVersion: 1 as const,
+    workId,
+    documentId,
+    revision: 0,
+    completedAt: null,
+    completedDate: null,
+    completedTimeZone: null,
+    completedDocumentRevisionId: null,
+    state: "incomplete" as const,
+    updatedAt: null,
+  };
+}
+
 describe("studio bridge contract", () => {
+  it("uses typed Document completion query and mutation channels", async () => {
+    const workId = entityId<"Work">(randomUUID());
+    const documentId = entityId<"Document">(randomUUID());
+    const documentRevisionId = entityId<"DocumentRevision">(randomUUID());
+    const projection = {
+      schemaVersion: 1 as const,
+      workId,
+      documentId,
+      revision: 1,
+      completedAt: "2026-08-21T15:00:00.000Z",
+      completedDate: "2026-08-22",
+      completedTimeZone: "Asia/Seoul",
+      completedDocumentRevisionId: documentRevisionId,
+      state: "current" as const,
+      updatedAt: "2026-08-21T15:00:00.000Z",
+    };
+    const invoke = vi.fn().mockResolvedValue(projection);
+    const bridge = createStudioBridge(invoke);
+
+    await expect(bridge.workspace.getDocumentCompletion({
+      schemaVersion: 1,
+      workId,
+      documentId,
+    })).resolves.toEqual(projection);
+    await expect(bridge.workspace.setDocumentCompletion({
+      schemaVersion: 1,
+      workId,
+      documentId,
+      expectedCompletionRevision: 0,
+      expectedDocumentRevisionId: documentRevisionId,
+      completed: true,
+    })).resolves.toEqual(projection);
+    expect(invoke).toHaveBeenNthCalledWith(
+      1,
+      WORKSPACE_GET_DOCUMENT_COMPLETION_CHANNEL,
+      { schemaVersion: 1, workId, documentId },
+    );
+    expect(invoke).toHaveBeenNthCalledWith(
+      2,
+      WORKSPACE_SET_DOCUMENT_COMPLETION_CHANNEL,
+      {
+        schemaVersion: 1,
+        workId,
+        documentId,
+        expectedCompletionRevision: 0,
+        expectedDocumentRevisionId: documentRevisionId,
+        completed: true,
+      },
+    );
+  });
+
   it("exposes renderer-safe ChatGPT OAuth status and login channels", async () => {
     const status = {
       schemaVersion: 1 as const,
@@ -705,8 +779,45 @@ describe("studio bridge contract", () => {
         completedEpisodeNumbers: [],
       },
     };
+    const calendarProjection = {
+      ...projection,
+      completedDocumentCount: 1,
+      occurrences: [
+        {
+          occurrenceId: "document-completion:document-a",
+          workId,
+          documentId: "document-a",
+          documentTitle: "5화",
+          kind: "document-completion" as const,
+          label: "5화 완료",
+          date: "2026-08-11",
+          time: null,
+          completed: true as const,
+          completedAt: timestamp,
+          completedDocumentRevisionId: "revision-a",
+        },
+        ...projection.occurrences,
+      ],
+    };
+    const todayProjection = {
+      schemaVersion: 1 as const,
+      date: "2026-08-11",
+      works: [
+        {
+          workId,
+          workTitle: "작품 A",
+          calendar: {
+            ...calendarProjection,
+            range: { from: "2026-08-11", to: "2026-08-11" },
+          },
+        },
+      ],
+      completedDocumentCount: 1,
+    };
     const invoke = vi.fn(async (channel: string) => {
       if (channel === SCHEDULE_LIST_WORK_CHANNEL) return projection;
+      if (channel === SCHEDULE_LIST_CALENDAR_CHANNEL) return calendarProjection;
+      if (channel === SCHEDULE_LIST_TODAY_CHANNEL) return todayProjection;
       if (
         channel === SCHEDULE_CREATE_ITEM_CHANNEL ||
         channel === SCHEDULE_UPDATE_ITEM_CHANNEL ||
@@ -726,6 +837,19 @@ describe("studio bridge contract", () => {
         range: projection.range,
       }),
     ).resolves.toEqual(projection);
+    await expect(
+      bridge.schedule.listCalendar({
+        schemaVersion: 1,
+        workId,
+        range: projection.range,
+      }),
+    ).resolves.toEqual(calendarProjection);
+    await expect(
+      bridge.schedule.listToday({
+        schemaVersion: 1,
+        date: "2026-08-11",
+      }),
+    ).resolves.toEqual(todayProjection);
     await expect(
       bridge.schedule.createItem({
         schemaVersion: 1,
@@ -772,6 +896,8 @@ describe("studio bridge contract", () => {
     ).resolves.toBeUndefined();
     expect(invoke.mock.calls.map(([channel]) => channel)).toEqual([
       SCHEDULE_LIST_WORK_CHANNEL,
+      SCHEDULE_LIST_CALENDAR_CHANNEL,
+      SCHEDULE_LIST_TODAY_CHANNEL,
       SCHEDULE_CREATE_ITEM_CHANNEL,
       SCHEDULE_UPDATE_ITEM_CHANNEL,
       SCHEDULE_SET_COMPLETION_CHANNEL,
@@ -1413,6 +1539,7 @@ describe("studio bridge contract", () => {
               title: documentTitle,
               currentRevisionId: revisionId,
               folderId: null,
+              completion: incompleteDocumentCompletion(workId, documentId),
             },
           ],
         },
@@ -1576,6 +1703,7 @@ describe("studio bridge contract", () => {
           title: randomUUID(),
           currentRevisionId: entityId<"DocumentRevision">(randomUUID()),
           folderId: null,
+          completion: incompleteDocumentCompletion(workId, documentId),
         }],
       }],
       activeWorkId: workId,
@@ -1617,6 +1745,7 @@ describe("studio bridge contract", () => {
           title: randomUUID(),
           currentRevisionId: entityId<"DocumentRevision">(randomUUID()),
           folderId,
+          completion: incompleteDocumentCompletion(workId, documentId),
         }],
       }],
       activeWorkId: workId,
@@ -1738,6 +1867,12 @@ describe("studio bridge contract", () => {
       eventSourceId: eventSource.eventSourceId,
       expectedRevision: 1,
     } as const;
+    const moveCommand = {
+      schemaVersion: 1,
+      workId,
+      eventBlockId: eventBlock.eventBlockId,
+      expectedRevision: 1,
+    } as const;
 
     await expect(
       bridge.structure.createEventBlock(command),
@@ -1745,6 +1880,14 @@ describe("studio bridge contract", () => {
     await expect(
       bridge.structure.createAnchorlessEvent(anchorlessCommand),
     ).resolves.toEqual(eventBlock);
+    await expect(
+      bridge.structure.moveEventBlock(moveCommand),
+    ).resolves.toEqual({
+      schemaVersion: 1,
+      workId,
+      eventBlocks: [eventBlock],
+      eventSources: [eventSource],
+    });
     await expect(
       bridge.structure.linkEventSource(linkCommand),
     ).resolves.toEqual(eventSource);
@@ -1769,6 +1912,10 @@ describe("studio bridge contract", () => {
     expect(invoke).toHaveBeenCalledWith(
       STRUCTURE_CREATE_ANCHORLESS_EVENT_CHANNEL,
       anchorlessCommand,
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_MOVE_EVENT_BLOCK_CHANNEL,
+      moveCommand,
     );
     expect(invoke).toHaveBeenCalledWith(
       STRUCTURE_LINK_EVENT_SOURCE_CHANNEL,

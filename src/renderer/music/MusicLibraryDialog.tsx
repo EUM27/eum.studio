@@ -2,6 +2,7 @@ import { Heart, ListPlus, Play, Search, Trash2, X } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import type { YouTubeVideoProjection } from "../../application/music/youtube-music";
+import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
 export function MusicLibraryDialog(input: {
   readonly connected: boolean;
@@ -23,6 +24,10 @@ export function MusicLibraryDialog(input: {
   const [query, setQuery] = useState("");
   const favoriteIds = new Set(input.favorites.map((video) => video.videoId));
   const queueIds = new Set(input.queue.map((video) => video.videoId));
+  const onBackdropPointerDown = useDialogDismiss({
+    disabled: input.searching || input.queueSaving,
+    onClose: input.onClose,
+  });
 
   function submit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
@@ -94,7 +99,10 @@ export function MusicLibraryDialog(input: {
   );
 
   return (
-    <div className="dialog-backdrop music-library-backdrop">
+    <div
+      className="dialog-backdrop music-library-backdrop"
+      onPointerDown={onBackdropPointerDown}
+    >
       <section
         aria-label="음악 선곡과 재생목록"
         className="music-library-dialog"

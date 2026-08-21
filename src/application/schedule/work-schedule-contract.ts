@@ -44,6 +44,15 @@ export type WorkScheduleDdayWorkload =
   | {
       readonly mode: "episodeNumber";
       readonly targetEpisodeNumber: number;
+    }
+  | {
+      readonly mode: "additionalCompletedDocuments";
+      readonly targetCount: number;
+      readonly baselineCompletedCount: number;
+    }
+  | {
+      readonly mode: "totalCompletedDocuments";
+      readonly targetCount: number;
     };
 
 export type WorkScheduleDdayInput = {
@@ -312,6 +321,32 @@ export function parseWorkScheduleDdayWorkload(
         targetEpisodeNumber: positiveInteger(
           input.targetEpisodeNumber,
           "D-DAY workload.targetEpisodeNumber",
+        ),
+      });
+    case "additionalCompletedDocuments":
+      exact(
+        input,
+        ["mode", "targetCount", "baselineCompletedCount"],
+        "D-DAY workload",
+      );
+      return Object.freeze({
+        mode: "additionalCompletedDocuments",
+        targetCount: positiveInteger(
+          input.targetCount,
+          "D-DAY workload.targetCount",
+        ),
+        baselineCompletedCount: nonNegativeInteger(
+          input.baselineCompletedCount,
+          "D-DAY workload.baselineCompletedCount",
+        ),
+      });
+    case "totalCompletedDocuments":
+      exact(input, ["mode", "targetCount"], "D-DAY workload");
+      return Object.freeze({
+        mode: "totalCompletedDocuments",
+        targetCount: positiveInteger(
+          input.targetCount,
+          "D-DAY workload.targetCount",
         ),
       });
     default:
