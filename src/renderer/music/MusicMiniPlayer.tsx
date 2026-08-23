@@ -31,6 +31,15 @@ import type { YouTubeMusicProfile } from "../../application/music/youtube-music"
 import type {
   YouTubeMusicConnectionStatus,
 } from "../../application/music/youtube-music-connection";
+import {
+  createPlaybackOrder,
+  endedPlaybackStep,
+  nextPlaybackStep,
+  previousPlaybackStep,
+  withPlaybackShuffle,
+  type PlaybackOrder,
+  type RepeatMode,
+} from "./playback-order";
 
 type YouTubePlayer = {
   readonly destroy: () => void;
@@ -69,10 +78,9 @@ type YouTubeWindow = Window & {
 
 export type MusicPlaybackRequest = {
   readonly nonce: number;
+  readonly startIndex?: number;
   readonly tracks: readonly MusicTrackProjection[];
 };
-
-type RepeatMode = "off" | "all" | "one";
 
 let youtubeApiPromise: Promise<void> | null = null;
 let youtubeApiUrl: string | null = null;
@@ -122,6 +130,8 @@ export function MusicMiniPlayer(input: {
   readonly connection: YouTubeMusicConnectionStatus | null;
   readonly focusText: string | null;
   readonly onOpenLibrary: () => void;
+  readonly onPlayPlaylist: (startIndex: number) => void;
+  readonly playlist: readonly MusicTrackProjection[];
   readonly playRequest: MusicPlaybackRequest | null;
   readonly profile: YouTubeMusicProfile | null;
 }) {
@@ -131,7 +141,12 @@ export function MusicMiniPlayer(input: {
   const queueRef = useRef<readonly MusicTrackProjection[]>([]);
   const currentIndexRef = useRef(0);
   const volumeRef = useRef(70);
+  const previousAudibleVolumeRef = useRef(70);
   const onEndedRef = useRef<() => void>(() => undefined);
+  const playbackOrderRef = useRef<PlaybackOrder>(
+    createPlaybackOrder(0, 0, false),
+  );
+  const shuffleRef = useRef(false);
   const lastNonceRef = useRef(0);
   const localPlaybackNonceRef = useRef(0);
   const [queue, setQueue] = useState<readonly MusicTrackProjection[]>([]);
@@ -143,7 +158,7 @@ export function MusicMiniPlayer(input: {
   const [volume, setVolume] = useState(70);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [repeatMode, setRepeatMode] = useState<RepeatMode>("all");
+  const [repeatMode, setRepeatMode] = useState<RepeatMode>("off");
   const [shuffle, setShuffle] = useState(false);
   const [localPlaybackSource, setLocalPlaybackSource] = useState<Readonly<{
     nonce: number;
@@ -155,6 +170,10 @@ export function MusicMiniPlayer(input: {
   const videoAvailable = currentTrack !== null && (
     !isLocalMediaTrack(currentTrack) || currentTrack.mediaKind === "video"
   );
+  const hasPlaylist = input.playlist.length > 0;
+  const availableTrackCount = queue.length > 0
+    ? queue.length
+    : input.playlist.length;
 
   const ensurePlayer = useCallback(async (): Promise<YouTubePlayer> => {
     if (playerRef.current !== null) return playerRef.current;
@@ -196,11 +215,10 @@ export function MusicMiniPlayer(input: {
 
   const loadQueueIndex = useCallback(async (nextIndex: number): Promise<void> => {
     const tracks = queueRef.current;
-    if (tracks.length === 0) return;
-    const normalized = (nextIndex + tracks.length) % tracks.length;
-    const track = tracks[normalized]!;
-    currentIndexRef.current = normalized;
-    setCurrentIndex(normalized);
+    if (nextIndex < 0 || nextIndex >= tracks.length) return;
+    const track = tracks[nextIndex]!;
+    currentIndexRef.current = nextIndex;
+    setCurrentIndex(nextIndex);
     setCurrentTime(0);
     setDuration(0);
     setLoading(true);
@@ -242,36 +260,31 @@ export function MusicMiniPlayer(input: {
     }
   }, [ensurePlayer]);
 
-  const shuffledIndex = useCallback((): number => {
-    const tracks = queueRef.current;
-    if (tracks.length <= 1) return currentIndexRef.current;
-    const candidate = Math.floor(Math.random() * (tracks.length - 1));
-    return candidate >= currentIndexRef.current ? candidate + 1 : candidate;
-  }, []);
-
   const nextTrack = useCallback(() => {
-    const nextIndex = shuffle
-      ? shuffledIndex()
-      : currentIndexRef.current + 1;
-    void loadQueueIndex(nextIndex);
-  }, [loadQueueIndex, shuffle, shuffledIndex]);
+    const step = nextPlaybackStep(
+      playbackOrderRef.current,
+      repeatMode === "one" ? "all" : repeatMode,
+    );
+    if (step === null) return;
+    playbackOrderRef.current = step.state;
+    void loadQueueIndex(step.index);
+  }, [loadQueueIndex, repeatMode]);
 
   useEffect(() => {
     onEndedRef.current = () => {
-      const tracks = queueRef.current;
-      if (tracks.length === 0) return;
-      if (repeatMode === "one") {
-        void loadQueueIndex(currentIndexRef.current);
-        return;
-      }
-      if (repeatMode === "off" && currentIndexRef.current === tracks.length - 1) {
+      const step = endedPlaybackStep(
+        playbackOrderRef.current,
+        repeatMode,
+      );
+      if (step === null) {
         setPaused(true);
         setCurrentTime(duration);
         return;
       }
-      nextTrack();
+      playbackOrderRef.current = step.state;
+      void loadQueueIndex(step.index);
     };
-  }, [duration, loadQueueIndex, nextTrack, repeatMode]);
+  }, [duration, loadQueueIndex, repeatMode]);
 
   useEffect(() => {
     const request = input.playRequest;
@@ -284,14 +297,24 @@ export function MusicMiniPlayer(input: {
     }
     lastNonceRef.current = request.nonce;
     queueRef.current = request.tracks;
-    currentIndexRef.current = 0;
+    const startIndex = Math.min(
+      Math.max(Math.trunc(request.startIndex ?? 0), 0),
+      request.tracks.length - 1,
+    );
+    playbackOrderRef.current = createPlaybackOrder(
+      request.tracks.length,
+      startIndex,
+      shuffleRef.current,
+    );
+    currentIndexRef.current = startIndex;
     setQueue(request.tracks);
-    setCurrentIndex(0);
-    void loadQueueIndex(0);
+    setCurrentIndex(startIndex);
+    void loadQueueIndex(startIndex);
   }, [input.playRequest, loadQueueIndex]);
 
   useEffect(() => {
     volumeRef.current = volume;
+    if (volume > 0) previousAudibleVolumeRef.current = volume;
     playerRef.current?.setVolume(volume);
     if (localMediaRef.current !== null) {
       localMediaRef.current.volume = volume / 100;
@@ -325,7 +348,10 @@ export function MusicMiniPlayer(input: {
   }, []);
 
   const togglePlayback = () => {
-    if (currentTrack === null) return;
+    if (currentTrack === null) {
+      if (hasPlaylist) input.onPlayPlaylist(0);
+      return;
+    }
     if (isLocalMediaTrack(currentTrack)) {
       const media = localMediaRef.current;
       if (media === null) return;
@@ -349,7 +375,16 @@ export function MusicMiniPlayer(input: {
       setCurrentTime(0);
       return;
     }
-    void loadQueueIndex(currentIndexRef.current - 1);
+    const step = previousPlaybackStep(
+      playbackOrderRef.current,
+      repeatMode === "one" ? "all" : repeatMode,
+    );
+    if (step === null) {
+      seek(0);
+      return;
+    }
+    playbackOrderRef.current = step.state;
+    void loadQueueIndex(step.index);
   };
 
   const stopPlayback = () => {
@@ -364,6 +399,7 @@ export function MusicMiniPlayer(input: {
     }
     setLocalPlaybackSource(null);
     queueRef.current = [];
+    playbackOrderRef.current = createPlaybackOrder(0, 0, shuffleRef.current);
     setQueue([]);
     setCurrentIndex(0);
     setCurrentTime(0);
@@ -384,8 +420,37 @@ export function MusicMiniPlayer(input: {
   };
 
   const cycleRepeatMode = () => {
+    if (shuffleRef.current) {
+      shuffleRef.current = false;
+      setShuffle(false);
+      playbackOrderRef.current = withPlaybackShuffle(
+        playbackOrderRef.current,
+        false,
+      );
+      setRepeatMode("one");
+      return;
+    }
     setRepeatMode((current) =>
       current === "off" ? "all" : current === "all" ? "one" : "off"
+    );
+  };
+
+  const toggleShuffle = () => {
+    setShuffle((current) => {
+      const next = !current;
+      shuffleRef.current = next;
+      playbackOrderRef.current = withPlaybackShuffle(
+        playbackOrderRef.current,
+        next,
+      );
+      if (next) setRepeatMode("all");
+      return next;
+    });
+  };
+
+  const toggleMute = () => {
+    setVolume((current) =>
+      current === 0 ? previousAudibleVolumeRef.current : 0
     );
   };
 
@@ -442,10 +507,14 @@ export function MusicMiniPlayer(input: {
 
       <div className="music-mini-controls">
         <button
-          aria-label={shuffle ? "셔플 끄기" : "셔플 켜기"}
+          aria-label={
+            shuffle ? "랜덤 전체 반복 끄기" : "랜덤 전체 반복 켜기"
+          }
           aria-pressed={shuffle}
-          disabled={currentTrack === null || queue.length < 2}
-          onClick={() => setShuffle((current) => !current)}
+          className={shuffle ? "is-active" : undefined}
+          disabled={availableTrackCount < 2}
+          onClick={toggleShuffle}
+          title={shuffle ? "랜덤 전체 반복 켜짐" : "랜덤 전체 반복"}
           type="button"
         >
           <Shuffle aria-hidden="true" size={13} />
@@ -461,7 +530,7 @@ export function MusicMiniPlayer(input: {
         <button
           aria-label={paused ? "음악 재생" : "음악 일시정지"}
           className="music-mini-primary-control"
-          disabled={currentTrack === null || loading}
+          disabled={(!hasPlaylist && currentTrack === null) || loading}
           onClick={togglePlayback}
           type="button"
         >
@@ -484,8 +553,14 @@ export function MusicMiniPlayer(input: {
               : repeatMode === "one" ? "한 곡 반복" : "반복 끔"
           }
           aria-pressed={repeatMode !== "off"}
-          disabled={currentTrack === null}
+          className={repeatMode === "off" ? undefined : "is-active"}
+          disabled={currentTrack === null && !hasPlaylist}
           onClick={cycleRepeatMode}
+          title={
+            repeatMode === "all"
+              ? "전체 반복 켜짐"
+              : repeatMode === "one" ? "한 곡 반복 켜짐" : "반복 끔"
+          }
           type="button"
         >
           {repeatMode === "one"
@@ -500,10 +575,18 @@ export function MusicMiniPlayer(input: {
       {currentTrack !== null && input.focusText !== null && (
         <span className="music-mini-focus">{input.focusText}</span>
       )}
-      <label className="music-mini-volume">
-        {volume === 0
-          ? <VolumeX aria-hidden="true" size={13} />
-          : <Volume2 aria-hidden="true" size={13} />}
+      <div className="music-mini-volume">
+        <button
+          aria-label={volume === 0 ? "음소거 해제" : "음소거"}
+          aria-pressed={volume === 0}
+          onClick={toggleMute}
+          title={volume === 0 ? "음소거 해제" : "음소거"}
+          type="button"
+        >
+          {volume === 0
+            ? <VolumeX aria-hidden="true" size={13} />
+            : <Volume2 aria-hidden="true" size={13} />}
+        </button>
         <input
           aria-label="음량"
           max="100"
@@ -513,7 +596,7 @@ export function MusicMiniPlayer(input: {
           type="range"
           value={volume}
         />
-      </label>
+      </div>
       <div className="music-mini-entry-actions">
         <button
           aria-label={showVideo ? "동영상 숨기기" : "동영상 표시"}
@@ -536,10 +619,10 @@ export function MusicMiniPlayer(input: {
         <button
           aria-label="선곡·재생목록 열기"
           onClick={input.onOpenLibrary}
+          title="재생목록"
           type="button"
         >
           <ListMusic aria-hidden="true" size={14} />
-          <span>목록</span>
         </button>
       </div>
       <div

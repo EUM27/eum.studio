@@ -6298,7 +6298,9 @@ textarea {
 }
 
 .studio-app-shell .music-mini-controls button,
-.studio-app-shell .music-mini-entry-actions button {
+.studio-app-shell .music-mini-entry-actions button,
+.studio-app-shell .music-mini-volume button {
+  position: relative;
   width: 24px;
   min-width: 24px;
   height: 24px;
@@ -6315,9 +6317,52 @@ textarea {
 
 .studio-app-shell .music-mini-controls button:hover:not(:disabled),
 .studio-app-shell .music-mini-entry-actions button:hover:not(:disabled),
-.studio-app-shell .music-mini-controls button[aria-pressed="true"] {
+.studio-app-shell .music-mini-volume button:hover:not(:disabled) {
   color: var(--eum-text);
   background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .music-mini-controls button.is-active,
+.studio-app-shell .music-mini-controls button[aria-pressed="true"],
+.studio-app-shell .music-mini-volume button[aria-pressed="true"] {
+  color: var(--eum-accent);
+  background: var(--eum-accent-soft);
+  box-shadow: inset 0 0 0 1px color-mix(
+    in srgb,
+    var(--eum-accent) 72%,
+    transparent
+  );
+}
+
+.studio-app-shell .music-mini-controls button.is-active::after {
+  width: 4px;
+  height: 4px;
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  border-radius: 999px;
+  background: var(--eum-accent);
+  content: "";
+}
+
+.studio-app-shell[data-starlight-theme]
+  .app-topbar-music
+  .music-mini-player
+  .music-mini-controls
+  button.is-active,
+.studio-app-shell[data-starlight-theme]
+  .app-topbar-music
+  .music-mini-player
+  .music-mini-volume
+  button[aria-pressed="true"] {
+  color: var(--starlight-accent);
+  border-color: var(--starlight-accent);
+  background: color-mix(
+    in srgb,
+    var(--starlight-accent) 20%,
+    var(--starlight-input)
+  );
+  box-shadow: inset 0 0 0 1px var(--starlight-accent);
 }
 
 .studio-app-shell .music-mini-controls .music-mini-primary-control,
@@ -6351,8 +6396,8 @@ textarea {
 }
 
 .studio-app-shell .music-mini-entry-actions button:last-child {
-  width: auto;
-  padding: 0 7px;
+  width: 24px;
+  padding: 0;
 }
 
 .studio-app-shell .music-mini-time,
@@ -6369,6 +6414,10 @@ textarea {
   gap: 4px;
   color: var(--eum-text-muted);
   font-size: 8px;
+}
+
+.studio-app-shell .music-mini-volume button {
+  border: 0;
 }
 
 .studio-app-shell .music-mini-volume input {
@@ -6440,7 +6489,7 @@ textarea {
   .studio-app-shell .music-mini-controls button:first-child,
   .studio-app-shell .music-mini-controls button:last-child,
   .studio-app-shell .music-mini-entry-actions button:not(:last-child) {
-    display: none;
+    display: inline-flex;
   }
 
   .studio-app-shell .music-mini-player {
@@ -11129,5 +11178,270 @@ textarea {
 
   .studio-app-shell .music-library-columns {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The music surface is a compact player palette, not a workspace-sized modal. */
+.studio-app-shell .music-library-backdrop {
+  padding: calc(var(--eum-topbar-height) + 8px) 12px 12px;
+  place-items: start end;
+  background: transparent;
+  backdrop-filter: none;
+  pointer-events: none;
+}
+
+.studio-app-shell .music-library-dialog {
+  width: min(420px, calc(100vw - 24px));
+  max-height: min(560px, calc(100vh - var(--eum-topbar-height) - 20px));
+  border-radius: 11px;
+  box-shadow: 0 16px 44px rgb(0 0 0 / 24%);
+  pointer-events: auto;
+}
+
+.studio-app-shell .music-library-dialog > header {
+  min-height: 38px;
+  padding: 6px 8px 6px 10px;
+}
+
+.studio-app-shell .music-library-dialog > header > div {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.studio-app-shell .music-library-dialog > header strong {
+  font-size: 12px;
+}
+
+.studio-app-shell .music-library-dialog > header span {
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  text-align: center;
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .music-library-dialog > header button,
+.studio-app-shell .music-library-tabs button,
+.studio-app-shell .music-library-content section > header button,
+.studio-app-shell .music-library-track-actions button,
+.studio-app-shell .music-library-register > button,
+.studio-app-shell .music-library-search button {
+  width: 27px;
+  min-width: 27px;
+  height: 27px;
+  min-height: 27px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  color: var(--eum-text-muted);
+  background: var(--eum-panel);
+}
+
+.studio-app-shell .music-library-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--eum-line);
+  background: color-mix(in srgb, var(--eum-panel) 94%, var(--eum-bg));
+}
+
+.studio-app-shell .music-library-tabs button {
+  width: auto;
+  display: inline-flex;
+  justify-content: center;
+  gap: 5px;
+}
+
+.studio-app-shell .music-library-tabs button span {
+  min-width: 14px;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.studio-app-shell .music-library-tabs button[aria-selected="true"] {
+  color: var(--eum-accent);
+  border-color: color-mix(in srgb, var(--eum-accent) 66%, var(--eum-line));
+  background: var(--eum-accent-soft);
+  box-shadow: inset 0 -2px 0 var(--eum-accent);
+}
+
+.studio-app-shell .music-library-register {
+  grid-template-columns: minmax(0, 1fr) 27px;
+  gap: 6px;
+  padding: 6px 8px;
+}
+
+.studio-app-shell .music-library-register fieldset {
+  justify-self: start;
+}
+
+.studio-app-shell .music-library-register fieldset label {
+  min-height: 25px;
+  padding: 0 7px;
+  font-size: 9px;
+}
+
+.studio-app-shell .music-library-connection {
+  min-height: 34px;
+  padding: 5px 8px;
+  font-size: 10px;
+}
+
+.studio-app-shell .music-library-connection button {
+  min-height: 26px;
+  padding: 0 8px;
+}
+
+.studio-app-shell .music-library-search {
+  gap: 5px;
+  padding: 6px 8px;
+}
+
+.studio-app-shell .dialog-backdrop .music-library-search input {
+  min-height: 29px;
+  height: 29px;
+  padding: 4px 8px;
+  font-size: 10px;
+}
+
+.studio-app-shell .music-library-error {
+  padding: 5px 8px;
+  font-size: 10px;
+}
+
+.studio-app-shell .music-library-content {
+  flex: 1 1 auto;
+  min-height: 150px;
+  display: grid;
+  overflow: hidden;
+}
+
+.studio-app-shell .music-library-content > section {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: 8px;
+}
+
+.studio-app-shell .music-library-content section > header {
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+
+.studio-app-shell .music-library-content section > header h3 {
+  margin: 0;
+  font-size: 11px;
+}
+
+.studio-app-shell .music-library-content section > header > span,
+.studio-app-shell .music-library-content section > header small {
+  color: var(--eum-text-muted);
+  font-size: 9px;
+}
+
+.studio-app-shell .music-library-content section > header button:first-of-type {
+  margin-left: auto;
+}
+
+.studio-app-shell .music-library-content section > p {
+  margin: 10px 2px;
+  color: var(--eum-text-muted);
+  font-size: 10px;
+}
+
+.studio-app-shell .music-library-content :is(ul, ol) {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  margin: 0;
+  padding: 0 3px 0 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  scrollbar-gutter: stable;
+}
+
+.studio-app-shell .music-library-content li {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid var(--eum-line);
+  border-radius: 8px;
+  background: var(--eum-bg);
+}
+
+.studio-app-shell .music-library-content li img,
+.studio-app-shell .music-library-content .music-library-media-icon {
+  width: 36px;
+  height: 36px;
+  grid-row: auto;
+  border-radius: 6px;
+}
+
+.studio-app-shell .music-library-track-copy {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.studio-app-shell .music-library-track-copy :is(strong, small) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-app-shell .music-library-track-copy strong {
+  font-size: 10.5px;
+}
+
+.studio-app-shell .music-library-track-copy small {
+  color: var(--eum-text-muted);
+  font-size: 8.5px;
+}
+
+.studio-app-shell .music-library-track-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 2px;
+}
+
+.studio-app-shell .music-library-track-actions button {
+  width: 25px;
+  min-width: 25px;
+  height: 25px;
+  min-height: 25px;
+}
+
+.studio-app-shell .music-library-track-actions button[aria-pressed="true"] {
+  color: var(--eum-accent);
+  border-color: var(--eum-accent);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .music-library-dialog button:hover:not(:disabled) {
+  color: var(--eum-text);
+  border-color: var(--eum-accent);
+}
+
+@media (max-width: 520px) {
+  .studio-app-shell .music-library-backdrop {
+    padding: calc(var(--eum-topbar-height) + 5px) 6px 6px;
+  }
+
+  .studio-app-shell .music-library-dialog {
+    width: calc(100vw - 12px);
   }
 }

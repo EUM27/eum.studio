@@ -33,7 +33,10 @@ describe("MusicLibraryDialog", () => {
       onAddToQueue: () => undefined,
       onClose: () => undefined,
       onOpenConnectionSettings: () => undefined,
+      onClearQueue: () => undefined,
+      onMoveQueueTrack: () => undefined,
       onPlayQueue: () => undefined,
+      onPlayQueueTrack: () => undefined,
       onPlayTrack: () => undefined,
       onRegisterLocalMedia: () => undefined,
       onRemoveFromQueue: () => undefined,
@@ -46,17 +49,15 @@ describe("MusicLibraryDialog", () => {
       searching: false,
     }));
 
-    expect(markup).toContain("미디어 라이브러리");
-    expect(markup).toContain('aria-label="원본 위치 연결"');
-    expect(markup).toContain('aria-label="앱에 가져오기"');
-    expect(markup).toMatch(/aria-label="원본 위치 연결"[^>]*checked/u);
-    expect(markup).toContain("미디어 파일 등록");
-    expect(markup).toContain('aria-label="내 미디어"');
-    expect(markup).toContain("rain.mp3");
-    expect(markup).toContain('aria-label="음악 검색어"');
+    expect(markup).toContain('aria-label="재생목록 탭"');
+    expect(markup).toContain('aria-label="내 미디어 탭"');
+    expect(markup).toContain('aria-label="YouTube 검색 탭"');
+    expect(markup).toContain('aria-label="즐겨찾기 탭"');
     expect(markup).toContain('aria-label="재생목록"');
-    expect(markup).toContain('aria-label="즐겨찾기"');
-    expect(markup).toContain("전체 재생");
-    expect(markup).toContain("작품에 저장됨");
+    expect(markup).toContain('aria-label="전체 재생"');
+    expect(markup).toContain("집중 음악 위로 이동");
+    expect(markup).toContain("집중 음악 아래로 이동");
+    expect(markup).toContain("재생목록 비우기");
+    expect(markup).toContain("저장됨");
   });
 });

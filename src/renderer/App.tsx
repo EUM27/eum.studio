@@ -4840,11 +4840,16 @@ export const App = forwardRef<
 
   const playMusicQueue = useCallback((
     tracks: readonly MusicTrackProjection[],
+    startIndex = 0,
   ): boolean => {
     if (tracks.length === 0) return false;
     musicPlaybackNonceRef.current += 1;
     setMusicPlaybackRequest(Object.freeze({
       nonce: musicPlaybackNonceRef.current,
+      startIndex: Math.min(
+        Math.max(Math.trunc(startIndex), 0),
+        tracks.length - 1,
+      ),
       tracks: Object.freeze([...tracks]),
     }));
     return true;
@@ -14310,6 +14315,10 @@ export const App = forwardRef<
                 setMusicLibraryError(null);
                 setMusicLibraryOpen(true);
               }}
+              onPlayPlaylist={(startIndex) => {
+                playMusicQueue(musicLibraryQueue, startIndex);
+              }}
+              playlist={musicLibraryQueue}
               playRequest={musicPlaybackRequest}
               profile={youtubeMusicProfile}
             />,
@@ -14659,11 +14668,42 @@ export const App = forwardRef<
                 setMusicLibraryOpen(false);
                 onOpenSettings?.();
               }}
+              onClearQueue={() => {
+                void saveMusicLibraryQueue(Object.freeze([]));
+              }}
+              onMoveQueueTrack={(index, direction) => {
+                const targetIndex = index + direction;
+                if (
+                  index < 0 ||
+                  index >= musicLibraryQueue.length ||
+                  targetIndex < 0 ||
+                  targetIndex >= musicLibraryQueue.length
+                ) {
+                  return;
+                }
+                const nextQueue = [...musicLibraryQueue];
+                [nextQueue[index], nextQueue[targetIndex]] = [
+                  nextQueue[targetIndex]!,
+                  nextQueue[index]!,
+                ];
+                void saveMusicLibraryQueue(Object.freeze(nextQueue));
+              }}
               onPlayQueue={() => {
                 playMusicQueue(musicLibraryQueue);
               }}
+              onPlayQueueTrack={(index) => {
+                playMusicQueue(musicLibraryQueue, index);
+              }}
               onPlayTrack={(track) => {
-                playMusicQueue([track]);
+                const queuedIndex = musicLibraryQueue.findIndex(
+                  (entry) =>
+                    musicTrackIdentity(entry) === musicTrackIdentity(track),
+                );
+                if (queuedIndex >= 0) {
+                  playMusicQueue(musicLibraryQueue, queuedIndex);
+                } else {
+                  playMusicQueue([track]);
+                }
               }}
               onRegisterLocalMedia={(storageMode) => {
                 void registerLocalMedia(storageMode);

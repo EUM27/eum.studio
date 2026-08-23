@@ -118,6 +118,7 @@ async function installFakeYouTubePlayer(targetPage: Page): Promise<void> {
   await targetPage.evaluate(() => {
     const testWindow = window as unknown as {
       YT?: unknown;
+      __youtubePlayerEnd?: () => void;
       __youtubePlayerCalls?: string[];
     };
     const calls: string[] = [];
@@ -139,6 +140,9 @@ async function installFakeYouTubePlayer(targetPage: Page): Promise<void> {
           },
         ) {
           this.events = options.events;
+          testWindow.__youtubePlayerEnd = () => {
+            this.events.onStateChange({ data: 0 });
+          };
           window.setTimeout(() => this.events.onReady(), 0);
         }
 
@@ -4869,6 +4873,10 @@ test("uses local inspiration draws and keeps GPT scene work separate", async () 
       name: "음악 선곡과 재생목록",
       exact: true,
     });
+    await musicLibrary.getByRole("tab", {
+      name: "YouTube 검색 탭",
+      exact: true,
+    }).click();
     await musicLibrary.getByLabel("음악 검색어", { exact: true })
       .fill(generalMusicQuery);
     await musicLibrary.getByRole("button", { name: "검색", exact: true })
@@ -4892,10 +4900,18 @@ test("uses local inspiration draws and keeps GPT scene work separate", async () 
       name: "장면 큐 2 재생목록에 추가",
       exact: true,
     }).click();
+    await musicLibrary.getByRole("tab", {
+      name: "재생목록 탭",
+      exact: true,
+    }).click();
     await expect(musicLibrary.getByRole("region", {
       name: "재생목록",
       exact: true,
     })).toContainText("장면 큐 1");
+    await musicLibrary.getByRole("tab", {
+      name: "YouTube 검색 탭",
+      exact: true,
+    }).click();
     await generalMusicResult.getByRole("button", {
       name: "장면 큐 1 선호 영상 저장",
       exact: true,
@@ -4932,6 +4948,10 @@ test("uses local inspiration draws and keeps GPT scene work separate", async () 
         exact: true,
       }).click();
     }
+    await musicLibrary.getByRole("tab", {
+      name: "재생목록 탭",
+      exact: true,
+    }).click();
     const curatedQueue = musicLibrary.getByRole("region", {
       name: "재생목록",
       exact: true,
@@ -4940,6 +4960,29 @@ test("uses local inspiration draws and keeps GPT scene work separate", async () 
     await expect(curatedQueue).toContainText("장면 큐 1");
     await expect(curatedQueue).toContainText("장면 큐 2");
     await expect(curatedQueue).toContainText("장면 큐 3");
+    const queueTwo = curatedQueue.getByRole("listitem")
+      .filter({ hasText: "장면 큐 2" });
+    await queueTwo.getByRole("button", {
+      name: "장면 큐 2 위로 이동",
+      exact: true,
+    }).click();
+    await expect.poll(async () => page.evaluate(async () => {
+      const catalog = await window.eumStudio.workspace.getCatalog();
+      if (catalog.activeWorkId === null) return [];
+      const settings = await window.eumStudio.settings.getWorkMusic({
+        schemaVersion: 1,
+        workId: catalog.activeWorkId,
+      });
+      return settings.settings.playlistTracks.slice(0, 2).map((track) =>
+        "videoId" in track ? track.videoId : null
+      );
+    })).toEqual(["queue-video-2", "queue-video-1"]);
+    const moveQueueTwoDown = queueTwo.getByRole("button", {
+      name: "장면 큐 2 아래로 이동",
+      exact: true,
+    });
+    await expect(moveQueueTwoDown).toBeEnabled();
+    await moveQueueTwoDown.click();
     await expect.poll(() => curatedQueue.locator(
       ".music-library-scroll-list",
     ).evaluate((list) => ({
@@ -4947,9 +4990,12 @@ test("uses local inspiration draws and keeps GPT scene work separate", async () 
       overflowY: getComputedStyle(list).overflowY,
       scrollHeight: list.scrollHeight,
     }))).toMatchObject({ overflowY: "auto" });
-    expect(await curatedQueue.locator(".music-library-scroll-list").evaluate(
-      (list) => list.scrollHeight > list.clientHeight,
-    )).toBe(true);
+    const compactLibraryBounds = await musicLibrary.boundingBox();
+    if (compactLibraryBounds === null) {
+      throw new Error("Expected compact music library bounds");
+    }
+    expect(compactLibraryBounds.width).toBeLessThanOrEqual(422);
+    expect(compactLibraryBounds.height).toBeLessThanOrEqual(562);
     await expect.poll(async () => page.evaluate(async () => {
       const catalog = await window.eumStudio.workspace.getCatalog();
       if (catalog.activeWorkId === null) return [];
@@ -12707,6 +12753,247 @@ test("opens manuscript search with Ctrl+F and replaces one or all matches", asyn
   }
 });
 
+test("runs selected, one-track, full, and random-repeat playback through the full queue", async () => {
+  test.setTimeout(120_000);
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "eum-studio-playback-modes-e2e-"),
+  );
+  const searches: string[] = [];
+  const upstream = createServer((request, response) => {
+    const requestUrl = new URL(request.url ?? "/", "http://127.0.0.1");
+    if (request.method === "GET" && requestUrl.pathname === "/youtube/v3/search") {
+      searches.push(requestUrl.searchParams.get("q") ?? "");
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({
+        items: [1, 2, 3].map((index) => ({
+          id: { videoId: `mode-video-${index}` },
+          snippet: {
+            title: `모드 곡 ${index}`,
+            channelTitle: "모드 테스트",
+            thumbnails: {},
+          },
+        })),
+      }));
+      return;
+    }
+    response.writeHead(404);
+    response.end();
+  });
+  await new Promise<void>((resolve, reject) => {
+    upstream.once("error", reject);
+    upstream.listen(0, "127.0.0.1", () => resolve());
+  });
+  const address = upstream.address();
+  if (address === null || typeof address === "string") {
+    throw new Error("Expected a loopback YouTube server");
+  }
+  const userDataPath = path.join(directory, "electron-user-data");
+  const electronApp = await electron.launch({
+    args: [".", `--user-data-dir=${userDataPath}`],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      EUM_STUDIO_TEST_EPHEMERAL_WORKSPACE: "0",
+      EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH: directory,
+      EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+      EUM_STUDIO_YOUTUBE_MUSIC_PROFILE: JSON.stringify({
+        schemaVersion: 1,
+        providerId: "youtube",
+        displayName: "YouTube",
+        searchApiBaseUrl: `http://127.0.0.1:${address.port}/youtube/v3`,
+        iframeApiUrl: "https://www.youtube.com/iframe_api",
+        watchBaseUrl: "https://www.youtube.com/watch",
+        playerReferer: "https://eum-studio/",
+        searchLimit: 6,
+        videosPerOption: 3,
+        requestTimeoutMs: 10_000,
+      }),
+    },
+  });
+
+  try {
+    const page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await installFakeYouTubePlayer(page);
+    await page.getByRole("button", { name: "작품 만들기", exact: true }).click();
+    const createWorkDialog = page.getByRole("dialog", { name: "새 작품 만들기" });
+    await createWorkDialog.getByLabel("작품 제목").fill(randomUUID());
+    await createWorkDialog.getByLabel("첫 회차 제목").fill(randomUUID());
+    await createWorkDialog.getByRole("button", {
+      name: "작품 만들기",
+      exact: true,
+    }).click();
+    await page.getByRole("button", { name: "앱 설정 열기", exact: true }).click();
+    const settingsDialog = page.getByRole("dialog", { name: "앱 설정" });
+    await settingsDialog.getByLabel("YouTube Data API 키").fill("mode-key");
+    await settingsDialog.getByRole("button", { name: "저장", exact: true })
+      .click();
+    await expect(settingsDialog).toBeHidden();
+
+    const player = page.getByRole("region", { name: "음악 플레이어" });
+    await player.getByRole("button", {
+      name: "선곡·재생목록 열기",
+      exact: true,
+    }).click();
+    const library = page.getByRole("dialog", {
+      name: "음악 선곡과 재생목록",
+      exact: true,
+    });
+    const libraryBounds = await library.boundingBox();
+    if (libraryBounds === null) throw new Error("Expected music palette bounds");
+    expect(libraryBounds.width).toBeLessThanOrEqual(422);
+    expect(libraryBounds.height).toBeLessThanOrEqual(562);
+    await library.getByRole("tab", {
+      name: "YouTube 검색 탭",
+      exact: true,
+    }).click();
+    await library.getByLabel("음악 검색어", { exact: true }).fill("모드 재생");
+    await library.getByRole("button", { name: "검색", exact: true }).click();
+    await expect.poll(() => searches.length).toBe(1);
+    expect(searches[0]).toContain("모드 재생");
+    const results = library.getByRole("region", {
+      name: "검색 결과",
+      exact: true,
+    });
+    for (const index of [1, 2, 3]) {
+      await results.getByRole("button", {
+        name: `모드 곡 ${index} 재생목록에 추가`,
+        exact: true,
+      }).click();
+    }
+    await library.getByRole("tab", {
+      name: "재생목록 탭",
+      exact: true,
+    }).click();
+    const queue = library.getByRole("region", {
+      name: "재생목록",
+      exact: true,
+    });
+    await expect(queue.getByRole("listitem")).toHaveCount(3);
+
+    const secondTrack = queue.getByRole("listitem").filter({
+      hasText: "모드 곡 2",
+    });
+    await secondTrack.getByRole("button", {
+      name: "모드 곡 2 위로 이동",
+      exact: true,
+    }).click();
+    await expect(queue.getByRole("listitem").first()).toContainText("모드 곡 2");
+    await secondTrack.getByRole("button", {
+      name: "모드 곡 2 아래로 이동",
+      exact: true,
+    }).click();
+    await expect(queue.getByRole("listitem").nth(1)).toContainText("모드 곡 2");
+
+    const loadCalls = async () => (await page.evaluate(() =>
+      (window as unknown as { __youtubePlayerCalls?: string[] })
+        .__youtubePlayerCalls ?? []
+    )).filter((entry) => entry.startsWith("load:"));
+    const clearCalls = async () => page.evaluate(() => {
+      (window as unknown as { __youtubePlayerCalls?: string[] })
+        .__youtubePlayerCalls?.splice(0);
+    });
+    const endTrack = async () => page.evaluate(() => {
+      (window as unknown as { __youtubePlayerEnd?: () => void })
+        .__youtubePlayerEnd?.();
+    });
+
+    await clearCalls();
+    await queue.getByRole("button", {
+      name: "모드 곡 2 바로 재생",
+      exact: true,
+    }).click();
+    await expect.poll(loadCalls).toEqual(["load:mode-video-2"]);
+    await player.getByRole("button", { name: "다음 곡", exact: true }).click();
+    await expect.poll(loadCalls).toEqual([
+      "load:mode-video-2",
+      "load:mode-video-3",
+    ]);
+
+    let repeatButton = player.getByRole("button", {
+      name: "반복 끔",
+      exact: true,
+    });
+    await repeatButton.click();
+    repeatButton = player.getByRole("button", {
+      name: "전체 반복",
+      exact: true,
+    });
+    await repeatButton.click();
+    repeatButton = player.getByRole("button", {
+      name: "한 곡 반복",
+      exact: true,
+    });
+    await clearCalls();
+    await queue.getByRole("button", {
+      name: "모드 곡 1 바로 재생",
+      exact: true,
+    }).click();
+    await expect.poll(loadCalls).toEqual(["load:mode-video-1"]);
+    await endTrack();
+    await expect.poll(loadCalls).toEqual([
+      "load:mode-video-1",
+      "load:mode-video-1",
+    ]);
+
+    await repeatButton.click();
+    await player.getByRole("button", { name: "반복 끔", exact: true }).click();
+    await clearCalls();
+    await queue.getByRole("button", {
+      name: "모드 곡 3 바로 재생",
+      exact: true,
+    }).click();
+    await expect.poll(loadCalls).toEqual(["load:mode-video-3"]);
+    await endTrack();
+    await expect.poll(loadCalls).toEqual([
+      "load:mode-video-3",
+      "load:mode-video-1",
+    ]);
+
+    await clearCalls();
+    await queue.getByRole("button", {
+      name: "모드 곡 1 바로 재생",
+      exact: true,
+    }).click();
+    await expect.poll(loadCalls).toEqual(["load:mode-video-1"]);
+    await page.evaluate(() => {
+      Math.random = () => 0;
+    });
+    await player.getByRole("button", {
+      name: "랜덤 전체 반복 켜기",
+      exact: true,
+    }).click();
+    const randomRepeat = player.getByRole("button", {
+      name: "랜덤 전체 반복 끄기",
+      exact: true,
+    });
+    await expect(randomRepeat).toHaveAttribute("aria-pressed", "true");
+    await expect(randomRepeat).not.toHaveCSS("box-shadow", "none");
+    await endTrack();
+    await expect.poll(loadCalls).toEqual([
+      "load:mode-video-1",
+      "load:mode-video-3",
+    ]);
+    await endTrack();
+    await expect.poll(loadCalls).toEqual([
+      "load:mode-video-1",
+      "load:mode-video-3",
+      "load:mode-video-2",
+    ]);
+    await endTrack();
+    await expect.poll(loadCalls).toEqual([
+      "load:mode-video-1",
+      "load:mode-video-3",
+      "load:mode-video-2",
+      "load:mode-video-3",
+    ]);
+  } finally {
+    await electronApp.close().catch(() => undefined);
+    await new Promise<void>((resolve) => upstream.close(() => resolve()));
+    await removeVerifiedTemporaryDirectory(directory);
+  }
+});
+
 test("keeps the playlist entry on one top-bar row at the 150-percent CSS viewport", async () => {
   const directory = await mkdtemp(
     path.join(tmpdir(), "eum-studio-playlist-topbar-e2e-"),
@@ -12754,30 +13041,32 @@ test("keeps the playlist entry on one top-bar row at the 150-percent CSS viewpor
     await expect(playAll).toBeVisible();
     const dialogLayout = await musicDialog.evaluate((element) => {
       const bounds = element.getBoundingClientRect();
-      const playAllButton = Array.from(element.querySelectorAll("button")).find(
-        (button) => button.textContent?.trim() === "전체 재생",
+      const playAllButton = element.querySelector<HTMLButtonElement>(
+        'button[aria-label="전체 재생"]',
       );
       const playAllBounds = playAllButton?.getBoundingClientRect();
       return {
         bottom: bounds.bottom,
+        height: bounds.height,
         playAllBottom: playAllBounds?.bottom ?? Number.NaN,
         playAllTop: playAllBounds?.top ?? Number.NaN,
         top: bounds.top,
         viewportHeight: window.innerHeight,
+        width: bounds.width,
       };
     });
+    expect(dialogLayout.width).toBeLessThanOrEqual(422);
+    expect(dialogLayout.height).toBeLessThanOrEqual(562);
     expect(dialogLayout.top).toBeGreaterThanOrEqual(0);
     expect(dialogLayout.bottom).toBeLessThanOrEqual(dialogLayout.viewportHeight);
     expect(dialogLayout.playAllTop).toBeGreaterThanOrEqual(0);
     expect(dialogLayout.playAllBottom).toBeLessThanOrEqual(
       dialogLayout.viewportHeight,
     );
-    const backdrop = page.locator(".music-library-backdrop");
-    const backdropBounds = await backdrop.boundingBox();
-    if (backdropBounds === null) {
-      throw new Error("Expected the music dialog backdrop bounds");
-    }
-    await page.mouse.click(backdropBounds.x + 2, backdropBounds.y + 2);
+    await musicDialog.getByRole("button", {
+      name: "음악 창 닫기",
+      exact: true,
+    }).click();
     await expect(musicDialog).toBeHidden();
   } finally {
     await electronApp.close().catch(() => undefined);
@@ -12892,6 +13181,10 @@ test("mixes YouTube with linked and managed MP3/MP4 files in the compact player"
       name: "음악 선곡과 재생목록",
       exact: true,
     });
+    await library.getByRole("tab", {
+      name: "내 미디어 탭",
+      exact: true,
+    }).click();
     await expect(library.getByLabel("원본 위치 연결", { exact: true }))
       .toBeChecked();
     await library.getByRole("button", {
@@ -12913,6 +13206,10 @@ test("mixes YouTube with linked and managed MP3/MP4 files in the compact player"
     await expect(localMedia.getByRole("listitem")).toHaveCount(4);
     await expect(localMedia).toContainText("앱에 가져오기");
 
+    await library.getByRole("tab", {
+      name: "YouTube 검색 탭",
+      exact: true,
+    }).click();
     await library.getByLabel("음악 검색어", { exact: true })
       .fill("혼합 재생 테스트");
     await library.getByRole("button", { name: "검색", exact: true }).click();
@@ -12926,6 +13223,10 @@ test("mixes YouTube with linked and managed MP3/MP4 files in the compact player"
       exact: true,
     }).click();
 
+    await library.getByRole("tab", {
+      name: "내 미디어 탭",
+      exact: true,
+    }).click();
     const linkedMp3 = localMedia.getByRole("listitem")
       .filter({ hasText: "linked-track.mp3" })
       .filter({ hasText: "원본 위치 연결" });
@@ -13032,6 +13333,10 @@ test("mixes YouTube with linked and managed MP3/MP4 files in the compact player"
       name: "managed-video 재생목록에 추가",
       exact: true,
     }).click();
+    await library.getByRole("tab", {
+      name: "재생목록 탭",
+      exact: true,
+    }).click();
     const mixedQueue = library.getByRole("region", {
       name: "재생목록",
       exact: true,
@@ -13082,16 +13387,20 @@ test("mixes YouTube with linked and managed MP3/MP4 files in the compact player"
       name: "음악 선곡과 재생목록",
       exact: true,
     });
+    await expect(library.getByRole("region", {
+      name: "재생목록",
+      exact: true,
+    }).getByRole("listitem")).toHaveCount(3);
+    await library.getByRole("tab", {
+      name: "내 미디어 탭",
+      exact: true,
+    }).click();
     await expect(library.getByLabel("원본 위치 연결", { exact: true }))
       .toBeChecked();
     await expect(library.getByRole("region", {
       name: "내 미디어",
       exact: true,
     }).getByRole("listitem")).toHaveCount(4);
-    await expect(library.getByRole("region", {
-      name: "재생목록",
-      exact: true,
-    }).getByRole("listitem")).toHaveCount(3);
   } finally {
     await electronApp.close().catch(() => undefined);
     await new Promise<void>((resolve) => upstream.close(() => resolve()));
