@@ -177,6 +177,12 @@ import type {
   YouTubeMusicProfile,
   YouTubeVideoProjection,
 } from "../application/music/youtube-music";
+import {
+  isYouTubeMusicTrack,
+  musicTrackIdentity,
+  type LocalMediaStorageMode,
+  type MusicTrackProjection,
+} from "../application/music/media-track";
 import type {
   YouTubeMusicConnectionStatus,
 } from "../application/music/youtube-music-connection";
@@ -248,6 +254,7 @@ import {
   FOCUS_TYPEWRITER_POSITION_MAX_PERCENT,
   FOCUS_TYPEWRITER_POSITION_MIN_PERCENT,
   FocusModeToolbar,
+  type FocusModeToolbarProps,
 } from "./editor/FocusModeToolbar";
 import {
   ManuscriptPreflightDialog,
@@ -310,7 +317,7 @@ import {
 } from "./editor/SceneDraftPanel";
 import {
   MusicMiniPlayer,
-  type YouTubePlaybackRequest,
+  type MusicPlaybackRequest,
 } from "./music/MusicMiniPlayer";
 import { MusicLibraryDialog } from "./music/MusicLibraryDialog";
 import {
@@ -706,6 +713,24 @@ function ManuscriptCount(input: {
   );
 }
 
+function FocusModeToolbarWithTelemetry(
+  input: Omit<FocusModeToolbarProps, "currentDocumentCharacterCount"> & {
+    readonly telemetryStore: ManuscriptTelemetryStore;
+  },
+) {
+  const { telemetryStore, ...toolbar } = input;
+  const statistics = useSyncExternalStore(
+    telemetryStore.subscribeStatistics,
+    telemetryStore.getStatisticsSnapshot,
+  );
+  return (
+    <FocusModeToolbar
+      {...toolbar}
+      currentDocumentCharacterCount={statistics.characterCount}
+    />
+  );
+}
+
 function SessionFeedbackWithTelemetry(
   input: Omit<SessionFeedbackPanelProps, "currentCharacterCount"> & {
     readonly telemetryStore: ManuscriptTelemetryStore;
@@ -927,6 +952,7 @@ type AppProps = {
   readonly documentRailHost?: HTMLElement | null;
   readonly embedded?: boolean;
   readonly eventRailHost?: HTMLElement | null;
+  readonly musicSettingsRevision?: number;
   readonly musicPlayerHost?: HTMLElement | null;
   readonly onCatalogChange?: (
     catalog: WorkspaceCatalogProjection,
@@ -1743,6 +1769,7 @@ export const App = forwardRef<
     embedded = false,
     eventRailHost,
     focusModePreferences,
+    musicSettingsRevision = 0,
     musicPlayerHost,
     onCatalogChange,
     onFocusModePreferencesChange,
@@ -1946,10 +1973,14 @@ export const App = forwardRef<
     readonly YouTubeVideoProjection[]
   >([]);
   const [musicLibraryQueue, setMusicLibraryQueue] = useState<
-    readonly YouTubeVideoProjection[]
+    readonly MusicTrackProjection[]
   >([]);
   const [musicLibraryActionState, setMusicLibraryActionState] =
-    useState<"idle" | "searching" | "saving-playlist">("idle");
+    useState<"idle" | "searching" | "saving-playlist" | "registering-media">(
+      "idle",
+    );
+  const [localMediaRegistrationMode, setLocalMediaRegistrationMode] =
+    useState<LocalMediaStorageMode | null>(null);
   const [musicLibraryError, setMusicLibraryError] = useState<string | null>(null);
   const [sceneExtractionSelection, setSceneExtractionSelection] =
     useState<SceneExtractionSelection | null>(null);
@@ -1979,9 +2010,9 @@ export const App = forwardRef<
     useState<string | null>(null);
   const [youtubeMusicProfile, setYoutubeMusicProfile] =
     useState<YouTubeMusicProfile | null>(null);
-  const [youtubePlaybackRequest, setYoutubePlaybackRequest] =
-    useState<YouTubePlaybackRequest | null>(null);
-  const youtubePlaybackNonceRef = useRef(0);
+  const [musicPlaybackRequest, setMusicPlaybackRequest] =
+    useState<MusicPlaybackRequest | null>(null);
+  const musicPlaybackNonceRef = useRef(0);
   const [dailyGoals, setDailyGoals] =
     useState<WorkRecordsGoalsProjection | null>(null);
   const [readthroughSettings, setReadthroughSettings] =
@@ -4663,7 +4694,7 @@ export const App = forwardRef<
       (projection) => {
         if (!disposed) {
           setWorkMusicSettings(projection);
-          setMusicLibraryQueue(projection.settings.playlistVideos);
+          setMusicLibraryQueue(projection.settings.playlistTracks);
         }
       },
       () => {
@@ -4676,7 +4707,7 @@ export const App = forwardRef<
     return () => {
       disposed = true;
     };
-  }, [activeWorkId]);
+  }, [activeWorkId, musicSettingsRevision]);
 
   useEffect(() => {
     if (activeWorkId === null) {
@@ -4807,14 +4838,14 @@ export const App = forwardRef<
     };
   }, []);
 
-  const playYouTubeQueue = useCallback((
-    videos: readonly YouTubeVideoProjection[],
+  const playMusicQueue = useCallback((
+    tracks: readonly MusicTrackProjection[],
   ): boolean => {
-    if (videos.length === 0) return false;
-    youtubePlaybackNonceRef.current += 1;
-    setYoutubePlaybackRequest(Object.freeze({
-      nonce: youtubePlaybackNonceRef.current,
-      videos: Object.freeze([...videos]),
+    if (tracks.length === 0) return false;
+    musicPlaybackNonceRef.current += 1;
+    setMusicPlaybackRequest(Object.freeze({
+      nonce: musicPlaybackNonceRef.current,
+      tracks: Object.freeze([...tracks]),
     }));
     return true;
   }, []);
@@ -4842,7 +4873,7 @@ export const App = forwardRef<
   }, [musicLibraryActionState]);
 
   const saveMusicLibraryQueue = useCallback(async (
-    nextQueue: readonly YouTubeVideoProjection[],
+    nextQueue: readonly MusicTrackProjection[],
   ) => {
     if (
       activeWork === undefined ||
@@ -4852,7 +4883,7 @@ export const App = forwardRef<
     ) {
       return;
     }
-    const previousQueue = workMusicSettings.settings.playlistVideos;
+    const previousQueue = workMusicSettings.settings.playlistTracks;
     setMusicLibraryQueue(nextQueue);
     setMusicLibraryActionState("saving-playlist");
     setMusicLibraryError(null);
@@ -4863,11 +4894,11 @@ export const App = forwardRef<
         expectedRevision: workMusicSettings.revision,
         settings: {
           ...workMusicSettings.settings,
-          playlistVideos: nextQueue,
+          playlistTracks: nextQueue,
         },
       });
       setWorkMusicSettings(saved);
-      setMusicLibraryQueue(saved.settings.playlistVideos);
+      setMusicLibraryQueue(saved.settings.playlistTracks);
     } catch (reason) {
       setMusicLibraryQueue(previousQueue);
       setMusicLibraryError(
@@ -4876,6 +4907,57 @@ export const App = forwardRef<
           : "재생목록을 저장하지 못했습니다.",
       );
     } finally {
+      setMusicLibraryActionState("idle");
+    }
+  }, [
+    activeWork,
+    musicLibraryActionState,
+    sceneMusicQueueActionState,
+    workMusicSettings,
+  ]);
+
+  const registerLocalMedia = useCallback(async (
+    storageMode: LocalMediaStorageMode,
+  ) => {
+    if (
+      activeWork === undefined ||
+      workMusicSettings?.workId !== activeWork.workId ||
+      musicLibraryActionState !== "idle" ||
+      sceneMusicQueueActionState !== "idle"
+    ) {
+      return;
+    }
+    setMusicLibraryActionState("registering-media");
+    setLocalMediaRegistrationMode(storageMode);
+    setMusicLibraryError(null);
+    try {
+      const result = await window.eumStudio.musicPlayback.selectLocalMedia({
+        schemaVersion: 1,
+        workId: activeWork.workId,
+        storageMode,
+      });
+      if (result.status === "cancelled") return;
+      const saved = await window.eumStudio.settings.saveWorkMusic({
+        schemaVersion: 1,
+        workId: activeWork.workId,
+        expectedRevision: workMusicSettings.revision,
+        settings: {
+          ...workMusicSettings.settings,
+          localMedia: Object.freeze([
+            ...workMusicSettings.settings.localMedia,
+            ...result.tracks,
+          ]),
+        },
+      });
+      setWorkMusicSettings(saved);
+    } catch (reason) {
+      setMusicLibraryError(
+        reason instanceof Error
+          ? reason.message
+          : "미디어 파일을 등록하지 못했습니다.",
+      );
+    } finally {
+      setLocalMediaRegistrationMode(null);
       setMusicLibraryActionState("idle");
     }
   }, [
@@ -5007,7 +5089,7 @@ export const App = forwardRef<
       if (option === null) {
         throw new Error("현재 장면에 선택된 최신 큐가 없습니다.");
       }
-      const played = playYouTubeQueue(option.tracks);
+      const played = playMusicQueue(option.tracks);
       if (!played) {
         setSceneMusicQueueError("선택한 장면 음악 큐를 재생하지 못했습니다.");
       }
@@ -5022,13 +5104,13 @@ export const App = forwardRef<
     }
   }, [
     activeWork,
-    playYouTubeQueue,
+    playMusicQueue,
     refreshSceneMusicQueueCandidates,
     sceneMusicQueueActionState,
   ]);
 
-  const toggleFavoriteMusicVideo = useCallback(async (
-    video: YouTubeVideoProjection,
+  const toggleFavoriteMusicTrack = useCallback(async (
+    track: MusicTrackProjection,
   ) => {
     if (
       activeWork === undefined ||
@@ -5038,9 +5120,10 @@ export const App = forwardRef<
     ) {
       return;
     }
-    const currentFavorites = workMusicSettings.settings.favoriteVideos;
+    const currentFavorites = workMusicSettings.settings.favoriteTracks;
+    const identity = musicTrackIdentity(track);
     const alreadyFavorite = currentFavorites.some(
-      (favorite) => favorite.videoId === video.videoId,
+      (favorite) => musicTrackIdentity(favorite) === identity,
     );
     setSceneMusicQueueActionState("saving-favorite");
     setSceneMusicQueueError(null);
@@ -5051,11 +5134,11 @@ export const App = forwardRef<
         expectedRevision: workMusicSettings.revision,
         settings: {
           ...workMusicSettings.settings,
-          favoriteVideos: alreadyFavorite
+          favoriteTracks: alreadyFavorite
             ? currentFavorites.filter(
-                (favorite) => favorite.videoId !== video.videoId,
+                (favorite) => musicTrackIdentity(favorite) !== identity,
               )
-            : Object.freeze([...currentFavorites, video]),
+            : Object.freeze([...currentFavorites, track]),
         },
       });
       setWorkMusicSettings(saved);
@@ -6548,7 +6631,7 @@ export const App = forwardRef<
               ? null
               : selectedSceneMusicQueueOption(selectedCandidate);
             if (selectedOption !== null) {
-              playYouTubeQueue(selectedOption.tracks);
+              playMusicQueue(selectedOption.tracks);
             }
           }
         }
@@ -6561,7 +6644,7 @@ export const App = forwardRef<
     [
       activeDocument,
       activityActionState,
-      playYouTubeQueue,
+      playMusicQueue,
       persistDocument,
       workMusicSettings,
     ],
@@ -12058,7 +12141,11 @@ export const App = forwardRef<
         busy={
           sceneActionState !== "idle" || sceneExtractionActionState !== "idle"
         }
-        favoriteMusicVideos={workMusicSettings?.settings.favoriteVideos ?? []}
+        favoriteMusicVideos={
+          (workMusicSettings?.settings.favoriteTracks ?? []).filter(
+            isYouTubeMusicTrack,
+          )
+        }
         musicConnected={youtubeMusicConnectionStatus?.apiKeyConfigured === true}
         musicPlaybackAvailable={youtubeMusicProfile !== null}
         musicQueueBusy={sceneMusicQueueActionState !== "idle"}
@@ -12068,7 +12155,7 @@ export const App = forwardRef<
         }}
         onOpenMusicSettings={() => onOpenSettings?.()}
         onOpenScene={focusScene}
-        onPlayFavoriteMusicVideo={(video) => playYouTubeQueue([video])}
+        onPlayFavoriteMusicVideo={(video) => playMusicQueue([video])}
         onPlaySceneMusicQueue={(candidate) => {
           void playSelectedSceneMusicQueue(candidate);
         }}
@@ -12090,7 +12177,7 @@ export const App = forwardRef<
           void createSceneBoundary("split");
         }}
         onToggleFavoriteMusicVideo={(video) => {
-          void toggleFavoriteMusicVideo(video);
+          void toggleFavoriteMusicTrack(video);
         }}
         onUpdateRuleSet={(draft) => {
           void updateSceneRuleSet(draft);
@@ -13007,7 +13094,7 @@ export const App = forwardRef<
             {focusMode &&
               runtime.status === "ready" &&
               activeDocument !== undefined && (
-                <FocusModeToolbar
+                <FocusModeToolbarWithTelemetry
                   contentWidthPx={focusContentWidthPx}
                   currentBlockHighlight={focusCurrentBlockHighlight}
                   exitLabel={
@@ -13049,6 +13136,7 @@ export const App = forwardRef<
                   pomodoroStatus={focusPomodoroStatus}
                   saveStatus={focusSaveStatus}
                   timerStatus={focusPomodoroTimerText}
+                  telemetryStore={telemetryStore}
                   typewriterMode={focusTypewriterMode}
                   typewriterPositionPercent={focusTypewriterPositionPercent}
                   zoomPercent={focusZoomPercent}
@@ -13450,7 +13538,8 @@ export const App = forwardRef<
                         }
                         musicConnected={youtubeMusicConnectionStatus?.apiKeyConfigured === true}
                         favoriteMusicVideos={
-                          workMusicSettings?.settings.favoriteVideos ?? []
+                          (workMusicSettings?.settings.favoriteTracks ?? [])
+                            .filter(isYouTubeMusicTrack)
                         }
                         musicPlaybackAvailable={youtubeMusicProfile !== null}
                         musicQueueBusy={sceneMusicQueueActionState !== "idle"}
@@ -13464,7 +13553,7 @@ export const App = forwardRef<
                           void playSelectedSceneMusicQueue(candidate);
                         }}
                         onPlayFavoriteMusicVideo={(video) => {
-                          playYouTubeQueue([video]);
+                          playMusicQueue([video]);
                         }}
                         onSearchSceneMusic={(annotation, query) => {
                           void searchSceneMusicQueues(annotation, query);
@@ -13473,7 +13562,7 @@ export const App = forwardRef<
                           void selectSceneMusicQueue(candidate, option);
                         }}
                         onToggleFavoriteMusicVideo={(video) => {
-                          void toggleFavoriteMusicVideo(video);
+                          void toggleFavoriteMusicTrack(video);
                         }}
                         onSetEventOverride={(
                           scene,
@@ -14221,7 +14310,7 @@ export const App = forwardRef<
                 setMusicLibraryError(null);
                 setMusicLibraryOpen(true);
               }}
-              playRequest={youtubePlaybackRequest}
+              playRequest={musicPlaybackRequest}
               profile={youtubeMusicProfile}
             />,
             musicPlayerHost,
@@ -14552,14 +14641,16 @@ export const App = forwardRef<
             <MusicLibraryDialog
               connected={youtubeMusicConnectionStatus?.apiKeyConfigured === true}
               error={musicLibraryError ?? sceneMusicQueueError}
-              favorites={workMusicSettings?.settings.favoriteVideos ?? []}
-              onAddToQueue={(video) => {
+              favorites={workMusicSettings?.settings.favoriteTracks ?? []}
+              localMedia={workMusicSettings?.settings.localMedia ?? []}
+              onAddToQueue={(track) => {
                 if (!musicLibraryQueue.some(
-                  (entry) => entry.videoId === video.videoId,
+                  (entry) =>
+                    musicTrackIdentity(entry) === musicTrackIdentity(track),
                 )) {
                   void saveMusicLibraryQueue(Object.freeze([
                     ...musicLibraryQueue,
-                    video,
+                    track,
                   ]));
                 }
               }}
@@ -14569,26 +14660,31 @@ export const App = forwardRef<
                 onOpenSettings?.();
               }}
               onPlayQueue={() => {
-                playYouTubeQueue(musicLibraryQueue);
+                playMusicQueue(musicLibraryQueue);
               }}
-              onPlayVideo={(video) => {
-                playYouTubeQueue([video]);
+              onPlayTrack={(track) => {
+                playMusicQueue([track]);
               }}
-              onRemoveFromQueue={(video) => {
+              onRegisterLocalMedia={(storageMode) => {
+                void registerLocalMedia(storageMode);
+              }}
+              onRemoveFromQueue={(track) => {
                 void saveMusicLibraryQueue(Object.freeze(
                   musicLibraryQueue.filter(
-                    (entry) => entry.videoId !== video.videoId,
+                    (entry) =>
+                      musicTrackIdentity(entry) !== musicTrackIdentity(track),
                   ),
                 ));
               }}
               onSearch={(query) => {
                 void searchMusicLibrary(query);
               }}
-              onToggleFavorite={(video) => {
-                void toggleFavoriteMusicVideo(video);
+              onToggleFavorite={(track) => {
+                void toggleFavoriteMusicTrack(track);
               }}
               queue={musicLibraryQueue}
               queueSaving={musicLibraryActionState === "saving-playlist"}
+              registeringMode={localMediaRegistrationMode}
               results={musicLibraryResults}
               searching={musicLibraryActionState === "searching"}
             />,

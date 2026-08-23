@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { MusicMiniPlayer } from "./MusicMiniPlayer";
 
 describe("MusicMiniPlayer", () => {
-  it("keeps the idle YouTube player clear of inactive playback controls", () => {
+  it("keeps a compact full player visible while idle", () => {
     const markup = renderToStaticMarkup(createElement(MusicMiniPlayer, {
       connection: {
         schemaVersion: 1,
@@ -31,13 +31,18 @@ describe("MusicMiniPlayer", () => {
     }));
 
     expect(markup).toContain('aria-label="음악 플레이어"');
-    expect(markup).toContain("YouTube 재생 대기");
+    expect(markup).toContain("재생할 곡을 선택하세요");
     expect(markup).toContain('aria-label="선곡·재생목록 열기"');
     expect(markup).not.toContain('aria-label="음악 설정 열기"');
     expect(markup).toContain("is-idle");
     expect(markup).not.toContain("집중 18:42");
-    expect(markup).not.toContain('aria-label="음악 재생"');
-    expect(markup).not.toContain('aria-label="YouTube 음량"');
+    expect(markup).toContain('aria-label="이전 곡"');
+    expect(markup).toContain('aria-label="음악 재생"');
+    expect(markup).toContain('aria-label="다음 곡"');
+    expect(markup).toContain('aria-label="셔플 켜기"');
+    expect(markup).toContain('aria-label="전체 반복"');
+    expect(markup).toContain('aria-label="재생 위치"');
+    expect(markup).toContain('aria-label="음량"');
     expect(markup).not.toContain("Spotify");
   });
 });

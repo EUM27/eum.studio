@@ -16,6 +16,7 @@ export const FOCUS_TYPEWRITER_POSITION_STEP_PERCENT = 5;
 export type FocusModeToolbarProps = {
   readonly contentWidthPx: number;
   readonly currentBlockHighlight: boolean;
+  readonly currentDocumentCharacterCount: number;
   readonly exitLabel?: string;
   readonly modeLabel?: string | null;
   readonly modeStatus?: string | null;
@@ -54,10 +55,13 @@ export function FocusModeToolbar(input: FocusModeToolbarProps) {
       ? "휴식 모드"
       : null;
   const toolbarModeLabel = input.modeLabel ?? pomodoroModeLabel ?? "집중";
+  const documentCharacterStatus =
+    `현재 회차 ${input.currentDocumentCharacterCount}자`;
   const toolbarTimerStatus = [
     input.modeStatus,
     input.pomodoroStatus,
     input.timerStatus,
+    documentCharacterStatus,
   ].filter((value): value is string => value !== null && value !== undefined)
     .join(" · ") || "원고에 집중 중";
   const persistentModeLabel = input.modeLabel ?? pomodoroModeLabel;
@@ -82,24 +86,31 @@ export function FocusModeToolbar(input: FocusModeToolbarProps) {
         ref={panelRef}
         style={style}
       >
-        {persistentModeLabel !== null && (
-          <div
-            aria-label="현재 집중 상태"
-            className="focus-mode-pomodoro-status"
-            data-pomodoro-phase={input.pomodoroPhase}
-            data-testid="focus-pomodoro-status"
-            role="status"
-          >
+        <div
+          aria-label="현재 집중 상태"
+          className="focus-mode-pomodoro-status"
+          data-pomodoro-phase={input.pomodoroPhase ?? undefined}
+          data-testid="focus-pomodoro-status"
+          role="status"
+        >
+          {persistentModeLabel !== null && (
             <strong>{persistentModeLabel}</strong>
-            {input.modeStatus !== null && input.modeStatus !== undefined && (
-              <span>{input.modeStatus}</span>
-            )}
-            {pomodoroModeLabel !== null && input.pomodoroStatus !== null && (
-              <span>{`${pomodoroModeLabel} · ${input.pomodoroStatus}`}</span>
-            )}
-            {input.timerStatus !== null && <output>{input.timerStatus}</output>}
-          </div>
-        )}
+          )}
+          {input.modeStatus !== null && input.modeStatus !== undefined && (
+            <span>{input.modeStatus}</span>
+          )}
+          {pomodoroModeLabel !== null && input.pomodoroStatus !== null && (
+            <span>{`${pomodoroModeLabel} · ${input.pomodoroStatus}`}</span>
+          )}
+          {input.timerStatus !== null && <output>{input.timerStatus}</output>}
+          <span
+            aria-label="현재 문서 글자 수"
+            className="focus-mode-document-character-count"
+            data-testid="focus-document-character-count"
+          >
+            {documentCharacterStatus}
+          </span>
+        </div>
         <section
           aria-label="집중 화면 도구"
           className="focus-mode-toolbar"

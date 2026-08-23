@@ -8,11 +8,31 @@
 
 현재 storage 결정: [POC-3 SQLite·blob·backup 결정](docs/poc-3-storage-decisions.md)
 
-마지막 갱신: 2026-08-21
+마지막 갱신: 2026-08-23
 
 ## 현재 Gate
 
-`회차 완료 조건부 승인 후속 — 병합 전 P0·P1 수정과 패키징 앱 검증 완료`
+`음악 Gate 14 — YouTube·로컬 파일 통합 미디어 플레이어 완료`
+
+음악 Gate 14 현재 상태:
+
+- [x] YouTube 영상과 Work 소유 로컬 MP3·MP4를 하나의 `MusicTrackProjection`·즐겨찾기·순서 있는 재생목록에서 함께 다룬다. 기존 `favoriteVideos`·`playlistVideos` JSON은 읽을 때 새 통합 필드로 무손실 변환한다.
+- [x] 미디어 등록은 `원본 위치 연결`을 기본으로 표시하고 `앱에 가져오기`를 함께 제공한다. 여러 MP3·MP4를 한 번에 선택하며 관리형 파일은 `local-media-library-v1` 아래 별도 파일로 복사한다.
+- [x] 로컬 절대 경로는 renderer·typed bridge·Work settings projection에 넣지 않는다. main process descriptor가 opaque Work/media ID를 실제 위치로 해석하고 `eum-media://`가 GET·HEAD와 단일 byte range `206`을 스트리밍한다.
+- [x] 기존 YouTube IFrame player와 HTML media element를 하나의 큐에서 전환한다. 진행 위치·셔플·이전/재생/다음·반복·정지·음량·영상 표시·큐 위치를 상단 한 줄 플레이어에 연결했다.
+- [x] 선곡 창을 `내 미디어 | 재생목록 | YouTube 검색 | 즐겨찾기` 2×2 라이브러리로 재구성하고 Starlight 테마 토큰과 좁은 화면 단일 열을 유지했다.
+- [x] 설정 창에서 YouTube 연결과 작품 음악 revision을 저장한 직후에도 App이 authoritative Work 음악 설정을 다시 읽어 로컬 등록 revision 충돌을 만들지 않는다.
+
+음악 Gate 14 현재 증거:
+
+- 승인 설계 manifest SHA-256 11/11 일치를 확인했다. 기존 SQLite schema와 migration, 장면 큐 Candidate 원장은 변경하지 않았다.
+- `npm run lint`, `npm run build`, 음악 계약·main 전용 descriptor·range streaming·typed bridge·기존 local workspace runtime·renderer 집중 9개 파일 171개 검증이 통과했다.
+- production Electron에서 960 CSS px 상단 플레이어와 `목록` 진입점이 한 줄에 유지됐다.
+- production Electron에서 loopback YouTube 검색 결과, 원본 위치 MP3, 앱에 가져온 MP4를 한 큐에 저장했다. MP3·MP4 실제 `play` 이벤트, 각각 `audio/mpeg`·`video/mp4` range `206`, YouTube→로컬 다음 곡 전환, 관리형 파일 복사, 완전 종료·재실행 뒤 내 미디어 4건·혼합 큐 3건 복원이 통과했다.
+- 검토 캡처에서 원고 작업면 높이와 기존 사건 레일을 바꾸지 않은 채 곡 정보·진행·재생 제어·음량·영상·목록이 상단에 한 줄로 표시되고, 라이브러리 등록/검색/목록/즐겨찾기 위계가 분리된 것을 확인했다. 임시 캡처 파일은 제거했다.
+- 관리형 미디어의 기존 BackupArchive 포함 범위는 이번 Gate에서 확장하지 않았다.
+
+이전 현재 Gate: `회차 완료 조건부 승인 후속 — 병합 전 P0·P1 수정과 패키징 앱 검증 완료`
 
 회차 완료 현재 상태:
 

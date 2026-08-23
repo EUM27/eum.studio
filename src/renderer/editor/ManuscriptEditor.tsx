@@ -1,4 +1,10 @@
-import { history, historyKeymap, redo, undo } from "@codemirror/commands";
+import {
+  history,
+  historyKeymap,
+  isolateHistory,
+  redo,
+  undo,
+} from "@codemirror/commands";
 import {
   Compartment,
   EditorSelection,
@@ -46,6 +52,10 @@ import {
   type ManuscriptEditorDocumentState,
   type ManuscriptFormattingProfile,
 } from "../../application/editor/manuscript-formatting";
+import {
+  formatManuscriptBlankLines,
+  type ManuscriptBlankLineCount,
+} from "../../application/editor/manuscript-blank-line-formatting";
 import {
   applyManuscriptLayoutSettings,
   readManuscriptLayoutSettings,
@@ -1288,6 +1298,37 @@ export const ManuscriptEditor = forwardRef<
       dispatchFormattingEffect(setManuscriptFontSizeEffect.of(nextSize));
     }
   };
+  const applyBlankLineFormatting = (
+    blankLineCount: ManuscriptBlankLineCount,
+  ): void => {
+    const view = viewRef.current;
+    if (view === null || readOnly) {
+      return;
+    }
+    const selection = view.state.selection.main;
+    const from = selection.empty ? 0 : selection.from;
+    const to = selection.empty ? view.state.doc.length : selection.to;
+    const source = view.state.doc.sliceString(from, to);
+    const result = formatManuscriptBlankLines(source, blankLineCount);
+    if (result === source) {
+      view.focus();
+      return;
+    }
+    view.dispatch({
+      changes: { from, to, insert: result },
+      ...(selection.empty
+        ? {}
+        : {
+            selection: EditorSelection.single(from, from + result.length),
+          }),
+      scrollIntoView: true,
+      annotations: [
+        Transaction.userEvent.of("input.format.blank-lines"),
+        isolateHistory.of("full"),
+      ],
+    });
+    view.focus();
+  };
 
   return (
     <div className="manuscript-editor-shell">
@@ -1736,6 +1777,36 @@ export const ManuscriptEditor = forwardRef<
               ))}
             </select>
           </label>
+        </div>
+
+        <div aria-label="빈 줄 서식" className="formatting-toolbar-group">
+          <button
+            className="toolbar-text-button"
+            disabled={readOnly}
+            onClick={() => applyBlankLineFormatting(1)}
+            onMouseDown={(event) => event.preventDefault()}
+            type="button"
+          >
+            1줄 띄우기
+          </button>
+          <button
+            className="toolbar-text-button"
+            disabled={readOnly}
+            onClick={() => applyBlankLineFormatting(2)}
+            onMouseDown={(event) => event.preventDefault()}
+            type="button"
+          >
+            2줄 띄우기
+          </button>
+          <button
+            className="toolbar-text-button"
+            disabled={readOnly}
+            onClick={() => applyBlankLineFormatting(0)}
+            onMouseDown={(event) => event.preventDefault()}
+            type="button"
+          >
+            빈줄 제거
+          </button>
         </div>
 
         <span aria-hidden="true" className="formatting-toolbar-divider" />

@@ -791,6 +791,12 @@ import {
   type YouTubeVideoSearchResult,
 } from "../music/youtube-music";
 import {
+  parseSelectLocalMediaCommand,
+  parseSelectLocalMediaResult,
+  type SelectLocalMediaCommand,
+  type SelectLocalMediaResult,
+} from "../music/media-track";
+import {
   parseListSceneMusicQueueCandidatesCommand,
   parseSceneMusicQueueCandidate,
   parseSceneMusicQueueCandidateList,
@@ -1274,6 +1280,8 @@ export const YOUTUBE_MUSIC_PROFILE_CHANNEL =
   "studio:music:youtube-profile";
 export const YOUTUBE_MUSIC_SEARCH_CHANNEL =
   "studio:music:youtube-search";
+export const LOCAL_MEDIA_SELECT_CHANNEL =
+  "studio:music:local-media-select";
 export const SCENE_MUSIC_QUEUE_SEARCH_CHANNEL =
   "studio:music:scene-queue-search";
 export const SCENE_MUSIC_QUEUE_LIST_CHANNEL =
@@ -1882,6 +1890,9 @@ export type StudioBridge = {
     searchVideos: (
       command: SearchYouTubeVideosCommand,
     ) => Promise<YouTubeVideoSearchResult>;
+    selectLocalMedia: (
+      command: SelectLocalMediaCommand,
+    ) => Promise<SelectLocalMediaResult>;
     searchSceneQueues: (
       command: SearchSceneMusicQueuesCommand,
     ) => Promise<SceneMusicQueueSearchResult>;
@@ -2238,6 +2249,7 @@ export type BridgeInvoke = (
     | typeof YOUTUBE_MUSIC_CONNECTION_SAVE_CHANNEL
     | typeof YOUTUBE_MUSIC_PROFILE_CHANNEL
     | typeof YOUTUBE_MUSIC_SEARCH_CHANNEL
+    | typeof LOCAL_MEDIA_SELECT_CHANNEL
     | typeof SCENE_MUSIC_QUEUE_SEARCH_CHANNEL
     | typeof SCENE_MUSIC_QUEUE_LIST_CHANNEL
     | typeof SCENE_MUSIC_QUEUE_SELECT_CHANNEL
@@ -2296,6 +2308,7 @@ export type BridgeInvoke = (
     | UpdateSceneDraftCandidateCommand
     | PrepareSceneDraftInsertionCommand
     | CompleteSceneDraftInsertionCommand
+    | SelectLocalMediaCommand
     | SearchSceneMusicQueuesCommand
     | ListSceneMusicQueueCandidatesCommand
     | SelectSceneMusicQueueCommand
@@ -4310,6 +4323,19 @@ export function createStudioBridge(
           return parseYouTubeVideoSearchResult(value);
         } catch {
           throw new Error("Invalid YouTube music search result");
+        }
+      },
+      selectLocalMedia: async (input) => {
+        const command = parseSelectLocalMediaCommand(input);
+        const value = await invoke(LOCAL_MEDIA_SELECT_CHANNEL, command);
+        try {
+          const result = parseSelectLocalMediaResult(value);
+          if (result.status === "selected" && result.workId !== command.workId) {
+            throw new Error("Selected local media crossed the Work boundary");
+          }
+          return result;
+        } catch {
+          throw new Error("Invalid local media selection result");
         }
       },
       searchSceneQueues: async (input) => {

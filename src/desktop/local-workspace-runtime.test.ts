@@ -10807,7 +10807,7 @@ describe("local workspace runtime", () => {
         settings: {
           ...initial.settings,
           autoOnEpisodeTransition: true,
-          playlistVideos: [playlistVideo],
+          playlistTracks: [playlistVideo],
           transitionPlaybackMode: "ask",
         },
       });
@@ -10817,7 +10817,7 @@ describe("local workspace runtime", () => {
         revision: 1,
         settings: {
           autoOnEpisodeTransition: true,
-          playlistVideos: [playlistVideo],
+          playlistTracks: [playlistVideo],
           transitionPlaybackMode: "ask",
         },
       });

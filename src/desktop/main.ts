@@ -3,6 +3,7 @@ import {
   BrowserWindow,
   dialog,
   ipcMain,
+  protocol,
   safeStorage,
   shell,
   type IpcMainInvokeEvent,
@@ -181,6 +182,7 @@ import {
   YOUTUBE_MUSIC_CONNECTION_SAVE_CHANNEL,
   YOUTUBE_MUSIC_PROFILE_CHANNEL,
   YOUTUBE_MUSIC_SEARCH_CHANNEL,
+  LOCAL_MEDIA_SELECT_CHANNEL,
   SCENE_MUSIC_QUEUE_SEARCH_CHANNEL,
   SCENE_MUSIC_QUEUE_LIST_CHANNEL,
   SCENE_MUSIC_QUEUE_SELECT_CHANNEL,
@@ -832,6 +834,9 @@ import {
 } from "./chatgpt-oauth-window";
 import { openNodeYouTubeMusicConnectionStore } from "../platform/music/node-youtube-music-connection-store";
 import { createNodeYouTubeMusicSearchClient } from "../platform/music/node-youtube-music-search";
+import { openNodeLocalMediaLibrary } from "../platform/music/node-local-media-library";
+import { createNodeLocalMediaResponse } from "../platform/music/node-local-media-response";
+import { parseSelectLocalMediaCommand } from "../application/music/media-track";
 import { openNodeUiPreferencesStore } from "../platform/settings/node-ui-preferences-store";
 import {
   openNodePublishingMailConnectionStore,
@@ -864,6 +869,17 @@ let allowMainWindowClose = false;
 let activeApplicationRuntime: ApplicationRuntime | null = null;
 let activeYouTubePlayerReferer: string | null = null;
 
+protocol.registerSchemesAsPrivileged([{
+  scheme: "eum-media",
+  privileges: {
+    standard: true,
+    secure: true,
+    supportFetchAPI: true,
+    corsEnabled: true,
+    stream: true,
+  },
+}]);
+
 function mediaTypeForWorkCover(filePath: string): string {
   switch (path.extname(filePath).toLocaleLowerCase()) {
     case ".png":
@@ -882,6 +898,19 @@ function mediaTypeForWorkCover(filePath: string): string {
     default:
       throw new Error("Unsupported Work cover image type");
   }
+}
+
+function configuredLocalMediaSelectionPaths(value: string): readonly string[] {
+  const parsed = JSON.parse(value) as unknown;
+  if (
+    !Array.isArray(parsed) ||
+    parsed.some((entry) => typeof entry !== "string" || !path.isAbsolute(entry))
+  ) {
+    throw new Error(
+      "EUM_STUDIO_LOCAL_MEDIA_SELECTION_PATHS must be a JSON array of absolute paths",
+    );
+  }
+  return Object.freeze([...parsed]);
 }
 
 type ApplicationRuntime = {
@@ -1539,6 +1568,28 @@ async function registerApplicationHandlers(): Promise<void> {
           safeStorage.decryptString(Buffer.from(encrypted)),
       },
     });
+  const localMediaLibrary = await openNodeLocalMediaLibrary({
+    rootDirectoryPath: path.join(
+      app.getPath("userData"),
+      "local-media-library-v1",
+    ),
+  });
+  protocol.handle("eum-media", async (request) => {
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      return new Response(null, { status: 405 });
+    }
+    try {
+      const source = await localMediaLibrary.resolvePlaybackUrl(request.url);
+      return createNodeLocalMediaResponse({
+        filePath: source.filePath,
+        mediaType: source.mediaType,
+        method: request.method,
+        rangeHeader: request.headers.get("range"),
+      });
+    } catch {
+      return new Response(null, { status: 404 });
+    }
+  });
   const uiPreferencesStore = await openNodeUiPreferencesStore({
     rootDirectoryPath: path.join(app.getPath("userData"), "ui-preferences-v1"),
   });
@@ -5542,6 +5593,48 @@ async function registerApplicationHandlers(): Promise<void> {
           command.query,
           youtubeMusicProfile.searchLimit,
         ),
+      });
+    },
+  );
+  ipcMain.handle(
+    LOCAL_MEDIA_SELECT_CHANNEL,
+    async (event, value: unknown) => {
+      assertTrustedRendererSender(event);
+      const command = parseSelectLocalMediaCommand(value);
+      const configuredPaths = process.env.EUM_STUDIO_LOCAL_MEDIA_SELECTION_PATHS;
+      let filePaths: readonly string[];
+      if (configuredPaths !== undefined) {
+        filePaths = configuredLocalMediaSelectionPaths(configuredPaths);
+      } else {
+        const owner = mainWindow;
+        if (owner === null) throw new Error("Main window is unavailable");
+        const selection = await dialog.showOpenDialog(owner, {
+          title: command.storageMode === "external-reference"
+            ? "미디어 원본 위치 연결"
+            : "미디어를 앱에 가져오기",
+          buttonLabel: command.storageMode === "external-reference"
+            ? "연결"
+            : "가져오기",
+          properties: ["openFile", "multiSelections"],
+          filters: [{ name: "미디어 파일", extensions: ["mp3", "mp4"] }],
+        });
+        if (selection.canceled) {
+          return Object.freeze({ schemaVersion: 1, status: "cancelled" });
+        }
+        filePaths = selection.filePaths;
+      }
+      if (filePaths.length === 0) {
+        return Object.freeze({ schemaVersion: 1, status: "cancelled" });
+      }
+      return Object.freeze({
+        schemaVersion: 1,
+        status: "selected",
+        workId: command.workId,
+        tracks: await localMediaLibrary.register({
+          workId: command.workId,
+          storageMode: command.storageMode,
+          filePaths,
+        }),
       });
     },
   );

@@ -1,31 +1,74 @@
-import { Heart, ListPlus, Play, Search, Trash2, X } from "lucide-react";
+import {
+  Film,
+  Heart,
+  Link2,
+  ListPlus,
+  Music2,
+  Play,
+  Search,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
 import { useState, type FormEvent } from "react";
 
+import {
+  isLocalMediaTrack,
+  musicTrackIdentity,
+  type LocalMediaStorageMode,
+  type LocalMediaTrackProjection,
+  type MusicTrackProjection,
+} from "../../application/music/media-track";
 import type { YouTubeVideoProjection } from "../../application/music/youtube-music";
 import { useDialogDismiss } from "../dialog/useDialogDismiss";
+
+function storageModeLabel(mode: LocalMediaStorageMode): string {
+  return mode === "external-reference" ? "원본 위치 연결" : "앱에 가져오기";
+}
+
+function byteSize(value: number): string {
+  if (value < 1024) return `${value.toLocaleString()} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function trackSubtitle(track: MusicTrackProjection): string {
+  if (!isLocalMediaTrack(track)) return track.channel;
+  return [
+    track.fileName,
+    storageModeLabel(track.storageMode),
+    byteSize(track.byteLength),
+  ].join(" · ");
+}
 
 export function MusicLibraryDialog(input: {
   readonly connected: boolean;
   readonly error: string | null;
-  readonly favorites: readonly YouTubeVideoProjection[];
-  readonly onAddToQueue: (video: YouTubeVideoProjection) => void;
+  readonly favorites: readonly MusicTrackProjection[];
+  readonly localMedia: readonly LocalMediaTrackProjection[];
+  readonly onAddToQueue: (track: MusicTrackProjection) => void;
   readonly onClose: () => void;
   readonly onOpenConnectionSettings: () => void;
   readonly onPlayQueue: () => void;
-  readonly onPlayVideo: (video: YouTubeVideoProjection) => void;
-  readonly onRemoveFromQueue: (video: YouTubeVideoProjection) => void;
+  readonly onPlayTrack: (track: MusicTrackProjection) => void;
+  readonly onRegisterLocalMedia: (mode: LocalMediaStorageMode) => void;
+  readonly onRemoveFromQueue: (track: MusicTrackProjection) => void;
   readonly onSearch: (query: string) => void;
-  readonly onToggleFavorite: (video: YouTubeVideoProjection) => void;
-  readonly queue: readonly YouTubeVideoProjection[];
+  readonly onToggleFavorite: (track: MusicTrackProjection) => void;
+  readonly queue: readonly MusicTrackProjection[];
   readonly queueSaving: boolean;
+  readonly registeringMode: LocalMediaStorageMode | null;
   readonly results: readonly YouTubeVideoProjection[];
   readonly searching: boolean;
 }) {
   const [query, setQuery] = useState("");
-  const favoriteIds = new Set(input.favorites.map((video) => video.videoId));
-  const queueIds = new Set(input.queue.map((video) => video.videoId));
+  const [registrationMode, setRegistrationMode] =
+    useState<LocalMediaStorageMode>("external-reference");
+  const favoriteIds = new Set(input.favorites.map(musicTrackIdentity));
+  const queueIds = new Set(input.queue.map(musicTrackIdentity));
+  const busy = input.searching || input.queueSaving || input.registeringMode !== null;
   const onBackdropPointerDown = useDialogDismiss({
-    disabled: input.searching || input.queueSaving,
+    disabled: busy,
     onClose: input.onClose,
   });
 
@@ -35,68 +78,82 @@ export function MusicLibraryDialog(input: {
     if (normalized.length > 0) input.onSearch(normalized);
   }
 
-  const renderVideo = (
-    video: YouTubeVideoProjection,
-    mode: "result" | "favorite" | "queue",
-  ) => (
-    <li key={`${mode}:${video.videoId}`}>
-      {video.thumbnailUrl !== null && <img alt="" src={video.thumbnailUrl} />}
-      <span>
-        <strong>{video.title}</strong>
-        <small>{video.channel}</small>
-      </span>
-      <div>
-        <button
-          aria-label={`${video.title} 바로 재생`}
-          onClick={() => input.onPlayVideo(video)}
-          type="button"
-        >
-          <Play aria-hidden="true" size={14} />
-          재생
-        </button>
-        {mode !== "queue" && (
+  const renderTrack = (
+    track: MusicTrackProjection,
+    mode: "result" | "favorite" | "queue" | "local",
+  ) => {
+    const identity = musicTrackIdentity(track);
+    const favorite = favoriteIds.has(identity);
+    const queued = queueIds.has(identity);
+    const favoriteAction = isLocalMediaTrack(track)
+      ? favorite ? "즐겨찾기 해제" : "즐겨찾기 추가"
+      : favorite ? "선호 영상 해제" : "선호 영상 저장";
+    return (
+      <li key={`${mode}:${identity}`}>
+        {!isLocalMediaTrack(track) && track.thumbnailUrl !== null
+          ? <img alt="" src={track.thumbnailUrl} />
+          : (
+            <span className="music-library-media-icon" aria-hidden="true">
+              {isLocalMediaTrack(track) && track.mediaKind === "video"
+                ? <Film size={20} />
+                : <Music2 size={20} />}
+            </span>
+          )}
+        <span>
+          <strong>{track.title}</strong>
+          <small>{trackSubtitle(track)}</small>
+        </span>
+        <div>
           <button
-            aria-label={`${video.title} 재생목록에 추가`}
-            disabled={input.queueSaving || queueIds.has(video.videoId)}
-            onClick={() => input.onAddToQueue(video)}
+            aria-label={`${track.title} 바로 재생`}
+            onClick={() => input.onPlayTrack(track)}
             type="button"
           >
-            <ListPlus aria-hidden="true" size={14} />
-            {queueIds.has(video.videoId) ? "추가됨" : "목록 추가"}
+            <Play aria-hidden="true" size={14} />
+            재생
           </button>
-        )}
-        {mode === "queue" && (
-          <button
-            aria-label={`${video.title} 재생목록에서 제거`}
-            disabled={input.queueSaving}
-            onClick={() => input.onRemoveFromQueue(video)}
-            type="button"
-          >
-            <Trash2 aria-hidden="true" size={14} />
-            제거
-          </button>
-        )}
-        {mode !== "queue" && (
-          <button
-            aria-label={`${video.title} ${
-              favoriteIds.has(video.videoId) ? "선호 영상 해제" : "선호 영상 저장"
-            }`}
-            aria-pressed={favoriteIds.has(video.videoId)}
-            disabled={input.queueSaving}
-            onClick={() => input.onToggleFavorite(video)}
-            type="button"
-          >
-            <Heart
-              aria-hidden="true"
-              fill={favoriteIds.has(video.videoId) ? "currentColor" : "none"}
-              size={14}
-            />
-            {favoriteIds.has(video.videoId) ? "저장됨" : "선호 저장"}
-          </button>
-        )}
-      </div>
-    </li>
-  );
+          {mode !== "queue" && (
+            <button
+              aria-label={`${track.title} 재생목록에 추가`}
+              disabled={busy || queued}
+              onClick={() => input.onAddToQueue(track)}
+              type="button"
+            >
+              <ListPlus aria-hidden="true" size={14} />
+              {queued ? "추가됨" : "목록 추가"}
+            </button>
+          )}
+          {mode === "queue" && (
+            <button
+              aria-label={`${track.title} 재생목록에서 제거`}
+              disabled={busy}
+              onClick={() => input.onRemoveFromQueue(track)}
+              type="button"
+            >
+              <Trash2 aria-hidden="true" size={14} />
+              제거
+            </button>
+          )}
+          {mode !== "queue" && (
+            <button
+              aria-label={`${track.title} ${favoriteAction}`}
+              aria-pressed={favorite}
+              disabled={busy}
+              onClick={() => input.onToggleFavorite(track)}
+              type="button"
+            >
+              <Heart
+                aria-hidden="true"
+                fill={favorite ? "currentColor" : "none"}
+                size={14}
+              />
+              {favorite ? "저장됨" : "즐겨찾기"}
+            </button>
+          )}
+        </div>
+      </li>
+    );
+  };
 
   return (
     <div
@@ -110,17 +167,58 @@ export function MusicLibraryDialog(input: {
       >
         <header>
           <div>
-            <span>YOUTUBE MUSIC</span>
-            <h2>음악 선곡</h2>
+            <span>MEDIA PLAYER</span>
+            <h2>미디어 라이브러리</h2>
           </div>
           <button aria-label="음악 창 닫기" onClick={input.onClose} type="button">
             <X aria-hidden="true" size={18} />
           </button>
         </header>
 
+        <div className="music-library-register">
+          <div>
+            <strong>내 파일 등록</strong>
+            <small>여러 MP3·MP4 파일을 한 번에 선택할 수 있습니다.</small>
+          </div>
+          <fieldset aria-label="미디어 등록 방식">
+            <label>
+              <input
+                aria-label="원본 위치 연결"
+                checked={registrationMode === "external-reference"}
+                disabled={busy}
+                name="local-media-storage-mode"
+                onChange={() => setRegistrationMode("external-reference")}
+                type="radio"
+              />
+              <Link2 aria-hidden="true" size={13} />
+              원본 위치 연결
+            </label>
+            <label>
+              <input
+                aria-label="앱에 가져오기"
+                checked={registrationMode === "managed-copy"}
+                disabled={busy}
+                name="local-media-storage-mode"
+                onChange={() => setRegistrationMode("managed-copy")}
+                type="radio"
+              />
+              <Upload aria-hidden="true" size={13} />
+              앱에 가져오기
+            </label>
+          </fieldset>
+          <button
+            disabled={busy}
+            onClick={() => input.onRegisterLocalMedia(registrationMode)}
+            type="button"
+          >
+            <Music2 aria-hidden="true" size={15} />
+            {input.registeringMode === null ? "미디어 파일 등록" : "등록 중…"}
+          </button>
+        </div>
+
         {!input.connected && (
           <div className="music-library-connection" role="status">
-            <span>YouTube Data API 연결이 필요합니다.</span>
+            <span>YouTube 검색에는 Data API 연결이 필요합니다.</span>
             <button onClick={input.onOpenConnectionSettings} type="button">
               연결 설정
             </button>
@@ -132,14 +230,14 @@ export function MusicLibraryDialog(input: {
             <span className="visually-hidden">음악 검색어</span>
             <input
               aria-label="음악 검색어"
-              disabled={!input.connected || input.searching}
+              disabled={!input.connected || busy}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="곡, 분위기, OST를 검색하세요"
+              placeholder="YouTube에서 곡, 분위기, OST 검색"
               value={query}
             />
           </label>
           <button
-            disabled={!input.connected || input.searching || query.trim().length === 0}
+            disabled={!input.connected || busy || query.trim().length === 0}
             type="submit"
           >
             <Search aria-hidden="true" size={15} />
@@ -151,12 +249,12 @@ export function MusicLibraryDialog(input: {
         )}
 
         <div className="music-library-columns">
-          <section aria-label="검색 결과" className="music-library-results">
-            <header><h3>검색 결과</h3><span>{input.results.length}</span></header>
-            {input.results.length === 0
-              ? <p>검색하면 재생 가능한 영상이 여기에 표시됩니다.</p>
+          <section aria-label="내 미디어" className="music-library-local">
+            <header><h3>내 미디어</h3><span>{input.localMedia.length}</span></header>
+            {input.localMedia.length === 0
+              ? <p>등록한 MP3·MP4 파일이 여기에 표시됩니다.</p>
               : <ul className="music-library-scroll-list">{
-                  input.results.map((video) => renderVideo(video, "result"))
+                  input.localMedia.map((track) => renderTrack(track, "local"))
                 }</ul>}
           </section>
           <section aria-label="재생목록" className="music-library-queue">
@@ -176,17 +274,25 @@ export function MusicLibraryDialog(input: {
               </button>
             </header>
             {input.queue.length === 0
-              ? <p>검색 결과나 선호 영상에서 곡을 추가하세요.</p>
+              ? <p>내 미디어나 검색 결과에서 곡을 추가하세요.</p>
               : <ol className="music-library-scroll-list">{
-                  input.queue.map((video) => renderVideo(video, "queue"))
+                  input.queue.map((track) => renderTrack(track, "queue"))
                 }</ol>}
           </section>
-          <section aria-label="선호 영상" className="music-library-favorites">
-            <header><h3>선호 영상</h3><span>{input.favorites.length}</span></header>
-            {input.favorites.length === 0
-              ? <p>저장한 선호 영상이 여기에 남습니다.</p>
+          <section aria-label="검색 결과" className="music-library-results">
+            <header><h3>YouTube 검색</h3><span>{input.results.length}</span></header>
+            {input.results.length === 0
+              ? <p>검색하면 재생 가능한 영상이 여기에 표시됩니다.</p>
               : <ul className="music-library-scroll-list">{
-                  input.favorites.map((video) => renderVideo(video, "favorite"))
+                  input.results.map((track) => renderTrack(track, "result"))
+                }</ul>}
+          </section>
+          <section aria-label="즐겨찾기" className="music-library-favorites">
+            <header><h3>즐겨찾기</h3><span>{input.favorites.length}</span></header>
+            {input.favorites.length === 0
+              ? <p>저장한 미디어가 여기에 남습니다.</p>
+              : <ul className="music-library-scroll-list">{
+                  input.favorites.map((track) => renderTrack(track, "favorite"))
                 }</ul>}
           </section>
         </div>

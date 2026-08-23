@@ -30,8 +30,9 @@ describe("work music settings", () => {
       settings: profile.workDefaults,
       updatedAt: null,
     });
-    expect(profile.workDefaults.favoriteVideos).toEqual([]);
-    expect(profile.workDefaults.playlistVideos).toEqual([]);
+    expect(profile.workDefaults.favoriteTracks).toEqual([]);
+    expect(profile.workDefaults.playlistTracks).toEqual([]);
+    expect(profile.workDefaults.localMedia).toEqual([]);
   });
 
   it("preserves unique favorite videos in Work-owned settings", () => {
@@ -51,9 +52,9 @@ describe("work music settings", () => {
       expectedRevision: 2,
       settings: {
         ...profile.workDefaults,
-        favoriteVideos: [favorite],
+        favoriteTracks: [favorite],
       },
-    }, profile).settings.favoriteVideos).toEqual([favorite]);
+    }, profile).settings.favoriteTracks).toEqual([favorite]);
   });
 
   it("preserves the ordered playlist in Work-owned settings", () => {
@@ -73,9 +74,76 @@ describe("work music settings", () => {
       expectedRevision: 2,
       settings: {
         ...profile.workDefaults,
-        playlistVideos: videos,
+        playlistTracks: videos,
       },
-    }, profile).settings.playlistVideos).toEqual(videos);
+    }, profile).settings.playlistTracks).toEqual(videos);
+  });
+
+  it("preserves registered local media and an ordered mixed playlist", () => {
+    const workId = entityId<"Work">("work-music-a");
+    const localTrack = {
+      sourceKind: "local-file",
+      mediaId: "media-a",
+      workId,
+      title: "빗소리",
+      fileName: "rain.mp3",
+      mediaKind: "audio",
+      mediaType: "audio/mpeg",
+      storageMode: "external-reference",
+      byteLength: 128,
+    } as const;
+    const youtubeTrack = {
+      providerId: "youtube",
+      videoId: "video-a",
+      title: "집중 음악",
+      channel: "작곡가",
+      thumbnailUrl: null,
+      externalUrl: "https://www.youtube.com/watch?v=video-a",
+    };
+
+    const settings = parseSaveWorkMusicSettingsCommand({
+      schemaVersion: 1,
+      workId,
+      expectedRevision: 2,
+      settings: {
+        ...profile.workDefaults,
+        localMedia: [localTrack],
+        playlistTracks: [youtubeTrack, localTrack],
+      },
+    }, profile).settings;
+
+    expect(settings.localMedia).toEqual([localTrack]);
+    expect(settings.playlistTracks).toEqual([youtubeTrack, localTrack]);
+  });
+
+  it("reads the previous YouTube-only field names into the unified track fields", () => {
+    const workId = entityId<"Work">("work-music-a");
+    const video = {
+      providerId: "youtube",
+      videoId: "legacy-video",
+      title: "기존 영상",
+      channel: "채널",
+      thumbnailUrl: null,
+      externalUrl: "https://www.youtube.com/watch?v=legacy-video",
+    };
+
+    const settings = parseSaveWorkMusicSettingsCommand({
+      schemaVersion: 1,
+      workId,
+      expectedRevision: 2,
+      settings: {
+        autoOnEpisodeTransition: false,
+        autoOnSceneTransition: false,
+        autoPlayOnPomodoroStart: true,
+        preciseSelection: false,
+        transitionPlaybackMode: "restart",
+        favoriteVideos: [video],
+        playlistVideos: [video],
+      },
+    }, profile).settings;
+
+    expect(settings.favoriteTracks).toEqual([video]);
+    expect(settings.playlistTracks).toEqual([video]);
   });
 
   it("accepts only the configured transition playback modes", () => {

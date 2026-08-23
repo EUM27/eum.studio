@@ -8,6 +8,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   rm,
   writeFile,
 } from "node:fs/promises";
@@ -2358,6 +2359,110 @@ test("edits and restores exact manuscript formatting in the local workspace", as
     );
   } finally {
     await electronApp.close();
+    await removeVerifiedTemporaryDirectory(directory);
+  }
+});
+
+test("formats manuscript blank lines from the additional formatting tools", async () => {
+  test.setTimeout(90_000);
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "eum-studio-blank-line-formatting-"),
+  );
+  const runtimeEnvironment = {
+    ...process.env,
+    EUM_STUDIO_TEST_EPHEMERAL_WORKSPACE: "0",
+    EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH: directory,
+    EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+  };
+  const electronArguments = [
+    ".",
+    `--user-data-dir=${path.join(directory, "electron-user-data")}`,
+  ];
+  const source = "첫 줄\n둘째 줄\n\n\n셋째 줄";
+  const oneBlankLine = "첫 줄\n\n둘째 줄\n\n셋째 줄";
+  const twoBlankLines = "첫 줄\n\n\n둘째 줄\n\n\n셋째 줄";
+  const noBlankLines = "첫 줄\n둘째 줄\n셋째 줄";
+  let electronApp = await electron.launch({
+    args: electronArguments,
+    cwd: process.cwd(),
+    env: runtimeEnvironment,
+  });
+
+  try {
+    let page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page
+      .getByRole("button", { name: "작품 만들기", exact: true })
+      .click();
+    const createWorkDialog = page.getByRole("dialog", {
+      name: "새 작품 만들기",
+    });
+    await createWorkDialog.getByLabel("작품 제목").fill(randomUUID());
+    await createWorkDialog.getByLabel("첫 회차 제목").fill(randomUUID());
+    await createWorkDialog
+      .getByRole("button", { name: "작품 만들기", exact: true })
+      .click();
+
+    const manuscript = page.getByRole("textbox", { name: "원고" });
+    await manuscript.pressSequentially("첫 줄");
+    await manuscript.press("Enter");
+    await manuscript.pressSequentially("둘째 줄");
+    await manuscript.press("Enter");
+    await manuscript.press("Enter");
+    await manuscript.press("Enter");
+    await manuscript.pressSequentially("셋째 줄");
+    await expectEditorText(manuscript, source);
+
+    await page
+      .getByRole("button", { name: "추가 서식 도구 열기", exact: true })
+      .click();
+    const formattingDialog = page.getByRole("dialog", {
+      name: "추가 서식 도구",
+      exact: true,
+    });
+    await formattingDialog
+      .getByRole("button", { name: "1줄 띄우기", exact: true })
+      .click();
+    await expectEditorText(manuscript, oneBlankLine);
+    await manuscript.press("Control+z");
+    await expectEditorText(manuscript, source);
+    await manuscript.press("Control+y");
+    await expectEditorText(manuscript, oneBlankLine);
+
+    await formattingDialog
+      .getByRole("button", { name: "2줄 띄우기", exact: true })
+      .click();
+    await expectEditorText(manuscript, twoBlankLines);
+    await manuscript.press("Control+z");
+    await expectEditorText(manuscript, oneBlankLine);
+    await formattingDialog
+      .getByRole("button", { name: "2줄 띄우기", exact: true })
+      .click();
+    await expectEditorText(manuscript, twoBlankLines);
+
+    await formattingDialog
+      .getByRole("button", { name: "빈줄 제거", exact: true })
+      .click();
+    await expectEditorText(manuscript, noBlankLines);
+    await manuscript.press("Control+z");
+    await expectEditorText(manuscript, twoBlankLines);
+    await manuscript.press("Control+y");
+    await expectEditorText(manuscript, noBlankLines);
+    await expect(page.getByTestId("save-state")).toHaveText("저장됨");
+
+    await electronApp.close();
+    electronApp = await electron.launch({
+      args: electronArguments,
+      cwd: process.cwd(),
+      env: runtimeEnvironment,
+    });
+    page = await openStudioWorkspace(electronApp);
+    await expectEditorText(
+      page.getByRole("textbox", { name: "원고" }),
+      noBlankLines,
+    );
+  } finally {
+    await electronApp.close().catch(() => undefined);
     await removeVerifiedTemporaryDirectory(directory);
   }
 });
@@ -4736,7 +4841,7 @@ test("uses local inspiration draws and keeps GPT scene work separate", async () 
       .click();
     const manuscript = page.getByRole("textbox", { name: "원고" });
     const musicPlayer = page.getByRole("region", { name: "음악 플레이어" });
-    await expect(musicPlayer).toContainText("YouTube 재생 대기");
+    await expect(musicPlayer).toContainText("재생할 곡을 선택하세요");
     await expect(musicPlayer.getByRole("button", {
       name: "선곡·재생목록 열기",
       exact: true,
@@ -4770,14 +4875,18 @@ test("uses local inspiration draws and keeps GPT scene work separate", async () 
       .click();
     await expect.poll(() => youtubeSearches.length).toBe(1);
     expect(youtubeSearches[0]).toContain(generalMusicQuery);
-    const generalMusicResult = musicLibrary.getByRole("listitem")
+    const generalMusicResults = musicLibrary.getByRole("region", {
+      name: "검색 결과",
+      exact: true,
+    });
+    const generalMusicResult = generalMusicResults.getByRole("listitem")
       .filter({ hasText: "장면 큐 1" }).first();
     await expect(generalMusicResult).toBeVisible();
     await generalMusicResult.getByRole("button", {
       name: "장면 큐 1 재생목록에 추가",
       exact: true,
     }).click();
-    const secondMusicResult = musicLibrary.getByRole("listitem")
+    const secondMusicResult = generalMusicResults.getByRole("listitem")
       .filter({ hasText: "장면 큐 2" }).first();
     await secondMusicResult.getByRole("button", {
       name: "장면 큐 2 재생목록에 추가",
@@ -4809,14 +4918,14 @@ test("uses local inspiration draws and keeps GPT scene work separate", async () 
     await musicLibrary.getByRole("button", { name: "검색", exact: true })
       .click();
     await expect.poll(() => youtubeSearches.length).toBe(2);
-    const thirdMusicResult = musicLibrary.getByRole("listitem")
+    const thirdMusicResult = generalMusicResults.getByRole("listitem")
       .filter({ hasText: "장면 큐 3" }).first();
     await thirdMusicResult.getByRole("button", {
       name: "장면 큐 3 재생목록에 추가",
       exact: true,
     }).click();
     for (const index of [4, 5, 6]) {
-      const result = musicLibrary.getByRole("listitem")
+      const result = generalMusicResults.getByRole("listitem")
         .filter({ hasText: `장면 큐 ${index}` }).first();
       await result.getByRole("button", {
         name: `장면 큐 ${index} 재생목록에 추가`,
@@ -4848,7 +4957,9 @@ test("uses local inspiration draws and keeps GPT scene work separate", async () 
         schemaVersion: 1,
         workId: catalog.activeWorkId,
       });
-      return settings.settings.playlistVideos.map((video) => video.videoId);
+      return settings.settings.playlistTracks.map((track) =>
+        "videoId" in track ? track.videoId : null
+      );
     })).toEqual(Array.from({ length: 6 }, (_value, index) =>
       `queue-video-${index + 1}`
     ));
@@ -5097,7 +5208,9 @@ test("uses local inspiration draws and keeps GPT scene work separate", async () 
         schemaVersion: 1,
         workId: catalog.activeWorkId,
       });
-      return settings.settings.favoriteVideos.map((video) => video.videoId);
+      return settings.settings.favoriteTracks.map((track) =>
+        "videoId" in track ? track.videoId : null
+      );
     })).toEqual(["queue-video-1", "queue-video-4"]);
     expect((await page.evaluate(() =>
       (window as unknown as { __youtubePlayerCalls?: string[] })
@@ -5279,7 +5392,7 @@ test("uses local inspiration draws and keeps GPT scene work separate", async () 
     page = await openStudioWorkspace(electronApp);
     await installFakeYouTubePlayer(page);
     await expect(page.getByRole("region", { name: "음악 플레이어" }))
-      .toContainText("YouTube 재생 대기");
+      .toContainText("재생할 곡을 선택하세요");
     await page.getByRole("button", {
       name: "선곡·재생목록 열기",
       exact: true,
@@ -5769,7 +5882,15 @@ test("uses the fixed Work header across IA sections and preserves the mounted ma
     await openWorkSection(page, "운영");
     const workOperations = page.getByRole("region", { name: "작품 운영 작업면" });
     await expect(workOperations).toBeVisible();
-    await workOperations.getByRole("button", { name: /^투고/u }).click();
+    await expect(workOperations).not.toContainText(
+      "현재 작품으로 범위가 고정된 운영 진입점입니다.",
+    );
+    await expect(workOperations.getByRole("button")).toHaveText([
+      "투고",
+      "계약·발행",
+      "정산·입금",
+    ]);
+    await workOperations.getByRole("button", { name: "투고", exact: true }).click();
     const publishingDialog = page.getByRole("dialog", { name: "투고" });
     await expect(
       publishingDialog.locator(".publishing-workspace-tabs button:visible"),
@@ -11853,10 +11974,49 @@ test("centers the manuscript surface in the focus screen", async () => {
 
   try {
     const window = await openStudioWorkspace(electronApp);
+    const initialCharacterCount = Number.parseInt(
+      await window.getByTestId("manuscript-character-count").innerText(),
+      10,
+    );
     await window
       .getByRole("button", { name: "집중 화면 시작", exact: true })
       .click();
     await expect(window.locator(".writing-workspace-focus-mode")).toBeVisible();
+    const focusCharacterCount = window.getByTestId(
+      "focus-document-character-count",
+    );
+    await expect(focusCharacterCount).toHaveText(
+      `현재 회차 ${initialCharacterCount}자`,
+    );
+    const floatingTypography = await window.evaluate(() => {
+      const fontSize = (selector: string) => {
+        const element = document.querySelector<HTMLElement>(selector);
+        if (element === null) {
+          throw new Error(`Missing focus toolbar element: ${selector}`);
+        }
+        return globalThis.getComputedStyle(element).fontSize;
+      };
+      return {
+        status: fontSize(".focus-mode-document-character-count"),
+        title: fontSize(".focus-mode-toolbar-title strong"),
+        control: fontSize(".focus-mode-width-control"),
+        button: fontSize(".focus-mode-toolbar button"),
+      };
+    });
+    expect(floatingTypography).toEqual({
+      status: "12px",
+      title: "13px",
+      control: "12px",
+      button: "12px",
+    });
+
+    const manuscript = window.getByRole("textbox", { name: "원고" });
+    await manuscript.click();
+    await manuscript.press("Control+End");
+    await manuscript.pressSequentially("끝");
+    await expect(focusCharacterCount).toHaveText(
+      `현재 회차 ${initialCharacterCount + 1}자`,
+    );
 
     const focusLayout = await window.evaluate(() => {
       const shell = document.querySelector<HTMLElement>(".studio-app-shell");
@@ -12621,6 +12781,320 @@ test("keeps the playlist entry on one top-bar row at the 150-percent CSS viewpor
     await expect(musicDialog).toBeHidden();
   } finally {
     await electronApp.close().catch(() => undefined);
+    await removeVerifiedTemporaryDirectory(directory);
+  }
+});
+
+test("mixes YouTube with linked and managed MP3/MP4 files in the compact player", async () => {
+  test.setTimeout(120_000);
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "eum-studio-local-media-e2e-"),
+  );
+  const sourceDirectory = path.join(directory, "source-media");
+  await mkdir(sourceDirectory, { recursive: true });
+  const mp3Path = path.join(sourceDirectory, "linked-track.mp3");
+  const mp4Path = path.join(sourceDirectory, "managed-video.mp4");
+  const mp3Bytes = Buffer.from(
+    "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYyLjEyLjEwMQAAAAAAAAAAAAAA//tAwAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAALAAAFMwA3Nzc3Nzc3NzdLS0tLS0tLS0tfX19fX19fX19zc3Nzc3Nzc3OHh4eHh4eHh4ebm5ubm5ubm5uvr6+vr6+vr6/Dw8PDw8PDw8PX19fX19fX19fr6+vr6+vr6+v///////////8AAAAATGF2YzYyLjI4AAAAAAAAAAAAAAAAJAQvAAAAAAAABTMXaM+kAAAAAAD/+xDEAAPAAAGkAAAAIAAANIAAAARMQU1FMy4xMDBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRTMuMTAwVf/7EsQpg8AAAaQAAAAgAAA0gAAABFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRTMuMTAwVf/7EMRTg8AAAaQAAAAgAAA0gAAABFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVMQU1FMy4xMDBV//sSxH0DwAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVMQU1FMy4xMDBV//sQxKcDwAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUxBTUUzLjEwMFX/+xLE0IPAAAGkAAAAIAAANIAAAARVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/+xDE1gPAAAGkAAAAIAAANIAAAARVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/7EsTVg8AAAaQAAAAgAAA0gAAABFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/7EMTWA8AAAaQAAAAgAAA0gAAABFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sSxNWDwAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQxNYDwAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=",
+    "base64",
+  );
+  const mp4Bytes = Buffer.from(
+    "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",
+    "base64",
+  );
+  await writeFile(mp3Path, mp3Bytes);
+  await writeFile(mp4Path, mp4Bytes);
+  const youtubeSearches: string[] = [];
+  const upstream = createServer((request, response) => {
+    const requestUrl = new URL(request.url ?? "/", "http://127.0.0.1");
+    if (request.method === "GET" && requestUrl.pathname === "/youtube/v3/search") {
+      youtubeSearches.push(requestUrl.searchParams.get("q") ?? "");
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({
+        items: [{
+          id: { videoId: "mixed-youtube-track" },
+          snippet: {
+            title: "혼합 큐 YouTube",
+            channelTitle: "테스트 채널",
+            thumbnails: {},
+          },
+        }],
+      }));
+      return;
+    }
+    response.writeHead(404);
+    response.end();
+  });
+  await new Promise<void>((resolve, reject) => {
+    upstream.once("error", reject);
+    upstream.listen(0, "127.0.0.1", () => resolve());
+  });
+  const address = upstream.address();
+  if (address === null || typeof address === "string") {
+    throw new Error("Expected a loopback YouTube server");
+  }
+  const youtubeProfile = {
+    schemaVersion: 1,
+    providerId: "youtube",
+    displayName: "YouTube",
+    searchApiBaseUrl: `http://127.0.0.1:${address.port}/youtube/v3`,
+    iframeApiUrl: "https://www.youtube.com/iframe_api",
+    watchBaseUrl: "https://www.youtube.com/watch",
+    playerReferer: "https://eum-studio/",
+    searchLimit: 6,
+    videosPerOption: 3,
+    requestTimeoutMs: 10_000,
+  } as const;
+  const userDataPath = path.join(directory, "electron-user-data");
+  const runtimeEnvironment = {
+    ...process.env,
+    EUM_STUDIO_TEST_EPHEMERAL_WORKSPACE: "0",
+    EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH: directory,
+    EUM_STUDIO_LOCAL_MEDIA_SELECTION_PATHS: JSON.stringify([mp3Path, mp4Path]),
+    EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+    EUM_STUDIO_YOUTUBE_MUSIC_PROFILE: JSON.stringify(youtubeProfile),
+  };
+  const electronArguments = [".", `--user-data-dir=${userDataPath}`];
+  let electronApp = await electron.launch({
+    args: electronArguments,
+    cwd: process.cwd(),
+    env: runtimeEnvironment,
+  });
+
+  try {
+    let page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await installFakeYouTubePlayer(page);
+    await page
+      .getByRole("button", { name: "작품 만들기", exact: true })
+      .click();
+    const createWorkDialog = page.getByRole("dialog", {
+      name: "새 작품 만들기",
+    });
+    await createWorkDialog.getByLabel("작품 제목").fill(randomUUID());
+    await createWorkDialog.getByLabel("첫 회차 제목").fill(randomUUID());
+    await createWorkDialog
+      .getByRole("button", { name: "작품 만들기", exact: true })
+      .click();
+
+    await page.getByRole("button", { name: "앱 설정 열기", exact: true }).click();
+    const settingsDialog = page.getByRole("dialog", { name: "앱 설정" });
+    await settingsDialog.getByLabel("YouTube Data API 키").fill("mixed-test-key");
+    await settingsDialog.getByRole("button", { name: "저장", exact: true }).click();
+    await expect(settingsDialog).toBeHidden();
+
+    let player = page.getByRole("region", { name: "음악 플레이어" });
+    await player.getByRole("button", {
+      name: "선곡·재생목록 열기",
+      exact: true,
+    }).click();
+    let library = page.getByRole("dialog", {
+      name: "음악 선곡과 재생목록",
+      exact: true,
+    });
+    await expect(library.getByLabel("원본 위치 연결", { exact: true }))
+      .toBeChecked();
+    await library.getByRole("button", {
+      name: "미디어 파일 등록",
+      exact: true,
+    }).click();
+    const localMedia = library.getByRole("region", {
+      name: "내 미디어",
+      exact: true,
+    });
+    await expect(localMedia.getByRole("listitem")).toHaveCount(2);
+    await expect(localMedia).toContainText("원본 위치 연결");
+
+    await library.getByLabel("앱에 가져오기", { exact: true }).check();
+    await library.getByRole("button", {
+      name: "미디어 파일 등록",
+      exact: true,
+    }).click();
+    await expect(localMedia.getByRole("listitem")).toHaveCount(4);
+    await expect(localMedia).toContainText("앱에 가져오기");
+
+    await library.getByLabel("음악 검색어", { exact: true })
+      .fill("혼합 재생 테스트");
+    await library.getByRole("button", { name: "검색", exact: true }).click();
+    await expect.poll(() => youtubeSearches.length).toBe(1);
+    const youtubeResult = library.getByRole("region", {
+      name: "검색 결과",
+      exact: true,
+    }).getByRole("listitem").filter({ hasText: "혼합 큐 YouTube" });
+    await youtubeResult.getByRole("button", {
+      name: "혼합 큐 YouTube 재생목록에 추가",
+      exact: true,
+    }).click();
+
+    const linkedMp3 = localMedia.getByRole("listitem")
+      .filter({ hasText: "linked-track.mp3" })
+      .filter({ hasText: "원본 위치 연결" });
+    const localMediaElement = page.locator(".music-mini-local-media");
+    await page.evaluate(() => {
+      const testWindow = window as unknown as { __localMediaPlayCount?: number };
+      testWindow.__localMediaPlayCount = 0;
+      document.addEventListener("play", (event) => {
+        if (
+          event.target instanceof HTMLMediaElement &&
+          event.target.classList.contains("music-mini-local-media")
+        ) {
+          testWindow.__localMediaPlayCount =
+            (testWindow.__localMediaPlayCount ?? 0) + 1;
+        }
+      }, true);
+    });
+    await linkedMp3.getByRole("button", {
+      name: "linked-track 바로 재생",
+      exact: true,
+    }).click();
+    await expect(player).toContainText("linked-track");
+    await expect(localMediaElement).toHaveAttribute(
+      "src",
+      /^eum-media:\/\/library\//u,
+    );
+    const localMediaUrl = await localMediaElement.getAttribute("src");
+    const streamed = await page.evaluate(async (url) => {
+      const response = await fetch(url!, {
+        headers: { Range: "bytes=0-127" },
+      });
+      return {
+        acceptRanges: response.headers.get("accept-ranges"),
+        bytes: Array.from(new Uint8Array(await response.arrayBuffer())),
+        contentRange: response.headers.get("content-range"),
+        contentType: response.headers.get("content-type"),
+        status: response.status,
+      };
+    }, localMediaUrl);
+    expect(streamed).toMatchObject({
+      acceptRanges: "bytes",
+      contentRange: `bytes 0-127/${mp3Bytes.length}`,
+      contentType: "audio/mpeg",
+      status: 206,
+    });
+    expect(streamed.bytes).toEqual(Array.from(mp3Bytes.subarray(0, 128)));
+    await expect.poll(() => page.evaluate(() =>
+      (window as unknown as { __localMediaPlayCount?: number })
+        .__localMediaPlayCount ?? 0
+    )).toBeGreaterThan(0);
+    expect(await localMediaElement.evaluate((media) =>
+      (media as HTMLMediaElement).error?.code ?? null
+    ))
+      .toBeNull();
+    const managedMp4 = localMedia.getByRole("listitem")
+      .filter({ hasText: "managed-video.mp4" })
+      .filter({ hasText: "앱에 가져오기" });
+    const playCountBeforeMp4 = await page.evaluate(() =>
+      (window as unknown as { __localMediaPlayCount?: number })
+        .__localMediaPlayCount ?? 0
+    );
+    await managedMp4.getByRole("button", {
+      name: "managed-video 바로 재생",
+      exact: true,
+    }).click();
+    await expect(player).toContainText("managed-video");
+    await expect.poll(() => page.evaluate(() =>
+      (window as unknown as { __localMediaPlayCount?: number })
+        .__localMediaPlayCount ?? 0
+    )).toBeGreaterThan(playCountBeforeMp4);
+    await expect(player.getByRole("button", {
+      name: "동영상 표시",
+      exact: true,
+    })).toBeEnabled();
+    const managedMediaUrl = await localMediaElement.getAttribute("src");
+    expect(managedMediaUrl).toMatch(/^eum-media:\/\/library\//u);
+    expect(managedMediaUrl).not.toBe(localMediaUrl);
+    const streamedVideo = await page.evaluate(async (url) => {
+      const response = await fetch(url!, {
+        headers: { Range: "bytes=0-127" },
+      });
+      return {
+        bytes: Array.from(new Uint8Array(await response.arrayBuffer())),
+        contentRange: response.headers.get("content-range"),
+        contentType: response.headers.get("content-type"),
+        status: response.status,
+      };
+    }, managedMediaUrl);
+    expect(streamedVideo).toMatchObject({
+      contentRange: `bytes 0-127/${mp4Bytes.length}`,
+      contentType: "video/mp4",
+      status: 206,
+    });
+    expect(streamedVideo.bytes).toEqual(Array.from(mp4Bytes.subarray(0, 128)));
+    expect(await localMediaElement.evaluate((media) =>
+      (media as HTMLMediaElement).error?.code ?? null
+    ))
+      .toBeNull();
+    await linkedMp3.getByRole("button", {
+      name: "linked-track 재생목록에 추가",
+      exact: true,
+    }).click();
+    await managedMp4.getByRole("button", {
+      name: "managed-video 재생목록에 추가",
+      exact: true,
+    }).click();
+    const mixedQueue = library.getByRole("region", {
+      name: "재생목록",
+      exact: true,
+    });
+    await expect(mixedQueue.getByRole("listitem")).toHaveCount(3);
+    await mixedQueue.getByRole("button", { name: "전체 재생", exact: true })
+      .click();
+    await expect.poll(async () => (await page.evaluate(() =>
+      (window as unknown as { __youtubePlayerCalls?: string[] })
+        .__youtubePlayerCalls ?? []
+    )).filter((entry) => entry.startsWith("load:")))
+      .toContain("load:mixed-youtube-track");
+    await library.getByRole("button", {
+      name: "음악 창 닫기",
+      exact: true,
+    }).click();
+    const playCountBeforeNext = await page.evaluate(() =>
+      (window as unknown as { __localMediaPlayCount?: number })
+        .__localMediaPlayCount ?? 0
+    );
+    await player.getByRole("button", { name: "다음 곡", exact: true }).click();
+    await expect(player).toContainText("linked-track");
+    await expect.poll(() => page.evaluate(() =>
+      (window as unknown as { __localMediaPlayCount?: number })
+        .__localMediaPlayCount ?? 0
+    )).toBeGreaterThan(playCountBeforeNext);
+
+    const mediaRoot = path.join(userDataPath, "local-media-library-v1");
+    await expect.poll(async () =>
+      (await readdir(path.join(mediaRoot, "entries"))).length
+    ).toBe(4);
+    expect((await readdir(path.join(mediaRoot, "files"))).length).toBe(2);
+
+    await electronApp.close();
+    electronApp = await electron.launch({
+      args: electronArguments,
+      cwd: process.cwd(),
+      env: runtimeEnvironment,
+    });
+    page = await openStudioWorkspace(electronApp);
+    await installFakeYouTubePlayer(page);
+    player = page.getByRole("region", { name: "음악 플레이어" });
+    await player.getByRole("button", {
+      name: "선곡·재생목록 열기",
+      exact: true,
+    }).click();
+    library = page.getByRole("dialog", {
+      name: "음악 선곡과 재생목록",
+      exact: true,
+    });
+    await expect(library.getByLabel("원본 위치 연결", { exact: true }))
+      .toBeChecked();
+    await expect(library.getByRole("region", {
+      name: "내 미디어",
+      exact: true,
+    }).getByRole("listitem")).toHaveCount(4);
+    await expect(library.getByRole("region", {
+      name: "재생목록",
+      exact: true,
+    }).getByRole("listitem")).toHaveCount(3);
+  } finally {
+    await electronApp.close().catch(() => undefined);
+    await new Promise<void>((resolve) => upstream.close(() => resolve()));
     await removeVerifiedTemporaryDirectory(directory);
   }
 });

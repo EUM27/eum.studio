@@ -16,6 +16,18 @@ function ruleFor(selector: string): string {
   return match[1];
 }
 
+function lastRuleFor(selector: string): string {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const matches = [
+    ...stylesheet.matchAll(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`, "gm")),
+  ];
+  const match = matches.at(-1);
+  if (match?.[1] === undefined) {
+    throw new Error(`Missing CSS rule: ${selector}`);
+  }
+  return match[1];
+}
+
 describe("studio home layout", () => {
   it("keeps the resume action compact and the library visually balanced", () => {
     const homeShell = ruleFor(
@@ -80,5 +92,37 @@ describe("studio home layout", () => {
 
     expect(focusShell).toContain("--eum-sidebar-width: 0px");
     expect(focusWorkspace).toContain("grid-column: 1 / -1");
+  });
+
+  it("keeps all focus floating toolbar text readable", () => {
+    const statusTitle = ruleFor(
+      ".studio-app-shell .focus-mode-pomodoro-status strong",
+    );
+    const statusDetail = ruleFor(
+      ".studio-app-shell .focus-mode-pomodoro-status span",
+    );
+    const statusTimer = lastRuleFor(
+      ".studio-app-shell .focus-mode-pomodoro-status output",
+    );
+    const toolbarTitle = ruleFor(
+      ".studio-app-shell .focus-mode-toolbar-title strong",
+    );
+    const toolbarDetail = ruleFor(
+      ".studio-app-shell .focus-mode-toolbar-title span,\n.studio-app-shell .focus-mode-save-status",
+    );
+    const toolbarControls = ruleFor(
+      ".studio-app-shell .focus-mode-width-control,\n.studio-app-shell .focus-mode-zoom-control,\n.studio-app-shell .focus-mode-typewriter-position",
+    );
+    const toolbarButton = ruleFor(
+      ".studio-app-shell .focus-mode-toolbar button",
+    );
+
+    expect(statusTitle).toContain("font-size: 13px");
+    expect(statusDetail).toContain("font-size: 12px");
+    expect(statusTimer).toContain("font-size: 14px");
+    expect(toolbarTitle).toContain("font-size: 13px");
+    expect(toolbarDetail).toContain("font-size: 12px");
+    expect(toolbarControls).toContain("font-size: 12px");
+    expect(toolbarButton).toContain("font-size: 12px");
   });
 });

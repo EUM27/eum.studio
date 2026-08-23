@@ -3207,6 +3207,7 @@ export function StudioShell() {
                 embedded
                 eventRailHost={eventRailHost}
                 musicPlayerHost={musicPlayerHost}
+                musicSettingsRevision={workMusicSettingsProjection?.revision ?? 0}
                 onCatalogChange={acceptCatalog}
                 onOpenPublishing={openPublishingPartners}
                 onOpenSettings={openAppSettings}

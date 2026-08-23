@@ -4,7 +4,11 @@
 
 ## 현재 상태
 
-`정식 작업면 복원 Gate 13 — 별빛 서재 테마 전체 이주` 완료
+`음악 Gate 14 — YouTube·로컬 파일 통합 미디어 플레이어` 완료
+
+기존 YouTube 검색·장면 큐·집중 시작 재생을 유지하면서 작품별 미디어 라이브러리에 MP3·MP4를 등록하고 같은 재생목록에서 섞어 재생한다. 등록 기본값은 `원본 위치 연결`이며 `앱에 가져오기`도 선택할 수 있다. 로컬 절대 경로는 renderer에 노출하지 않고 main process의 opaque descriptor와 `eum-media://` 단일-range 스트리밍으로 재생한다. 상단 플레이어는 곡 정보·진행 위치·셔플·이전/재생/다음·반복·음량·영상·정지·목록을 한 줄에 둔 컴팩트 형태로 바꿨고, production Electron에서 YouTube→원본 MP3→관리형 MP4 혼합 큐와 완전 재실행 복원을 검증했다.
+
+직전 `정식 작업면 복원 Gate 13 — 별빛 서재 테마 전체 이주`도 완료 상태를 유지한다.
 
 지정된 `별빛서재_테마수정완료.html`의 테마 코드를 현재 제품 셸에 이식했다. 원본 순서와 표시명을 유지한 밝은 테마 7개·어두운 테마 7개, 각 배경·패널·본문·보조문자·강조·경계·입력·caret·버튼·그림자·focus backdrop 값, Pretendard UI 글꼴, 상단 300px 2열 테마 선택기, `starlight_theme` 선택 저장·재실행 복원을 production Electron에서 검증했다. 현재 Work·Document·원고·세션·저장 동작과 화면 구조는 바꾸지 않고 테마 표면만 대응했다.
 
@@ -12,7 +16,7 @@
 
 인물 작업면은 `인물 목록 | 확정 상세 | 인물 뽑기`, 플롯 작업면은 `플롯 목록 | 확정 상세 | 사건 뽑기`의 3열 구조다. 두 뽑기 도구는 GPT가 아니라 런타임 manifest와 작품별 사용자 키워드를 사용하는 로컬 랜덤 도구이며, 키워드는 Work 소유 SQLite 설정으로 재실행 뒤에도 유지된다. GPT 원고 추출 Candidate는 뽑기 도구와 분리해 편집기 우측 `조수` 검토함에서만 실행·검토한다.
 
-사건 레일은 플롯 탭이나 우측 검토 레일이 아니라 편집기 바로 아래 전체 폭에 놓인다. 원고 위치에서 파생된 동일 폭 사건 카드를 가로로 표시하고, 현재 커서 사건을 조용히 강조하며, 카드를 누르면 exact 원고 범위를 연다. 기본 레일은 구조를 편집하지 않는다. 음악은 Spotify 경로 없이 기존 YouTube Data API 연결만 사용하며, 마리나라 엔진의 서버측 검색 필터와 내장 IFrame 재생 방식을 따라 모든 작업면 상단에 항상 보이는 미니 플레이어로 표시한다. 상세 증거는 [현재 실행 상태](plan.md)에 기록한다.
+사건 레일은 플롯 탭이나 우측 검토 레일이 아니라 편집기 바로 아래 전체 폭에 놓인다. 원고 위치에서 파생된 동일 폭 사건 카드를 가로로 표시하고, 현재 커서 사건을 조용히 강조하며, 카드를 누르면 exact 원고 범위를 연다. 기본 레일은 구조를 편집하지 않는다. 음악은 Spotify 경로 없이 기존 YouTube Data API 검색·IFrame 재생과 로컬 MP3·MP4 재생을 같은 작품별 플레이어에 연결하며, 모든 작업면 상단에 항상 보이는 컴팩트 바와 필요할 때 여는 미디어 라이브러리로 표시한다. 상세 증거는 [현재 실행 상태](plan.md)에 기록한다.
 
 POC-1의 장편 편집기 검증을 마치고 POC-2 저장 계약과 증거를 구현했다. 저장 offset은 UTF-16 code unit, 내부 줄바꿈은 LF, Unicode normalization은 적용하지 않으며, hash·Anchor 검증 입력 계약은 이 문자열의 UTF-16LE code unit bytes로 고정했다. 운영체제·파일 입력의 CRLF/CR 변환은 `ChangeBatch` 생성 전 platform adapter 경계의 책임이며, durable parser는 CR을 조용히 바꾸지 않고 거부한다. `ChangeBatch`는 작품·문서·base revision·순서·불투명 batch identity·schema version·정확한 변경 범위를 소유하고, 고정 필드 순서의 UTF-8 canonical bytes를 만든다. 같은 `batchId`와 같은 canonical bytes만 idempotent duplicate이며, 같은 identity의 다른 bytes는 충돌이다. application 소유권 경계는 등록 작품이 소유한 문서의 현재 durable revision identity를 확인하고, 변화하는 본문 길이는 journal replay의 현재 head에 원자 적용할 때 검증한다.
 

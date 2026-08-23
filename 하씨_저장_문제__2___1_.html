@@ -1,0 +1,1789 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<title>별빛 서재 - 통합 집필 작업실 (v2.0)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;600&family=Noto+Serif+KR:wght@200;400&display=swap" rel="stylesheet">
+<style>
+body { 
+  margin: 0; 
+  font-family: Pretendard, sans-serif; 
+  font-size: 17px;
+  overflow: hidden;
+  transition: background-color 0.3s, color 0.3s;
+}body.light-mode {
+  background: #faf9f6;
+  color: #1e293b;
+}body.dark-mode {
+  background: #1a1a1a;
+  color: #f5f3e8;
+}.serif { font-family: 'Noto Serif KR', serif; }
+.typewriter-container {
+  display: flex;
+  flex-direction: column-reverse;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  transition: filter 0.3s;
+}.written-text-area {
+  flex: 1;
+  overflow-y: auto;
+  padding-top: 2rem;
+  padding-bottom: 2rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  transition: filter 0.3s;
+}.input-line-container {
+  flex-shrink: 0;
+  z-index: 10;
+  padding: 0 2rem;
+  border-top: 2px solid;
+  border-bottom: 2px solid;
+  pointer-events: all;
+}.light-mode .input-line-container {
+  border-color: #8b5e34;
+  background: rgba(250, 249, 246, 0.95);
+  backdrop-filter: blur(10px);
+}.dark-mode .input-line-container {
+  border-color: #d4a574;
+  background: rgba(26, 26, 26, 0.95);
+  backdrop-filter: blur(10px);
+}.typewriter-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 1.5rem 0;
+  font-size: inherit;
+  line-height: 2.5;
+  resize: none;
+  overflow: hidden;
+}.light-mode .typewriter-input {
+  color: #000000;
+  caret-color: #2563eb;
+}.dark-mode .typewriter-input {
+  color: #f5f3e8;
+  caret-color: #60a5fa;
+}.typewriter-input::placeholder {
+  opacity: 0.3;
+}.light-mode .typewriter-input::placeholder {
+  color: #64748b;
+}.dark-mode .typewriter-input::placeholder {
+  color: #94a3b8;
+}.written-text-area::-webkit-scrollbar {
+  width: 8px;
+}.light-mode .written-text-area::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}.dark-mode .written-text-area::-webkit-scrollbar-track {
+  background: #2a2a2a;
+}.light-mode .written-text-area::-webkit-scrollbar-thumb {
+  background: #8b5e34;
+  border-radius: 4px;
+}.dark-mode .written-text-area::-webkit-scrollbar-thumb {
+  background: #d4a574;
+  border-radius: 4px;
+}.light-mode .written-text-area::-webkit-scrollbar-thumb:hover {
+  background: #6d4a29;
+}.dark-mode .written-text-area::-webkit-scrollbar-thumb:hover {
+  background: #e0b68a;
+}.text-common {
+  line-height: 2.5;
+}.heatmap-line {
+  cursor: pointer;
+  transition: background-color 0.1s;
+}.heatmap-line:hover {
+  background-color: rgba(139, 94, 52, 0.05) !important;
+}.dark-mode .heatmap-line:hover {
+  background-color: rgba(212, 165, 116, 0.08) !important;
+}.light-mode .s-long { background: rgba(59,130,246,0.1); }
+.light-mode .s-very-long { background: rgba(251,146,60,0.12); }
+.light-mode .s-extreme { background: rgba(239,68,68,0.15); }
+.light-mode .repeat-word { 
+  background: rgba(147,51,234,0.1); 
+  border-bottom: 1px solid rgba(147,51,234,0.2); 
+}.light-mode .repeat-dense { 
+  background: rgba(147,51,234,0.25) !important; 
+  border-bottom: 2px solid rgba(147,51,234,0.8) !important; 
+}.dark-mode .s-long { background: rgba(96,165,250,0.15); }
+.dark-mode .s-very-long { background: rgba(251,146,60,0.2); }
+.dark-mode .s-extreme { background: rgba(248,113,113,0.2); }
+.dark-mode .repeat-word { 
+  background: rgba(192,132,252,0.15); 
+  border-bottom: 1px solid rgba(192,132,252,0.3); 
+}.dark-mode .repeat-dense { 
+  background: rgba(192,132,252,0.3) !important; 
+  border-bottom: 2px solid rgba(192,132,252,0.9) !important; 
+}.cursor-blink { animation: blink 1s infinite; }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+input[type='range'] { 
+  -webkit-appearance: none; 
+  height: 2px; 
+  outline: none; 
+}.light-mode input[type='range'] {
+  background: #e5e7eb;
+}.dark-mode input[type='range'] {
+  background: #4a4a4a;
+}input[type='range']::-webkit-slider-thumb { 
+  -webkit-appearance: none; 
+  width: 10px; 
+  height: 10px; 
+  border-radius: 50%; 
+  cursor: pointer; 
+}.light-mode input[type='range']::-webkit-slider-thumb {
+  background: #8b5e34;
+}.dark-mode input[type='range']::-webkit-slider-thumb {
+  background: #d4a574;
+}.light-mode .bg-primary { background: #faf9f6; }
+.dark-mode .bg-primary { background: #1a1a1a; }
+.light-mode .bg-secondary { background: #ffffff; }
+.dark-mode .bg-secondary { background: #2a2a2a; }
+.light-mode .border-primary { border-color: #e5e7eb; }
+.dark-mode .border-primary { border-color: #3a3a3a; }
+.light-mode .text-primary { color: #1e293b; }
+.dark-mode .text-primary { color: #f5f3e8; }
+.light-mode .text-secondary { color: #64748b; }
+.dark-mode .text-secondary { color: #94a3b8; }
+.light-mode .text-tertiary { color: #cbd5e1; }
+.dark-mode .text-tertiary { color: #64748b; }
+.light-mode .text-accent { color: #8b5e34; }
+.dark-mode .text-accent { color: #d4a574; }
+.light-mode .bg-hover:hover { background: #f8f9fa; }
+.dark-mode .bg-hover:hover { background: #333333; }
+.btn-primary {
+  transition: all 0.2s;
+}.light-mode .btn-primary {
+  background: transparent;
+  color: #8b5e34;
+  border: 1px solid #c9b39a;
+}.light-mode .btn-primary:hover {
+  background: rgba(139, 94, 52, 0.08);
+}  
+.dark-mode .btn-primary {
+  background: transparent;
+  color: #d4a574;
+  border: 1px solid #6b5d4f;
+}.dark-mode .btn-primary:hover {
+  background: rgba(212, 165, 116, 0.12);
+}.session-item {
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+}.light-mode .session-item {
+  background: #f8f9fa;
+  border: 1px solid #e5e7eb;
+}.dark-mode .session-item {
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+}.light-mode .session-item:hover {
+  background: #f1f3f5;
+}.dark-mode .session-item:hover {
+  background: #333333;
+}/* 집중 모드 블러 효과 */
+.focus-blur {
+  filter: blur(4px);
+  opacity: 0.5;
+  pointer-events: none;
+  transition: filter 0.3s, opacity 0.3s;
+}/* 수정금지 모드 - 이미 쓴 텍스트 블러 */
+.lock-write-blur {
+  filter: blur(6px);
+  opacity: 0.3;
+  pointer-events: none !important;
+  user-select: none !important;
+  transition: filter 0.3s, opacity 0.3s;
+}/* 전체 편집 모드 개선 */
+.bulk-edit-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  padding: 2rem;
+}.light-mode .bulk-edit-overlay {
+  background: rgba(250, 249, 246, 0.97);
+}.dark-mode .bulk-edit-overlay {
+  background: rgba(26, 26, 26, 0.97);
+}/* 실시간 세션 피드백 UI - 항상 표시 */
+.session-feedback {
+  position: fixed;
+  top: 5.5rem;                 /* 상단 헤더 아래 */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  padding: 1rem 1.5rem;
+  border-radius: 1rem;
+  backdrop-filter: blur(10px);
+  border: 1px solid;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  min-width: 220px;
+}.dark-mode .session-feedback {
+  background: rgba(42, 42, 42, 0.95);
+  border-color: #3a3a3a;
+}/* 수정금지 모드 상태 표시 */
+.lock-write-indicator {
+  position: fixed;
+  top: 5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  padding: 1rem 2rem;
+  border-radius: 2rem;
+  backdrop-filter: blur(10px);
+  border: 2px solid;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  font-weight: bold;
+}.light-mode .lock-write-indicator {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: #dc2626;
+  color: #dc2626;
+}.dark-mode .lock-write-indicator {
+  background: rgba(42, 42, 42, 0.98);
+  border-color: #f87171;
+  color: #f87171;
+}</style>
+</head>
+<body class="light-mode">
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useMemo } = React;
+const App = () => {
+  const today = new Date().toISOString().split('T')[0];
+  
+  // 날짜별 아카이브 (추가)
+  const [archive,setArchive]=useState(() => {
+    const saved = localStorage.getItem('starlight_archive');
+    return saved ? JSON.parse(saved) : {};
+  });
+  
+const [works, setWorks] = useState(() => {
+  const saved = localStorage.getItem('starlight_works');
+  return saved
+    ? JSON.parse(saved)
+    : [{ id: 1, title: '새 작업', pages: [{ title: '1장', content: [] }] }];
+});
+  const [activeWorkId,setActiveWorkId]=useState(1);
+const [isSessionCollapsed, setIsSessionCollapsed] = useState(false);
+  const [activePageIndex,setActivePageIndex]=useState(0);
+  const [currentInput,setCurrentInput]=useState('');
+  const [isEditingLine,setIsEditingLine]=useState(false);
+  const [editingLineIndex,setEditingLineIndex]=useState(null);
+  const [showSettings,setShowSettings]=useState(false);
+  const [showStatsPanel,setShowStatsPanel]=useState(false);
+  const [showAnalysisPanel,setShowAnalysisPanel]=useState(false);
+  const [fontSize,setFontSize]=useState(18);
+  const [sidePadding,setSidePadding]=useState(80);
+  const [inputOffset,setInputOffset]=useState(
+  -window.innerHeight * 0.04
+);
+  const [textAlign,setTextAlign]=useState('left');
+  const [dailyGoal,setDailyGoal]=useState(2000);
+  const [heatmapMode,setHeatmapMode]=useState('sentence');
+  const [bulkEditMode,setBulkEditMode]=useState(false);
+  const [bulkEditText,setBulkEditText]=useState('');
+  
+  // 일일 통계 (오늘 하루 기록)
+  const [dailyStats,setDailyStats]=useState({
+    date:new Date().toDateString(),
+    totalChars:0,
+    sessions:[]
+  });
+  
+  // 뽀모도로 상태
+  const [pomodoroState,setPomodoroState]=useState({
+    running:false,
+    phase:'WORK',
+    timeLeft:0,
+    sessionStartTime:null,
+    sessionStartChars:0,
+    workSessionMemo:''
+  });
+  const [pomodoroSettings,setPomodoroSettings]=useState({
+    workMinutes:25,
+    breakMinutes:5
+  });
+  
+  const [darkMode,setDarkMode]=useState(false);
+  const [focusMode,setFocusMode]=useState(false);
+  const [lockWriteMode,setLockWriteMode]=useState(false);
+  const [lockWriteGoal,setLockWriteGoal]=useState(1000);
+  const [lockWriteStartChars,setLockWriteStartChars]=useState(0);
+  const [editingWorkId,setEditingWorkId]=useState(null);
+  const [tempWorkTitle,setTempWorkTitle]=useState('');
+  const inputRef=useRef(null);
+  const contentRef=useRef(null);
+  const timerIntervalRef=useRef(null);
+  const workEditInputRef=useRef(null);
+  // ===== 안전한 activeWork / activePage / content =====
+const safeWork =
+  works.find(w => w.id === activeWorkId) ?? works[0];
+
+const safePage =
+  safeWork?.pages?.[activePageIndex] ?? safeWork?.pages?.[0];
+
+const content = safePage?.content ?? [];
+// ================================================
+
+
+// ===== 안전 가드 (필수, 정답 버전) =====
+useEffect(() => {
+  if (!works.length) return;
+
+  // activeWorkId가 유효하지 않으면 첫 작업으로 복구
+  const workExists = works.some(w => w.id === activeWorkId);
+  if (!workExists) {
+    setActiveWorkId(works[0].id);
+    setActivePageIndex(0);
+    return;
+  }
+
+  // 페이지 배열이 없거나 비어 있으면 0번 페이지로
+  if (!safeWork || !safeWork.pages || safeWork.pages.length === 0) {
+    setActivePageIndex(0);
+    return;
+  }
+
+  // 페이지 인덱스 범위 보호
+  if (
+    activePageIndex < 0 ||
+    activePageIndex >= safeWork.pages.length
+  ) {
+    setActivePageIndex(0);
+  }
+}, [works, activeWorkId, activePageIndex, safeWork]);
+// ===========================
+
+  const clampedInputOffset=Math.max(-(window.innerHeight*0.7),Math.min(0,inputOffset));
+  const totalChars=content.join('').length;
+useEffect(() => {
+  localStorage.setItem('starlight_works', JSON.stringify(works));
+}, [works]);
+  // localStorage 자동 저장 (추가)
+  useEffect(()=>{
+    localStorage.setItem('starlight_archive',JSON.stringify(archive));
+  },[archive]);
+useEffect(() => {
+  const handleSaveAsText = (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      e.preventDefault();
+     const allText = content.join('\n\n');
+
+      const blob = new Blob([allText], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `writing_${new Date().toISOString().slice(0,10)}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+  window.addEventListener('keydown', handleSaveAsText);
+  return () => window.removeEventListener('keydown', handleSaveAsText);
+}, [works, activeWorkId, activePageIndex]);
+useEffect(() => {
+  const handleResize = () => {
+    setInputOffset(-window.innerHeight * 0.04);
+  };
+  window.addEventListener('resize', handleResize);
+  return () => window.removeEventListener('resize', handleResize);
+}, []);
+  // 오늘 아카이브 업데이트 (추가)
+  useEffect(()=>{
+    if(totalChars>0||works.length>0){
+      setArchive(prev=>({
+        ...prev,
+        [today]:{
+          totalChars,
+          works,
+          timestamp:Date.now()
+        }
+      }));
+    }
+  },[totalChars,works,today]);
+  // 날짜가 바뀌면 일일 통계 초기화
+  useEffect(()=>{
+    const todayStr=new Date().toDateString();
+    if(dailyStats.date!==todayStr){
+      setDailyStats({
+        date:todayStr,
+        totalChars:0,
+        sessions:[]
+      });
+    }
+  },[dailyStats.date]);
+  // 글자 수 변화 추적 (일일 통계 업데이트)
+  useEffect(()=>{
+    const todayStr=new Date().toDateString();
+    if(dailyStats.date===todayStr){
+      setDailyStats(prev=>({
+        ...prev,
+        totalChars:totalChars
+      }));
+    }
+  },[totalChars,dailyStats.date]);
+  useEffect(()=>{
+    document.body.className=darkMode?'dark-mode':'light-mode';
+  },[darkMode]);
+  useEffect(()=>{
+    if(inputRef.current&&!bulkEditMode){
+      inputRef.current.focus();
+    }
+  },[activeWorkId,activePageIndex,bulkEditMode,isEditingLine]);
+  // 뽀모도로 타이머
+  useEffect(()=>{
+    if(pomodoroState.running){
+      timerIntervalRef.current=setInterval(()=>{
+        setPomodoroState(prev=>{
+          if(prev.timeLeft<=1){
+            const elapsed=prev.phase==='WORK'?pomodoroSettings.workMinutes:pomodoroSettings.breakMinutes;
+            const sessionChars=totalChars-prev.sessionStartChars;
+            
+            if(prev.phase==='WORK'){
+              // 작업 세션 완료
+              const newSession={
+                type:'WORK',
+                duration:elapsed,
+                timestamp:Date.now(),
+                work:safeWork.title,
+                page:safePage.title,
+                charCount:sessionChars,
+                memo:prev.workSessionMemo
+              };
+              setDailyStats(d=>({
+                ...d,
+                sessions:[...d.sessions,newSession]
+              }));
+              
+              return {
+                running:true,
+                phase:'BREAK',
+                timeLeft:pomodoroSettings.breakMinutes*60,
+                sessionStartTime:Date.now(),
+                sessionStartChars:totalChars,
+                workSessionMemo:''
+              };
+            }else{
+              // 휴식 세션 완료
+              const newSession={
+                type:'BREAK',
+                duration:elapsed,
+                timestamp:Date.now()
+              };
+              setDailyStats(d=>({
+                ...d,
+                sessions:[...d.sessions,newSession]
+              }));
+              
+              return {
+                running:false,
+                phase:'WORK',
+                timeLeft:pomodoroSettings.workMinutes*60,
+                sessionStartTime:null,
+                sessionStartChars:0,
+                workSessionMemo:''
+              };
+            }
+          }
+          return {...prev,timeLeft:prev.timeLeft-1};
+        });
+      },1000);
+    }else{
+      if(timerIntervalRef.current){
+        clearInterval(timerIntervalRef.current);
+      }
+    }
+    return()=>{
+      if(timerIntervalRef.current){
+        clearInterval(timerIntervalRef.current);
+      }
+    };
+  },[pomodoroState.running, pomodoroSettings, safeWork, safePage, totalChars]);
+  // ESC 키 처리
+  useEffect(()=>{
+    const handleEscape=(e)=>{
+      if(e.key==='Escape'){
+        if(bulkEditMode){
+          e.preventDefault();
+          setBulkEditMode(false);
+        }else if(isEditingLine){
+          e.preventDefault();
+          setIsEditingLine(false);
+          setEditingLineIndex(null);
+          setCurrentInput('');
+        }else if(!lockWriteMode){
+          setFocusMode(f=>!f);
+        }
+      }
+    };
+    window.addEventListener('keydown',handleEscape);
+    return()=>window.removeEventListener('keydown',handleEscape);
+  },[bulkEditMode,isEditingLine,lockWriteMode]);
+  const handleInputChange=e=>{
+    setCurrentInput(e.target.value);
+   
+  };
+const handleKeyDown = e => {
+  const el = inputRef.current;
+  if (!el) return;
+  const value = currentInput;
+  const pos = el.selectionStart;
+  // =========================
+  // 시작 괄호 연속 입력 → 단계 진화
+  // =========================
+if (['(', '[', '{', '<'].includes(e.key)) {
+  e.preventDefault();
+  const EVOLUTION = {
+    '(': ['()', '【】', '〖〗', '⦅⦆'],
+    '[': ['[]', '「」', '『』', '⟦⟧'],
+    '{': ['{}', '〈〉', '《》', '⦃⦄'],
+    '<': ['<>', '〈〉', '《》', '⟨⟩'],
+  };
+  const cycles = EVOLUTION[e.key];
+  for (let i = 0; i < cycles.length; i++) {
+    const pair = cycles[i];
+    const open = pair[0];
+    const close = pair[1];
+    if (
+      pos > 0 &&
+      pos < value.length &&
+      value[pos - 1] === open &&
+      value[pos] === close
+    ) {
+      const next = cycles[(i + 1) % cycles.length];
+      setCurrentInput(
+        value.slice(0, pos - 1) +
+        next +
+        value.slice(pos + 1)
+      );
+      requestAnimationFrame(() => {
+        el.selectionStart = el.selectionEnd = pos;
+      });
+      return;
+    }
+  }
+  const first = cycles[0];
+  setCurrentInput(
+    value.slice(0, pos) +
+    first +
+    value.slice(pos)
+  );
+  requestAnimationFrame(() => {
+    el.selectionStart = el.selectionEnd = pos + 1;
+  });
+  return;
+}  // =========================
+  // 둥근 따옴표
+  // =========================
+  if (e.key === '"' || e.key === "'") {
+    e.preventDefault();
+    const pairs = {
+      '"': ['“', '”'],
+      "'": ['‘', '’'],
+    };
+    const [open, close] = pairs[e.key];
+    setCurrentInput(
+      value.slice(0, pos) +
+      open +
+      close +
+      value.slice(pos)
+    );
+    requestAnimationFrame(() => {
+      el.selectionStart = el.selectionEnd = pos + 1;
+    });
+    return;
+  }
+  // =========================
+  // Enter
+  // =========================
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    const trimmed = currentInput.trim();
+    if (!trimmed) return;
+    setWorks(works.map(w =>
+      w.id === activeWorkId
+        ? {
+            ...w,
+            pages: w.pages.map((p, i) =>
+              i === activePageIndex
+                ? { ...p, content: [...p.content, trimmed] }
+                : p
+            )
+          }
+        : w
+    ));
+    setCurrentInput('');
+    return;
+  }
+  // =========================
+  // Escape
+  // =========================
+  if (e.key === 'Escape') {
+    setCurrentInput('');
+    return;
+  }
+};
+  const handleContentClick=e=>{
+    if(lockWriteMode)return;
+    if(e.target.classList.contains('heatmap-line')){
+      const idx=parseInt(e.target.dataset.index,10);
+      if(!isNaN(idx)&&content[idx]){
+        setCurrentInput(content[idx]);
+        setIsEditingLine(true);
+        setEditingLineIndex(idx);
+        setTimeout(()=>{
+          if(inputRef.current){
+            inputRef.current.focus();
+            inputRef.current.setSelectionRange(content[idx].length,content[idx].length);
+          }
+        },0);
+      }
+    }
+  };
+  const addWork=()=>{
+    if(lockWriteMode)return;
+    const newId=Math.max(...works.map(w=>w.id),0)+1;
+    setWorks([...works,{id:newId,title:`작업 ${newId}`,pages:[{title:'1장',content:[]}]}]);
+    setActiveWorkId(newId);
+    setActivePageIndex(0);
+  };
+  const deleteWork=id=>{
+    if(lockWriteMode||works.length<=1)return;
+    const filtered=works.filter(w=>w.id!==id);
+    setWorks(filtered);
+    if(activeWorkId===id){
+      setActiveWorkId(filtered[0].id);
+      setActivePageIndex(0);
+    }
+  };
+  const renameWork=(id,newTitle)=>{
+    if(!newTitle||!newTitle.trim())return;
+    setWorks(works.map(w=>w.id===id?{...w,title:newTitle.trim()}:w));
+  };
+  const startEditWorkTitle=work=>{
+    setEditingWorkId(work.id);
+    setTempWorkTitle(work.title);
+  };
+  const confirmEditWorkTitle=()=>{
+    if(editingWorkId!==null){
+      if(tempWorkTitle.trim()){
+        renameWork(editingWorkId,tempWorkTitle);
+      }
+      setEditingWorkId(null);
+      setTempWorkTitle('');
+    }
+  };
+  const cancelEditWorkTitle=()=>{
+    setEditingWorkId(null);
+    setTempWorkTitle('');
+  };
+  useEffect(()=>{
+    if(workEditInputRef.current&&editingWorkId!==null){
+      workEditInputRef.current.focus();
+      workEditInputRef.current.select();
+    }
+  },[editingWorkId]);
+  const addPage=()=>{
+    if(lockWriteMode)return;
+    setWorks(works.map(w=>
+      w.id===activeWorkId?{
+        ...w,
+        pages:[...w.pages,{title:`${w.pages.length+1}장`,content:[]}]
+      }:w
+    ));
+    setActivePageIndex(safeWork.pages.length);
+  };
+  const deletePage=idx=>{
+    if(lockWriteMode||safeWork.pages.length<=1)return;
+    setWorks(works.map(w=>
+      w.id===activeWorkId?{
+        ...w,
+        pages:w.pages.filter((_,i)=>i!==idx)
+      }:w
+    ));
+    if(activePageIndex>=safeWork.pages.length-1){
+      setActivePageIndex(Math.max(0,safeWork.pages.length-2));
+    }
+  };
+  const switchPage=(newPageIndex)=>{
+    if(lockWriteMode)return;
+    setActivePageIndex(newPageIndex);
+  };
+  const openBulkEdit=()=>{
+    if(lockWriteMode)return;
+    setBulkEditText(content.join('\n\n'));
+    setBulkEditMode(true);
+  };
+  const applyBulkEdit=()=>{
+    setWorks(works.map(w=>
+      w.id===activeWorkId?{
+        ...w,
+        pages:w.pages.map((p,i)=>
+          i===activePageIndex?{...p,content:bulkEditText.split(/\n+/).map(l=>l.trim()).filter(Boolean)}:p
+        )
+      }:w
+    ));
+    setBulkEditMode(false);
+  };
+  const cancelBulkEdit=()=>{
+    setBulkEditMode(false);
+  };
+  const exportAsText=()=>{
+    if(lockWriteMode)return;
+    const sortedDates=Object.keys(archive).sort();
+    let content='=== 별빛서재 기록 ===\n\n';
+    sortedDates.forEach(date=>{
+      const record=archive[date];
+      content+=`[${date}]\n`;
+      content+=`총 글자 수: ${record.totalChars||0}\n\n`;
+      (record.works||[]).forEach((w,wi)=>{
+        content+=`작업 ${wi+1}: ${w.title}\n`;
+        w.pages.forEach((p,pi)=>{
+          content+=`  ${p.title}\n`;
+          content+=p.content.join('\n')+'\n\n';
+        });
+      });
+      content+='---\n\n';
+    });
+    const blob=new Blob([content],{type:'text/plain;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=`starlight_${today}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  const importFromFile=e=>{
+    if(lockWriteMode)return;
+    const file=e.target.files[0];
+    if(!file)return;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const text=ev.target.result;
+      const lines=text.split(/\n+/).map(l=>l.trim()).filter(Boolean);
+      setWorks(works.map(w=>
+        w.id===activeWorkId?{
+          ...w,
+          pages:w.pages.map((p,i)=>
+            i===activePageIndex?{...p,content:lines}:p
+          )
+        }:w
+      ));
+    };
+    reader.readAsText(file);
+  };
+  const clearAll=()=>{
+    if(lockWriteMode)return;
+    if(confirm('정말 모든 내용을 지우시겠습니까?')){
+      setWorks(works.map(w=>
+        w.id===activeWorkId?{
+          ...w,
+          pages:w.pages.map((p,i)=>
+            i===activePageIndex?{...p,content:[]}:p
+          )
+        }:w
+      ));
+    }
+  };
+  // ===== 분석 함수들 (추가) =====
+  const analyzeWords=()=>{
+    const allText=Object.values(archive)
+      .flatMap(day=>(day.works||[]))
+      .flatMap(w=>w.pages)
+      .flatMap(p=>p.content)
+      .join(' ');
+    const words=allText.match(/[\uAC00-\uD7A3]+/g)||[];
+    const wordFreq={};
+    words.forEach(w=>{
+      if(w.length>1)wordFreq[w]=(wordFreq[w]||0)+1;
+    });
+    return Object.entries(wordFreq).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  };
+  const analyzeSentenceStats=()=>{
+    const allText=Object.values(archive)
+      .flatMap(day=>(day.works||[]))
+      .flatMap(w=>w.pages)
+      .flatMap(p=>p.content)
+      .join(' ');
+    const sentences=allText.split(/[.!?]\s+/).filter(s=>s.trim().length>0);
+    if(sentences.length===0)return{avg:0,min:0,max:0,count:0};
+    const lengths=sentences.map(s=>s.replace(/\s/g,'').length);
+    return{
+      avg:Math.round(lengths.reduce((a,b)=>a+b,0)/lengths.length),
+      min:Math.min(...lengths),
+      max:Math.max(...lengths),
+      count:sentences.length
+    };
+  };
+  const calculateRepetitionDensity=()=>{
+    const topWords=analyzeWords();
+    const allText=Object.values(archive)
+      .flatMap(day=>(day.works||[]))
+      .flatMap(w=>w.pages)
+      .flatMap(p=>p.content)
+      .join(' ');
+    const totalWords=(allText.match(/[\uAC00-\uD7A3]+/g)||[]).length;
+    if(totalWords===0)return 0;
+    const topWordCount=topWords.reduce((sum,[_,count])=>sum+count,0);
+    return((topWordCount/totalWords)*100).toFixed(1);
+  };
+  const generateSummary=()=>{
+    const topWords=analyzeWords().slice(0,5);
+    if(topWords.length===0)return "아직 작성된 내용이 없습니다.";
+    const keywords=topWords.map(([word,_])=>word).join(', ');
+    return`주요 키워드: ${keywords}`;
+  };
+  const calculateStreak=()=>{
+    const dates=Object.keys(archive).sort().reverse();
+    if(dates.length===0)return 0;
+    let streak=0;
+    let currentDate=new Date(today);
+    for(let i=0;i<365;i++){
+      const checkDate=currentDate.toISOString().split('T')[0];
+      if(archive[checkDate]&&archive[checkDate].totalChars>0){
+        streak++;
+        currentDate.setDate(currentDate.getDate()-1);
+      }else{
+        break;
+      }
+    }
+    return streak;
+  };
+  const exportAsJSON=()=>{
+    const content=JSON.stringify(archive,null,2);
+    const blob=new Blob([content],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=`starlight_${today}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  const totalStats={
+    totalChars:Object.values(archive).reduce((sum,r)=>sum+(r.totalChars||0),0),
+    totalDays:Object.keys(archive).length,
+    streak:calculateStreak()
+  };
+  // ===== 분석 함수 끝 =====
+  const startPomodoro=()=>{
+    setPomodoroState({
+      running:true,
+      phase:'WORK',
+      timeLeft:pomodoroSettings.workMinutes*60,
+      sessionStartTime:Date.now(),
+      sessionStartChars:totalChars,
+      workSessionMemo:''
+    });
+  };
+  const stopPomodoro=()=>{
+    if(pomodoroState.running&&pomodoroState.phase==='WORK'){
+      // 중단된 작업 세션도 기록
+      const elapsed=Math.floor((Date.now()-pomodoroState.sessionStartTime)/1000/60);
+      const sessionChars=totalChars-pomodoroState.sessionStartChars;
+      const newSession={
+        type:'WORK',
+        duration:elapsed,
+        timestamp:Date.now(),
+        work:safeWork.title,
+        page:safePage.title,
+        charCount:sessionChars,
+        memo:pomodoroState.workSessionMemo,
+        incomplete:true
+      };
+      setDailyStats(d=>({
+        ...d,
+        sessions:[...d.sessions,newSession]
+      }));
+    }
+    setPomodoroState(prev=>({
+      ...prev,
+      running:false
+    }));
+  };
+  const resetPomodoro=()=>{
+    setPomodoroState({
+      running:false,
+      phase:'WORK',
+      timeLeft:pomodoroSettings.workMinutes*60,
+      sessionStartTime:null,
+      sessionStartChars:0,
+      workSessionMemo:''
+    });
+  };
+  const toggleLockWriteMode=()=>{
+    if(lockWriteMode){
+      setLockWriteMode(false);
+      setLockWriteStartChars(0);
+    }else{
+      setLockWriteStartChars(totalChars);
+      setLockWriteMode(true);
+      setIsEditingLine(false);
+      setEditingLineIndex(null);
+      setCurrentInput('');
+    }
+  };
+  const formatTime=seconds=>{
+    const m=Math.floor(seconds/60);
+    const s=seconds%60;
+    return `${m}:${s<10?'0':''}${s}`;
+  };
+  const renderedHeatmap=useMemo(()=>{
+    if(heatmapMode==='off'){
+      return content.map((line,idx)=>(
+        <div key={idx} className="heatmap-line" data-index={idx} style={{marginBottom:'0.5em'}}>
+          {line}
+        </div>
+      ));
+    }
+    const allText=content.join(' ');
+    const wordFreq={};
+    const words=allText.match(/[\u4e00-\u9fa5\uac00-\ud7a3a-zA-Z가-힣]+/g)||[];
+    words.forEach(w=>{
+      const lower=w.toLowerCase();
+      wordFreq[lower]=(wordFreq[lower]||0)+1;
+    });
+    const repeatWords=new Set();
+    Object.entries(wordFreq).forEach(([w,count])=>{
+      if(count>=3&&w.length>=2){
+        repeatWords.add(w);
+      }
+    });
+    return content.map((line,idx)=>{
+      let parts=[];
+      if(heatmapMode==='sentence'){
+        const len=line.replace(/[^\uac00-\ud7a3a-zA-Z가-힣]/g,'').length;
+        let cls='';
+        if(len>80)cls='s-extreme';
+        else if(len>60)cls='s-very-long';
+        else if(len>40)cls='s-long';
+        parts.push(
+          <div key={idx} className={`heatmap-line ${cls}`} data-index={idx} style={{marginBottom:'0.5em'}}>
+            {line}
+          </div>
+        );
+      }else if(heatmapMode==='word'){
+        const tokens=line.split(/(\s+)/);
+        const segments=[];
+        tokens.forEach((token,i)=>{
+          const w=token.match(/[\u4e00-\u9fa5\uac00-\ud7a3a-zA-Z가-힣]+/);
+          if(w){
+            const lower=w[0].toLowerCase();
+            if(repeatWords.has(lower)){
+              const freq=wordFreq[lower];
+              const cls=freq>=6?'repeat-dense':'repeat-word';
+              segments.push(<span key={i} className={cls}>{token}</span>);
+            }else{
+              segments.push(<span key={i}>{token}</span>);
+            }
+          }else{
+            segments.push(<span key={i}>{token}</span>);
+          }
+        });
+        parts.push(
+          <div key={idx} className="heatmap-line" data-index={idx} style={{marginBottom:'0.5em'}}>
+            {segments}
+          </div>
+        );
+      }else{
+        parts.push(
+          <div key={idx} className="heatmap-line" data-index={idx} style={{marginBottom:'0.5em'}}>
+            {line}
+          </div>
+        );
+      }
+      return parts;
+    });
+  },[content,heatmapMode]);
+  const isGoalReached=dailyStats.totalChars>=dailyGoal;
+  const progressPercent=Math.min(100,(dailyStats.totalChars/dailyGoal)*100);
+  // 수정금지 모드 진행 상황
+  const lockWriteProgress=lockWriteMode?totalChars-lockWriteStartChars:0;
+  const lockWriteRemaining=lockWriteMode?Math.max(0,lockWriteGoal-lockWriteProgress):0;
+  const lockWriteCanRelease=lockWriteMode&&lockWriteProgress>=lockWriteGoal;
+  // 현재 세션 진행 상황 (항상 표시)
+  const currentSessionChars=pomodoroState.running?totalChars-pomodoroState.sessionStartChars:0;
+  const currentSessionElapsed=pomodoroState.running&&pomodoroState.sessionStartTime?
+    Math.floor((Date.now()-pomodoroState.sessionStartTime)/1000):0;
+  // 오늘 작업 세션들의 총 글자 수
+  const todayWorkSessions=dailyStats.sessions.filter(s=>s.type==='WORK');
+  const todaySessionChars=todayWorkSessions.reduce((sum,s)=>sum+s.charCount,0);
+  return (
+<div className="h-screen flex flex-col bg-primary text-primary">
+  <div className={`bg-secondary border-b border-primary px-4 py-3 flex items-center justify-between ${focusMode?'focus-blur':''}`}>
+    <div className="flex items-center gap-3">
+      <button
+        onClick={()=>setDarkMode(!darkMode)}
+        className="text-primary hover:text-accent transition-colors"
+        title={darkMode?'라이트 모드':'다크 모드'}
+      >
+        {darkMode?'☀️':'🌙'}
+      </button>
+      <span className="font-bold text-accent">{safeWork.title}</span>
+      <span className="text-tertiary">·</span>
+      <span className="text-secondary">{safePage.title}</span>
+      <span className="text-tertiary">·</span>
+      <span className="font-mono text-accent">{dailyStats.totalChars.toLocaleString()}자</span>
+      <div className="w-20 h-1.5 bg-primary rounded-full overflow-hidden">
+        <div
+          className="h-full bg-accent transition-all"
+          style={{width:`${progressPercent}%`}}
+        />
+      </div>
+    </div>
+    <div className="flex items-center gap-2">
+      <button
+        onClick={()=>setFocusMode(!focusMode)}
+        className="px-3 py-1.5 text-secondary hover:text-primary transition-colors"
+        title="집중 모드 (ESC)"
+        disabled={lockWriteMode}
+      >
+        {focusMode?'🎯':'👁️'}
+      </button>
+      <button
+        onClick={()=>setShowStatsPanel(!showStatsPanel)}
+        className="px-3 py-1.5 text-secondary hover:text-primary transition-colors"
+      >
+        📊
+      </button>
+      <button
+        onClick={()=>setShowAnalysisPanel(!showAnalysisPanel)}
+        className="px-3 py-1.5 text-secondary hover:text-primary transition-colors"
+        title="분석"
+      >
+        📈
+      </button>
+      <button
+        onClick={()=>setShowSettings(!showSettings)}
+        className="px-3 py-1.5 text-secondary hover:text-primary transition-colors"
+      >
+        ⚙️
+      </button>
+    </div>
+  </div>
+  {/* 수정금지 모드 상태 표시 */}
+  {lockWriteMode&&(
+    <div className="lock-write-indicator">
+      <div className="text-center">
+        <div className="text-lg mb-1">
+          🔒 수정금지 모드
+        </div>
+        <div className="text-sm font-normal">
+          목표까지 <span className="font-mono font-bold">{lockWriteRemaining.toLocaleString()}</span>자
+        </div>
+        {lockWriteCanRelease&&(
+          <button
+            onClick={toggleLockWriteMode}
+            className="mt-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-bold"
+          >
+            해제하기
+          </button>
+        )}
+      </div>
+    </div>
+  )}
+  <div className="flex-1 flex min-h-0 overflow-hidden">
+    <div className={`w-64 bg-secondary border-r border-primary flex flex-col overflow-hidden ${focusMode?'focus-blur':''}`}>
+      <div className="p-3 border-b border-primary flex justify-between items-center">
+        <span className="text-sm font-bold text-primary">작업 목록</span>
+        <button
+          onClick={addWork}
+          className="text-xs text-accent hover:text-primary"
+          disabled={lockWriteMode}
+        >
+          + 추가
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        {works.map(work=>(
+          <div key={work.id}>
+            <div
+              className={`p-2 rounded cursor-pointer flex justify-between items-center group ${
+                activeWorkId===work.id?'bg-primary':'bg-hover'
+              } ${lockWriteMode?'opacity-50 pointer-events-none':''}`}
+              onClick={()=>{
+                if(!lockWriteMode&&!editingWorkId){
+                  setActiveWorkId(work.id);
+                  setActivePageIndex(0);
+                }
+              }}
+            >
+              {editingWorkId===work.id?(
+                <input
+                  ref={workEditInputRef}
+                  type="text"
+                  value={tempWorkTitle}
+                  onChange={e=>setTempWorkTitle(e.target.value)}
+                  onKeyDown={e=>{
+                    if(e.key==='Enter'){
+                      e.preventDefault();
+                      confirmEditWorkTitle();
+                    }else if(e.key==='Escape'){
+                      e.preventDefault();
+                      cancelEditWorkTitle();
+                    }
+                  }}
+                  onBlur={confirmEditWorkTitle}
+                  onClick={e=>e.stopPropagation()}
+                  className="text-sm text-primary flex-1 bg-primary border border-primary rounded px-2 py-1"
+                  style={{outline:'none'}}
+                />
+              ):(
+                <span className="text-sm text-primary flex-1">
+                  {work.title}
+                </span>
+              )}
+              {!lockWriteMode&&editingWorkId!==work.id&&(
+                <button
+                  onClick={e=>{
+                    e.stopPropagation();
+                    startEditWorkTitle(work);
+                  }}
+                  className="text-xs text-secondary hover:text-primary opacity-0 group-hover:opacity-100"
+                  title="이름 수정"
+                >
+                  ✏️
+                </button>
+              )}
+              {works.length>1&&!lockWriteMode&&editingWorkId!==work.id&&(
+                <button
+                  onClick={e=>{
+                    e.stopPropagation();
+                    deleteWork(work.id);
+                  }}
+                  className="text-xs text-tertiary hover:text-primary opacity-0 group-hover:opacity-100"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            {activeWorkId===work.id&&(
+              <div className="ml-4 mt-1 space-y-1">
+                {work.pages.map((page,idx)=>(
+                  <div
+                    key={idx}
+                    className={`p-2 rounded cursor-pointer flex justify-between items-center group ${
+                      activePageIndex===idx?'bg-primary':'bg-hover'
+                    } ${lockWriteMode?'opacity-50 pointer-events-none':''}`}
+                    onClick={()=>switchPage(idx)}
+                  >
+                    <span className="text-sm text-primary flex-1">
+                      {page.title}
+                    </span>
+                    {work.pages.length>1&&!lockWriteMode&&(
+                      <button
+                        onClick={e=>{
+                          e.stopPropagation();
+                          deletePage(idx);
+                        }}
+                        className="text-xs text-tertiary hover:text-primary opacity-0 group-hover:opacity-100"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  onClick={addPage}
+                  className="w-full text-xs text-accent hover:text-primary p-2 rounded"
+                  disabled={lockWriteMode}
+                >
+                  + 장 추가
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="p-3 border-t border-primary space-y-2">
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-secondary">히트맵</span>
+            <select
+              value={heatmapMode}
+              onChange={e=>setHeatmapMode(e.target.value)}
+              className="bg-primary border border-primary rounded px-2 py-1 text-xs text-primary"
+              disabled={lockWriteMode}
+            >
+              <option value="off">꺼짐</option>
+              <option value="sentence">문장 길이</option>
+              <option value="word">반복 단어</option>
+            </select>
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <button
+            onClick={toggleLockWriteMode}
+            className={`text-sm px-3 py-2 rounded w-full font-bold ${
+              lockWriteMode
+                ?'bg-red-500 text-white border-red-600'
+                :'btn-primary'
+            }`}
+          >
+            {lockWriteMode?'🔒 수정금지 모드':'수정금지 모드'}
+          </button>
+          <button
+            onClick={openBulkEdit}
+            className="text-sm btn-primary px-3 py-2 rounded w-full"
+            disabled={lockWriteMode}
+          >
+            전체 편집
+          </button>
+          <button
+            onClick={exportAsText}
+            className="text-sm btn-primary px-3 py-2 rounded w-full"
+            disabled={lockWriteMode}
+          >
+            기록 내보내기
+          </button>
+          <button
+            onClick={clearAll}
+            className="text-sm text-secondary hover:text-primary px-3 py-2 rounded w-full border border-primary"
+            disabled={lockWriteMode}
+          >
+            전체 삭제
+          </button>
+        </div>
+        <div className="pt-2 border-t border-primary">
+          <div className="text-sm text-secondary mb-2">뽀모도로</div>
+          {!pomodoroState.running?(
+            <button
+              onClick={startPomodoro}
+              className="text-sm btn-primary px-3 py-2 rounded w-full"
+            >
+              시작
+            </button>
+          ):(
+            <div className="space-y-2">
+              <button
+                onClick={stopPomodoro}
+                className="text-sm btn-primary px-3 py-2 rounded w-full"
+              >
+                일시정지
+              </button>
+              <button
+                onClick={resetPomodoro}
+                className="text-sm text-secondary hover:text-primary px-3 py-2 rounded w-full border border-primary"
+              >
+                초기화
+              </button>
+              {pomodoroState.phase==='WORK'&&(
+                <input
+                  type="text"
+                  value={pomodoroState.workSessionMemo}
+                  onChange={e=>setPomodoroState({...pomodoroState,workSessionMemo:e.target.value})}
+                  placeholder="세션 메모 (선택)"
+                  className="w-full px-3 py-2 bg-primary border border-primary rounded text-xs text-primary"
+                />
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+    {/* 일일 통계 패널 (기록실) */}
+    {showStatsPanel && (
+      <div className="absolute top-12 right-4 w-96 max-h-[32rem] bg-secondary border border-primary rounded-lg shadow-xl overflow-hidden z-50">
+        <div className="flex justify-between items-center p-3 border-b border-primary">
+          <span className="text-sm font-bold text-primary">오늘의 기록</span>
+          <button
+            onClick={() => setShowStatsPanel(false)}
+            className="text-xs text-secondary hover:text-primary"
+          >
+            ✕
+          </button>
+        </div>
+        
+        <div className="p-4 border-b border-primary bg-primary">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <div className="text-xs text-secondary mb-1">총 작성량</div>
+              <div className="text-2xl font-bold text-accent font-mono">
+                {dailyStats.totalChars.toLocaleString()}자
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-secondary mb-1">일일 목표</div>
+              <div className="text-2xl font-bold text-primary font-mono">
+                {dailyGoal.toLocaleString()}자
+              </div>
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="flex justify-between text-xs text-secondary mb-1">
+              <span>진행률</span>
+              <span>{Math.round(progressPercent)}%</span>
+            </div>
+            <div className="w-full h-2 bg-secondary rounded-full overflow-hidden">
+              <div
+                className="h-full bg-accent transition-all"
+                style={{width:`${progressPercent}%`}}
+              />
+            </div>
+          </div>
+          <div className="mt-3 flex justify-between items-center text-xs">
+            <span className="text-secondary">연속 집필</span>
+            <span className="text-primary font-mono font-bold">{totalStats.streak}일 🔥</span>
+          </div>
+        </div>
+        <div className="p-3 overflow-y-auto max-h-96">
+          <div className="text-xs font-bold text-secondary mb-2">세션 기록</div>
+          {dailyStats.sessions.length === 0 ? (
+            <div className="text-xs text-tertiary text-center py-8">
+              아직 완료된 세션이 없습니다
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {dailyStats.sessions.slice().reverse().map((session, idx) => (
+                <div key={idx} className="session-item">
+                  <div className="flex justify-between items-start mb-1">
+                    <span className={`text-xs font-bold ${session.type === 'WORK' ? 'text-accent' : 'text-secondary'}`}>
+                      {session.type === 'WORK' ? '🔨 작업' : '☕ 휴식'} • {session.duration}분
+                      {session.incomplete&&<span className="text-tertiary ml-1">(중단)</span>}
+                    </span>
+                    <span className="text-[10px] text-tertiary">
+                      {new Date(session.timestamp).toLocaleTimeString('ko-KR', {hour: '2-digit', minute: '2-digit'})}
+                    </span>
+                  </div>
+                  {session.type === 'WORK' && (
+                    <>
+                      <div className="text-xs text-primary mb-1">
+                        {session.work} • {session.page}
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-tertiary">작성량</span>
+                        <span className="text-accent font-mono">+{session.charCount}자</span>
+                      </div>
+                      {session.memo && (
+                        <div className="text-xs text-tertiary mt-1 italic">
+                          "{session.memo}"
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    )}
+    {/* 실시간 세션 피드백 UI - 항상 표시 */}
+<div className="session-feedback">
+  <div className="space-y-3">
+    {/* 상단: 상태 + 타이머 + 접기 토글 */}
+    <div className="flex items-center justify-between">
+      <span
+        className={`text-sm font-bold ${
+          pomodoroState.phase === 'WORK'
+            ? 'text-accent'
+            : 'text-secondary'
+        }`}
+      >
+        {pomodoroState.phase === 'WORK' ? '🔨 작업 중' : '☕ 휴식 중'}
+      </span>
+      <div className="flex items-center gap-2">
+        <span className="text-lg font-mono text-primary font-bold">
+          {formatTime(pomodoroState.timeLeft)}
+        </span>
+        <button
+          onClick={() => setIsSessionCollapsed(v => !v)}
+          className="text-xs text-tertiary hover:text-primary"
+          title="접기/펼치기"
+        >
+          {isSessionCollapsed ? '▼' : '▲'}
+        </button>
+      </div>
+    </div>
+    {/* 접히는 영역 */}
+    {!isSessionCollapsed && (
+      <>
+        {pomodoroState.phase === 'WORK' && (
+          <div className="pt-2 border-t border-primary space-y-1">
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-secondary">이번 세션</span>
+              <span className="font-mono text-accent font-bold text-lg">
+                +{currentSessionChars.toLocaleString()}자
+              </span>
+            </div>
+            <div className="text-xs text-tertiary text-right">
+              {Math.floor(currentSessionElapsed / 60)}분{' '}
+              {currentSessionElapsed % 60}초 경과
+            </div>
+          </div>
+        )}
+        <div className="pt-2 border-t border-primary">
+          <div className="flex justify-between text-xs">
+            <span className="text-secondary">오늘 총</span>
+            <span className="font-mono text-primary font-bold">
+              {dailyStats.totalChars.toLocaleString()}자
+            </span>
+          </div>
+          {todayWorkSessions.length > 0 && (
+            <div className="flex justify-between text-xs mt-1">
+              <span className="text-tertiary">세션 평균</span>
+              <span className="font-mono text-tertiary">
+                {Math.round(
+                  todaySessionChars / todayWorkSessions.length
+                ).toLocaleString()}
+                자
+              </span>
+            </div>
+          )}
+        </div>
+      </>
+    )}
+  </div>
+</div>
+    <div className="flex-1 flex flex-col min-w-0 relative">
+      {bulkEditMode&&(
+        <div 
+          className="bulk-edit-overlay"
+          onClick={(e)=>{
+            if(e.target===e.currentTarget){
+              if(confirm('전체 편집을 종료하시겠습니까? (변경사항은 저장되지 않습니다)')){
+                cancelBulkEdit();
+              }
+            }
+          }}
+        >
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-bold text-primary">전체 편집 (ESC로 나가기)</h3>
+            <div className="flex gap-2">
+              <button
+                onClick={cancelBulkEdit}
+                className="text-sm px-4 py-2 rounded text-secondary hover:text-primary border border-primary"
+              >
+                취소
+              </button>
+              <button
+                onClick={applyBulkEdit}
+                className="text-sm btn-primary px-4 py-2 rounded font-bold"
+              >
+                적용
+              </button>
+            </div>
+          </div>
+          <textarea
+            value={bulkEditText}
+            onChange={e=>setBulkEditText(e.target.value)}
+            className="flex-1 w-full bg-transparent border border-primary rounded p-4 text-primary resize-none"
+            style={{fontSize,lineHeight:'2.5'}}
+            autoFocus
+          />
+          <div className="text-xs text-tertiary mt-2 text-center">
+            배경을 클릭하거나 ESC 키를 눌러 나갈 수 있습니다
+          </div>
+        </div>
+      )}
+      <div className="typewriter-container" style={{fontSize,paddingLeft:sidePadding,paddingRight:sidePadding,transform:`translateY(${clampedInputOffset}px)`}}>
+        <div className="input-line-container">
+          <textarea
+            ref={inputRef}
+            value={currentInput}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            className="typewriter-input text-common"
+            style={{
+              textAlign,
+              height:'auto',
+              minHeight:'7em',
+              maxHeight:`${window.innerHeight * 0.3}px`,
+              overflow:'auto'
+            }}
+            placeholder={isEditingLine?"문단 수정 중 (Enter로 확정, Esc로 취소)":"여기에 문장을 입력하세요..."}
+            rows={4}
+          />
+        </div>
+        
+        <div
+          className={`written-text-area text-common ${lockWriteMode?'lock-write-blur':''}`}
+          ref={contentRef}
+          style={{
+            textAlign,
+            cursor:lockWriteMode?'default':'pointer',
+            paddingLeft:sidePadding,
+            paddingRight:sidePadding
+          }}
+          onClick={handleContentClick}
+        >
+          {renderedHeatmap}
+        </div>
+      </div>
+      {isGoalReached&&!lockWriteMode&&(
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-secondary backdrop-blur-md px-8 py-5 rounded-full border border-primary shadow-xl flex items-center gap-4 z-40">
+          <span className="text-base text-accent font-bold">🎉 목표 달성!</span>
+          <button
+            onClick={exportAsText}
+            className="text-sm btn-primary px-5 py-3 rounded-full font-bold"
+          >
+            내보내기
+          </button>
+        </div>
+      )}
+    </div>
+    {showAnalysisPanel&&(
+      <div className={`w-80 bg-secondary border-l border-primary flex flex-col overflow-hidden ${focusMode?'focus-blur':''}`}>
+        <div className="p-3 border-b border-primary flex justify-between items-center">
+          <span className="text-sm font-bold text-primary">📈 글쓰기 분석</span>
+          <button
+            onClick={()=>setShowAnalysisPanel(false)}
+            className="text-xs text-secondary hover:text-primary"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="bg-primary rounded p-3">
+            <div className="text-xs text-secondary mb-2">📝 자동 요약</div>
+            <div className="text-sm text-primary">
+              {generateSummary()}
+            </div>
+          </div>
+          <div className="bg-primary rounded p-3">
+            <div className="text-xs text-secondary mb-3">🔤 많이 사용한 단어 TOP 10</div>
+            <div className="space-y-2">
+              {analyzeWords().map(([word,count],idx)=>(
+                <div key={word} className="flex justify-between items-center">
+                  <span className="text-sm text-primary">
+                    {idx+1}. {word}
+                  </span>
+                  <span className="text-xs text-accent font-bold">
+                    {count}회
+                  </span>
+                </div>
+              ))}
+              {analyzeWords().length===0&&(
+                <div className="text-sm text-tertiary text-center py-4">
+                  아직 분석할 데이터가 없습니다
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="bg-primary rounded p-3">
+            <div className="text-xs text-secondary mb-3">📏 문장 길이 통계</div>
+            {(()=>{
+              const stats=analyzeSentenceStats();
+              return(
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-xs text-tertiary">평균</div>
+                    <div className="text-lg text-primary font-bold">
+                      {stats.avg}자
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-tertiary">문장 수</div>
+                    <div className="text-lg text-primary font-bold">
+                      {stats.count}개
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-tertiary">최소</div>
+                    <div className="text-lg text-primary font-bold">
+                      {stats.min}자
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-tertiary">최대</div>
+                    <div className="text-lg text-primary font-bold">
+                      {stats.max}자
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+          <div className="bg-primary rounded p-3">
+            <div className="text-xs text-secondary mb-2">🔁 반복 어휘 밀도</div>
+            <div className="text-2xl text-primary font-bold">
+              {calculateRepetitionDensity()}%
+            </div>
+            <div className="text-xs text-tertiary mt-2">
+              상위 10개 단어가 전체 어휘에서 차지하는 비율
+            </div>
+          </div>
+          <div className="bg-primary rounded p-3">
+            <div className="text-xs text-secondary mb-3">📅 최근 7일 기록</div>
+            <div className="space-y-2">
+              {Object.keys(archive)
+                .sort()
+                .reverse()
+                .slice(0,7)
+                .map(date=>(
+                  <div key={date} className="flex justify-between text-xs">
+                    <span className="text-tertiary">{date}</span>
+                    <span className="text-primary font-mono">{archive[date].totalChars.toLocaleString()}자</span>
+                  </div>
+                ))
+              }
+              {Object.keys(archive).length===0&&(
+                <div className="text-sm text-tertiary text-center py-4">
+                  아직 기록이 없습니다
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="bg-primary rounded p-3">
+            <div className="text-xs text-secondary mb-2">📊 전체 통계</div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs">
+                <span className="text-tertiary">총 글자 수</span>
+                <span className="text-primary font-mono font-bold">{totalStats.totalChars.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-tertiary">총 작성일</span>
+                <span className="text-primary font-mono font-bold">{totalStats.totalDays}일</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-tertiary">연속 집필</span>
+                <span className="text-primary font-mono font-bold">{totalStats.streak}일 🔥</span>
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={exportAsText}
+            className="w-full text-sm btn-primary py-2 rounded"
+          >
+            📄 TXT 내보내기
+          </button>
+          <button
+            onClick={exportAsJSON}
+            className="w-full text-sm btn-primary py-2 rounded"
+          >
+            💾 JSON 내보내기
+          </button>
+        </div>
+      </div>
+    )}
+    {showSettings&&(
+      <div className={`w-80 bg-secondary border-l border-primary flex flex-col overflow-hidden ${focusMode?'focus-blur':''}`}>
+        <div className="p-3 border-b border-primary flex justify-between items-center">
+          <span className="text-sm font-bold text-primary">설정</span>
+          <button
+            onClick={()=>setShowSettings(false)}
+            className="text-xs text-secondary hover:text-primary"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div>
+            <label className="text-sm text-secondary mb-2 block">글씨 크기</label>
+            <input
+              type="range"
+              min="12"
+              max="32"
+              value={fontSize}
+              onChange={e=>setFontSize(Number(e.target.value))}
+              className="w-full"
+            />
+            <div className="text-sm text-tertiary text-right">{fontSize}px</div>
+          </div>
+          <div>
+            <label className="text-sm text-secondary mb-2 block">좌우 여백</label>
+            <input
+              type="range"
+              min="20"
+              max="300"
+              value={sidePadding}
+              onChange={e=>setSidePadding(Number(e.target.value))}
+              className="w-full"
+            />
+            <div className="text-sm text-tertiary text-right">{sidePadding}px</div>
+          </div>
+          <div>
+            <label className="text-sm text-secondary mb-2 block">입력창 위치</label>
+            <input
+              type="range"
+              min={-(window.innerHeight * 0.7)}
+              max="0"
+              value={inputOffset}
+              onChange={e=>setInputOffset(Number(e.target.value))}
+              className="w-full"
+            />
+            <div className="text-sm text-tertiary text-right">
+              {inputOffset >= 0 ? '하단' : `상단 ${Math.abs(Math.round((inputOffset / window.innerHeight) * 100))}%`}
+            </div>
+          </div>
+          <div>
+            <label className="text-sm text-secondary mb-2 block">정렬</label>
+            <div className="flex gap-2">
+              {['left','center','right'].map(align=>(
+                <button
+                  key={align}
+                  onClick={()=>setTextAlign(align)}
+                  className={`flex-1 text-sm py-2 rounded ${textAlign===align?'btn-primary':'text-secondary border border-primary'}`}
+                >
+                  {align==='left'?'왼쪽':align==='center'?'가운데':'오른쪽'}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-sm text-secondary mb-2 block">일일 목표 (자)</label>
+            <input
+              type="number"
+              value={dailyGoal}
+              onChange={e=>setDailyGoal(Number(e.target.value))}
+              className="w-full px-3 py-2 bg-primary border border-primary rounded text-sm text-primary"
+            />
+          </div>
+          <div>
+            <label className="text-sm text-secondary mb-2 block">수정금지 목표 (자)</label>
+            <input
+              type="number"
+              value={lockWriteGoal}
+              onChange={e=>setLockWriteGoal(Number(e.target.value))}
+              className="w-full px-3 py-2 bg-primary border border-primary rounded text-sm text-primary"
+              disabled={lockWriteMode}
+            />
+            <div className="text-xs text-tertiary mt-1">
+              수정금지 모드에서 작성해야 할 글자 수
+            </div>
+          </div>
+          <div>
+            <label className="text-sm text-secondary mb-2 block">뽀모도로 설정</label>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-tertiary">작업 시간 (분)</span>
+                <input
+                  type="number"
+                  value={pomodoroSettings.workMinutes}
+                  onChange={e=>setPomodoroSettings({...pomodoroSettings,workMinutes:Number(e.target.value)})}
+                  className="w-20 px-3 py-2 bg-primary border border-primary rounded text-sm text-primary"
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-tertiary">휴식 시간 (분)</span>
+                <input
+                  type="number"
+                  value={pomodoroSettings.breakMinutes}
+                  onChange={e=>setPomodoroSettings({...pomodoroSettings,breakMinutes:Number(e.target.value)})}
+                  className="w-20 px-3 py-2 bg-primary border border-primary rounded text-sm text-primary"
+                />
+              </div>
+            </div>
+          </div>
+          <div>
+            <label className="text-sm text-secondary mb-2 block">파일 가져오기</label>
+            <input
+              type="file"
+              accept=".txt"
+              onChange={importFromFile}
+              className="text-sm text-primary"
+              disabled={lockWriteMode}
+            />
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+</div>
+);
+};
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

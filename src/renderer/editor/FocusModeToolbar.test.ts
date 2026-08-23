@@ -10,6 +10,7 @@ describe("FocusModeToolbar", () => {
       createElement(FocusModeToolbar, {
         contentWidthPx: 700,
         currentBlockHighlight: true,
+        currentDocumentCharacterCount: 1_234,
         pomodoroPhase: "break",
         pomodoroStatus: "휴식 2/5 · 완료 2회",
         saveStatus: "저장됨",
@@ -41,6 +42,8 @@ describe("FocusModeToolbar", () => {
     expect(markup).toContain("휴식 모드");
     expect(markup).toContain("휴식 2/5 · 완료 2회");
     expect(markup).toContain("04:12");
+    expect(markup).toContain("현재 회차 1234자");
+    expect(markup).toContain('aria-label="현재 문서 글자 수"');
     expect(markup).toContain("저장됨");
   });
 
@@ -49,6 +52,7 @@ describe("FocusModeToolbar", () => {
       createElement(FocusModeToolbar, {
         contentWidthPx: 700,
         currentBlockHighlight: false,
+        currentDocumentCharacterCount: 660,
         exitLabel: "수정금지 종료",
         modeLabel: "수정금지 집필",
         modeStatus: "목표까지 660자",
@@ -70,6 +74,7 @@ describe("FocusModeToolbar", () => {
 
     expect(markup).toContain("수정금지 집필");
     expect(markup).toContain("목표까지 660자");
+    expect(markup).toContain("현재 회차 660자");
     expect(markup).toContain("작업 모드 · 작업 1/5 · 완료 0회");
     expect(markup).toContain('aria-label="수정금지 종료"');
     expect(markup).toContain('aria-label="타자기 위치"');

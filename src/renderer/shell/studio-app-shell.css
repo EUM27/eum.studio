@@ -186,9 +186,9 @@ textarea {
 .studio-app-shell .app-topbar-music {
   display: flex;
   min-width: 0;
-  max-width: 760px;
+  max-width: 900px;
   margin-left: auto;
-  flex: 1 1 760px;
+  flex: 1 1 900px;
   -webkit-app-region: no-drag;
 }
 
@@ -211,50 +211,8 @@ textarea {
 }
 
 .studio-app-shell .app-topbar-music:has(.music-mini-player.is-idle) {
-  max-width: 340px;
-  flex: 0 1 340px;
-}
-
-.studio-app-shell .app-topbar-music .music-mini-player.is-idle {
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 5px;
-}
-
-.studio-app-shell
-  .app-topbar-music
-  .music-mini-player.is-idle
-  .music-mini-track
-  > :first-child {
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  font-size: 8px;
-}
-
-.studio-app-shell
-  .app-topbar-music
-  .music-mini-player.is-idle
-  .music-mini-track
-  small {
-  display: none;
-}
-
-.studio-app-shell
-  .app-topbar-music
-  .music-mini-player.is-idle
-  .music-mini-track
-  strong {
-  font-size: 9px;
-  font-weight: 650;
-}
-
-.studio-app-shell
-  .app-topbar-music
-  .music-mini-player.is-idle
-  .music-mini-settings {
-  height: 24px;
-  min-height: 24px;
-  padding-inline: 7px;
+  max-width: 760px;
+  flex-basis: 760px;
 }
 
 .studio-app-shell .app-topbar-settings.is-active {
@@ -4165,10 +4123,14 @@ textarea {
   display: none;
 }
 
-.studio-app-shell[data-starlight-theme] .app-topbar-music .music-mini-player :is(
-    button,
-    input
-  ) {
+.studio-app-shell[data-starlight-theme]
+  .app-topbar-music
+  .music-mini-player
+  button:not(.music-mini-primary-control),
+.studio-app-shell[data-starlight-theme]
+  .app-topbar-music
+  .music-mini-player
+  input {
   color: var(--starlight-text-primary);
   background: var(--starlight-input);
   border-color: var(--starlight-border);
@@ -4339,17 +4301,17 @@ textarea {
 }
 
 .studio-app-shell .focus-mode-pomodoro-status strong {
-  font-size: 10px;
+  font-size: 13px;
 }
 
 .studio-app-shell .focus-mode-pomodoro-status span {
   color: var(--eum-text-muted);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .studio-app-shell .focus-mode-pomodoro-status output {
   font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
-  font-size: 11px;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
 }
@@ -4416,7 +4378,7 @@ textarea {
 }
 
 .studio-app-shell .focus-mode-toolbar-title strong {
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .studio-app-shell
@@ -4429,7 +4391,7 @@ textarea {
 .studio-app-shell .focus-mode-save-status {
   overflow: hidden;
   color: var(--eum-text-muted);
-  font-size: 9px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4441,7 +4403,7 @@ textarea {
   align-items: center;
   gap: 6px;
   color: var(--eum-text-muted);
-  font-size: 9px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -4475,7 +4437,7 @@ textarea {
   border-radius: 7px;
   color: var(--eum-text-muted);
   background: var(--eum-panel);
-  font-size: 9px;
+  font-size: 12px;
   cursor: pointer;
   user-select: none;
 }
@@ -6243,21 +6205,25 @@ textarea {
   min-width: 0;
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(150px, 1fr) auto auto auto auto auto;
+  grid-template-columns: minmax(180px, 1.15fr) minmax(110px, 0.9fr) auto auto auto auto;
   align-items: center;
-  gap: 9px;
-  color: #56505a;
+  gap: 7px;
+  padding: 2px 5px;
+  border: 1px solid color-mix(in srgb, var(--eum-line) 76%, transparent);
+  border-radius: 9px;
+  color: var(--eum-text);
+  background: color-mix(in srgb, var(--eum-panel) 88%, transparent);
 }
 
 .studio-app-shell .app-topbar-music .music-mini-player {
-  height: 28px;
+  height: 32px;
 }
 
 .studio-app-shell .music-mini-track {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
 }
 
 .studio-app-shell .music-mini-track > img,
@@ -6265,15 +6231,15 @@ textarea {
   width: 28px;
   height: 28px;
   flex: none;
-  border-radius: 5px;
+  border-radius: 7px;
   object-fit: cover;
 }
 
 .studio-app-shell .music-mini-track > span:first-child {
   display: grid;
   place-items: center;
-  color: #6d6177;
-  background: #eeeaf1;
+  color: var(--eum-accent);
+  background: var(--eum-accent-soft);
 }
 
 .studio-app-shell .music-mini-track > span:last-child {
@@ -6290,53 +6256,108 @@ textarea {
 }
 
 .studio-app-shell .music-mini-track strong {
-  color: #333;
-  font-size: 10px;
+  color: var(--eum-text);
+  font-size: 10.5px;
+  font-weight: 720;
 }
 
 .studio-app-shell .music-mini-track small {
-  color: #888;
-  font-size: 8px;
+  color: var(--eum-text-muted);
+  font-size: 8.5px;
+}
+
+.studio-app-shell .music-mini-progress {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(62px, 1fr) auto;
+  align-items: center;
+  gap: 5px;
+}
+
+.studio-app-shell .music-mini-progress input,
+.studio-app-shell .music-mini-volume input {
+  min-width: 0;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--eum-accent);
+}
+
+.studio-app-shell .music-mini-progress output {
+  color: var(--eum-text-muted);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 7.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .studio-app-shell .music-mini-controls {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 1px;
 }
 
 .studio-app-shell .music-mini-controls button,
 .studio-app-shell .music-mini-entry-actions button {
-  width: 25px;
-  min-width: 25px;
-  height: 25px;
-  min-height: 25px;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  border: 1px solid #ded8e2;
+  border: 0;
+  border-radius: 7px;
+  color: var(--eum-text-muted);
+  background: transparent;
+}
+
+.studio-app-shell .music-mini-controls button:hover:not(:disabled),
+.studio-app-shell .music-mini-entry-actions button:hover:not(:disabled),
+.studio-app-shell .music-mini-controls button[aria-pressed="true"] {
+  color: var(--eum-text);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .music-mini-controls .music-mini-primary-control,
+.studio-app-shell[data-starlight-theme]
+  .app-topbar-music
+  .music-mini-player
+  .music-mini-primary-control {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
   border-radius: 999px;
-  color: #5d5266;
-  background: #fff;
+  color: var(--starlight-button-text, #fff);
+  background: var(--eum-accent);
+}
+
+.studio-app-shell .music-mini-controls button:disabled,
+.studio-app-shell .music-mini-entry-actions button:disabled {
+  opacity: 0.34;
 }
 
 .studio-app-shell .music-mini-entry-actions {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 1px;
 }
 
 .studio-app-shell .music-mini-entry-actions button {
+  gap: 3px;
+  font-size: 8.5px;
+}
+
+.studio-app-shell .music-mini-entry-actions button:last-child {
   width: auto;
-  gap: 4px;
   padding: 0 7px;
-  font-size: 8px;
 }
 
 .studio-app-shell .music-mini-time,
 .studio-app-shell .music-mini-focus {
-  color: #777;
+  color: var(--eum-text-muted);
   font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
   font-size: 8px;
   white-space: nowrap;
@@ -6345,26 +6366,13 @@ textarea {
 .studio-app-shell .music-mini-volume {
   display: flex;
   align-items: center;
-  gap: 5px;
-  color: #888;
+  gap: 4px;
+  color: var(--eum-text-muted);
   font-size: 8px;
 }
 
 .studio-app-shell .music-mini-volume input {
-  width: 62px;
-}
-
-.studio-app-shell .music-mini-player > a {
-  color: #6d6177;
-}
-
-.studio-app-shell .music-mini-error {
-  grid-column: 1 / -1;
-  overflow: hidden;
-  color: #9b3030;
-  font-size: 8px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  width: 52px;
 }
 
 .studio-app-shell .music-mini-video-panel {
@@ -6375,8 +6383,8 @@ textarea {
   width: 356px;
   height: 200px;
   overflow: hidden;
-  border: 1px solid #d9d1de;
-  border-radius: 10px;
+  border: 1px solid var(--eum-line);
+  border-radius: 12px;
   opacity: 0;
   background: #000;
   box-shadow: 0 16px 38px rgb(31 24 36 / 28%);
@@ -6400,20 +6408,44 @@ textarea {
 
 .studio-app-shell .music-mini-video-host,
 .studio-app-shell .music-mini-video-host > div,
-.studio-app-shell .music-mini-video-host iframe {
+.studio-app-shell .music-mini-video-host iframe,
+.studio-app-shell .music-mini-local-media {
   width: 356px;
   height: 200px;
   border: 0;
+  object-fit: contain;
+  background: #000;
+}
+
+.studio-app-shell .music-mini-player.is-local .music-mini-video-host,
+.studio-app-shell .music-mini-player.is-youtube .music-mini-local-media,
+.studio-app-shell .music-mini-player.is-idle .music-mini-video-panel {
+  display: none;
 }
 
 @media (max-width: 1080px) {
+  .studio-app-shell .music-mini-progress,
   .studio-app-shell .music-mini-volume,
-  .studio-app-shell .music-mini-focus {
+  .studio-app-shell .music-mini-focus,
+  .studio-app-shell .music-mini-time {
     display: none;
   }
 
   .studio-app-shell .music-mini-player {
-    grid-template-columns: minmax(120px, 1fr) auto auto auto;
+    grid-template-columns: minmax(140px, 1fr) auto auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .studio-app-shell .music-mini-controls button:first-child,
+  .studio-app-shell .music-mini-controls button:last-child,
+  .studio-app-shell .music-mini-entry-actions button:not(:last-child) {
+    display: none;
+  }
+
+  .studio-app-shell .music-mini-player {
+    grid-template-columns: minmax(112px, 1fr) auto auto;
+    gap: 3px;
   }
 }
 
@@ -10734,7 +10766,7 @@ textarea {
 
 .studio-app-shell .music-library-dialog,
 .studio-app-shell .assistant-chat-dialog {
-  width: min(960px, calc(100vw - 32px));
+  width: min(1040px, calc(100vw - 32px));
   max-height: min(820px, calc(100vh - 32px));
   display: grid;
   overflow: hidden;
@@ -10782,6 +10814,63 @@ textarea {
   flex-direction: column;
 }
 
+.studio-app-shell .music-library-register {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--eum-line);
+  background: color-mix(in srgb, var(--eum-accent-soft) 58%, var(--eum-panel));
+}
+
+.studio-app-shell .music-library-register > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.studio-app-shell .music-library-register small {
+  color: var(--eum-text-muted);
+  font-size: 10px;
+}
+
+.studio-app-shell .music-library-register fieldset {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0;
+  padding: 2px;
+  border: 1px solid var(--eum-line);
+  border-radius: 9px;
+  background: var(--eum-panel);
+}
+
+.studio-app-shell .music-library-register fieldset label {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  border-radius: 7px;
+  color: var(--eum-text-muted);
+  font-size: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.studio-app-shell .music-library-register fieldset label:has(input:checked) {
+  color: var(--eum-text);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .music-library-register fieldset input {
+  width: 1px;
+  height: 1px;
+  position: absolute;
+  opacity: 0;
+}
+
 .studio-app-shell .music-library-connection,
 .studio-app-shell .assistant-chat-connection {
   display: flex;
@@ -10804,6 +10893,7 @@ textarea {
 
 .studio-app-shell .music-library-search input,
 .studio-app-shell .music-library-search button,
+.studio-app-shell .music-library-register > button,
 .studio-app-shell .music-library-connection button,
 .studio-app-shell .assistant-chat-connection button,
 .studio-app-shell .assistant-chat-dialog button {
@@ -10815,6 +10905,7 @@ textarea {
 }
 
 .studio-app-shell .music-library-search button,
+.studio-app-shell .music-library-register > button,
 .studio-app-shell .assistant-chat-dialog button {
   display: inline-flex;
   align-items: center;
@@ -10844,10 +10935,6 @@ textarea {
   padding: 14px;
   border-right: 1px solid var(--eum-line);
   border-bottom: 1px solid var(--eum-line);
-}
-
-.studio-app-shell .music-library-columns > .music-library-favorites {
-  grid-column: 1 / -1;
 }
 
 .studio-app-shell .music-library-columns section > header {
@@ -10880,7 +10967,7 @@ textarea {
 }
 
 .studio-app-shell .music-library-columns .music-library-scroll-list {
-  max-height: min(34vh, 340px);
+  max-height: min(29vh, 300px);
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-right: 6px;
@@ -10888,7 +10975,7 @@ textarea {
 }
 
 .studio-app-shell .music-library-queue .music-library-scroll-list {
-  max-height: min(42vh, 420px);
+  max-height: min(34vh, 360px);
 }
 
 .studio-app-shell .music-library-columns li {
@@ -10907,6 +10994,17 @@ textarea {
   grid-row: 1 / 3;
   object-fit: cover;
   border-radius: 6px;
+}
+
+.studio-app-shell .music-library-media-icon {
+  width: 56px;
+  height: 42px;
+  grid-row: 1 / 3;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--eum-accent);
+  background: var(--eum-accent-soft);
 }
 
 .studio-app-shell .music-library-columns li > span {
@@ -11016,11 +11114,20 @@ textarea {
 }
 
 @media (max-width: 760px) {
-  .studio-app-shell .music-library-columns {
+  .studio-app-shell .music-library-register {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .studio-app-shell .music-library-columns > .music-library-favorites {
-    grid-column: auto;
+  .studio-app-shell .music-library-register fieldset {
+    justify-self: stretch;
+  }
+
+  .studio-app-shell .music-library-register fieldset label {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .studio-app-shell .music-library-columns {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
