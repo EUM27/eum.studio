@@ -8,11 +8,288 @@
 
 현재 storage 결정: [POC-3 SQLite·blob·backup 결정](docs/poc-3-storage-decisions.md)
 
-마지막 갱신: 2026-08-23
+마지막 갱신: 2026-08-25
 
 ## 현재 Gate
 
-`음악 Gate 14 — YouTube·로컬 파일 통합 미디어 플레이어 완료`
+`리팩토링 Gate R9-2 — fresh 전체 검증과 최종 감사 완료`
+
+리팩토링 Gate R1 현재 상태:
+
+- [x] R1-0 — 현재 `D:\eum.studio`의 승인 설계 manifest SHA-256 11/11 일치와 깨끗한 시작 작업 트리를 확인하고, 첨부 리팩토링 제안의 첫 변경 단위를 현재 브랜치 기준으로 다시 고정했다.
+- [x] R1-1 — `App.tsx` 안의 `DocumentFolderTree`와 문서 drag·폴더 편집 local state를 `src/renderer/workspace/documents/DocumentFolderTree.tsx`로 그대로 옮겼다. 두 호출부의 props, DOM class·접근성 표면, CSS, workspace 명령과 저장 동작은 변경하지 않았다.
+- [x] R1-2 — 홈의 `WorkCard`·`LibraryPage`, Shell의 백업·가져오기·새 작품·이름 변경 dialog, App의 사건 dialog와 문서 제목/생성 control을 상태·명령 소유권 이동 없이 기능 폴더로 기계적으로 추출했다.
+- [x] R1-3 — active renderer CSS를 기존 selector·선언·공백·개행·cascade 순서를 그대로 유지한 24개 기능/호환 shard와 0-byte legacy residual로 이동했다.
+- [x] R1-4 — WorkspaceRoot의 core editor/activity/version dialog 10종을 조건·props·callback 변경 없이 각 controller를 직접 소비하는 typed `WorkspaceDialogHost`로 이동했다.
+- [x] R1-5 — 조수 chat/connections/context dialog JSX를 controller와 navigation port를 소비하는 typed Assistant dialog host로 이동했다.
+- [x] R1-6 — 작품 구조·별빛·인물·플롯·파편·복선 관리 dialog JSX를 기능 controller와 navigation port를 소비하는 typed host로 이동했다.
+- [x] R1-7 — 구조 개요·플롯·사건·장면·인물·복선·별빛의 embedded workspace panel JSX를 typed structure host와 공유 Scene content로 이동했다.
+- [x] R1-8 — 집필 기록·원고 검토·Candidate·버전의 review workspace panel JSX와 Candidate count 파생을 typed review host로 이동했다.
+- [x] R1-9 — 현재 원고·조수·작품·버전의 오른쪽 review inspector rail JSX를 typed rail host로 이동했다.
+- [x] R1-10 — 빈 작품/활성 회차 문서 레일, 폴더 트리, 원고 검색과 왼쪽 재진입 JSX를 typed document rail host로 이동했다.
+- [x] R1-11 — 인물·플롯 전용 workspace surface JSX를 typed feature surface host로 이동하고 Scene content를 기존 typed component의 별도 인스턴스로 조립했다.
+- [x] R1-12 — 집중 toolbar·열린 회차 tab·ManuscriptEditor·편집 오류 JSX를 typed manuscript surface host로 이동했다.
+- [x] R1-13 — Work header·fallback manuscript header·startup recovery preview/action JSX를 typed host로 이동했다.
+- [x] R4-29 — Scene·Assistant vocabulary·Character·Plot·Lore·Event·Work-structure·Foreshadow·Fragment의 exact source navigation callback을 typed feature navigation controller로 이동했다.
+- [x] R5-32 — 문서 생성·이름/순서 변경 설치, schedule/완료 revision 열기, tab activation/close와 WorkspaceController install을 typed document controller로 이동했다.
+- [x] R5-33 — Runtime projection 설치, editor activation, durable queue 등록과 bootstrap effect를 typed runtime projection controller로 이동했다.
+- [x] R4-30 — 인물·별빛·파편의 editor-bound capture/create/insert와 manuscript transaction 기록을 typed manuscript-actions controller로 이동했다.
+- [x] R1-14 — bottom event rail·statusbar·schedule·music library와 남은 workspace tool host JSX를 typed host로 이동했다.
+- [x] R4-31 — structure/music projection state와 lifecycle을 `useWorkspaceStructureKernel`로 이동했다.
+- [x] R4-32 — assistant/version/schedule/editor/activity/character/lore 조립과 plot/scene/foreshadow/fragment 조립을 core/story feature kernel로 이동했다.
+- [x] R5-34 — 공통 workspace activation/DocumentNavigator port 조립을 typed document navigator controller로 이동했다.
+- [x] R1-15 — WorkspaceRoot의 화면 조립을 `WorkspaceView`로 이동하고 `App.tsx`를 670 lines의 session/navigator/kernel 조립부로 축소했다.
+
+리팩토링 Gate R1 현재 증거:
+
+- 추출 전 `App.tsx` 블록과 새 컴포넌트 본문은 `export` 표기 정규화 뒤 SHA-256 `E4A5B5B09ADF9AD37212979CFF34833268C0E98248336FC3A91BA0517BF7BC01`로 일치한다.
+- `WorkCard`, `LibraryPage`, Studio Shell dialog 4개, `EventBlockDialog`, 문서 control 2개의 각 원본/new 정규화 block hash가 일치한다. 새 static-render 검증은 각 selector·접근성 이름·표시 분기와 local form 상태를 고정한다.
+- fresh `npm run check`에서 lint, 네 TypeScript project, Vitest 239개 파일·846개 검증, Electron/preload/renderer production build가 통과했고 기존 1개만 skip됐다.
+- 현재 production Electron에서 작품 카드·즐겨찾기·이름 변경·재실행, 홈 native 회차 선택, 새 작품/백업/가져오기 dialog, exact-selection 사건 생성, `제목없음` 회차 2개 생성 흐름을 통과했다. 현재 완료 마커·IA와 맞지 않는 기존 E2E locator는 검증 실행에서만 좁혀 사용했고 모든 임시 test/workspace를 제거했다.
+- production Electron에서 회차 완료→원고 저장→완전 재실행 복원이 통과했다. 폴더 생성·중첩·두 회차 drag·순서 변경·폴더 삭제·원고 undo/redo·완전 재실행 복원도 현재 완료 마커를 고려한 검증용 locator로 통과했으며, 검증용 테스트 변경은 즉시 제거했다.
+- 체크인된 폴더 E2E의 exact 회차명 locator와 버튼 텍스트 기대는 R1-1 변경 전부터 완료 상태 마커 `○/✓/△`를 포함한 현재 접근성 이름·텍스트와 맞지 않아 같은 위치에서 실패한다. 이 리팩토링 범위에서는 제품 접근성 표면이나 기존 테스트를 바꾸지 않았다.
+- CSS 25개 active import의 누적 원본은 266,778 bytes, LF 11,447, CR 3,953, SHA-256 `101FDA86519F33CFE90D22709C738D65E3C142592AB77FD7AA6460CC1E63A737`로 분할 전과 일치한다. Vite 산출 CSS도 225,897 bytes, SHA-256 `775B0343B70558A8C0081E06B0DF2D33DCEA1D8915D392F22F464556A7EDEBC5`로 단일 파일 기준과 동일하다.
+- CSS 분할 대표 production Electron 흐름은 native 홈 회차 선택, 일정·집필 기록, exact-selection 내보내기, 투고·빠른 메모·음악 큐·플롯 보드, 장면 초안·원고 분석, 인물·영감·플롯, 장면 preview·TXT 가져오기·다크 테마, 14개 테마·150% 플레이어·혼합 로컬 미디어를 통과했다. 기존 Home 즐겨찾기 표기, sidebar 강제 표시, 검토 레일 action 폭, 옛 snapshot/rename/folder locator 불일치는 동일한 단일 CSS bundle에서도 재현되거나 현재 DOM 이전부터 어긋난 기준으로 확인해 제품을 바꾸지 않았다.
+- SQLite schema·migration·durable save·CodeMirror·typed bridge·IPC·Electron main에는 변경이 없다. CSS는 파일 경계만 바뀌었고 selector·선언·원본 byte·production 계산 결과는 바뀌지 않았다.
+
+리팩토링 Gate R2 — `DocumentNavigator` 통합 상태:
+
+- [x] R2-0 — 조각·복선·별빛·별빛 Candidate·인물·플롯·사건·작품 구조·조수 어휘·장면 경계·장면 초안의 same/visible/cross-document 성공 경로와 assistant stale revision 경로를 production Electron characterization으로 봉인했다.
+- [x] R2-1 — typed `DocumentTarget`, neutral result/port 계약, awaitable surface readiness, installed-editor handshake, exact revision 전후 확인, generation supersession을 `DocumentNavigator.open`에 추가했다.
+- [x] R2-2 — revision을 보유한 조각·복선·별빛·별빛 Candidate·플롯·사건·조수·장면 focus/preview는 exact target으로, 기존 계약상 revision rejection이 없는 인물·작품 구조 범위·stale 장면 초안 비교는 current target으로 구분했다.
+- [x] R2-3 — 작품 구조의 범위 없는 회차 열기는 `kind: "document"`로 이동했고, 일반 회차 트리·탭·완료 revision·활동 기록·홈·닫기 전환은 후속 `WorkspaceLifecycleCoordinator` 범위로 남겼다.
+- [x] R2-4 — 8개 임시 channel registry와 `stage/clear/consumeActivated`, 12개 feature pending ref/type/effect, 활성화 후 feature 분기 체인을 제거했다. `handleDocumentActivated`는 editor identity 설치·telemetry·navigator notify·resume capture만 조정한다.
+- [x] R2-5 — cross-episode 장면 preview에서 B의 extraction selection revision이 A Candidate decoration을 가리던 실제 실패를 exact navigation preview target으로 좁혀 수정하고, skip 없이 decoration·cursor·focus·scroll·tab·원고 불변을 통과했다.
+
+리팩토링 Gate R2 현재 증거:
+
+- `App.tsx`의 feature pending ref와 `pendingVisibleManuscriptSelection` 검색 결과는 0건이고, `test.fixme`도 0건이다. feature 위치 이동은 `documentNavigator.open` 13개 호출로 수렴했다.
+- 직접 `selectDocumentRange`는 forward-writing의 현재 cursor 배치, 공통 navigator port, 현재 문서 안의 별빛 cue 선택만 남았다. 직접 `revealDocumentOffset`은 공통 navigator port 한 곳만 남았다.
+- `activateWorkspaceLocation` 직접 호출은 navigator activation port와 완료 revision 보기·활동 기록 회차 열기·탭 닫기 같은 일반 lifecycle 전환만 남았다.
+- fresh `npm run check`가 lint, 세 TypeScript project, Vitest 238개 파일·842개 검증 통과·기존 1개 skip, Electron/preload/renderer production build를 통과했다.
+- production Electron에서 조각·인물·장면 boundary·stale draft·플롯·작품 구조·별빛·복선·조수 stale revision·별빛 Candidate·장면 focus·사건 레일·flush-before-switch·IME defer/cancel 15개 흐름이 한 worker에서 9.6분에 모두 통과했다.
+- 오래된 final-scenes E2E는 App을 우회한 bridge 직접 setup 뒤 renderer scene projection이 갱신되지 않는 지점에서 focusScene 전에 멈춘다. Stage R2는 현재 UI의 우클릭 장면 생성 흐름에 visible-transition exact selection 검증을 추가해 focusScene을 증명했으며, 해당 오래된 fixture 구조는 Stage 7 E2E 분리/driver 정비에서 교체한다.
+
+리팩토링 Gate R3 — 투고 운영 controller 상태:
+
+- [x] `StudioShell`의 투고 route 3개와 persistent projection·선택·메일 상태 21개, 하나의 action/error gate, 11-query all-or-error 로드, 투고처·투고·계약·발행·정산·입금·근거·조사·조수·CSV·메일 동작을 항상 마운트되는 `usePublishingController`로 이동했다.
+- [x] `PublishingPartnerDialog`의 현재 61개 prop surface, dialog-local form·검색·Candidate·CSV mapping/preview·메일 draft는 그대로 유지했다. controller는 주입된 client만 사용하며 `window` 직접 접근과 raw state setter 노출이 없다.
+- [x] 조건부 dialog host와 61개 live prop mapping을 stateless `PublishingFeature`로 옮겼다. controller hook과 feature host는 Shell에서 각각 무조건 한 번 마운트되고, dialog 자체는 기존 visibility/catalog 조건에서만 마운트된다.
+- [x] `StudioShell.tsx`는 87,863 bytes·2,473 lines에서 43,087 bytes로 줄었다. 새 controller/host는 투고 feature 안에서 orchestration과 화면 조립을 소유하고 public bridge/schema/SubmissionPackage/PublishingSource/Candidate/메일 보안 경계를 바꾸지 않는다.
+
+리팩토링 Gate R3 현재 증거:
+
+- normalized route·persistent state·966-line callback·dialog prop block hash 감사가 통과했다.
+- 투고 controller와 기존 application/dialog/bridge/runtime/mail 집중 21개 파일·198개 검증이 통과했다.
+- fresh `npm run check`가 lint, 네 TypeScript project, Vitest 240개 파일·852개 검증 통과·기존 1개 skip, Electron/preload/renderer production build를 통과했다.
+- production Electron 한 worker에서 투고처·웹 조사·조수 승인·불변 제출 패키지·계약·발행·정산·입금·불변 근거·근거 연결·투고처/투고 CSV·메일 Candidate·메일 연결/일정/동기화 14개 흐름을 9.2분에 모두 통과했다.
+- host 이동 뒤 fresh `npm run check`도 Vitest 242개 파일·863개 검증 통과·기존 1개 skip과 production build를 통과했고, 같은 production Electron 14개 흐름이 9.3분에 다시 모두 통과했다.
+
+리팩토링 Gate R4 — 기능별 controller 상태:
+
+- [x] R4-1 — 조각 projection·Work load/reset·dialog/gate/error와 capture/move/insert/update/retire를 injected `useFragmentsController`로 이동했다. App은 profile bootstrap, editor/durable/resume, exact-selection `DocumentNavigator`, rail/dialog UI만 유지한다.
+- [x] R4-2 — 복선 lines/points와 line/point 동작을 `useForeshadowController`로 이동하고 shared Lore link와 exact source navigation을 App에 유지했다.
+- [x] R4-3 — canonical Lore와 Lore Candidate를 함께 `useLoreController`로 이동하고 shared link·cue·exact evidence navigation을 App에 유지했다.
+- [x] R4-4 — 인물·관계·수동 근거·추출/생성 Candidate를 `useCharactersController`로 이동하고 inspiration·OAuth·workspace/navigation을 App에 유지했다.
+- [x] R4-5a — 사건·플롯·장면 projection state, 독립 load lane, refresh/reconcile kernel을 `useStructureController`로 이동하고 mutation/UI/music/navigation을 App에 유지했다.
+- [x] R4-5b — 사건 create/move/source link·replace·retire의 payload와 persist→command→refresh를 StructureController에 이동하고 shared gate/error/UI/navigation을 App에 유지했다.
+- [x] R4-5c — canonical PlotThread create/update/retire와 internal reconcile을 StructureController에 이동하고 swallowed-error rail refresh·selection/UI gate는 App에 유지했다.
+- [x] R4-5d — plot source expectedSourceId·persist→linkSource→reconcile을 StructureController에 이동하고 editor capture·gate/UI/navigation을 App에 유지했다.
+- [x] R4-5e — placement 이동·story-time payload와 authoritative board→selection→swallowed refresh를 StructureController에 이동하고 validation·UI/selection state는 App에 유지했다.
+- [x] R4-5f — plot-to-event selected/anchorless 생성과 수동 link/unlink의 payload·mutation reconcile·swallowed refresh를 StructureController에 이동했다.
+- [x] R4-5g — 마지막 createPlotFromEvent의 command→mutation→병렬 board/raw refresh→board→selection→tab 순서를 StructureController에 이동하고 App의 직접 plots 명령을 0으로 만들었다.
+- [x] R4-6 — Work 음악 설정·YouTube 프로필·불변 단조 증가 재생 요청을 MusicController로 이동하고 transport·queue 저장·장면 음악·Pomodoro는 App에 유지했다.
+- [x] R4-7 — 활동 state/lifecycle을 옮기지 않고 Work 활동·Pomodoro·목표·읽기 시간 네 조회의 atomic loader만 분리했다.
+- [x] R4-8 — App 수명 ephemeral 조수 채팅의 message/sending/error/runChat만 AssistantController로 이동하고 Work·OAuth·context·connections·permissions·navigation은 App에 유지했다.
+- [x] R5-1 — RuntimeProjection과 11-query atomic loader를 stable RuntimeBootstrapController로 이동하고 여섯 호출부의 install·recovery·durable·catalog 의미는 App에 유지했다.
+- [x] R5-2 — continuous-reading의 promise tail·latest pending만 stable SerialPersistenceLane으로 이동하고 progress/location·bridge save·IME·switch·close 순서는 App에 유지했다.
+- [x] R5-3 — 같은 lane을 Work manuscript layout save tail·latest pending에 적용하되 cache·load/change sequence·revision·optimistic rollback은 App에 유지했다.
+- [x] R5-4 — regular manuscript persist의 queue flush→resume capture만 one-method facade와 pure helper로 이동하고 durable queue·IME·strict close·switch lifecycle은 App에 유지했다.
+- [x] R5-5 — mutable store를 만들기 전에 active Work/Document/derived Work ID 선택만 pure immutable WorkspaceSession selector로 이동했다.
+- [x] R5-6 — DocumentNavigator용 raw catalog Work ID·selected Document·document profile snapshot의 type/factory만 Store로 이동하고 ref/effect/editor/tab identity는 App에 유지했다.
+- [x] R5-7 — mutable documentTabSession을 옮기지 않고 existing projectDocumentTabs 기반 open Document ID projection만 WorkspaceSession selector로 이동했다.
+- [x] R5-8 — installed editor identity의 exact Work/Document 생성·비교만 pure helper로 이동하고 ref·notification·reveal·Navigator lifecycle은 App에 유지했다.
+- [x] R5-9 — App의 동일한 openDocumentTab 전이 11개를 pure WorkspaceSession facade로 치환하고 mutable state·close·switch lifecycle은 App에 유지했다.
+- [x] R5-10 — closeDocumentTab 계산 한 곳만 pure Store facade로 치환하고 activation 성공 후 session commit 순서는 App에 유지했다.
+- [x] R5-11 — workspace activation의 current Document lookup·same-target 판단만 pure lifecycle plan으로 이동하고 모든 side effect/order는 App에 유지했다.
+- [x] R5-12 — activation 결과의 selected Work/Document lookup만 pure lifecycle selector로 이동하고 validity/error/state order는 App에 유지했다.
+- [x] R5-13 — successful activation의 catalog·selected Document ID runtime patch만 pure projection으로 이동하고 setRuntime·ready gate·callback은 App에 유지했다.
+- [x] R5-14 — existing activateWorkspaceLocation의 전체 side-effect 순서를 injected lifecycle coordinator로 이동하고 App callback을 thin port composition으로 줄였다.
+- [x] R5-15 — prepareForMain의 save→resume preview→catalog refresh→runtime/callback 순서를 injected lifecycle coordinator로 이동했다.
+- [x] R5-16 — App component ref service를 stable WorkspaceController로 교체하고 forwardRef/useImperativeHandle을 제거했다.
+- [x] R5-17 — window close의 flushForClose→reading/layout/focus/session/resume→ack 순서를 injected lifecycle coordinator로 이동했다.
+- [x] R5-18 — runtime/recovery/tab session, lifecycle action, persistence ref/lane state를 각각 session/lifecycle/persistence hook으로 이동했다.
+- [x] R5-19 — StudioRoot·WorkspaceRoot entry와 stable WorkspaceController를 도입하고 component imperative ref service를 제거했다.
+- [x] R6-1 — fragments bridge contract·preload factory·desktop IPC registrar를 기능 파일로 분리하고 채널/public bridge/sender policy를 유지했다.
+- [x] R6-2 — `studio-bridge.ts`·`preload/index.ts`·`desktop/main.ts` public entry를 기존 import/side-effect 시작 의미를 유지한 38/27/22-byte entry로 축소하고 구현을 core/bootstrap module로 옮겼다.
+- [x] R6-3 — 19개 bridge capability와 preload factory, 20개 desktop IPC registrar를 기능 경계로 분리하고 단일 registrar composition으로 조립했다. 230개 채널 이름·문자열과 229개 handler 등록은 이전 단일 파일과 누락·추가·값 변경 없이 일치한다.
+- [x] R6-4 — renderer leaf의 직접 global bridge 접근을 제거하고 Quick Tools·Schedule client를 root에서 주입했다. preload/main public entry와 renderer `StudioRoot`·`WorkspaceRoot` entry를 작은 조립 경계로 고정했다.
+- [x] R4-9 — Assistant OAuth·connection·context permission·어휘/표기/설정 검토 state와 명령을 `useAssistantController`로 완전히 이동하고, 편집기·저장 revision 접근은 좁은 document port로 주입했다. 원문/설정 reference 이동은 기존 Navigator·feature 경계에 유지했다.
+- [x] R4-10 — Activity session/focus/Pomodoro/goal/readthrough/export state와 명령을 `useActivityController`로 이동하고, close lifecycle ref와 Pomodoro 시작 뒤 음악 선택 큐 재생은 좁은 port로 주입했다.
+- [x] R4-11 — Music playlist/local media/scene queue/favorite/playback state와 명령을 `useMusicController`로 이동하고, Structure projection load와 Pomodoro 시작 후 선택 큐 재생은 좁은 port로 연결했다.
+- [x] R4-12 — DocumentRevision·WorkSnapshot 조회/미리보기/복원/생성/비교 state·supersession과 명령을 `useVersionController`로 이동하고 runtime 재설치는 callback port로 유지했다.
+- [x] R4-13 — 작품 영감 설정 조회/저장과 인물·사건 키워드 편집 state·명령을 `useInspirationController`로 이동했다.
+- [x] R4-14 — 원고 사전 점검·TXT 가져오기·분석/히트맵/수정금지 집필 state와 명령을 editor-tools controller로 이동하고 Editor mutation은 read/exact-replace/select port로 제한했다.
+- [x] R5-20 — 연속 읽기 dialog/progress와 작품별 원고 layout load/save/rollback orchestration을 기존 serial lane·cache·sequence ref를 주입받는 session controller로 이동했다.
+- [x] R4-15 — 작품 일정 load/open/close/settings-revision refresh와 Escape 처리를 `useScheduleController`로 이동했다.
+- [x] R5-21 — Work/Document 생성·이름 변경·삭제·순서/폴더 명령과 title editor state를 기존 runtime/install/search port를 주입받는 workspace command controller로 이동했다.
+- [x] R4-16 — 사건 생성 dialog/action과 move/source link·replace·retire wrapper를 exact editor/persistence/Structure mutation port를 주입받는 event workspace controller로 이동했다.
+- [x] R4-17 — 장면 경계·규칙·사건 override와 장면 추출·초안 검토 state/명령을 injected Structure·Assistant·editor·persistence port 기반 scene workspace controller로 이동했다.
+- [x] R4-18 — 플롯 dialog/selection/action과 CRUD·출처·배치·사건 연결 wrapper를 existing Structure mutation과 editor/persistence port 기반 plot workspace controller로 이동했다.
+- [x] R4-19 — 별빛–복선 공유 link projection·Lore/Foreshadow 호환 port·link/unlink orchestration을 injected controller로 이동했다.
+- [x] R4-20 — 원고 별빛 cue hover/pin/occurrence-selection state와 명령을 narrow editor/resume/rail port 기반 lore cue controller로 이동했다.
+- [x] R5-22 — 작품 구조 dialog/action/error와 DocumentNavigator 결과 전이를 work-structure state controller로 이동했다.
+- [x] R4-21 — 집중 모드와 작품 UI preference state·변경 명령을 localStorage compatibility port 기반 focus mode controller로 이동했다.
+- [x] R5-23 — Work section·structure/review tab·return location·records clock state와 진입 전이를 workspace navigation controller로 이동했다.
+- [x] R4-22 — 작품 원고 검색 query/result/sequence와 편집·활성화 무효화 전이를 manuscript search controller로 이동했다.
+- [x] R5-24 — rail layout/visibility, inspector tab, event rail mode와 active manuscript position state를 workspace layout controller로 이동했다.
+- [x] R5-25 — per-Document durable save state map을 PersistenceCoordinator hook으로 이동했다.
+- [x] R4-23 — 회차 완료·취소·완료 revision 열기 orchestration을 shared workspace gate와 queue/client port 기반 document completion controller로 이동했다.
+- [x] R5-26 — durable queue validation/construction, save callback과 save-state install을 PersistenceCoordinator로 이동했다.
+- [x] R4-24 — StudioShell의 앱 설정·작품 음악 설정·YouTube 연결·ChatGPT OAuth state/명령을 injected settings controller로 이동했다.
+- [x] R4-25 — 백업 상태/create/restore와 레거시 가져오기 rehearsal dialog/state/명령을 backup-migration controller로 이동했다.
+- [x] R4-26 — 작품 catalog/favorites/covers/resume, 일정 요약과 Library CRUD/navigation/dialog gate를 LibraryController로 이동했다.
+- [x] R4-27 — 테마·집중 UI preferences load/save/localStorage/body-class state를 UI preferences controller로 이동했다.
+- [x] R5-27 — resume checkpoint capture validation/client call을 session controller로 이동했다.
+- [x] R5-28 — startup recovery apply gate/command/runtime reinstall을 session controller로 이동했다.
+- [x] R5-29 — close request listener와 focus/session/resume/ack port composition을 session controller로 이동했다.
+- [x] R4-28 — Pomodoro 시작 시 current scene/selected queue 조회·재생 orchestration을 music controller로 이동했다.
+- [x] R5-30 — 새 Document profile/persistence/resume 조회·검증·queue register를 PersistenceCoordinator로 이동했다.
+- [x] R5-31 — editor activation의 resume capture 뒤 catalog refresh client call을 session controller로 이동했다.
+- [x] R7-1 — `desktop-shell.spec.ts`를 공용 support와 8개 기능별 spec으로 test body 변경 없이 분리했다.
+- [x] R9-1 — 원 승인 완료 기준을 current source·diff·GoalBuddy receipt로 source-only 감사하고, 테스트 중단 이후의 미검증 범위를 식별했다.
+- [x] R9-2 — 사용자 테스트 중단 해제 후 fresh type/static/unit/integration/build/production Electron 검증, stale ownership expectation 정합화와 최종 감사를 완료했다.
+
+리팩토링 Gate R6 source-only 증거:
+
+- `studio-bridge-core.ts`는 148,200 bytes에서 26,789 bytes로 줄었고 기능 계약은 `src/application/contracts/bridge/` 19개 파일로 분리됐다.
+- 이전 `studio-bridge.ts`와 현재 기능 계약의 채널 mapping은 old/new 각 230개, missing 0, extra 0, changed 0이다. import path를 제외한 문자열 literal multiset도 old/new 각 484개로 완전히 일치한다.
+- 이전 `desktop/main.ts`와 현재 `src/desktop/ipc/` registrar의 handler mapping은 old/new 각 229개, 누락·추가·중복 0이다. 기존 무인증 profile/catalog/favorites/covers 조회와 sender 인증 명령의 구분을 유지했다.
+- 사용자의 `테스트 그만해` 지시 이후 test·typecheck·lint·build·Electron E2E는 실행하지 않았다. 이 구간의 증거는 source mapping 감사뿐이며 runtime 완료 증거로 취급하지 않는다.
+- core 10종, 조수 3종, 작품 구조·별빛·인물·플롯·파편·복선 7종 dialog가 controller를 직접 소비하는 세 typed host로 이동했다. 마지막 7종의 ready/active-Work gate, 표시 순서, source/capture 가능 조건, 선택 ID, profile, Lore-Foreshadow link와 navigation callback은 이전 App block과 동일하며 parser·relative import·unused import source 감사가 0건이다. `App.tsx`는 7,354 lines·267,117 bytes로 줄었고 project test는 실행하지 않았다.
+- embedded 구조 workspace의 7개 tab과 공유 Scene content를 typed host로 이동했다. 기존 10개 주요 child component의 prop 이름/count, tab order, DOM·표시 literal multiset은 old/new 차이 0건이고 parser·relative import·unused import source 감사도 0건이다. `App.tsx`는 7,037 lines·254,229 bytes이며 project test는 실행하지 않았다.
+- review workspace의 records/manuscript/candidates/versions 4개 tab을 typed host로 이동했다. 기존 7개 child component prop surface는 old/new 차이 0건이고 active-Work/activity gate, Candidate count, records/version command와 오류 우선순위를 유지했다. parser·relative import·unused import source 감사는 0건이며 `App.tsx`는 6,891 lines·248,294 bytes이다. project test는 실행하지 않았다.
+- 오른쪽 review inspector의 current/assistant/work/versions 표면과 재진입 button을 typed rail host로 이동했다. 기존 JSX tag·attribute multiset 차이는 0건이고 Work-aware rail toggle, Candidate capture/permission, Lore/조수/버전/구조 명령과 오류 표시 조건을 유지했다. parser·relative import·unused import source 감사는 0건이며 `App.tsx`는 6,248 lines·221,737 bytes이다. project test는 실행하지 않았다.
+- 빈 작품/활성 회차의 왼쪽 document rail, folder tree, manuscript search와 reentry를 typed host로 이동했다. 두 portal 표면의 native JSX tag·attribute multiset 차이는 0건이고 shared-sidebar/visibility, Work-bound document move, title/edit gate, search result와 accessibility 표면을 유지했다. parser·relative import·unused import source 감사는 0건이며 `App.tsx`는 6,030 lines·213,158 bytes이다. project test는 실행하지 않았다.
+- Character와 Plot 전용 workspace surface를 typed feature host로 이동하고 Plot의 Scene tab은 기존 `SceneStructureContent`를 별도 컴포넌트 인스턴스로 조립했다. workspaceSurface/workSection gate, Character/Plot child prop surface, Candidate/inspiration/selection/source actions를 유지했고 parser·relative import·unused import source 감사는 0건이다. `App.tsx`는 5,684 lines·198,249 bytes이며 project test는 실행하지 않았다.
+- focus toolbar, open-document tabs, ManuscriptEditor와 editor open-error 표면을 typed manuscript host로 이동했다. 기존 전체 JSX tag·attribute multiset 차이는 0건이고 focus/forward-write, tab gate, editor props/ref/callback, recovery read-only, layout/lore/scene input과 error 조건을 유지했다. parser·relative import·unused import source 감사는 0건이며 `App.tsx`는 5,493 lines·190,732 bytes이다. project test는 실행하지 않았다.
+- embedded Work header, fallback manuscript header와 startup recovery preview/issues/apply 표면을 typed host로 이동했다. 기존 header/recovery JSX tag·attribute multiset 차이는 0건이고 completion/title/schedule/navigation gate와 recovery candidate/issue/apply 조건을 유지했다. parser·relative import·unused import source 감사는 0건이며 `App.tsx`는 5,290 lines·183,262 bytes이다. project test는 실행하지 않았다.
+- Scene부터 Fragment까지 exact-source navigation callback 22개를 기존 `DocumentNavigator` port를 소비하는 typed controller로 기계 이동했다. callback 본문, dependency, ownership/revision/range 검사, same/visible/cross-document outcome, hide/reopen/error transition을 바꾸지 않았고 parser·relative import·unused import source 감사는 0건이다. 이 시점 `App.tsx`는 3,666 lines였다.
+- 문서 생성·rename/reorder 설치, WorkspaceCommands composition, controller imperative install, schedule/completed revision, document tab activate/close를 typed document controller로 기계 이동했다. command/portal이 아니라 기존 session/runtime/catalog/persistence callback을 그대로 소비하며 parser·relative import·unused import source 감사는 0건이다. `App.tsx`는 3,303 lines·116,253 bytes이며 project test는 실행하지 않았다.
+- Runtime projection install, editor activation, durable queue scheduler/catalog/scene refresh와 bootstrap effect를 typed controller로 기계 이동했다. query/install/cleanup/error swallowing 순서를 유지했고 parser·relative import·unused import source 감사는 0건이다. 이동 뒤 `App.tsx`는 3,057 lines였다.
+- Characters/Lore/Fragment manuscript port 생성과 capture/create/move/insert, transaction telemetry/search/Pomodoro/forward-write/scene-clear/durable record를 typed manuscript-actions controller로 기계 이동했다. parser·relative import·unused import source 감사는 0건이며 `App.tsx`는 2,822 lines·99,354 bytes이다. project test는 실행하지 않았다.
+- bottom event rail, statusbar, Session feedback, schedule, core dialogs와 music library를 typed status/tools host로 이동했다. portal target, gate, action/error/visible copy와 JSX attribute surface를 유지했다.
+- assistant setting reference와 공통 workspace activation/DocumentNavigator ports를 navigation controller로 이동하고, structure/music, core feature, story feature 조립을 세 typed kernel로 이동했다. 새 controller/kernel은 bridge client를 주입받으며 leaf `.tsx`의 직접 global bridge method 호출은 0건이다.
+- 최종 화면 조립은 `WorkspaceView.tsx` 990 lines·37,654 bytes로 이동했고 `App.tsx`는 architecture report 기준 670 lines·21,485 bytes가 됐다. App의 실제 hook call은 `useState` 3, `useRef` 9, `useMemo` 6, `useCallback` 7, `useEffect` 2이며 feature projection local state는 없다.
+
+리팩토링 Gate R7 source-only 증거:
+
+- 기존 `tests/e2e/desktop-shell.spec.ts`의 helper 30,241 bytes를 `tests/e2e/support/desktop-shell-suite.ts`로 옮기고, 119개 test body 753,761 bytes를 8개 기능 spec으로 분리했다.
+- 8개 body를 원래 group 순서로 다시 결합한 SHA-256은 분리 직전과 같은 `aa53d9e0bbc9cc75af37adc7e2ea67bcc521a3f8e6d53cb8a624d14be82cf6eb`이며 test count도 119개로 같다. 각 spec import는 support export에 모두 대응한다.
+- architecture report의 E2E target을 새 support/spec 파일로 갱신했고 모든 19개 target path가 존재한다. 테스트 실행은 하지 않았다.
+
+리팩토링 Gate R9 최종 감사:
+
+- `StudioShell.tsx`는 499 source lines·16,774 bytes이고 UI host/sidebar/Quick Tools 조립만 local state로 남았다. `App.tsx`는 architecture report 기준 670 lines·21,485 bytes의 session/navigator/kernel 조립부이고, `WorkspaceView.tsx`는 990 lines·37,654 bytes의 typed 화면 조립부다. App local `useState`는 stable `DocumentNavigator`·telemetry store·runtime bootstrap instance 3개뿐이다.
+- `App.tsx`와 `StudioShell.tsx`의 직접 `window.eumStudio.<capability>.<method>` 호출은 0건이다. leaf `.tsx`의 직접 global bridge method 호출도 0건이다.
+- feature pending navigation ref/type은 0건이고 교차 회차 기능 이동은 `documentNavigator.open` 13개 경로로 수렴했다. 현재 `pending...` 검색 결과는 Candidate count와 Event dialog draft뿐이다.
+- bridge/preload/desktop entry는 38/27/22 bytes이고 19 contract·19 preload factory·20 IPC registrar로 분리됐다. 앞선 source mapping 감사의 230 channel, 229 handler, 문자열 literal 누락·추가·변경 0 결과를 유지한다.
+- CSS 24 shard+legacy residual, 9개 feature E2E spec+shared support와 별도 YouTube live smoke, architecture report/check script를 갖췄다. Playwright listing은 현재 10개 spec·123개 test이며 package dependency와 devDependency는 기준 브랜치와 동일하다.
+- fresh `npm run check`에서 lint, 네 TypeScript project, Vitest 252개 파일·959개 통과·기존 1개 skip, Electron/preload/renderer production build가 통과했다. stale ownership expectation은 현재 controller/kernel/host 소유권으로 정합화했고 전체 suite가 이를 검증한다.
+- production Electron E2E는 9개 feature spec의 122개 test가 모두 통과했다. API key가 있어야 하는 별도 YouTube live smoke 1개만 의도적으로 skip되어 전체 123개는 122 passed·1 skipped다. 장시간 전체 러너가 외부 세션 중단으로 71번째 뒤 종료된 뒤 각 spec을 종료 코드가 남는 bounded 실행으로 다시 검증했다.
+- E2E current-IA 정합화는 현재 Work card/native select, 완료 마커, Review/Structure surface, assistant entry와 schedule copy를 실제 제품 표면에 맞췄다. IME 문서 전환의 비동기 React 상태 assertion은 제품 코드 변경 없이 `expect.poll`로 안정화했고 3회 반복 및 전체 29개 persistence spec에서 통과했다.
+- fresh `npm run architecture:check`는 `architecture boundaries: ok`이고 report 생성도 통과했다. current contract channel은 기준 230개와 일치하며 누락·추가·중복 0, IPC registrar는 229개 handler channel과 outbound `MANUSCRIPT_CLOSE_REQUEST_CHANNEL` 1개를 참조한다. 직접 renderer bridge method와 leaf `.tsx` global bridge 접근은 모두 0건이다.
+- `git diff --check`가 통과했고 신규 dependency, staged change, merge conflict는 없다. 원 승인안의 ownership·navigation·session/lifecycle·bridge/IPC·CSS·E2E 분리와 수백 줄 root 목표, fresh runtime behavior 보존 증거를 모두 충족해 R9-2와 전체 리팩토링 Gate를 완료한다.
+
+타이틀바 음악 입력 후속:
+
+- [x] 상단 음악 플레이어의 개별 버튼과 topbar host에 portal된 재생목록 닫기 버튼을 명시적 `no-drag` 영역으로 분리했다. 재생·목록 데이터와 다른 타이틀바 동작은 변경하지 않았다.
+- focused Vitest 2개, lint, 전체 TypeScript 검사, production build가 통과했다. 재시작한 실제 Windows `이음 스튜디오` 창에서 재생목록 `X` 닫기와 첫 곡 재생 후 일시정지를 실제 마우스 입력으로 확인했다.
+
+리팩토링 Gate R4 현재 증거:
+
+- Resume controller가 editor activation의 capture→catalog query 순서를 함께 소유해 App과 StudioShell의 직접 bridge method 호출은 모두 0건이다. runtime/catalog callback과 swallowed failure 순서는 유지되며 project test·typecheck·lint·build는 실행하지 않았다.
+- 새 Document의 document/persistence/resume 3-query, durable source·duplicate·sequence validation, queue register와 saved-state install을 PersistenceCoordinator로 이동했다. App의 직접 manuscript profile/persistence/resume method 호출은 0건이고 tab/runtime/catalog 후속 순서는 유지된다. project test·typecheck·lint·build는 실행하지 않았다.
+- Pomodoro music controller가 auto-play gate, cursor 기준 resolved current scene, selected/current queue 조회, scene/music reconcile과 no-selection no-op 재생을 소유한다. App의 직접 `listSceneProjection` 호출은 0건이며 순서는 이전 원문과 일치한다. project test·typecheck·lint·build는 실행하지 않았다.
+- Workspace close controller가 close listener, queue/document snapshot, continuous-reading→layout→focus wait, owned WritingSession stop, resume capture와 ack client를 조립한다. App의 직접 close listener/activity stop/ack method 호출은 0건이고 기존 coordinator 순서는 유지된다. project test·typecheck·lint·build는 실행하지 않았다.
+- Startup recovery controller가 recovery-pending/applyAvailable gate, active Document preference, apply command, runtime reload/install과 applying/idle/failed 전이를 소유한다. App의 직접 recovery apply method 호출은 0건이며 project test·typecheck·lint·build는 실행하지 않았다.
+- Resume checkpoint controller가 unavailable short-circuit, editor state/selection validation, resolved exact-identity no-op과 capture payload를 소유한다. App의 직접 `captureResume` method 호출은 0건이고 오류 문자열·timing은 이전 원문과 일치한다. project test·typecheck·lint·build는 실행하지 않았다.
+- UI preferences controller가 theme/focus initial legacy localStorage, revision-zero seed, serialized compatibility mirror, serialized revision save chain, restore와 body theme class를 소유한다. StudioShell의 직접 settings method 호출은 0건이고 key/default/order는 이전 원문과 일치한다. project test·typecheck·lint·build는 실행하지 않았다.
+- LibraryController가 catalog/favorites/covers initial·manual load, Work 일정 요약, resume, home/workspace 전환, 생성·이름 변경·삭제·회차 이동·표지·완료 revision·dialog gate를 소유한다. StudioShell의 workspace/schedule 직접 method 호출은 0건이고 옮긴 한국어 문구 12개는 이전 원문과 일치한다. project test·typecheck·lint·build는 실행하지 않았다.
+- Backup/migration controller가 initial·manual backup status, prepareForMain-before-create/rehearsal, create/restore summary, import rehearsal와 두 dialog gate를 소유한다. StudioShell의 backup/migration 직접 method 호출은 0건이고 옮긴 한국어 오류 문자열 4개는 이전 원문과 일치한다. project test·typecheck·lint·build는 실행하지 않았다.
+- Studio settings controller가 initial YouTube status, dialog visibility, six-query app/Work music/OAuth load, revision-checked settings/music/API-key save·remove, OAuth login과 schedule revision을 소유한다. StudioShell의 해당 direct client 호출과 raw setter는 0건이고 옮긴 한국어 오류 문자열 4개는 이전 원문과 일치한다. project test·typecheck·lint·build는 실행하지 않았다.
+- Durable queue document/revision/sequence validation, batching policy, saveChangeBatch/saveFormatting, catalog install, scene refresh trigger, scheduler, batch identity와 초기/변경 save state를 PersistenceCoordinator hook으로 이동했다. App의 직접 saveDocumentChange/saveFormatting 호출은 0건이며 project test·typecheck·lint·build는 실행하지 않았다.
+- Document completion controller가 animation-frame→flushForClose→durable revision→complete, clear-completion, catalog/schedule refresh와 완료 revision 열기를 소유한다. App의 complete/clear 직접 bridge 호출은 0건이고 옮긴 한국어 오류 문자열 3개는 이전 원문과 일치한다. project test·typecheck·lint·build는 실행하지 않았다.
+- Per-Document `ManuscriptSaveState` map과 setter를 기존 `usePersistenceCoordinator`가 소유하도록 이동하고 queue reset/install/onStateChange와 표시 label은 바꾸지 않았다. App의 독립 save-state hook은 0건이며 project test·typecheck·lint·build는 실행하지 않았다.
+- Workspace layout controller가 wide/narrow rail projection, rail open/toggle, review inspector tab, event rail mode와 active manuscript cursor position을 소유한다. 기존 ResizeObserver와 transaction/activation timing은 App 조정부에 유지하고 raw layout setter는 0건이다. project test·typecheck·lint·build는 실행하지 않았다.
+- Manuscript search controller가 query, Work-scoped result, sequence ref, edit-only result invalidation과 activation/command clear를 소유한다. materialization은 검색 실행 순간의 injected reader에서만 수행되고 App의 search state/ref setter는 0건이다. project test·typecheck·lint·build는 실행하지 않았다.
+- Workspace navigation controller가 Work section, structure/review tab, return location, records clock와 Work-switch reset을 소유한다. Character/Plot 준비 await 뒤 전환, Candidate refresh/capture 병렬 호출, focus exit와 records timestamp 순서를 유지하고 App의 navigation raw setter는 0건이다. project test·typecheck·lint·build는 실행하지 않았다.
+- Focus mode controller가 mode, content width, zoom, current-block highlight, typewriter mode/position과 preference callback을 소유한다. 기존 `eum_focus_typewriter_position_percent` key, 기본값·clamp·callback timing을 유지하고 shortcut의 overlay/forward-writing guard는 App에 그대로 남겼다. App의 focus raw setter는 editor-tools port mapping을 제외하고 0건이며 project test·typecheck·lint·build는 실행하지 않았다.
+- Work-structure state controller가 dialog open/close, opening gate, 오류와 same/visible/cross-document 결과 전이를 소유한다. 실제 대상 확인·tab policy·resume capture와 범위 열기는 기존 `DocumentNavigator` 경계에 그대로 있고 App의 work-structure raw setter는 0건이다. project test·typecheck·lint·build는 실행하지 않았다.
+- Lore cue controller가 current-document hover/pin, inspector close, exact occurrence selection과 resume capture를 소유한다. App의 cue raw setter는 0건이고 옮긴 한국어 오류 문자열 2개는 이전 원문과 일치한다. project test·typecheck·lint·build는 실행하지 않았다.
+- Lore–Foreshadow link controller가 공유 projection, Lore load/clear/prune port, Foreshadow refresh/prune port와 revision-checked link/unlink 순서를 소유한다. App의 link state setter와 직접 list/link/unlink method 호출은 0건이고 옮긴 한국어 오류 문자열 4개는 이전 원문과 일치한다. project test·typecheck·lint·build는 실행하지 않았다.
+- Plot workspace controller가 dialog/selection/gate/error, active selection projection, CRUD, 출처 exact selection, board 이동·이야기 시간과 양방향 event link wrapper를 소유한다. App에는 `DocumentNavigator` 기반 source open 조정만 남고 plot raw setter와 직접 plot mutation wrapper는 0건이다. 옮긴 한국어 문자열 15개는 이전 App 원문과 일치하며 project test·typecheck·lint·build는 실행하지 않았다.
+- Scene workspace controller가 장면 경계/병합, 규칙·사건 override, exact-selection 추출·권한·Candidate 결정, 초안 생성·편집·stale 확인·삽입과 boundary preview projection을 소유한다. App에는 `DocumentNavigator` 기반 focus/preview/compare 조정만 남고 scene raw setter와 해당 직접 bridge 명령은 0건이다. 옮긴 한국어 문자열 30개는 이전 App 원문과 일치하며 project test·typecheck·lint·build는 실행하지 않았다.
+- Event workspace controller가 selection/anchorless dialog, move, source link·replace·retire와 plot mutation 뒤 event refresh를 소유한다. App의 사건 state setter와 중복 wrapper는 0건이며, 옮긴 한국어 오류 문자열 10개는 이전 App 원문과 일치한다. 사용자의 중단 지시에 따라 project test·typecheck·lint·build는 실행하지 않았다.
+
+- FragmentsController의 pure ordering/partial-success 검증 9개와 기존 fragment/dialog/bridge/runtime/navigation 집중 6개 파일·185개 검증이 통과했다.
+- fresh `npm run check`가 lint, 네 TypeScript project, Vitest 241개 파일·861개 검증 통과·기존 1개 skip과 production build를 통과했다.
+- production Electron에서 exact selection 조각 복사, 다른 회차 exact source 열기, 선택을 조각으로 이동한 뒤 cursor 삽입 3개 흐름이 모두 통과했다.
+- ForeshadowController의 moved/retained hash, focused ESLint, 기존 계약·dialog·bridge·runtime·navigation 집중 8개 파일·189개 검증이 통과했다.
+- fresh `npm run check`가 Vitest 243개 파일·870개 검증 통과·기존 1개 skip과 production build를 통과했고, production Electron에서 line 재시작·Lore 양방향 연결·exact point/payoff·다른 회차 source 4개 흐름이 모두 통과했다.
+- LoreController의 canonical/Candidate atomic load·approval·retire helper 9개와 기존 계약·dialog·cue·bridge·runtime·navigation 집중 11개 파일·194개 검증이 통과했다.
+- fresh `npm run check`가 Vitest 244개 파일·879개 검증 통과·기존 1개 skip과 production build를 통과했고, production Electron에서 canonical history·양방향 link·Candidate 비정규 원본/승인·다른 회차 Candidate 근거·확정 cue 5개 흐름이 모두 통과했다.
+- CharactersController의 five-way load·relation/evidence·extraction/generation helper 9개와 기존 계약·workspace·dialog·inspiration·bridge·runtime·navigation 집중 11개 파일·195개 검증이 통과했다.
+- fresh `npm run check`가 Vitest 245개 파일·888개 검증 통과·기존 1개 skip과 production build를 통과했고, production Electron에서 인물 재시작·다른 회차 exact evidence·로컬 영감/GPT 분리 3개 흐름이 모두 통과했다.
+- StructureController projection kernel의 race/asymmetric failure/music/refresh/reconcile 9개와 기존 구조·플롯·장면·음악·rail·bridge·runtime·navigation 집중 19개 파일·215개 검증이 통과했다.
+- fresh `npm run check`가 Vitest 246개 파일·897개 검증 통과·기존 1개 skip과 production build를 통과했고, production Electron에서 plot/event·전역 rail·exact plot source·scene preview/draft·우클릭 scene 6개 흐름이 모두 통과했다.
+- 사건 mutation kernel의 여섯 payload·persist/command/refresh·short-circuit 검증 12개와 기존 계약·rail·dialog·bridge·runtime 집중 9개 파일·176개 검증이 통과했다.
+- fresh `npm run check`가 Vitest 246개 파일·900개 검증 통과·기존 1개 skip과 production build를 통과했고, production Electron에서 anchorless source lifecycle·exact-selection 생성·전역 rail navigation 3개 흐름이 모두 통과했다.
+- PlotThread CRUD의 exact payload·private reconcile·swallowed refresh 검증 16개와 기존 plot/event/rail/dialog/bridge/runtime 집중 8개 파일·187개 검증이 통과했다.
+- fresh `npm run check`가 Vitest 246개 파일·904개 검증 통과·기존 1개 skip과 production build를 통과했고, production Electron에서 작품 소유 플롯 재시작과 bidirectional plot/event link 2개 흐름이 모두 통과했다.
+- Plot source의 null/exact previous ID·directional selection·persist short-circuit 검증 19개와 기존 source/overview/dialog/bridge/runtime/navigation 집중 9개 파일·206개 검증이 통과했다.
+- fresh `npm run check`가 Vitest 246개 파일·907개 검증 통과·기존 1개 skip과 production build를 통과했고, production Electron exact source replacement와 Work-structure source navigation이 통과했다.
+- placement/story-time의 exact payload·optional neighbor omission·unsnapped decimal/null·authoritative board→selection→swallowed refresh 순서 검증 23개와 기존 board/plot/rail/dialog/bridge/runtime 집중 8개 파일·195개 검증이 통과했다.
+- fresh `npm run check`가 Vitest 246개 파일·911개 검증 통과·기존 1개 skip과 production build를 통과했고, production Electron 기본 board 이동·재실행 흐름이 통과했다.
+- drag와 story-time production Electron 검증은 제품 명령 전 단계에서 기존 non-exact `플롯 보드` region locator가 `플롯 보드 작업면`까지 함께 잡아 같은 strict-mode 오류로 중단됐다. 제품 동작은 바꾸지 않고 두 흐름의 initial·restart 네 locator만 정확 일치로 좁혀 실제 흐름 검증을 이어갔다.
+- drag/story-time의 initial·restart 네 locator만 exact accessible-name으로 좁힌 뒤 story-time 재시작 흐름은 통과했다. drag는 active preview·삽입선까지 도달했지만, 현재 embedded 가로형 플롯 목록에 세로 overflow가 있다는 전제 없이 `scrollTop > 0`을 요구하는 기존 fixture에서 중단됐다.
+- `PlotManagerDialog.tsx`는 HEAD와 62,702 bytes·SHA-256 `B3C56B11AE4D994B46BAE1B5B2286C203790A3416B3744A7629F855DC1EF1E90`로 같고, ordered split CSS의 정규화 SHA-256도 HEAD와 `BC33421F17F19541F85751B86C27105F19B8BE65D74AB570D4E298529FEE579E`로 일치한다. 이 pre-existing overflow fixture 간극은 제품 레이아웃을 바꾸지 않고 Stage 7 E2E 정비 범위에 남겼다.
+- plot-to-event selected/anchorless와 manual link/unlink의 exact payload·persist/command short-circuit·mutation→translated refresh 검증 27개와 기존 계약·rail·dialog·bridge·runtime 집중 10개 파일·202개 검증이 통과했다.
+- fresh `npm run check`가 Vitest 246개 파일·915개 검증 통과·기존 1개 skip과 production build를 통과했고, production Electron 양방향 plot/event link·unlink·재시작 흐름이 통과했다. App의 남은 직접 plots method는 createFromEvent와 getDefaultBoard 두 개뿐이다.
+- createPlotFromEvent의 command→mutation reconcile→병렬 default board/raw refresh→board→selection→plots tab과 command/raw-refresh/board-query partial failure 검증 31개, 기존 계약·rail·dialog·bridge·runtime 집중 11개 파일·212개 검증이 통과했다.
+- fresh `npm run check`가 Vitest 246개 파일·919개 검증 통과·기존 1개 skip과 production build를 통과했고, production Electron 양방향 plot/event와 기본 board 이동·재시작 2개 흐름이 통과했다. App의 직접 plots method 호출은 0개이고 `plotsClient` 주입만 남았으며, public plot reconciler 두 개도 controller 내부로 수렴했다.
+- MusicController의 delayed reset·A→B 보존·silent failure·profile one-shot·즉시 단조 nonce·불변 queue request·settings-only reconcile 검증 6개와 기존 음악 계약·player/library·bridge/runtime/platform 집중 15개 파일·188개 검증이 통과했다.
+- fresh `npm run check`가 Vitest 247개 파일·925개 검증 통과·기존 1개 skip과 production build를 통과했고, production Electron에서 YouTube 연결/작품 설정·전체 queue 재생·150% 한 줄 player·YouTube/linked/managed MP3·MP4 혼합 4개 흐름이 모두 통과했다. transport·queue 저장·장면 음악·Pomodoro는 App에 남고 Pomodoro block hash가 원본과 일치한다.
+- Activity loader의 네 query 순서·exact payload·tuple identity·all-settle pending·single rejection atomic failure 검증 4개와 기존 활동 계약·bridge/runtime 집중 169개 검증이 통과했다.
+- fresh `npm run check`가 Vitest 248개 파일·929개 검증 통과·기존 1개 skip과 production build를 통과했고, production Electron Pomodoro·집필 기록·작품 목표·회차 읽기 시간 4개 흐름이 모두 통과했다. App의 delayed reset·disposed guard·atomic install/failure·6개 mutation refresh는 원본과 일치한다.
+- AssistantController의 frozen full-history·optimistic user·functional response append·raw/fallback error·failure retention·state gate·error clear 검증 5개와 기존 dialog·contract·platform·bridge 집중 77개 검증이 통과했다.
+- fresh `npm run check`가 Vitest 249개 파일·934개 검증 통과·기존 1개 skip과 production build를 통과했고, production Electron local inspiration/GPT separation 흐름이 통과했다. App의 직접 runChat은 0개이고 dialog visibility·OAuth·context·connections·permissions·navigation과 외부 파일 hash는 유지된다.
+- RuntimeBootstrapController의 11-query 순서·exact mapping/freeze·same rejection·반복/동시 load 무-cache 검증 4개와 기존 bridge/runtime 집중 157개 검증이 통과했다. 두 feature ownership 테스트는 App 직접 profile 호출 가정 대신 RuntimeBootstrap 소유와 stable App instance를 확인하도록 정확히 수정했다.
+- fresh `npm run check`가 Vitest 250개 파일·938개 검증 통과·기존 1개 skip과 production build를 통과했고, production Electron 최초 작품 생성·명시적 startup recovery·published manuscript cursor replay 3개 흐름이 모두 통과했다. App에는 legacy queryRuntimeProjection이 0개, controller.load가 6개, stable instance가 1개다.
+- SerialPersistenceLane의 microtask start·non-overlap·raw pending failure·swallowed tail-only continuation 검증 4개와 continuous-reading/durable/bridge 집중 90개 검증이 통과했고, T108 fresh `npm run check`는 Vitest 251개 파일·942개 검증 통과·기존 1개 skip과 production build를 통과했다.
+- graceful-close의 오래된 exact-one journal 가정은 valid frame 1개 이상·exact ownership/base revision·연속 sequence·all-frame replay로 정정했다. direct production Electron continuous-reading 재시작과 graceful close 2개 흐름, lint, Electron/renderer build가 통과했다. 이후 fresh renderer `tsc` 한 번은 진단 없이 약 32GB로 runaway되어 중단했으며, 추가 App 축소 뒤 full check 재실행 대상으로 남겼다.
+- Work-layout serialization은 같은 `SerialPersistenceLane`의 두 번째 stable instance와 swallowed tail 전용 `waitForSettled`로 이동했다. focused 82개 검증, lint, direct Electron/renderer build와 production Electron layout·reading·graceful-close 3개 흐름이 통과했다.
+- 정확한 count는 lane 2개·enqueue 2개·continuous pending wait 3개·layout pending 1개·layout settled 1개이며, layout cache/load/change sequence/revision/optimistic rollback과 close 순서, 모든 외부 hash가 유지된다. renderer full tsc는 앞선 resource 경계에 따라 후속 App 축소 뒤 재실행한다.
+- one-method `RegularPersistenceQueuePort`와 pure `persistDocumentRegularly`가 regular flush→resume capture만 소유한다. focused 92개 검증, lint, direct build와 production Electron regular switch·IME-deferred switch·graceful close 3개 흐름이 통과했다.
+- queue identity/install, record/format/composition, revision/register, strict flushForClose, close/switch lifecycle은 App에 남고 pre-change App와 queue/IME/close/switch block 10개, durable/resume/bridge/E2E hash가 일치한다.
+- WorkspaceSession selector는 null·exact/dangling Work·exact/null/dangling Document·cross-Work independent selection·identity/freeze를 검증하며, focused 38개 검증과 lint/test typecheck/direct build가 통과했다.
+- production Electron 최초 작품 재시작·Ctrl+K Work 전환·회차 트리 전환 3개 흐름이 통과했다. 회차 트리의 두 stale raw-title locator는 completion-aware `.document-tree-open`과 UUID title filter로 정정했으며, RuntimeState·activeWorkDocuments·tabs·Navigator·installed editor·lifecycle은 App에 유지된다.
+- DocumentNavigator workspace snapshot의 null/raw dangling Work ID/exact active Document/cross-Work identity/documents-array identity를 검증하는 focused 40개 검증, lint/test typecheck/direct build가 통과했다.
+- production Electron mounted editor·Work switch·document-tree 3개 흐름이 통과했다. factory call은 initial ref와 sync effect 두 곳뿐이며 mutable ref/effect·installed editor·tab state·Navigator ports·lifecycle과 외부 hash는 유지된다.
+- open Document ID selector는 existing `projectDocumentTabs`에 그대로 위임하며 focused 30개 검증, lint/test typecheck/direct build가 통과했다. Work switch와 document-tree production Electron 흐름도 통과했다.
+- cross-episode scene preview의 6,614자 단일 `pressSequentially` setup은 같은 문단·줄바꿈·문자 순서를 보존한 72개 paragraph 단위 호출로 바꿨다. 이 변경 직후 사용자가 `테스트 그만해`라고 명시했으므로 이후 project test·typecheck·lint·build·Electron E2E 실행을 중단하고, 남은 구현은 source 범위 확인만으로 진행한다.
+- installed editor identity의 frozen exact Work/Document 생성과 null-false equality만 Store helper로 이동했다. App은 ref assignment→notify 순서, telemetry·resume·reveal 실행·Navigator editorDocument·tabs·lifecycle을 계속 소유한다. 사용자 지시에 따라 이 slice부터 source/diff inspection 외 검증 명령은 실행하지 않았다.
+- `openWorkspaceSessionDocumentTab`은 existing `openDocumentTab`에 그대로 위임하며 App의 11개 호출을 exact input/call timing 그대로 치환했다. App 직접 openDocumentTab 호출은 0개이고 mutable state/setter·close·switch·Navigator·durable·IME·UI는 유지된다. 테스트 명령은 실행하지 않았다.
+- `closeWorkspaceSessionDocumentTab`은 existing `closeDocumentTab`에 그대로 위임하며 App 한 곳을 치환했다. closed-false, same-active 즉시 commit, 다른 active activation 성공 뒤 commit, 실패 시 prior session 유지 순서는 App에 남는다. 테스트 명령은 실행하지 않았다.
+- `planWorkspaceLocationActivation`은 current active Document의 exact object lookup과 same Work+Document target 판단만 소유한다. App은 runtime gate·same-target callback·persist→bridge→ownership→search/runtime/catalog→catch/finally를 계속 소유한다. 테스트 명령은 실행하지 않았다.
+- `selectActivatedWorkspaceLocationOwnership`은 Work를 먼저 찾고 없으면 Document lookup 없이 종료하며, 성공 시 exact Work/Document identity를 frozen outer result로 반환한다. App은 두 기존 오류 조건·문구와 search/runtime/catalog/catch/finally 순서를 유지한다. 테스트 명령은 실행하지 않았다.
+- `createSuccessfulWorkspaceActivationRuntimeProjection`은 성공 catalog identity와 selected Document ID/null patch만 frozen 생성하며, App의 ready-gated setRuntime·search reset·catalog callback·catch/finally는 유지한다. 테스트 명령은 실행하지 않았다.
+- `activateWorkspaceLocationThroughPorts`가 runtime-ready/same-target/action gate·persist→bridge→ownership validation→search reset→runtime/catalog callback→catch/finally 전체 순서를 소유한다. App callback은 injected client와 state ports만 조립하며 mutable 상태는 App에 남는다. 테스트 명령은 실행하지 않았다.
+- `prepareWorkspaceForMainThroughPorts`가 current Document save→resume preview→catalog refresh→runtime install→catalog callback 순서를 소유한다. 이어 `WorkspaceController`를 도입해 StudioShell의 component ref 호출을 제거했고, Workspace가 기존 명령 ports를 stable service에 설치한다. 테스트 명령은 실행하지 않았다.
+- window close participant 순서는 coordinator ports로 이동했고 queue/session/resume 구현과 refs는 App에 남았다. `useWorkspaceSession`, `useWorkspaceLifecycle`, `usePersistenceCoordinator`, `StudioRoot`, `WorkspaceRoot`, stable `WorkspaceController`를 추가했다. 사용자 지시에 따라 테스트 명령은 실행하지 않았다.
+- fragments 채널 상수·타입·parser factory, preload feature factory, desktop registrar를 분리했다. `window.eumStudio.fragments`와 채널 문자열, profile read 및 mutating sender 검증 의미는 유지한다. 테스트 명령은 실행하지 않았다.
+
+이전 현재 Gate: `음악 Gate 14 — YouTube·로컬 파일 통합 미디어 플레이어 완료`
 
 음악 Gate 14 현재 상태:
 

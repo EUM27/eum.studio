@@ -27,6 +27,7 @@ import type {
   WorkspaceCatalogProjection,
   WorkspaceWorkSummary,
 } from "../../application/workspace/workspace-contract";
+import type { StudioBridge } from "../../application/contracts/studio-bridge";
 
 type MemoState =
   | { readonly status: "loading" }
@@ -107,6 +108,7 @@ function TargetIcon({ kind }: { readonly kind: QuickToolTarget["kind"] }) {
 }
 
 export function QuickToolsDialog(input: {
+  readonly client: StudioBridge["quickTools"];
   readonly catalog: WorkspaceCatalogProjection;
   readonly disabled: boolean;
   readonly onClose: () => void;
@@ -156,7 +158,7 @@ export function QuickToolsDialog(input: {
       return;
     }
     let disposed = false;
-    void window.eumStudio.quickTools.getMemo({
+    void input.client.getMemo({
       schemaVersion: 1,
       workId: activeWork.workId,
     }).then(
@@ -176,7 +178,7 @@ export function QuickToolsDialog(input: {
     return () => {
       disposed = true;
     };
-  }, [activeWork]);
+  }, [activeWork, input.client]);
 
   const selectTarget = (target: QuickToolTarget | undefined) => {
     if (target === undefined || input.disabled) return;
@@ -218,7 +220,7 @@ export function QuickToolsDialog(input: {
       return;
     }
     setMemoState({ status: "saving", projection: memoProjection });
-    void window.eumStudio.quickTools.saveMemo({
+    void input.client.saveMemo({
       schemaVersion: 1,
       workId: activeWork.workId,
       expectedRevision: memoProjection.revision,

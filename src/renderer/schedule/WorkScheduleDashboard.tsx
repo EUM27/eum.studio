@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import type { WorkspaceWorkSummary } from "../../application/workspace/workspace-contract";
+import type { StudioBridge } from "../../application/contracts/studio-bridge";
 import type {
   WorkScheduleDdayWorkload,
   WorkScheduleItemInput,
@@ -514,11 +515,13 @@ function ScheduleItemDialog({
 }
 
 export function WorkScheduleDashboard({
+  client,
   onOpenCompletedRevision,
   onOpenDocument,
   work,
   settingsRevision,
 }: {
+  readonly client: StudioBridge["schedule"];
   readonly onOpenCompletedRevision?: (
     documentId: EntityId<"Document">,
     revisionId: EntityId<"DocumentRevision">,
@@ -544,7 +547,7 @@ export function WorkScheduleDashboard({
   const load = useCallback(() => {
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
-    void window.eumStudio.schedule
+    void client
       .listCalendar({
         schemaVersion: 1,
         workId: work.workId,
@@ -566,7 +569,7 @@ export function WorkScheduleDashboard({
           setLoading(false);
         },
       );
-  }, [calendar.range, work.workId]);
+  }, [calendar.range, client, work.workId]);
 
   useEffect(() => {
     void settingsRevision;
@@ -620,12 +623,12 @@ export function WorkScheduleDashboard({
     setError(null);
     const action =
       editor.mode === "create" || editor.item === null
-        ? window.eumStudio.schedule.createItem({
+        ? client.createItem({
             schemaVersion: 1,
             workId: work.workId,
             item,
           })
-        : window.eumStudio.schedule.updateItem({
+        : client.updateItem({
             schemaVersion: 1,
             workId: work.workId,
             itemId: editor.item.itemId,
@@ -650,7 +653,7 @@ export function WorkScheduleDashboard({
     if (editor?.item === null || editor?.item === undefined) return;
     setActionBusy(true);
     setError(null);
-    void window.eumStudio.schedule
+    void client
       .retireItem({
         schemaVersion: 1,
         workId: work.workId,
@@ -676,7 +679,7 @@ export function WorkScheduleDashboard({
     if (item === undefined) return;
     setActionBusy(true);
     setError(null);
-    void window.eumStudio.schedule
+    void client
       .setCompletion({
         schemaVersion: 1,
         workId: work.workId,

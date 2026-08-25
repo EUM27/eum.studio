@@ -1,9 +1,22 @@
+import { readFileSync } from "node:fs";
+
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { entityId } from "../../domain/writing";
 import { MusicMiniPlayer } from "./MusicMiniPlayer";
+
+const musicTitlebarStyles = [
+  readFileSync(
+    new URL("../styles/publishing-revision-music-plot-compat.css", import.meta.url),
+    "utf8",
+  ),
+  readFileSync(
+    new URL("../styles/music-assistant-surfaces.css", import.meta.url),
+    "utf8",
+  ),
+].join("\n");
 
 describe("MusicMiniPlayer", () => {
   it("keeps a compact full player visible while idle", () => {
@@ -59,5 +72,14 @@ describe("MusicMiniPlayer", () => {
     expect(markup).toContain('aria-label="재생 위치"');
     expect(markup).toContain('aria-label="음량"');
     expect(markup).not.toContain("Spotify");
+  });
+
+  it("keeps the titlebar player controls and playlist close button clickable", () => {
+    expect(musicTitlebarStyles).toMatch(
+      /\.app-topbar-music \.music-mini-player button\s*\{[^}]*-webkit-app-region:\s*no-drag;/u,
+    );
+    expect(musicTitlebarStyles).toMatch(
+      /\.app-topbar-music\s+\.music-library-dialog\s+> header\s+> button\s*\{[^}]*-webkit-app-region:\s*no-drag;/u,
+    );
   });
 });

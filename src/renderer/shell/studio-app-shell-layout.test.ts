@@ -2,8 +2,35 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-const stylesheet = readFileSync(
-  new URL("./studio-app-shell.css", import.meta.url),
+const stylesheet = Buffer.concat([
+  readFileSync(new URL("../styles/shell-foundation.css", import.meta.url)),
+  readFileSync(new URL("../styles/library.css", import.meta.url)),
+  readFileSync(new URL("../styles/shared-controls.css", import.meta.url)),
+  readFileSync(new URL("../styles/library-cards.css", import.meta.url)),
+  readFileSync(new URL("../styles/workspace-editor-shell.css", import.meta.url)),
+  readFileSync(new URL("../styles/document-controls.css", import.meta.url)),
+  readFileSync(new URL("../styles/workspace-layout.css", import.meta.url)),
+  readFileSync(new URL("../styles/document-rail-compat.css", import.meta.url)),
+  readFileSync(new URL("../styles/workspace-ia-compat.css", import.meta.url)),
+  readFileSync(new URL("../styles/dialogs.css", import.meta.url)),
+  readFileSync(new URL("../styles/schedule.css", import.meta.url)),
+  readFileSync(new URL("../styles/activity-records.css", import.meta.url)),
+  readFileSync(new URL("../styles/manuscript-review.css", import.meta.url)),
+  readFileSync(new URL("../styles/manager-surfaces-compat.css", import.meta.url)),
+  readFileSync(new URL("../styles/publishing-revision-music-plot-compat.css", import.meta.url)),
+  readFileSync(new URL("../styles/quick-tools.css", import.meta.url)),
+  readFileSync(new URL("../styles/late-dialog-surfaces-compat.css", import.meta.url)),
+  readFileSync(new URL("../styles/responsive-manuscript-compat.css", import.meta.url)),
+  readFileSync(new URL("../styles/characters-inspiration.css", import.meta.url)),
+  readFileSync(new URL("../styles/plot-manager-compat.css", import.meta.url)),
+  readFileSync(new URL("../styles/plot-scene-music.css", import.meta.url)),
+  readFileSync(new URL("../styles/planning-import-dark-compat.css", import.meta.url)),
+  readFileSync(new URL("../styles/theme-compat.css", import.meta.url)),
+  readFileSync(new URL("../styles/music-assistant-surfaces.css", import.meta.url)),
+  readFileSync(new URL("./studio-app-shell.css", import.meta.url)),
+]).toString("utf8");
+const mainEntry = readFileSync(
+  new URL("../main.tsx", import.meta.url),
   "utf8",
 );
 
@@ -29,6 +56,38 @@ function lastRuleFor(selector: string): string {
 }
 
 describe("studio home layout", () => {
+  it("loads the active CSS shards in their original cascade order", () => {
+    expect(mainEntry).toContain(
+      [
+        'import "./styles/shell-foundation.css";',
+        'import "./styles/library.css";',
+        'import "./styles/shared-controls.css";',
+        'import "./styles/library-cards.css";',
+        'import "./styles/workspace-editor-shell.css";',
+        'import "./styles/document-controls.css";',
+        'import "./styles/workspace-layout.css";',
+        'import "./styles/document-rail-compat.css";',
+        'import "./styles/workspace-ia-compat.css";',
+        'import "./styles/dialogs.css";',
+        'import "./styles/schedule.css";',
+        'import "./styles/activity-records.css";',
+        'import "./styles/manuscript-review.css";',
+        'import "./styles/manager-surfaces-compat.css";',
+        'import "./styles/publishing-revision-music-plot-compat.css";',
+        'import "./styles/quick-tools.css";',
+        'import "./styles/late-dialog-surfaces-compat.css";',
+        'import "./styles/responsive-manuscript-compat.css";',
+        'import "./styles/characters-inspiration.css";',
+        'import "./styles/plot-manager-compat.css";',
+        'import "./styles/plot-scene-music.css";',
+        'import "./styles/planning-import-dark-compat.css";',
+        'import "./styles/theme-compat.css";',
+        'import "./styles/music-assistant-surfaces.css";',
+        'import "./shell/studio-app-shell.css";',
+      ].join("\n"),
+    );
+  });
+
   it("keeps the resume action compact and the library visually balanced", () => {
     const homeShell = ruleFor(
       ".studio-app-shell.is-home:not(.is-compact)",

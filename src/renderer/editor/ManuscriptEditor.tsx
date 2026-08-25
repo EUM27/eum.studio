@@ -3,7 +3,9 @@ import {
   historyKeymap,
   isolateHistory,
   redo,
+  selectAll,
   undo,
+  undoDepth,
 } from "@codemirror/commands";
 import {
   Compartment,
@@ -186,6 +188,7 @@ export type ManuscriptEditorProps = {
   readonly focusPresentation?: ManuscriptFocusPresentation;
   readonly forwardWriteProtectedLength?: number | null;
   readonly heatmapMode?: ManuscriptHeatmapMode;
+  readonly hasNextEpisode: boolean;
   readonly inputProfile: ManuscriptInputProfile;
   readonly loreEntries: readonly LoreEntryProjection[];
   readonly layoutSettings?: ManuscriptLayoutSettings;
@@ -211,6 +214,7 @@ export type ManuscriptEditorProps = {
   ) => void;
   readonly onHeatmapModeChange?: (mode: ManuscriptHeatmapMode) => void;
   readonly onImportText?: () => void;
+  readonly onMoveToNextEpisode: () => void;
   readonly onLoreCueHover: (interaction: LoreCueInteraction | null) => void;
   readonly onOpenLoreCue: (cue: LoreCue) => void;
   readonly onOpenContinuousReading: () => void;
@@ -231,6 +235,7 @@ export type ManuscriptEditorProps = {
     composing: boolean,
     editorStateJson: string,
   ) => void;
+  readonly onUndoExternal?: () => boolean;
 };
 
 export type ManuscriptEditorHandle = {
@@ -324,6 +329,7 @@ export const ManuscriptEditor = forwardRef<
     focusPresentation,
     forwardWriteProtectedLength = null,
     heatmapMode = "off",
+    hasNextEpisode,
     inputProfile,
     layoutSettings,
     loreEntries,
@@ -335,6 +341,7 @@ export const ManuscriptEditor = forwardRef<
     onLayoutSettingsChange,
     onHeatmapModeChange,
     onImportText,
+    onMoveToNextEpisode,
     onLoreCueHover,
     onAddEvent,
     onAddScene,
@@ -343,6 +350,7 @@ export const ManuscriptEditor = forwardRef<
     onOpenPreflight,
     onOpenAnalysis,
     onTransaction,
+    onUndoExternal,
     readOnly,
     resumeLocation,
     sceneBoundaryPreviews = [],
@@ -390,8 +398,12 @@ export const ManuscriptEditor = forwardRef<
   const [additionalToolsVisible, setAdditionalToolsVisible] = useState(false);
   const [colorMenu, setColorMenu] = useState<"text" | "highlight" | null>(null);
   const [contextMenu, setContextMenu] = useState<Readonly<{
+    canCopy: boolean;
+    canCut: boolean;
     clientX: number;
     clientY: number;
+    canMoveToNextEpisode: boolean;
+    canPaste: boolean;
   }> | null>(null);
   const readOnlyCompartmentRef = useRef(
     new Compartment(),
@@ -413,7 +425,13 @@ export const ManuscriptEditor = forwardRef<
   const notifyAddEvent = useEffectEvent(onAddEvent);
   const notifyAddScene = useEffectEvent(onAddScene);
   const notifyOpenLoreCue = useEffectEvent(onOpenLoreCue);
+  const notifyMoveToNextEpisode = useEffectEvent(onMoveToNextEpisode);
   const notifyTransaction = useEffectEvent(onTransaction);
+  const notifyUndoExternal = useEffectEvent(
+    () => onUndoExternal?.() ?? false,
+  );
+  const hasNextEpisodeRef = useRef(hasNextEpisode);
+  hasNextEpisodeRef.current = hasNextEpisode;
   const materializeDocumentText = (
     document: ManuscriptDocumentSource,
   ): string => {
@@ -702,6 +720,17 @@ export const ManuscriptEditor = forwardRef<
             "replaced match on line $": "$행의 일치를 바꿈",
           }),
           keymap.of(searchKeymap),
+          keymap.of([
+            {
+              key: "Mod-a",
+              run: selectAll,
+            },
+            {
+              key: "Mod-z",
+              run: (view) =>
+                undoDepth(view.state) === 0 && notifyUndoExternal(),
+            },
+          ]),
           keymap.of(historyKeymap),
           EditorView.lineWrapping,
           focusHighlightCompartmentRef.current.of(
@@ -780,8 +809,23 @@ export const ManuscriptEditor = forwardRef<
                 });
               }
               setContextMenu({
+                canCopy:
+                  selection.anchor !== selection.head &&
+                  typeof navigator.clipboard?.writeText === "function",
+                canCut:
+                  selection.anchor !== selection.head &&
+                  !readOnly &&
+                  typeof navigator.clipboard?.writeText === "function",
                 clientX: event.clientX,
                 clientY: event.clientY,
+                canMoveToNextEpisode:
+                  hasNextEpisodeRef.current &&
+                  Math.min(selection.anchor, selection.head) <
+                    view.state.doc.length &&
+                  !readOnly,
+                canPaste:
+                  !readOnly &&
+                  typeof navigator.clipboard?.readText === "function",
               });
               return true;
             },
@@ -1281,8 +1325,80 @@ export const ManuscriptEditor = forwardRef<
     if (view === null || readOnly) {
       return;
     }
+    if (
+      command === undo &&
+      undoDepth(view.state) === 0 &&
+      notifyUndoExternal()
+    ) {
+      view.focus();
+      return;
+    }
     command(view);
     view.focus();
+  };
+
+  const copyOrCutSelection = (cut: boolean): void => {
+    const view = viewRef.current;
+    if (view === null || (cut && readOnly)) {
+      return;
+    }
+    const selection = view.state.selection.main;
+    if (selection.empty) {
+      view.focus();
+      return;
+    }
+    const selectedText = view.state.doc.sliceString(selection.from, selection.to);
+    void navigator.clipboard.writeText(selectedText).then(() => {
+      if (
+        cut &&
+        viewRef.current === view &&
+        view.state.selection.main.from === selection.from &&
+        view.state.selection.main.to === selection.to &&
+        view.state.doc.sliceString(selection.from, selection.to) === selectedText
+      ) {
+        view.dispatch({
+          changes: { from: selection.from, to: selection.to, insert: "" },
+          selection: EditorSelection.cursor(selection.from),
+          scrollIntoView: true,
+          annotations: [
+            Transaction.userEvent.of("delete.cut"),
+            isolateHistory.of("full"),
+          ],
+        });
+      }
+      view.focus();
+    }, () => {
+      view.focus();
+    });
+  };
+
+  const pasteClipboardText = (): void => {
+    const view = viewRef.current;
+    if (view === null || readOnly) {
+      return;
+    }
+    const selection = view.state.selection.main;
+    void navigator.clipboard.readText().then((text) => {
+      if (
+        text.length > 0 &&
+        viewRef.current === view &&
+        view.state.selection.main.from === selection.from &&
+        view.state.selection.main.to === selection.to
+      ) {
+        view.dispatch({
+          changes: { from: selection.from, to: selection.to, insert: text },
+          selection: EditorSelection.cursor(selection.from + text.length),
+          scrollIntoView: true,
+          annotations: [
+            Transaction.userEvent.of("input.paste"),
+            isolateHistory.of("full"),
+          ],
+        });
+      }
+      view.focus();
+    }, () => {
+      view.focus();
+    });
   };
 
   const activeFontSizeIndex = formattingProfile.fontSizesPx.indexOf(
@@ -1924,8 +2040,16 @@ export const ManuscriptEditor = forwardRef<
         <ManuscriptContextMenu
           clientX={contextMenu.clientX}
           clientY={contextMenu.clientY}
+          copyDisabled={!contextMenu.canCopy}
+          cutDisabled={!contextMenu.canCut}
           onAddEvent={notifyAddEvent}
           onAddScene={notifyAddScene}
+          onCopy={() => copyOrCutSelection(false)}
+          onCut={() => copyOrCutSelection(true)}
+          onMoveToNextEpisode={notifyMoveToNextEpisode}
+          onPaste={pasteClipboardText}
+          pasteDisabled={!contextMenu.canPaste}
+          moveToNextEpisodeDisabled={!contextMenu.canMoveToNextEpisode}
           onClose={() => setContextMenu(null)}
         />
       )}

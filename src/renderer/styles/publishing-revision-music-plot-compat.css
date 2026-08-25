@@ -1,0 +1,807 @@
+/* Publishing workspace */
+
+.studio-app-shell .publishing-partner-dialog {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.studio-app-shell .publishing-workspace-tabs {
+  display: flex;
+  min-width: 0;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--eum-line);
+}
+
+.studio-app-shell .publishing-workspace-tabs button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--eum-text-muted);
+  background: transparent;
+  white-space: nowrap;
+}
+
+.studio-app-shell .publishing-workspace-tabs button[aria-current="page"] {
+  color: var(--eum-text);
+  background: var(--eum-accent-soft);
+  font-weight: 650;
+}
+
+.studio-app-shell .publishing-partner-note-field,
+.studio-app-shell .publishing-partner-genres-field,
+.studio-app-shell .publishing-submission-package,
+.studio-app-shell .publishing-submission-ownership,
+.studio-app-shell .publishing-evidence-links {
+  grid-column: 1 / -1;
+}
+
+.studio-app-shell .publishing-partner-list-tools {
+  display: grid;
+  gap: 8px;
+}
+
+.plot-board-panel {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.8rem;
+  padding: 0.75rem;
+  border: 1px solid #ded7e7;
+  border-radius: 0.75rem;
+  background: #faf7fc;
+}
+
+.studio-app-shell .schedule-document-completion-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+}
+
+.studio-app-shell .document-revision-preview-dialog {
+  display: grid;
+  width: min(760px, calc(100vw - 48px));
+  max-height: calc(100dvh - 48px);
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--eum-line);
+  border-radius: 11px;
+  color: var(--eum-text);
+  background: var(--eum-panel);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 18%);
+}
+
+.studio-app-shell .document-revision-preview-dialog > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--eum-line);
+}
+
+.studio-app-shell .document-revision-preview-dialog h2,
+.studio-app-shell .document-revision-preview-dialog header p {
+  margin: 0;
+}
+
+.studio-app-shell .document-revision-preview-dialog header > div > p:last-child {
+  margin-top: 4px;
+  color: var(--eum-text-muted);
+  font-size: 11px;
+}
+
+.studio-app-shell .document-revision-preview-dialog pre {
+  min-height: 0;
+  margin: 0;
+  overflow: auto;
+  padding: 26px clamp(22px, 7vw, 72px);
+  color: var(--eum-text);
+  background: var(--eum-bg);
+  font: 15px/1.9 "MaruBuri", serif;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.studio-app-shell .schedule-completion-fact-mark {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  padding: 0;
+}
+
+.studio-app-shell .schedule-explicit-baseline {
+  align-self: end;
+  margin: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  color: var(--eum-text-muted);
+  background: var(--eum-bg);
+  font-size: 11px;
+}
+
+.studio-app-shell .music-mini-player {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(180px, 1.15fr) minmax(110px, 0.9fr) auto auto auto auto;
+  align-items: center;
+  gap: 7px;
+  padding: 2px 5px;
+  border: 1px solid color-mix(in srgb, var(--eum-line) 76%, transparent);
+  border-radius: 9px;
+  color: var(--eum-text);
+  background: color-mix(in srgb, var(--eum-panel) 88%, transparent);
+}
+
+.studio-app-shell .app-topbar-music .music-mini-player {
+  height: 32px;
+}
+
+.studio-app-shell .music-mini-track {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.studio-app-shell .music-mini-track > img,
+.studio-app-shell .music-mini-track > span:first-child {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 7px;
+  object-fit: cover;
+}
+
+.studio-app-shell .music-mini-track > span:first-child {
+  display: grid;
+  place-items: center;
+  color: var(--eum-accent);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .music-mini-track > span:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.studio-app-shell .music-mini-track strong,
+.studio-app-shell .music-mini-track small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-app-shell .music-mini-track strong {
+  color: var(--eum-text);
+  font-size: 10.5px;
+  font-weight: 720;
+}
+
+.studio-app-shell .music-mini-track small {
+  color: var(--eum-text-muted);
+  font-size: 8.5px;
+}
+
+.studio-app-shell .music-mini-progress {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(62px, 1fr) auto;
+  align-items: center;
+  gap: 5px;
+}
+
+.studio-app-shell .music-mini-progress input,
+.studio-app-shell .music-mini-volume input {
+  min-width: 0;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--eum-accent);
+}
+
+.studio-app-shell .music-mini-progress output {
+  color: var(--eum-text-muted);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 7.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.studio-app-shell .music-mini-controls {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.studio-app-shell .app-topbar-music .music-mini-player button {
+  -webkit-app-region: no-drag;
+}
+
+.studio-app-shell .music-mini-controls button,
+.studio-app-shell .music-mini-entry-actions button,
+.studio-app-shell .music-mini-volume button {
+  position: relative;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  color: var(--eum-text-muted);
+  background: transparent;
+}
+
+.studio-app-shell .music-mini-controls button:hover:not(:disabled),
+.studio-app-shell .music-mini-entry-actions button:hover:not(:disabled),
+.studio-app-shell .music-mini-volume button:hover:not(:disabled) {
+  color: var(--eum-text);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .music-mini-controls button.is-active,
+.studio-app-shell .music-mini-controls button[aria-pressed="true"],
+.studio-app-shell .music-mini-volume button[aria-pressed="true"] {
+  color: var(--eum-accent);
+  background: var(--eum-accent-soft);
+  box-shadow: inset 0 0 0 1px color-mix(
+    in srgb,
+    var(--eum-accent) 72%,
+    transparent
+  );
+}
+
+.studio-app-shell .music-mini-controls button.is-active::after {
+  width: 4px;
+  height: 4px;
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  border-radius: 999px;
+  background: var(--eum-accent);
+  content: "";
+}
+
+.studio-app-shell[data-starlight-theme]
+  .app-topbar-music
+  .music-mini-player
+  .music-mini-controls
+  button.is-active,
+.studio-app-shell[data-starlight-theme]
+  .app-topbar-music
+  .music-mini-player
+  .music-mini-volume
+  button[aria-pressed="true"] {
+  color: var(--starlight-accent);
+  border-color: var(--starlight-accent);
+  background: color-mix(
+    in srgb,
+    var(--starlight-accent) 20%,
+    var(--starlight-input)
+  );
+  box-shadow: inset 0 0 0 1px var(--starlight-accent);
+}
+
+.studio-app-shell .music-mini-controls .music-mini-primary-control,
+.studio-app-shell[data-starlight-theme]
+  .app-topbar-music
+  .music-mini-player
+  .music-mini-primary-control {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  border-radius: 999px;
+  color: var(--starlight-button-text, #fff);
+  background: var(--eum-accent);
+}
+
+.studio-app-shell .music-mini-controls button:disabled,
+.studio-app-shell .music-mini-entry-actions button:disabled {
+  opacity: 0.34;
+}
+
+.studio-app-shell .music-mini-entry-actions {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.studio-app-shell .music-mini-entry-actions button {
+  gap: 3px;
+  font-size: 8.5px;
+}
+
+.studio-app-shell .music-mini-entry-actions button:last-child {
+  width: 24px;
+  padding: 0;
+}
+
+.studio-app-shell .music-mini-time,
+.studio-app-shell .music-mini-focus {
+  color: var(--eum-text-muted);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 8px;
+  white-space: nowrap;
+}
+
+.studio-app-shell .music-mini-volume {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--eum-text-muted);
+  font-size: 8px;
+}
+
+.studio-app-shell .music-mini-volume button {
+  border: 0;
+}
+
+.studio-app-shell .music-mini-volume input {
+  width: 52px;
+}
+
+.studio-app-shell .music-mini-video-panel {
+  position: fixed;
+  left: -9999px;
+  bottom: 46px;
+  z-index: 80;
+  width: 356px;
+  height: 200px;
+  overflow: hidden;
+  border: 1px solid var(--eum-line);
+  border-radius: 12px;
+  opacity: 0;
+  background: #000;
+  box-shadow: 0 16px 38px rgb(31 24 36 / 28%);
+  pointer-events: none;
+}
+
+.studio-app-shell .music-mini-video-panel.is-open {
+  left: 12px;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.studio-app-shell
+  .app-topbar-music
+  .music-mini-video-panel.is-open {
+  top: calc(var(--eum-topbar-height) + 6px);
+  right: 12px;
+  bottom: auto;
+  left: auto;
+}
+
+.studio-app-shell .music-mini-video-host,
+.studio-app-shell .music-mini-video-host > div,
+.studio-app-shell .music-mini-video-host iframe,
+.studio-app-shell .music-mini-local-media {
+  width: 356px;
+  height: 200px;
+  border: 0;
+  object-fit: contain;
+  background: #000;
+}
+
+.studio-app-shell .music-mini-player.is-local .music-mini-video-host,
+.studio-app-shell .music-mini-player.is-youtube .music-mini-local-media,
+.studio-app-shell .music-mini-player.is-idle .music-mini-video-panel {
+  display: none;
+}
+
+@media (max-width: 1080px) {
+  .studio-app-shell .music-mini-progress,
+  .studio-app-shell .music-mini-volume,
+  .studio-app-shell .music-mini-focus,
+  .studio-app-shell .music-mini-time {
+    display: none;
+  }
+
+  .studio-app-shell .music-mini-player {
+    grid-template-columns: minmax(140px, 1fr) auto auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .studio-app-shell .music-mini-controls button:first-child,
+  .studio-app-shell .music-mini-controls button:last-child,
+  .studio-app-shell .music-mini-entry-actions button:not(:last-child) {
+    display: inline-flex;
+  }
+
+  .studio-app-shell .music-mini-player {
+    grid-template-columns: minmax(112px, 1fr) auto auto;
+    gap: 3px;
+  }
+}
+
+.studio-app-shell .music-mini-entry-actions,
+.studio-app-shell .music-mini-entry-actions button,
+.studio-app-shell .music-mini-entry-actions button span {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.plot-board-panel > header {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.plot-board-header {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.55rem;
+}
+
+.plot-board-header > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.plot-board-view-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.2rem;
+  padding: 0.18rem;
+  border: 1px solid #d8cede;
+  border-radius: 0.55rem;
+  background: #f3edf7;
+}
+
+.plot-board-view-switch button {
+  min-height: 1.75rem;
+  padding: 0 0.45rem;
+  border: 0;
+  border-radius: 0.4rem;
+  color: #71637d;
+  background: transparent;
+  font: inherit;
+  font-size: 0.6rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.plot-board-view-switch button[aria-pressed="true"] {
+  color: #51465e;
+  background: #fffefa;
+  box-shadow: 0 1px 0.2rem rgb(83 65 98 / 14%);
+}
+
+.plot-board-panel > header span,
+.plot-board-lane > h3,
+.plot-board-lane > p {
+  color: #746c7d;
+  font-size: 0.65rem;
+}
+
+.plot-board-panel > header strong {
+  color: #51465e;
+  font-size: 0.78rem;
+}
+
+.plot-board-lane {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.plot-board-lane > h3,
+.plot-board-lane > p {
+  margin: 0;
+}
+
+.plot-board-lane > ol {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plot-board-lane > ol > li {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.5rem;
+  border: 1px solid #ddd3e7;
+  border-radius: 0.6rem;
+  background: #fffefa;
+}
+
+.plot-board-card-select {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0;
+  border: 0;
+  color: #51465e;
+  background: transparent;
+  text-align: left;
+  touch-action: none;
+  cursor: grab;
+}
+
+.plot-board-panel[data-drag-active="true"],
+.plot-board-panel[data-drag-active="true"] .plot-board-card-select {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.plot-board-lane > ol > li.is-drag-preview-source {
+  border-style: dashed;
+  opacity: 0.45;
+}
+
+.plot-board-lane > ol > li.plot-board-insertion-line {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-top: 3px solid #8d72a8;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: 0 0 0.45rem rgb(112 83 139 / 24%);
+  pointer-events: none;
+}
+
+.plot-board-card-select span {
+  color: #81768c;
+  font-size: 0.62rem;
+}
+
+.plot-board-card-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+}
+
+.plot-board-card-actions button {
+  min-height: 1.9rem;
+  padding: 0 0.4rem;
+  border: 1px solid #d4c8df;
+  border-radius: 0.5rem;
+  color: #645571;
+  background: #f8f4fb;
+  font: inherit;
+  font-size: 0.61rem;
+  cursor: pointer;
+}
+
+.plot-board-card-actions button:disabled,
+.plot-board-card-select:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.plot-story-time-lane {
+  min-width: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.plot-story-time-lane > h3,
+.plot-story-time-unassigned > p {
+  margin: 0;
+  color: #746c7d;
+  font-size: 0.65rem;
+}
+
+.plot-story-time-track {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #d9cfe3;
+  border-radius: 0.65rem;
+  background:
+    linear-gradient(90deg, rgb(141 114 168 / 5%), transparent 42%, rgb(141 114 168 / 5%)),
+    #fffefa;
+}
+
+.plot-story-time-axis {
+  position: absolute;
+  top: 1.15rem;
+  right: 0.55rem;
+  left: 0.55rem;
+  height: 2px;
+  border-radius: 999px;
+  background: #b9a8c8;
+  pointer-events: none;
+}
+
+.plot-story-time-axis-start,
+.plot-story-time-axis-end {
+  position: absolute;
+  top: 0.25rem;
+  color: #81768c;
+  font-size: 0.58rem;
+  pointer-events: none;
+}
+
+.plot-story-time-axis-start {
+  left: 0.45rem;
+}
+
+.plot-story-time-axis-end {
+  right: 0.45rem;
+}
+
+.plot-story-time-card {
+  position: absolute;
+  z-index: 2;
+  width: min(8rem, calc(100% - 0.5rem));
+  min-height: 2.8rem;
+  display: grid;
+  gap: 0.12rem;
+  padding: 0.42rem 0.5rem;
+  transform: translateX(-50%);
+  border: 1px solid #d8cce2;
+  border-radius: 0.55rem;
+  color: #51465e;
+  background: #fffefa;
+  box-shadow: 0 0.2rem 0.45rem rgb(83 65 98 / 12%);
+  font: inherit;
+  text-align: left;
+  touch-action: none;
+  cursor: grab;
+}
+
+.plot-story-time-card-measure {
+  position: absolute;
+  display: block;
+  width: min(8rem, calc(100% - 0.5rem));
+  height: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.plot-story-time-card.is-start {
+  transform: translateX(0);
+}
+
+.plot-story-time-card.is-end {
+  transform: translateX(-100%);
+}
+
+.plot-story-time-card strong,
+.plot-story-time-card span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plot-story-time-card strong {
+  font-size: 0.67rem;
+}
+
+.plot-story-time-card span {
+  color: #81768c;
+  font-size: 0.58rem;
+}
+
+.plot-story-time-card[data-story-time-preview="true"] {
+  border-style: dashed;
+  border-color: #8d72a8;
+  box-shadow: 0 0 0.55rem rgb(112 83 139 / 25%);
+}
+
+.plot-story-time-range {
+  position: absolute;
+  z-index: 1;
+  height: 0.25rem;
+  border-radius: 999px;
+  background: #a68bbb;
+  pointer-events: none;
+}
+
+.plot-story-time-unassigned {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.5rem;
+  border: 1px dashed #d2c6dc;
+  border-radius: 0.6rem;
+  background: rgb(255 254 250 / 65%);
+}
+
+.plot-story-time-unassigned > ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plot-story-time-unassigned > ul > li > button {
+  min-height: 1.8rem;
+  padding: 0 0.5rem;
+  border: 1px solid #d8cce2;
+  border-radius: 0.45rem;
+  color: #645571;
+  background: #fffefa;
+  font: inherit;
+  font-size: 0.61rem;
+  touch-action: none;
+  cursor: grab;
+}
+
+.plot-story-time-unassigned
+  button[data-story-time-drag-source="true"] {
+  border-style: dashed;
+  opacity: 0.45;
+}
+
+.plot-board-panel[data-board-view="time-map"][data-drag-active="true"],
+.plot-board-panel[data-board-view="time-map"][data-drag-active="true"]
+  .plot-story-time-card,
+.plot-board-panel[data-board-view="time-map"][data-drag-active="true"]
+  .plot-story-time-unassigned button {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.plot-story-time-card:disabled,
+.plot-story-time-unassigned button:disabled,
+.plot-board-view-switch button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+
+@media (max-width: 860px) {
+  .studio-app-shell .dialog-backdrop {
+    padding: 12px;
+  }
+
+  .studio-app-shell :is(
+    .records-dialog,
+    .manuscript-preflight-dialog,
+    .continuous-reading-dialog,
+    .fragment-shelf-dialog,
+    .work-structure-dialog,
+    .character-manager-dialog,
+    .lore-candidate-dialog,
+    .foreshadow-line-dialog,
+    .snapshot-comparison-dialog,
+    .assistant-context-dialog,
+    .assistant-connections-dialog,
+    .publishing-partner-dialog,
+    .workspace-tool-dialog
+  ) {
+    width: calc(100vw - 24px);
+    height: calc(100dvh - 24px);
+  }
+
+  .studio-app-shell :is(
+    .schedule-dashboard-grid,
+    .manuscript-preflight-layout,
+    .character-manager-body,
+    .assistant-connections-body,
+    .assistant-context-body,
+    .publishing-partner-body,
+    .records-dialog-body
+  ) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .studio-app-shell :is(
+    .character-manager-list,
+    .assistant-connections-list,
+    .publishing-partner-list,
+    .preflight-settings-panel
+  ) {
+    max-height: 240px;
+    border-right: 0;
+    border-bottom: 1px solid var(--eum-line);
+  }
+
+  .studio-app-shell .schedule-calendar-panel {
+    grid-row: auto;
+  }
+}
+

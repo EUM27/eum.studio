@@ -336,6 +336,14 @@ export function SceneList(input: {
         <ol className="scene-list-items">
           {scenes.map((scene, index) => {
             const previousScene = scenes[index - 1];
+            const nextScene = scenes[index + 1];
+            const episodeSpan = scene.sceneIdentity === undefined
+              ? []
+              : [...new Set(
+                  scene.sceneIdentity.segments.map(
+                    (segment) => segment.documentTitle,
+                  ),
+                )];
             const annotation = input.annotations.find(
               (candidate) => candidate.sceneKey === scene.sceneKey,
             ) ?? null;
@@ -364,6 +372,11 @@ export function SceneList(input: {
                       ? `장면 ${scene.sceneIndex}`
                       : `장면 ${scene.sceneIndex} · ${annotation.title}`}
                   </strong>
+                  {episodeSpan.length > 1 && (
+                    <small className="scene-episode-span">
+                      {episodeSpan.join(" → ")}
+                    </small>
+                  )}
                   <span>
                     {scene.range === null
                       ? "위치 없음"
@@ -438,6 +451,26 @@ export function SceneList(input: {
                       앞 장면과 병합
                     </button>
                   )}
+                  <button
+                    disabled={
+                      input.busy ||
+                      scene.range === null ||
+                      (previousScene === undefined && nextScene === undefined)
+                    }
+                    onClick={() => {
+                      if (!window.confirm(
+                        "이 장면 구분을 삭제할까요?\n원고는 삭제되지 않고 인접 장면과 합쳐집니다.",
+                      )) return;
+                      if (previousScene !== undefined) {
+                        input.onMergeWithPrevious(scene, previousScene);
+                      } else if (nextScene !== undefined) {
+                        input.onMergeWithPrevious(nextScene, scene);
+                      }
+                    }}
+                    type="button"
+                  >
+                    장면 삭제
+                  </button>
                 </div>
                 <div className="scene-event-membership">
                   <h5>사건</h5>

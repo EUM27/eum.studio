@@ -14,6 +14,14 @@ describe("QuickToolsDialog", () => {
     const documentId = entityId<"Document">("document-1");
     const markup = renderToStaticMarkup(
       createElement(QuickToolsDialog, {
+        client: {
+          getMemo: async () => {
+            throw new Error("Static render must not load a memo");
+          },
+          saveMemo: async () => {
+            throw new Error("Static render must not save a memo");
+          },
+        },
         catalog: {
           schemaVersion: 1,
           works: [{

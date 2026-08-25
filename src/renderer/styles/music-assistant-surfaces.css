@@ -1,0 +1,646 @@
+/* Actual music selection and GPT conversation surfaces. */
+.studio-app-shell .music-library-backdrop,
+.studio-app-shell .assistant-chat-backdrop {
+  z-index: 82;
+}
+
+.studio-app-shell .music-library-dialog,
+.studio-app-shell .assistant-chat-dialog {
+  width: min(1040px, calc(100vw - 32px));
+  max-height: min(820px, calc(100vh - 32px));
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--eum-line);
+  border-radius: 14px;
+  color: var(--eum-text);
+  background: var(--eum-panel);
+  box-shadow: 0 24px 70px rgb(0 0 0 / 24%);
+}
+
+.studio-app-shell .music-library-dialog > header,
+.studio-app-shell .assistant-chat-dialog > header {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--eum-line);
+}
+
+.studio-app-shell .music-library-dialog > header h2,
+.studio-app-shell .music-library-dialog > header span,
+.studio-app-shell .assistant-chat-dialog > header strong,
+.studio-app-shell .assistant-chat-dialog > header small {
+  margin: 0;
+}
+
+.studio-app-shell .music-library-dialog > header span,
+.studio-app-shell .assistant-chat-dialog > header small {
+  color: var(--eum-text-muted);
+  font-size: 10px;
+}
+
+.studio-app-shell .music-library-dialog > header button,
+.studio-app-shell .assistant-chat-dialog > header button,
+.studio-app-shell .assistant-chat-dialog > header > div {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.studio-app-shell
+  .app-topbar-music
+  .music-library-dialog
+  > header
+  > button {
+  -webkit-app-region: no-drag;
+}
+
+.studio-app-shell .music-library-dialog {
+  display: flex;
+  flex-direction: column;
+}
+
+.studio-app-shell .music-library-register {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--eum-line);
+  background: color-mix(in srgb, var(--eum-accent-soft) 58%, var(--eum-panel));
+}
+
+.studio-app-shell .music-library-register > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.studio-app-shell .music-library-register small {
+  color: var(--eum-text-muted);
+  font-size: 10px;
+}
+
+.studio-app-shell .music-library-register fieldset {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0;
+  padding: 2px;
+  border: 1px solid var(--eum-line);
+  border-radius: 9px;
+  background: var(--eum-panel);
+}
+
+.studio-app-shell .music-library-register fieldset label {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  border-radius: 7px;
+  color: var(--eum-text-muted);
+  font-size: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.studio-app-shell .music-library-register fieldset label:has(input:checked) {
+  color: var(--eum-text);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .music-library-register fieldset input {
+  width: 1px;
+  height: 1px;
+  position: absolute;
+  opacity: 0;
+}
+
+.studio-app-shell .music-library-connection,
+.studio-app-shell .assistant-chat-connection {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  color: var(--eum-text-muted);
+  background: var(--eum-accent-soft);
+  border-bottom: 1px solid var(--eum-line);
+}
+
+.studio-app-shell .music-library-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--eum-line);
+}
+
+.studio-app-shell .music-library-search input,
+.studio-app-shell .music-library-search button,
+.studio-app-shell .music-library-register > button,
+.studio-app-shell .music-library-connection button,
+.studio-app-shell .assistant-chat-connection button,
+.studio-app-shell .assistant-chat-dialog button {
+  min-height: 34px;
+  border: 1px solid var(--eum-line);
+  border-radius: 8px;
+  color: var(--eum-text);
+  background: var(--starlight-input, #fff);
+}
+
+.studio-app-shell .music-library-search button,
+.studio-app-shell .music-library-register > button,
+.studio-app-shell .assistant-chat-dialog button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 10px;
+}
+
+.studio-app-shell .music-library-error,
+.studio-app-shell .assistant-chat-error {
+  margin: 0;
+  padding: 8px 16px;
+  color: #c04444;
+  border-bottom: 1px solid var(--eum-line);
+}
+
+.studio-app-shell .music-library-columns {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: auto;
+}
+
+.studio-app-shell .music-library-columns > section {
+  min-width: 0;
+  padding: 14px;
+  border-right: 1px solid var(--eum-line);
+  border-bottom: 1px solid var(--eum-line);
+}
+
+.studio-app-shell .music-library-columns section > header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.studio-app-shell .music-library-columns section > header h3 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.studio-app-shell .music-library-columns section > header button {
+  margin-left: auto;
+}
+
+.studio-app-shell .music-library-columns section > header small {
+  color: var(--eum-text-muted);
+  font-size: 10px;
+}
+
+.studio-app-shell .music-library-columns :is(ul, ol) {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.studio-app-shell .music-library-columns .music-library-scroll-list {
+  max-height: min(29vh, 300px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 6px;
+  scrollbar-gutter: stable;
+}
+
+.studio-app-shell .music-library-queue .music-library-scroll-list {
+  max-height: min(34vh, 360px);
+}
+
+.studio-app-shell .music-library-columns li {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 9px;
+  padding: 9px;
+  border: 1px solid var(--eum-line);
+  border-radius: 9px;
+  background: var(--eum-bg);
+}
+
+.studio-app-shell .music-library-columns li img {
+  width: 56px;
+  height: 42px;
+  grid-row: 1 / 3;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.studio-app-shell .music-library-media-icon {
+  width: 56px;
+  height: 42px;
+  grid-row: 1 / 3;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--eum-accent);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .music-library-columns li > span {
+  min-width: 0;
+  display: grid;
+}
+
+.studio-app-shell .music-library-columns li :is(strong, small) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-app-shell .music-library-columns li small {
+  color: var(--eum-text-muted);
+}
+
+.studio-app-shell .music-library-columns li > div {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.studio-app-shell .music-library-columns li button {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  background: var(--eum-panel);
+}
+
+.studio-app-shell .assistant-chat-dialog {
+  width: min(720px, calc(100vw - 32px));
+  grid-template-rows: auto auto minmax(180px, 1fr) auto auto;
+}
+
+.studio-app-shell .assistant-chat-messages {
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+
+.studio-app-shell .assistant-chat-messages > p {
+  color: var(--eum-text-muted);
+}
+
+.studio-app-shell .assistant-chat-messages ol {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.studio-app-shell .assistant-chat-messages li {
+  width: min(88%, 620px);
+  display: grid;
+  gap: 4px;
+}
+
+.studio-app-shell .assistant-chat-messages li.is-user {
+  justify-self: end;
+}
+
+.studio-app-shell .assistant-chat-messages li > span {
+  color: var(--eum-text-muted);
+  font-size: 10px;
+}
+
+.studio-app-shell .assistant-chat-messages li.is-user > span {
+  text-align: right;
+}
+
+.studio-app-shell .assistant-chat-messages li p {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--eum-line);
+  border-radius: 11px;
+  white-space: pre-wrap;
+}
+
+.studio-app-shell .assistant-chat-messages li.is-user p {
+  color: var(--starlight-button-text, #fff);
+  background: var(--eum-accent);
+  border-color: var(--eum-accent);
+}
+
+.studio-app-shell .assistant-chat-messages li.is-assistant p {
+  background: var(--eum-bg);
+}
+
+.studio-app-shell .assistant-chat-composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  gap: 8px;
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--eum-line);
+}
+
+.studio-app-shell .assistant-chat-composer textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+@media (max-width: 760px) {
+  .studio-app-shell .music-library-register {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .studio-app-shell .music-library-register fieldset {
+    justify-self: stretch;
+  }
+
+  .studio-app-shell .music-library-register fieldset label {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .studio-app-shell .music-library-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The music surface is a compact player palette, not a workspace-sized modal. */
+.studio-app-shell .music-library-backdrop {
+  padding: calc(var(--eum-topbar-height) + 8px) 12px 12px;
+  place-items: start end;
+  background: transparent;
+  backdrop-filter: none;
+  pointer-events: none;
+}
+
+.studio-app-shell .music-library-dialog {
+  width: min(420px, calc(100vw - 24px));
+  max-height: min(560px, calc(100vh - var(--eum-topbar-height) - 20px));
+  border-radius: 11px;
+  box-shadow: 0 16px 44px rgb(0 0 0 / 24%);
+  pointer-events: auto;
+}
+
+.studio-app-shell .music-library-dialog > header {
+  min-height: 38px;
+  padding: 6px 8px 6px 10px;
+}
+
+.studio-app-shell .music-library-dialog > header > div {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.studio-app-shell .music-library-dialog > header strong {
+  font-size: 12px;
+}
+
+.studio-app-shell .music-library-dialog > header span {
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  text-align: center;
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .music-library-dialog > header button,
+.studio-app-shell .music-library-tabs button,
+.studio-app-shell .music-library-content section > header button,
+.studio-app-shell .music-library-track-actions button,
+.studio-app-shell .music-library-register > button,
+.studio-app-shell .music-library-search button {
+  width: 27px;
+  min-width: 27px;
+  height: 27px;
+  min-height: 27px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  color: var(--eum-text-muted);
+  background: var(--eum-panel);
+}
+
+.studio-app-shell .music-library-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--eum-line);
+  background: color-mix(in srgb, var(--eum-panel) 94%, var(--eum-bg));
+}
+
+.studio-app-shell .music-library-tabs button {
+  width: auto;
+  display: inline-flex;
+  justify-content: center;
+  gap: 5px;
+}
+
+.studio-app-shell .music-library-tabs button span {
+  min-width: 14px;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.studio-app-shell .music-library-tabs button[aria-selected="true"] {
+  color: var(--eum-accent);
+  border-color: color-mix(in srgb, var(--eum-accent) 66%, var(--eum-line));
+  background: var(--eum-accent-soft);
+  box-shadow: inset 0 -2px 0 var(--eum-accent);
+}
+
+.studio-app-shell .music-library-register {
+  grid-template-columns: minmax(0, 1fr) 27px;
+  gap: 6px;
+  padding: 6px 8px;
+}
+
+.studio-app-shell .music-library-register fieldset {
+  justify-self: start;
+}
+
+.studio-app-shell .music-library-register fieldset label {
+  min-height: 25px;
+  padding: 0 7px;
+  font-size: 9px;
+}
+
+.studio-app-shell .music-library-connection {
+  min-height: 34px;
+  padding: 5px 8px;
+  font-size: 10px;
+}
+
+.studio-app-shell .music-library-connection button {
+  min-height: 26px;
+  padding: 0 8px;
+}
+
+.studio-app-shell .music-library-search {
+  gap: 5px;
+  padding: 6px 8px;
+}
+
+.studio-app-shell .dialog-backdrop .music-library-search input {
+  min-height: 29px;
+  height: 29px;
+  padding: 4px 8px;
+  font-size: 10px;
+}
+
+.studio-app-shell .music-library-error {
+  padding: 5px 8px;
+  font-size: 10px;
+}
+
+.studio-app-shell .music-library-content {
+  flex: 1 1 auto;
+  min-height: 150px;
+  display: grid;
+  overflow: hidden;
+}
+
+.studio-app-shell .music-library-content > section {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: 8px;
+}
+
+.studio-app-shell .music-library-content section > header {
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+
+.studio-app-shell .music-library-content section > header h3 {
+  margin: 0;
+  font-size: 11px;
+}
+
+.studio-app-shell .music-library-content section > header > span,
+.studio-app-shell .music-library-content section > header small {
+  color: var(--eum-text-muted);
+  font-size: 9px;
+}
+
+.studio-app-shell .music-library-content section > header button:first-of-type {
+  margin-left: auto;
+}
+
+.studio-app-shell .music-library-content section > p {
+  margin: 10px 2px;
+  color: var(--eum-text-muted);
+  font-size: 10px;
+}
+
+.studio-app-shell .music-library-content :is(ul, ol) {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  margin: 0;
+  padding: 0 3px 0 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  scrollbar-gutter: stable;
+}
+
+.studio-app-shell .music-library-content li {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid var(--eum-line);
+  border-radius: 8px;
+  background: var(--eum-bg);
+}
+
+.studio-app-shell .music-library-content li img,
+.studio-app-shell .music-library-content .music-library-media-icon {
+  width: 36px;
+  height: 36px;
+  grid-row: auto;
+  border-radius: 6px;
+}
+
+.studio-app-shell .music-library-track-copy {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.studio-app-shell .music-library-track-copy :is(strong, small) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-app-shell .music-library-track-copy strong {
+  font-size: 10.5px;
+}
+
+.studio-app-shell .music-library-track-copy small {
+  color: var(--eum-text-muted);
+  font-size: 8.5px;
+}
+
+.studio-app-shell .music-library-track-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 2px;
+}
+
+.studio-app-shell .music-library-track-actions button {
+  width: 25px;
+  min-width: 25px;
+  height: 25px;
+  min-height: 25px;
+}
+
+.studio-app-shell .music-library-track-actions button[aria-pressed="true"] {
+  color: var(--eum-accent);
+  border-color: var(--eum-accent);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .music-library-dialog button:hover:not(:disabled) {
+  color: var(--eum-text);
+  border-color: var(--eum-accent);
+}
+
+@media (max-width: 520px) {
+  .studio-app-shell .music-library-backdrop {
+    padding: calc(var(--eum-topbar-height) + 5px) 6px 6px;
+  }
+
+  .studio-app-shell .music-library-dialog {
+    width: calc(100vw - 12px);
+  }
+}

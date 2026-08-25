@@ -10,6 +10,7 @@ import type {
 } from "../application/checkpoints/manuscript-resume-checkpoint-projection";
 import {
   CreateAnchor,
+  createAnchorForKnownRevisionContent,
 } from "../application/anchors/create-anchor";
 import {
   ResolveAnchor,
@@ -28,6 +29,7 @@ import {
   type ManuscriptDocumentProfile,
 } from "../application/editor/manuscript-document-profile";
 import {
+  createDefaultManuscriptEditorDocumentState,
   parseManuscriptEditorDocumentState,
   parseSaveManuscriptDocumentChangeCommand,
   parseSaveManuscriptFormattingCommand,
@@ -35,6 +37,19 @@ import {
   type ManuscriptFormattingProfile,
   type SaveManuscriptFormattingReceipt,
 } from "../application/editor/manuscript-formatting";
+import {
+  moveManuscriptEditorStateRange,
+  moveRangeToEpisodeText,
+  parseMoveRangeToEpisodeCommand,
+  parseMoveRangeToEpisodeReceipt,
+  parseUndoMoveRangeToEpisodeCommand,
+  planEpisodeSceneIdentityChanges,
+  type EpisodeRangeMoveStore,
+  type MoveRangeToEpisodeCommand,
+  type MoveRangeToEpisodeReceipt,
+  type SceneEpisodeSegmentRange,
+  type UndoMoveRangeToEpisodeCommand,
+} from "../application/editor/move-range-to-episode";
 import {
   createDefaultWorkManuscriptLayoutSettingsProjection,
   parseGetWorkManuscriptLayoutSettingsCommand,
@@ -406,6 +421,7 @@ import {
   parseSetSceneEventOverrideCommand,
   parseUpdateSceneRuleSetCommand,
   type ListSceneProjectionCommand,
+  type SceneEpisodeSegmentProjection,
   type SceneEventOverrideProjection,
   type SceneProjectionList,
   type SceneRuleSetProjection,
@@ -972,6 +988,9 @@ import {
 import {
   migrateLocalWorkspaceDocumentCompletionIfNeeded,
 } from "./local-workspace-document-completion-migration";
+import {
+  migrateLocalWorkspaceEpisodeRangeMovesIfNeeded,
+} from "./local-workspace-episode-range-move-migration";
 
 type NodeSqliteStatement = {
   all(
@@ -1105,6 +1124,14 @@ type StoredSceneOverrideRow = {
   readonly exactQuote: string;
   readonly orderIndex: number;
   readonly createdAt: string;
+};
+
+type StoredSceneEpisodeSegmentRow = {
+  readonly segmentId: EntityId<"EpisodeSceneSegment">;
+  readonly sceneId: EntityId<"Scene">;
+  readonly workId: EntityId<"Work">;
+  readonly documentId: EntityId<"Document">;
+  readonly anchorId: EntityId<"Anchor">;
 };
 
 type StoredSceneRuleSetRow = {
@@ -1553,6 +1580,8 @@ export type LocalWorkspaceRuntime =
     captureWorkspaceResume(
       value: unknown,
     ): Promise<ManuscriptResumeCheckpointProjection>;
+    moveRangeToEpisode(value: unknown): Promise<MoveRangeToEpisodeReceipt>;
+    undoMoveRangeToEpisode(value: unknown): Promise<MoveRangeToEpisodeReceipt>;
     createEventBlock(value: unknown): Promise<EventBlockProjection>;
     createAnchorlessEvent(value: unknown): Promise<EventBlockProjection>;
     moveEventBlock(value: unknown): Promise<EventBlockListProjection>;
@@ -1996,7 +2025,7 @@ export type LocalWorkspaceRuntimeOptions = {
   readonly backupProfile: LocalWorkspaceBackupProfile;
 };
 
-export const LOCAL_WORKSPACE_LEDGER_SCHEMA_VERSION = 14;
+export const LOCAL_WORKSPACE_LEDGER_SCHEMA_VERSION = 15;
 export const LOCAL_WORKSPACE_LEDGER_CHECKSUM_IDENTITY =
   "eum-studio-ledger-sha256-v1";
 export const LOCAL_WORKSPACE_MANUSCRIPT_CODEC_IDENTITY =
@@ -2221,6 +2250,24 @@ SELECT
 FROM scene_event_overrides AS seo
 WHERE seo.work_id = ? AND seo.retired_at IS NULL
 ORDER BY seo.created_at ASC, seo.id ASC
+`;
+
+const SCENE_EPISODE_SEGMENT_ROWS_SQL = `
+SELECT
+  segment.id AS "segmentId",
+  segment.scene_id AS "sceneId",
+  segment.work_id AS "workId",
+  segment.document_id AS "documentId",
+  segment.anchor_id AS "anchorId"
+FROM scene_episode_segments AS segment
+JOIN scene_identities AS scene
+  ON scene.work_id = segment.work_id
+  AND scene.id = segment.scene_id
+  AND scene.retired_at IS NULL
+WHERE
+  segment.work_id = ?
+  AND segment.retired_at IS NULL
+ORDER BY segment.created_at, segment.id
 `;
 
 const ACTIVE_FRAGMENT_ROWS_SQL = `
@@ -3978,6 +4025,7 @@ class DefaultLocalWorkspaceRuntime
     ReturnType<typeof openNodeSqliteLedger>
   >;
   readonly #revisionStore: RevisionStore;
+  readonly #episodeRangeMoveStore: EpisodeRangeMoveStore;
   readonly #blobStore: Awaited<
     ReturnType<typeof createNodeImmutableBlobStore>
   >;
@@ -4012,6 +4060,7 @@ class DefaultLocalWorkspaceRuntime
       ReturnType<typeof openNodeSqliteLedger>
     >;
     readonly revisionStore: RevisionStore;
+    readonly episodeRangeMoveStore: EpisodeRangeMoveStore;
     readonly blobStore: Awaited<
       ReturnType<typeof createNodeImmutableBlobStore>
     >;
@@ -4027,6 +4076,7 @@ class DefaultLocalWorkspaceRuntime
     this.#database = input.database;
     this.#ledger = input.ledger;
     this.#revisionStore = input.revisionStore;
+    this.#episodeRangeMoveStore = input.episodeRangeMoveStore;
     this.#blobStore = input.blobStore;
     this.#blobProfile = input.blobProfile;
     this.#backupService = input.backupService;
@@ -14044,6 +14094,80 @@ class DefaultLocalWorkspaceRuntime
         text: target.text,
       });
     });
+    const storedSceneSegments: readonly StoredSceneEpisodeSegmentRow[] =
+      Object.freeze(this.#database.prepare(SCENE_EPISODE_SEGMENT_ROWS_SQL)
+        .all(command.workId)
+        .map((row, index) => {
+          const label = `Scene episode segment rows[${index}]`;
+          return Object.freeze({
+            segmentId: entityId<"EpisodeSceneSegment">(
+              readRequiredString(row, "segmentId", label),
+            ),
+            sceneId: entityId<"Scene">(
+              readRequiredString(row, "sceneId", label),
+            ),
+            workId: entityId<"Work">(
+              readRequiredString(row, "workId", label),
+            ),
+            documentId: entityId<"Document">(
+              readRequiredString(row, "documentId", label),
+            ),
+            anchorId: entityId<"Anchor">(
+              readRequiredString(row, "anchorId", label),
+            ),
+          });
+        }));
+    const resolver = new ResolveAnchor({
+      catalog: createCatalogFromStoredRows(readStoredDocumentRows(this.#database)),
+      revisionStore: this.#revisionStore,
+      reader: this.#ledger,
+      describeEvidence: createNodeCryptoAnchorEvidenceDescriptor(
+        this.#options.defaults.anchorEvidenceChecksumAlgorithm,
+      ),
+    });
+    const sceneSegments: readonly SceneEpisodeSegmentProjection[] =
+      Object.freeze(await Promise.all(storedSceneSegments.map(async (segment) => {
+        const documentIndex = work.documents.findIndex(
+          (document) => document.documentId === segment.documentId,
+        );
+        const document = work.documents[documentIndex];
+        const target = this.#documentTargets.get(segment.documentId);
+        if (
+          documentIndex < 0 ||
+          document === undefined ||
+          target === undefined ||
+          target.workId !== command.workId
+        ) {
+          throw new Error(
+            `Scene episode segment is outside its Work: ${segment.segmentId}`,
+          );
+        }
+        const resolution = await resolver.execute({
+          workId: command.workId,
+          anchorId: segment.anchorId,
+          targetRevisionId: target.currentRevisionId,
+        });
+        const integrity = resolution.status === "resolved"
+          ? "resolved"
+          : resolution.status === "needsReview"
+            ? "needsReview"
+            : "broken";
+        return Object.freeze({
+          segmentId: segment.segmentId,
+          sceneId: segment.sceneId,
+          documentId: segment.documentId,
+          documentRevisionId: target.currentRevisionId,
+          documentTitle: document.title,
+          documentIndex,
+          range: resolution.status === "resolved"
+            ? Object.freeze({
+                start: resolution.range.startOffset,
+                end: resolution.range.endOffset,
+              })
+            : null,
+          integrity,
+        });
+      })));
     const [events, overrides] = await Promise.all([
       this.#listEventBlocksSerially({
         schemaVersion: 1,
@@ -14066,6 +14190,7 @@ class DefaultLocalWorkspaceRuntime
       sceneEventOverrides: this.#projectSceneEventOverrideRows(
         readStoredSceneEventOverrideRows(this.#database, command.workId),
       ),
+      sceneSegments,
     });
   }
 
@@ -19649,6 +19774,419 @@ class DefaultLocalWorkspaceRuntime
     return execution;
   }
 
+  moveRangeToEpisode(value: unknown): Promise<MoveRangeToEpisodeReceipt> {
+    this.#assertOpen();
+    const command = parseMoveRangeToEpisodeCommand(value);
+    const execution = Promise.all([this.#createPending, this.#savePending])
+      .then(() => this.#moveRangeToEpisodeSerially(command));
+    const settled = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.#createPending = settled;
+    this.#savePending = settled;
+    return execution;
+  }
+
+  undoMoveRangeToEpisode(value: unknown): Promise<MoveRangeToEpisodeReceipt> {
+    this.#assertOpen();
+    const command = parseUndoMoveRangeToEpisodeCommand(value);
+    const execution = Promise.all([this.#createPending, this.#savePending])
+      .then(() => this.#undoMoveRangeToEpisodeSerially(command));
+    const settled = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.#createPending = settled;
+    this.#savePending = settled;
+    return execution;
+  }
+
+  #readEditorStateForRevision(
+    workId: EntityId<"Work">,
+    documentId: EntityId<"Document">,
+    revisionId: EntityId<"DocumentRevision">,
+    textLength: number,
+  ) {
+    const stored = readRevisionEditorStateJson(this.#database, {
+      workId,
+      documentId,
+      revisionId,
+    });
+    return stored === undefined
+      ? createDefaultManuscriptEditorDocumentState(this.#options.formattingProfile)
+      : parseManuscriptEditorDocumentState(
+          JSON.parse(stored),
+          this.#options.formattingProfile,
+          textLength,
+        );
+  }
+
+  #installMovedDocumentTarget(
+    target: MutableDocumentSaveTarget,
+    revisionId: EntityId<"DocumentRevision">,
+    text: string,
+  ): void {
+    target.baseRevisionId = revisionId;
+    target.currentRevisionId = revisionId;
+    target.nextSequence = 0;
+    target.text = text;
+    for (const [batchId, accepted] of this.#acceptedByBatchId) {
+      if (accepted.batch.documentId === target.documentId) {
+        this.#acceptedByBatchId.delete(batchId);
+      }
+    }
+  }
+
+  async #moveRangeToEpisodeSerially(
+    command: MoveRangeToEpisodeCommand,
+  ): Promise<MoveRangeToEpisodeReceipt> {
+    const source = this.#documentTargets.get(command.sourceEpisodeId);
+    const target = this.#documentTargets.get(command.targetEpisodeId);
+    if (
+      source === undefined ||
+      target === undefined ||
+      source.workId !== command.workId ||
+      target.workId !== command.workId
+    ) {
+      throw new Error("Episode move must stay inside one Work");
+    }
+    if (
+      source.currentRevisionId !== command.expectedSourceRevisionId ||
+      target.currentRevisionId !== command.expectedTargetRevisionId
+    ) {
+      throw new Error("Episode move revision conflict");
+    }
+    const movedText = moveRangeToEpisodeText({
+      sourceText: source.text,
+      targetText: target.text,
+      from: command.from,
+      to: command.to,
+      placement: command.placement,
+    });
+    const projection = await this.#listSceneProjectionSerially({
+      schemaVersion: 1,
+      workId: command.workId,
+    });
+    const annotatedSceneKeys = new Set(
+      readStoredSceneAnnotationRows(this.#database, command.workId)
+        .map((annotation) => annotation.sceneKey),
+    );
+    const scenePlan = planEpisodeSceneIdentityChanges({
+      sourceEpisodeId: command.sourceEpisodeId,
+      targetEpisodeId: command.targetEpisodeId,
+      from: command.from,
+      to: command.to,
+      targetInsertOffset: movedText.targetInsertOffset,
+      scenes: projection.scenes
+        .filter(
+          (scene) =>
+            scene.documentId === command.sourceEpisodeId &&
+            scene.range !== null,
+        )
+        .map((scene) => ({
+          sceneKey: scene.sceneKey,
+          sceneId: scene.sceneIdentity?.sceneId ?? null,
+          range: scene.range as { readonly start: number; readonly end: number },
+          explicitlyStructured:
+            scene.sceneIdentity !== undefined ||
+            scene.source === "override" ||
+            (scene.range?.start ?? 0) > 0 ||
+            (scene.range?.end ?? source.text.length) < source.text.length ||
+            annotatedSceneKeys.has(scene.sceneKey),
+          existingSegments: (scene.sceneIdentity?.segments ?? [])
+            .flatMap((segment): readonly SceneEpisodeSegmentRange[] =>
+              segment.range === null
+                ? []
+                : [Object.freeze({
+                    segmentId: segment.segmentId,
+                    sceneId: segment.sceneId,
+                    documentId: segment.documentId,
+                    range: segment.range,
+                  })]),
+        })),
+      createSceneId: () => entityId<"Scene">(randomUUID()),
+      createSegmentId: () =>
+        entityId<"EpisodeSceneSegment">(randomUUID()),
+    });
+    const sourceState = this.#readEditorStateForRevision(
+      command.workId,
+      command.sourceEpisodeId,
+      source.currentRevisionId,
+      source.text.length,
+    );
+    const targetState = this.#readEditorStateForRevision(
+      command.workId,
+      command.targetEpisodeId,
+      target.currentRevisionId,
+      target.text.length,
+    );
+    const movedEditorState = moveManuscriptEditorStateRange({
+      sourceText: source.text,
+      targetText: target.text,
+      sourceState,
+      targetState,
+      from: command.from,
+      to: command.to,
+      placement: command.placement,
+    });
+    const moveId = entityId<"EpisodeRangeMove">(randomUUID());
+    const sourceRevisionId = entityId<"DocumentRevision">(randomUUID());
+    const targetRevisionId = entityId<"DocumentRevision">(randomUUID());
+    const changedAt = new Date().toISOString();
+    const sourceRevision = Object.freeze({
+      revisionId: sourceRevisionId,
+      workId: command.workId,
+      documentId: command.sourceEpisodeId,
+      expectedCurrentRevisionId: source.currentRevisionId,
+      content: movedText.sourceText,
+      editorStateJson: serializeManuscriptEditorDocumentState(
+        movedEditorState.sourceState,
+      ),
+      cause: JSON.stringify({
+        kind: "move-range-to-episode",
+        moveId,
+        role: "source",
+      }),
+      createdAt: changedAt,
+      durableAt: changedAt,
+    });
+    const targetRevision = Object.freeze({
+      revisionId: targetRevisionId,
+      workId: command.workId,
+      documentId: command.targetEpisodeId,
+      expectedCurrentRevisionId: target.currentRevisionId,
+      content: movedText.targetText,
+      editorStateJson: serializeManuscriptEditorDocumentState(
+        movedEditorState.targetState,
+      ),
+      cause: JSON.stringify({
+        kind: "move-range-to-episode",
+        moveId,
+        role: "target",
+      }),
+      createdAt: changedAt,
+      durableAt: changedAt,
+    });
+    const work = createCatalogFromStoredRows(
+      readStoredDocumentRows(this.#database),
+    ).getWork(command.workId);
+    if (work === null) {
+      throw new Error(`Unknown Work: ${command.workId}`);
+    }
+    const describeEvidence = createNodeCryptoAnchorEvidenceDescriptor(
+      this.#options.defaults.anchorEvidenceChecksumAlgorithm,
+    );
+    const preparedSegments = scenePlan.createdSegments.map((segment) => {
+      const isSource = segment.documentId === command.sourceEpisodeId;
+      const documentRevisionId = isSource
+        ? sourceRevisionId
+        : targetRevisionId;
+      const content = isSource ? movedText.sourceText : movedText.targetText;
+      const anchorId = entityId<"Anchor">(randomUUID());
+      return Object.freeze({
+        segmentId: segment.segmentId,
+        sceneId: segment.sceneId,
+        anchor: createAnchorForKnownRevisionContent({
+          meta: {
+            id: anchorId,
+            schemaVersion: LOCAL_WORKSPACE_LEDGER_SCHEMA_VERSION,
+            revision: 1,
+            createdAt: changedAt,
+            updatedAt: changedAt,
+          },
+          documentId: segment.documentId,
+          documentRevisionId,
+          content,
+          startOffset: segment.range.start,
+          endOffset: segment.range.end,
+          policy: this.#options.defaults.anchorPolicy,
+          commandRef: moveId,
+          actorRef: work.studioId,
+          describeEvidence,
+        }),
+      });
+    });
+    const committed = await this.#episodeRangeMoveStore.commit({
+      moveId,
+      workId: command.workId,
+      sourceEpisodeId: command.sourceEpisodeId,
+      targetEpisodeId: command.targetEpisodeId,
+      from: command.from,
+      to: command.to,
+      placement: command.placement,
+      sourceRevision,
+      targetRevision,
+      createdSceneIds: scenePlan.createdSceneIds,
+      retiredSegmentIds: scenePlan.retiredSegmentIds,
+      createdSegments: preparedSegments,
+    });
+    this.#installMovedDocumentTarget(
+      source,
+      committed.sourceRevision.id,
+      movedText.sourceText,
+    );
+    this.#installMovedDocumentTarget(
+      target,
+      committed.targetRevision.id,
+      movedText.targetText,
+    );
+    await this.#reload({
+      schemaVersion: 1,
+      workId: command.workId,
+      documentId: command.sourceEpisodeId,
+    });
+    return parseMoveRangeToEpisodeReceipt({
+      schemaVersion: 1,
+      status: "moved",
+      moveId,
+      workId: command.workId,
+      sourceEpisodeId: command.sourceEpisodeId,
+      targetEpisodeId: command.targetEpisodeId,
+      sourceRevisionId: committed.sourceRevision.id,
+      targetRevisionId: committed.targetRevision.id,
+      sceneIds: committed.sceneIds,
+    });
+  }
+
+  async #undoMoveRangeToEpisodeSerially(
+    command: UndoMoveRangeToEpisodeCommand,
+  ): Promise<MoveRangeToEpisodeReceipt> {
+    const rows = this.#database.prepare(`
+      SELECT
+        source_document_id AS "sourceEpisodeId",
+        target_document_id AS "targetEpisodeId",
+        source_before_revision_id AS "sourceBeforeRevisionId",
+        target_before_revision_id AS "targetBeforeRevisionId",
+        source_after_revision_id AS "sourceAfterRevisionId",
+        target_after_revision_id AS "targetAfterRevisionId",
+        status
+      FROM episode_range_moves
+      WHERE id = ? AND work_id = ?
+    `).all(command.moveId, command.workId);
+    if (rows.length !== 1) {
+      throw new Error(`Unknown Episode range move: ${command.moveId}`);
+    }
+    const row = rows[0] ?? {};
+    const label = "Episode range move undo row";
+    const sourceEpisodeId = entityId<"Document">(
+      readRequiredString(row, "sourceEpisodeId", label),
+    );
+    const targetEpisodeId = entityId<"Document">(
+      readRequiredString(row, "targetEpisodeId", label),
+    );
+    const sourceAfterRevisionId = entityId<"DocumentRevision">(
+      readRequiredString(row, "sourceAfterRevisionId", label),
+    );
+    const targetAfterRevisionId = entityId<"DocumentRevision">(
+      readRequiredString(row, "targetAfterRevisionId", label),
+    );
+    const source = this.#documentTargets.get(sourceEpisodeId);
+    const target = this.#documentTargets.get(targetEpisodeId);
+    if (
+      readRequiredString(row, "status", label) !== "active" ||
+      source === undefined ||
+      target === undefined ||
+      source.workId !== command.workId ||
+      target.workId !== command.workId ||
+      source.currentRevisionId !== command.expectedSourceRevisionId ||
+      target.currentRevisionId !== command.expectedTargetRevisionId ||
+      source.currentRevisionId !== sourceAfterRevisionId ||
+      target.currentRevisionId !== targetAfterRevisionId
+    ) {
+      throw new Error(`Episode range move is not undoable: ${command.moveId}`);
+    }
+    const sourceBeforeRevisionId = entityId<"DocumentRevision">(
+      readRequiredString(row, "sourceBeforeRevisionId", label),
+    );
+    const targetBeforeRevisionId = entityId<"DocumentRevision">(
+      readRequiredString(row, "targetBeforeRevisionId", label),
+    );
+    const [sourceBeforeText, targetBeforeText] = await Promise.all([
+      this.#revisionStore.materialize(sourceBeforeRevisionId),
+      this.#revisionStore.materialize(targetBeforeRevisionId),
+    ]);
+    const changedAt = new Date().toISOString();
+    const sourceRevisionId = entityId<"DocumentRevision">(randomUUID());
+    const targetRevisionId = entityId<"DocumentRevision">(randomUUID());
+    const sourceBeforeState = this.#readEditorStateForRevision(
+      command.workId,
+      sourceEpisodeId,
+      sourceBeforeRevisionId,
+      sourceBeforeText.length,
+    );
+    const targetBeforeState = this.#readEditorStateForRevision(
+      command.workId,
+      targetEpisodeId,
+      targetBeforeRevisionId,
+      targetBeforeText.length,
+    );
+    const committed = await this.#episodeRangeMoveStore.undo({
+      moveId: command.moveId,
+      workId: command.workId,
+      sourceRevision: {
+        revisionId: sourceRevisionId,
+        workId: command.workId,
+        documentId: sourceEpisodeId,
+        expectedCurrentRevisionId: source.currentRevisionId,
+        content: sourceBeforeText,
+        editorStateJson: serializeManuscriptEditorDocumentState(
+          sourceBeforeState,
+        ),
+        cause: JSON.stringify({
+          kind: "undo-move-range-to-episode",
+          moveId: command.moveId,
+          role: "source",
+        }),
+        createdAt: changedAt,
+        durableAt: changedAt,
+      },
+      targetRevision: {
+        revisionId: targetRevisionId,
+        workId: command.workId,
+        documentId: targetEpisodeId,
+        expectedCurrentRevisionId: target.currentRevisionId,
+        content: targetBeforeText,
+        editorStateJson: serializeManuscriptEditorDocumentState(
+          targetBeforeState,
+        ),
+        cause: JSON.stringify({
+          kind: "undo-move-range-to-episode",
+          moveId: command.moveId,
+          role: "target",
+        }),
+        createdAt: changedAt,
+        durableAt: changedAt,
+      },
+    });
+    this.#installMovedDocumentTarget(
+      source,
+      committed.sourceRevision.id,
+      sourceBeforeText,
+    );
+    this.#installMovedDocumentTarget(
+      target,
+      committed.targetRevision.id,
+      targetBeforeText,
+    );
+    await this.#reload({
+      schemaVersion: 1,
+      workId: command.workId,
+      documentId: sourceEpisodeId,
+    });
+    return parseMoveRangeToEpisodeReceipt({
+      schemaVersion: 1,
+      status: "undone",
+      moveId: command.moveId,
+      workId: command.workId,
+      sourceEpisodeId,
+      targetEpisodeId,
+      sourceRevisionId: committed.sourceRevision.id,
+      targetRevisionId: committed.targetRevision.id,
+      sceneIds: committed.sceneIds,
+    });
+  }
+
   saveFormatting(value: unknown): Promise<SaveManuscriptFormattingReceipt> {
     this.#assertOpen();
     const command = parseSaveManuscriptFormattingCommand(value);
@@ -20161,6 +20699,14 @@ class DefaultLocalWorkspaceRuntime
       const updatedWork = this.#database.prepare(`
         UPDATE works
         SET
+          resume_checkpoint_id = CASE
+            WHEN resume_checkpoint_id IN (
+              SELECT id
+              FROM resume_checkpoints
+              WHERE work_id = ? AND document_id = ?
+            ) THEN NULL
+            ELSE resume_checkpoint_id
+          END,
           revision = revision + 1,
           updated_at = ?
         WHERE
@@ -20168,6 +20714,8 @@ class DefaultLocalWorkspaceRuntime
           AND revision = ?
           AND retired_at IS NULL
       `).run(
+        command.workId,
+        command.documentId,
         retiredAt,
         command.workId,
         row.workRevision,
@@ -24945,6 +25493,9 @@ export async function openLocalWorkspaceRuntime(
   await migrateLocalWorkspaceDocumentCompletionIfNeeded(
     profiles.ledgerProfile,
   );
+  await migrateLocalWorkspaceEpisodeRangeMovesIfNeeded(
+    profiles.ledgerProfile,
+  );
   const ledger = await openNodeSqliteLedger(profiles.ledgerProfile);
   const blobStore = await createNodeImmutableBlobStore(
     profiles.blobStoreProfile,
@@ -24988,6 +25539,10 @@ export async function openLocalWorkspaceRuntime(
       blobStore,
       blobProfile,
     });
+    const episodeRangeMoveStore = ledger.createEpisodeRangeMoveStore({
+      blobStore,
+      blobProfile,
+    });
     const backupService = createLocalWorkspaceBackupService({
       rootDirectoryPath: options.rootDirectoryPath,
       sourceBlobStore: blobStore,
@@ -25004,6 +25559,7 @@ export async function openLocalWorkspaceRuntime(
       database,
       ledger,
       revisionStore,
+      episodeRangeMoveStore,
       blobStore,
       blobProfile,
       backupService,

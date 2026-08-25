@@ -83,6 +83,22 @@ export type SceneExcludedEventProjection = {
   readonly sceneEventOverrideRevision: number;
 };
 
+export type SceneEpisodeSegmentProjection = {
+  readonly segmentId: EntityId<"EpisodeSceneSegment">;
+  readonly sceneId: EntityId<"Scene">;
+  readonly documentId: EntityId<"Document">;
+  readonly documentRevisionId: EntityId<"DocumentRevision">;
+  readonly documentTitle: string;
+  readonly documentIndex: number;
+  readonly range: { readonly start: number; readonly end: number } | null;
+  readonly integrity: "resolved" | "needsReview" | "broken";
+};
+
+export type SceneIdentityProjection = {
+  readonly sceneId: EntityId<"Scene">;
+  readonly segments: readonly SceneEpisodeSegmentProjection[];
+};
+
 export type SceneProjection = {
   readonly schemaVersion: 1;
   readonly sceneKey: string;
@@ -99,6 +115,7 @@ export type SceneProjection = {
   readonly source: "rule" | "override";
   readonly events: readonly SceneEventProjection[];
   readonly excludedEvents: readonly SceneExcludedEventProjection[];
+  readonly sceneIdentity?: SceneIdentityProjection;
 };
 
 export type SceneUnassignedEventProjection = {
@@ -134,6 +151,7 @@ export type DeriveSceneProjectionInput = {
   readonly eventBlocks: readonly EventBlockProjection[];
   readonly eventSources: readonly EventSourceProjection[];
   readonly sceneEventOverrides: readonly SceneEventOverrideProjection[];
+  readonly sceneSegments?: readonly SceneEpisodeSegmentProjection[];
 };
 
 type Boundary = {
@@ -548,6 +566,62 @@ function parseRange(
   return Object.freeze({ start, end });
 }
 
+function parseSceneEpisodeSegment(
+  value: unknown,
+  label: string,
+): SceneEpisodeSegmentProjection {
+  const input = record(value, label);
+  exactFields(input, [
+    "segmentId",
+    "sceneId",
+    "documentId",
+    "documentRevisionId",
+    "documentTitle",
+    "documentIndex",
+    "range",
+    "integrity",
+  ], label);
+  if (
+    input.integrity !== "resolved" &&
+    input.integrity !== "needsReview" &&
+    input.integrity !== "broken"
+  ) {
+    throw new Error(`${label}.integrity is invalid`);
+  }
+  return Object.freeze({
+    segmentId: id<"EpisodeSceneSegment">(input, "segmentId", label),
+    sceneId: id<"Scene">(input, "sceneId", label),
+    documentId: id<"Document">(input, "documentId", label),
+    documentRevisionId: id<"DocumentRevision">(
+      input,
+      "documentRevisionId",
+      label,
+    ),
+    documentTitle: nonEmptyString(input, "documentTitle", label),
+    documentIndex: integer(input, "documentIndex", label),
+    range: parseRange(input.range, `${label}.range`),
+    integrity: input.integrity,
+  });
+}
+
+function parseSceneIdentity(
+  value: unknown,
+  label: string,
+): SceneIdentityProjection {
+  const input = record(value, label);
+  exactFields(input, ["sceneId", "segments"], label);
+  if (!Array.isArray(input.segments)) {
+    throw new Error(`${label}.segments must be an array`);
+  }
+  const sceneId = id<"Scene">(input, "sceneId", label);
+  const segments = input.segments.map((segment, index) =>
+    parseSceneEpisodeSegment(segment, `${label}.segments[${index}]`));
+  if (segments.some((segment) => segment.sceneId !== sceneId)) {
+    throw new Error(`${label}.segments must share the same Scene identity`);
+  }
+  return Object.freeze({ sceneId, segments: Object.freeze(segments) });
+}
+
 function parseScene(value: unknown, label: string): SceneProjection {
   const input = record(value, label);
   exactFields(
@@ -568,6 +642,7 @@ function parseScene(value: unknown, label: string): SceneProjection {
       "source",
       "events",
       "excludedEvents",
+      ...("sceneIdentity" in input ? ["sceneIdentity"] : []),
     ],
     label,
   );
@@ -615,6 +690,14 @@ function parseScene(value: unknown, label: string): SceneProjection {
         parseExcludedEvent(event, `${label}.excludedEvents[${index}]`),
       ),
     ),
+    ...(input.sceneIdentity === undefined
+      ? {}
+      : {
+          sceneIdentity: parseSceneIdentity(
+            input.sceneIdentity,
+            `${label}.sceneIdentity`,
+          ),
+        }),
   });
 }
 
@@ -1047,6 +1130,44 @@ export function deriveSceneProjection(
     }
     return Object.freeze({ ...scene, events, excludedEvents });
   });
+  const scenesWithIdentities = projectedScenes.map((scene) => {
+    if (scene.range === null || input.sceneSegments === undefined) return scene;
+    const matchingSegments = input.sceneSegments.filter(
+      (segment) =>
+        segment.documentId === scene.documentId &&
+        segment.range !== null &&
+        segment.range.start < scene.range!.end &&
+        segment.range.end > scene.range!.start,
+    );
+    const sceneIds = [...new Set(
+      matchingSegments.map((segment) => segment.sceneId),
+    )];
+    if (sceneIds.length === 0) return scene;
+    if (sceneIds.length > 1) {
+      status = higherStatus(status, "needsReview");
+      return Object.freeze({
+        ...scene,
+        integrity: scene.integrity === "broken" ? "broken" : "needsReview",
+      });
+    }
+    const sceneId = sceneIds[0] as EntityId<"Scene">;
+    const segments = input.sceneSegments
+      .filter((segment) => segment.sceneId === sceneId)
+      .sort(
+        (left, right) =>
+          left.documentIndex - right.documentIndex ||
+          (left.range?.start ?? Number.MAX_SAFE_INTEGER) -
+            (right.range?.start ?? Number.MAX_SAFE_INTEGER) ||
+          left.segmentId.localeCompare(right.segmentId),
+      );
+    return Object.freeze({
+      ...scene,
+      sceneIdentity: Object.freeze({
+        sceneId,
+        segments: Object.freeze(segments),
+      }),
+    });
+  });
   const unassignedEvents = eventBlocks
     .filter((eventBlock) => !assignedEventIds.has(eventBlock.eventBlockId))
     .map((eventBlock) => Object.freeze({
@@ -1063,7 +1184,7 @@ export function deriveSceneProjection(
     workId: input.workId,
     status,
     ruleSet,
-    scenes: projectedScenes,
+    scenes: scenesWithIdentities,
     unassignedEvents,
     sceneEventOverrides,
   });

@@ -1,0 +1,1398 @@
+/* Theme every nested assistant surface instead of only the outer dialog. */
+.studio-app-shell[data-starlight-theme] :is(
+    .assistant-context-dialog,
+    .assistant-context-header,
+    .assistant-context-body
+  ) {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-primary) !important;
+  border-color: var(--starlight-border) !important;
+}
+
+.studio-app-shell[data-starlight-theme] :is(
+    .assistant-context-grant-form,
+    .assistant-context-ledger,
+    .assistant-context-ledger li,
+    .assistant-vocabulary-suggestion-list article,
+    .assistant-external-setting-proposal-list article,
+    .assistant-external-setting-review-note-list article
+  ) {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-secondary) !important;
+  border-color: var(--starlight-border) !important;
+  backdrop-filter: var(--starlight-secondary-backdrop);
+}
+
+.studio-app-shell[data-starlight-theme] .assistant-context-dialog :is(
+    h2,
+    h3,
+    strong,
+    label,
+    legend
+  ) {
+  color: var(--starlight-text-primary) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .assistant-context-dialog :is(
+    p,
+    span,
+    small,
+    blockquote,
+    .assistant-context-empty,
+    .assistant-vocabulary-selection-help
+  ) {
+  color: var(--starlight-text-secondary) !important;
+  border-color: var(--starlight-border) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .assistant-context-dialog :is(
+    button,
+    input,
+    select,
+    textarea
+  ) {
+  color: var(--starlight-text-primary) !important;
+  background: var(--starlight-input) !important;
+  border-color: var(--starlight-border) !important;
+  caret-color: var(--starlight-caret);
+  box-shadow: var(--starlight-input-shadow);
+}
+
+.studio-app-shell[data-starlight-theme]
+  .assistant-context-dialog .assistant-context-grant-button {
+  color: var(--starlight-button-text) !important;
+  background: var(--starlight-button) !important;
+  border-color: var(--starlight-button) !important;
+}
+
+.studio-app-shell[data-starlight-theme]
+  .assistant-context-dialog .assistant-context-icon,
+.studio-app-shell[data-starlight-theme]
+  .assistant-context-ledger > header > span {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-hover);
+}
+
+/* Approved action-based Work information architecture (IA-1 through IA-4). */
+.studio-app-shell .work-header {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) auto minmax(12rem, 1fr);
+  min-width: 0;
+  min-height: 58px;
+  align-items: center;
+  gap: 14px;
+  padding: 7px 14px;
+}
+
+.studio-app-shell .work-header-location,
+.studio-app-shell .work-header-tools,
+.studio-app-shell .work-header-title-block {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.studio-app-shell .work-header-location {
+  gap: 10px;
+}
+
+.studio-app-shell .work-header-tools {
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.studio-app-shell .work-header-back,
+.studio-app-shell .work-header-return,
+.studio-app-shell .work-header-schedule {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 9px;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  color: var(--eum-text-muted);
+  background: var(--eum-panel);
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.studio-app-shell .work-header-back {
+  flex: 0 0 auto;
+  border-color: transparent;
+  background: transparent;
+}
+
+.studio-app-shell .work-header-schedule span + span::before {
+  content: "·";
+  margin-right: 5px;
+  color: var(--eum-text-faint);
+}
+
+.studio-app-shell .work-header-completion {
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  color: var(--eum-text-muted);
+  background: var(--eum-panel);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.studio-app-shell .work-header-completion[data-completion-state="current"] {
+  color: var(--eum-accent-strong);
+  border-color: var(--eum-accent-border);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell
+  .work-header-completion[data-completion-state="edited-after-completion"] {
+  color: var(--eum-accent);
+}
+
+.studio-app-shell .work-header-completion:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.studio-app-shell .work-header-completion-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.studio-app-shell .work-header-completion-status {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  color: var(--eum-text-muted);
+  background: var(--eum-panel);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.studio-app-shell
+  .work-header-completion-status[data-completion-state="current"] {
+  color: var(--eum-accent-strong);
+  border-color: var(--eum-accent-border);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell
+  .work-header-completion-status[data-completion-state="edited-after-completion"] {
+  color: var(--eum-accent);
+}
+
+.studio-app-shell .work-header-completion-more {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  color: var(--eum-text-muted);
+  background: var(--eum-panel);
+  cursor: pointer;
+}
+
+.studio-app-shell .work-header-completion-menu {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 158px;
+  padding: 5px;
+  border: 1px solid var(--eum-line);
+  border-radius: 9px;
+  background: var(--eum-panel);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 12%);
+}
+
+.studio-app-shell .work-header-completion-menu button {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--eum-text);
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.studio-app-shell .work-header-completion-menu button:hover {
+  background: color-mix(in srgb, var(--eum-text) 7%, var(--eum-panel));
+}
+
+.studio-app-shell .work-header-completion-menu button.is-destructive {
+  color: #a34f4f;
+}
+
+.studio-app-shell .version-history-list li[data-completed-revision="true"] {
+  border-color: var(--eum-accent-border);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .work-header-work-title,
+.studio-app-shell .work-header h2 {
+  overflow: hidden;
+  margin: 0;
+  color: var(--eum-text);
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-app-shell .work-header-title-divider {
+  margin: 0 7px;
+  color: var(--eum-text-faint);
+}
+
+.studio-app-shell .work-primary-navigation {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(4rem, 1fr));
+  gap: 3px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--starlight-hover, #f0f0f1);
+}
+
+.studio-app-shell .work-primary-navigation button {
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--eum-text-muted);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.studio-app-shell .work-primary-navigation button.is-active {
+  color: var(--eum-accent-strong);
+  background: var(--eum-panel);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 8%);
+}
+
+.studio-app-shell .work-primary-navigation button:focus-visible,
+.studio-app-shell .work-header button:focus-visible,
+.studio-app-shell .work-subsection-tabs button:focus-visible {
+  outline: 2px solid var(--eum-accent);
+  outline-offset: 1px;
+}
+
+.studio-app-shell .work-section-surface {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  color: var(--eum-text);
+  background: var(--eum-bg);
+}
+
+.studio-app-shell .work-subsection-tabs {
+  display: flex;
+  min-width: 0;
+  gap: 4px;
+  padding: 9px 14px 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--eum-line);
+  background: var(--eum-panel);
+}
+
+.studio-app-shell .work-subsection-tabs button {
+  min-width: max-content;
+  min-height: 34px;
+  padding: 0 11px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--eum-text-muted);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.studio-app-shell .work-subsection-tabs button[aria-selected="true"] {
+  border-bottom-color: var(--eum-accent);
+  color: var(--eum-accent-strong);
+}
+
+.studio-app-shell .work-subsection-panel {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.studio-app-shell .structure-panel,
+.studio-app-shell .review-panel {
+  min-width: 0;
+  min-height: 100%;
+}
+
+.studio-app-shell .work-structure-content,
+.studio-app-shell .lore-manager-content,
+.studio-app-shell .foreshadow-line-content,
+.studio-app-shell .lore-candidate-content,
+.studio-app-shell .records-content {
+  position: static;
+  width: 100%;
+  max-width: none;
+  min-height: 100%;
+  max-height: none;
+  margin: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.studio-app-shell .structure-overview-panel,
+.studio-app-shell .foreshadow-structure-panel,
+.studio-app-shell .lore-structure-panel,
+.studio-app-shell .work-records-panel,
+.studio-app-shell .candidate-inbox-panel,
+.studio-app-shell .version-panel,
+.studio-app-shell .manuscript-review-panel {
+  padding: 14px;
+}
+
+.studio-app-shell .event-structure-panel .event-rail,
+.studio-app-shell .scene-structure-panel .plot-workspace-structure-pane,
+.studio-app-shell .plot-structure-panel > .plot-manager-dialog,
+.studio-app-shell .character-structure-panel > .character-workspace {
+  min-height: 100%;
+}
+
+.studio-app-shell .review-inspector-tabs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.studio-app-shell .candidate-inbox-panel > header,
+.studio-app-shell .manuscript-review-panel > header,
+.studio-app-shell .work-operations-workspace > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.studio-app-shell .candidate-inbox-panel h3,
+.studio-app-shell .manuscript-review-panel h3,
+.studio-app-shell .work-operations-workspace h3 {
+  margin: 2px 0 4px;
+}
+
+.studio-app-shell .candidate-inbox-tabs {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 12px;
+}
+
+.studio-app-shell .candidate-inbox-tabs button {
+  min-height: 32px;
+  padding: 0 11px;
+  border: 1px solid var(--eum-line);
+  border-radius: 999px;
+  color: var(--eum-text-muted);
+  background: var(--eum-panel);
+}
+
+.studio-app-shell .candidate-inbox-tabs button[aria-selected="true"] {
+  border-color: var(--eum-accent-border);
+  color: var(--eum-accent-strong);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .candidate-inbox-tabs button span {
+  margin-left: 5px;
+}
+
+.studio-app-shell .candidate-inbox-content {
+  display: grid;
+  gap: 14px;
+}
+
+.studio-app-shell .candidate-inbox-group {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--eum-line);
+  border-radius: 10px;
+  background: var(--eum-panel);
+}
+
+.studio-app-shell .candidate-inbox-group > h4 {
+  margin: 0 0 10px;
+}
+
+.studio-app-shell .manuscript-review-actions,
+.studio-app-shell .work-operations-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.studio-app-shell .manuscript-review-actions button,
+.studio-app-shell .work-operations-grid button {
+  display: grid;
+  min-height: 104px;
+  align-content: center;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid var(--eum-line);
+  border-radius: 10px;
+  color: var(--eum-text);
+  background: var(--eum-panel);
+  text-align: left;
+  cursor: pointer;
+}
+
+.studio-app-shell .manuscript-review-actions span,
+.studio-app-shell .work-operations-grid span {
+  color: var(--eum-text-muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.studio-app-shell .work-operations-workspace {
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: 18px;
+  overflow: auto;
+}
+
+.studio-app-shell .today-schedule-panel {
+  display: grid;
+  grid-template-columns: minmax(11rem, 0.34fr) minmax(0, 1fr);
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--eum-line);
+  border-radius: 11px;
+  background: var(--eum-panel);
+}
+
+.studio-app-shell .today-schedule-panel > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.studio-app-shell .today-schedule-open {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--eum-line);
+  border-radius: 8px;
+  color: var(--eum-text-muted);
+  background: var(--eum-bg);
+  cursor: pointer;
+}
+
+.studio-app-shell .today-schedule-open:hover:not(:disabled) {
+  color: var(--eum-text);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .today-completion-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--eum-text);
+  font-size: 12px;
+}
+
+.studio-app-shell .today-completion-heading span {
+  color: var(--eum-accent);
+  font-size: 11px;
+}
+
+.studio-app-shell .today-schedule-panel h2 {
+  margin: 3px 0 0;
+  font-size: 15px;
+}
+
+.studio-app-shell .today-schedule-panel ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.studio-app-shell .today-schedule-panel li > button,
+.studio-app-shell .today-completion-entry {
+  display: grid;
+  width: 100%;
+  min-height: 36px;
+  grid-template-columns: minmax(7rem, 0.35fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--eum-text);
+  background: var(--eum-bg);
+  text-align: left;
+  cursor: pointer;
+}
+
+.studio-app-shell .today-completion-entry {
+  cursor: default;
+}
+
+.studio-app-shell .today-completion-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  gap: 6px;
+}
+
+.studio-app-shell .today-completion-actions button,
+.studio-app-shell .schedule-document-completion-actions button {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--eum-line);
+  border-radius: 6px;
+  color: var(--eum-text-muted);
+  background: var(--eum-panel);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.studio-app-shell .today-schedule-panel li span,
+.studio-app-shell .today-schedule-panel li small,
+.studio-app-shell .today-schedule-empty {
+  color: var(--eum-text-muted);
+  font-size: 11px;
+}
+
+.studio-app-shell .today-schedule-empty {
+  align-self: center;
+  margin: 0;
+}
+
+.studio-app-shell .work-schedule-summary {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  color: var(--eum-text-muted);
+  background: transparent;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.studio-app-shell .work-card-actions {
+  gap: 7px;
+}
+
+.studio-app-shell.is-editor:has(.writing-workspace[data-work-section]) {
+  --eum-sidebar-width: clamp(220px, 20vw, 288px);
+}
+
+.studio-app-shell.is-editor:has(.writing-workspace[data-work-section]) .sidebar {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.studio-app-shell.is-editor:has(.writing-workspace[data-work-section]) .workspace {
+  grid-column: 2;
+}
+
+.studio-app-shell[data-starlight-theme] :is(
+    .work-header,
+    .work-primary-navigation,
+    .work-subsection-tabs,
+    .work-section-surface,
+    .candidate-inbox-group,
+    .manuscript-review-actions button,
+    .work-operations-grid button
+  ) {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-secondary);
+  border-color: var(--starlight-border);
+}
+
+@media (max-width: 980px) {
+  .studio-app-shell .work-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .studio-app-shell .work-primary-navigation {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+  }
+
+  .studio-app-shell .work-header-tools {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .studio-app-shell .manuscript-review-actions,
+  .studio-app-shell .work-operations-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .studio-app-shell .today-schedule-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Review rail scene controls and music cards use the same active theme. */
+.studio-app-shell[data-starlight-theme] .workspace-rail-right :is(
+    .scene-rule-settings,
+    .scene-rule-list fieldset,
+    .scene-list-card,
+    .scene-music-favorites,
+    .scene-music-queue,
+    .version-history-entry,
+    .work-snapshot-entry,
+    .event-block-card
+  ) {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-secondary) !important;
+  border-color: var(--starlight-border) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .workspace-rail-right :is(
+    .review-inspector-section-stack,
+    .scene-list,
+    .scene-music-favorites,
+    .scene-music-queue
+  ) :is(button, input, select, textarea) {
+  color: var(--starlight-text-primary) !important;
+  background: var(--starlight-input) !important;
+  border-color: var(--starlight-border) !important;
+  caret-color: var(--starlight-caret);
+}
+
+.studio-app-shell[data-starlight-theme] .workspace-rail-right :is(
+    .scene-list-open-button,
+    .scene-rule-settings > summary,
+    .scene-unassigned-events > summary
+  ) {
+  color: var(--starlight-text-primary) !important;
+  background: transparent !important;
+}
+
+.studio-app-shell[data-starlight-theme] .workspace-rail-right :is(
+    p,
+    small,
+    label,
+    legend,
+    .scene-music-connection-note,
+    .scene-music-candidates li
+  ) {
+  color: var(--starlight-text-secondary) !important;
+}
+
+/* The event rail is part of the editor surface, not an unthemed footer. */
+.studio-app-shell[data-starlight-theme] :is(
+    .studio-event-rail-host,
+    .bottom-event-rail,
+    .bottom-event-rail-header,
+    .bottom-event-rail-content
+  ) {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-primary) !important;
+  border-color: var(--starlight-border) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .bottom-event-card {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-secondary) !important;
+  border-color: var(--starlight-border) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .bottom-event-card:hover:not(:disabled),
+.studio-app-shell[data-starlight-theme] .bottom-event-card.is-current {
+  background: var(--starlight-hover) !important;
+  border-color: var(--starlight-accent) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .bottom-event-rail :is(span, small) {
+  color: var(--starlight-text-secondary);
+}
+
+.studio-app-shell .publishing-workspace-tabs [hidden] {
+  display: none;
+}
+
+.studio-app-shell[data-starlight-theme]
+  .app-topbar-music
+  .music-mini-player
+  button:not(.music-mini-primary-control),
+.studio-app-shell[data-starlight-theme]
+  .app-topbar-music
+  .music-mini-player
+  input {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-input);
+  border-color: var(--starlight-border);
+}
+
+/* CodeMirror's native Ctrl+F search and replace panel follows the app theme. */
+.studio-app-shell .manuscript-editor :is(.cm-panels, .cm-search) {
+  color: var(--eum-text);
+  background: var(--eum-panel);
+  border-color: var(--eum-line);
+}
+
+.studio-app-shell .manuscript-editor .cm-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+}
+
+.studio-app-shell .manuscript-editor .cm-search :is(input, button) {
+  min-height: 28px;
+  padding: 3px 8px;
+  border: 1px solid var(--eum-line-strong);
+  border-radius: 6px;
+  color: var(--eum-text);
+  background: var(--starlight-input, var(--eum-bg));
+  font: inherit;
+}
+
+.studio-app-shell .manuscript-editor .cm-search label {
+  color: var(--eum-text-muted);
+  font-size: 10px;
+}
+
+.studio-app-shell .manuscript-editor .cm-searchMatch {
+  background: color-mix(in srgb, var(--eum-accent) 28%, transparent);
+}
+
+.studio-app-shell .manuscript-editor .cm-searchMatch-selected {
+  background: color-mix(in srgb, var(--eum-accent) 48%, transparent);
+}
+
+.studio-app-shell:has(.writing-workspace-focus-mode) {
+  --eum-sidebar-width: 0px;
+  --eum-topbar-height: 0px;
+}
+
+.studio-app-shell.is-editor:has(.writing-workspace-focus-mode[data-work-section]) {
+  --eum-sidebar-width: 0px;
+}
+
+.studio-app-shell:has(.writing-workspace-focus-mode) > .app-topbar,
+.studio-app-shell:has(.writing-workspace-focus-mode) > .sidebar,
+.studio-app-shell:has(.writing-workspace-focus-mode) > .studio-event-rail-host,
+.studio-app-shell:has(.writing-workspace-focus-mode) .session-feedback-panel,
+.studio-app-shell .writing-workspace-focus-mode > .manuscript-header,
+.studio-app-shell .writing-workspace-focus-mode .document-tab-strip,
+.studio-app-shell .writing-workspace-focus-mode .manuscript-formatting-toolbar,
+.studio-app-shell .writing-workspace-focus-mode .workspace-rail-right,
+.studio-app-shell .writing-workspace-focus-mode .rail-reentry {
+  display: none;
+}
+
+.studio-app-shell:has(.writing-workspace-focus-mode) > .workspace {
+  grid-column: 1 / -1;
+}
+
+.studio-app-shell.is-editor:has(.writing-workspace-focus-mode[data-work-section])
+  > .workspace {
+  grid-column: 1 / -1;
+}
+
+.studio-app-shell .writing-workspace-focus-mode {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.studio-app-shell .writing-workspace-focus-mode > .workspace-body {
+  grid-row: 1;
+}
+
+.studio-app-shell .writing-workspace-focus-mode > .workspace-statusbar {
+  grid-row: 2;
+}
+
+.studio-app-shell .writing-workspace-focus-mode .workspace-center,
+.studio-app-shell .writing-workspace-focus-mode .manuscript-workspace-surface,
+.studio-app-shell .writing-workspace-focus-mode .manuscript-editor-shell,
+.studio-app-shell .writing-workspace-focus-mode .manuscript-editor-canvas {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.studio-app-shell .writing-workspace-focus-mode .manuscript-workspace-surface {
+  position: relative;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.studio-app-shell .focus-mode-toolbar-host {
+  --focus-pomodoro-color: var(--eum-accent);
+  position: absolute;
+  z-index: 28;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 48px;
+}
+
+.studio-app-shell .focus-mode-floating-surface {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  width: min(calc(100% - 24px), 1040px);
+  min-height: 54px;
+  transform: translateX(-50%);
+}
+
+.studio-app-shell .focus-mode-floating-surface.is-moved {
+  position: fixed;
+}
+
+.studio-app-shell
+  .focus-mode-toolbar-host[data-pomodoro-phase="work"] {
+  --focus-pomodoro-color: var(--eum-accent);
+}
+
+.studio-app-shell
+  .focus-mode-toolbar-host[data-pomodoro-phase="break"] {
+  --focus-pomodoro-color: #2f9e61;
+}
+
+.studio-app-shell .focus-mode-pomodoro-status {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: 50%;
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  border: 1px solid color-mix(
+    in srgb,
+    var(--focus-pomodoro-color) 45%,
+    var(--eum-line)
+  );
+  border-radius: 999px;
+  color: var(--focus-pomodoro-color);
+  background: color-mix(
+    in srgb,
+    var(--focus-pomodoro-color) 9%,
+    var(--eum-panel)
+  );
+  box-shadow: 0 8px 24px rgb(24 20 28 / 12%);
+  transform: translateX(-50%);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+  backdrop-filter: blur(14px);
+}
+
+.studio-app-shell .focus-mode-pomodoro-status strong,
+.studio-app-shell .focus-mode-pomodoro-status span,
+.studio-app-shell .focus-mode-pomodoro-status output {
+  white-space: nowrap;
+}
+
+.studio-app-shell .focus-mode-pomodoro-status strong {
+  font-size: 13px;
+}
+
+.studio-app-shell .focus-mode-pomodoro-status span {
+  color: var(--eum-text-muted);
+  font-size: 12px;
+}
+
+.studio-app-shell .focus-mode-pomodoro-status output {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.studio-app-shell
+  .focus-mode-toolbar-host:is(:hover, :focus-within)
+  .focus-mode-pomodoro-status {
+  opacity: 0;
+  transform: translate(-50%, -8px);
+  pointer-events: none;
+}
+
+.studio-app-shell .focus-mode-toolbar {
+  position: relative;
+  width: 100%;
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 10px;
+  transform: translateY(calc(-100% - 12px));
+  border: 1px solid color-mix(in srgb, var(--eum-line) 82%, transparent);
+  border-radius: 12px;
+  opacity: 0;
+  color: var(--eum-text);
+  background: color-mix(in srgb, var(--eum-panel) 92%, transparent);
+  box-shadow: 0 12px 36px rgb(24 20 28 / 16%);
+  backdrop-filter: blur(18px);
+  pointer-events: none;
+  transition:
+    transform 200ms ease 300ms,
+    opacity 200ms ease 300ms;
+}
+
+.studio-app-shell .focus-mode-toolbar-host:hover .focus-mode-toolbar,
+.studio-app-shell .focus-mode-toolbar-host:focus-within .focus-mode-toolbar,
+.studio-app-shell .focus-mode-floating-surface.is-moved .focus-mode-toolbar {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+  transition-delay: 80ms;
+}
+
+.studio-app-shell
+  .focus-mode-floating-surface.is-moved
+  .focus-mode-pomodoro-status {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.studio-app-shell .focus-mode-toolbar-title {
+  min-width: 86px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 4px;
+  gap: 1px;
+}
+
+.studio-app-shell .focus-mode-drag-handle {
+  grid-row: 1 / 3;
+}
+
+.studio-app-shell .focus-mode-toolbar-title strong {
+  font-size: 13px;
+}
+
+.studio-app-shell
+  .focus-mode-toolbar[data-pomodoro-phase]
+  .focus-mode-toolbar-title strong {
+  color: var(--focus-pomodoro-color);
+}
+
+.studio-app-shell .focus-mode-toolbar-title span,
+.studio-app-shell .focus-mode-save-status {
+  overflow: hidden;
+  color: var(--eum-text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-app-shell .focus-mode-width-control,
+.studio-app-shell .focus-mode-zoom-control,
+.studio-app-shell .focus-mode-typewriter-position {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--eum-text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.studio-app-shell .focus-mode-width-control input {
+  width: clamp(90px, 14vw, 155px);
+  accent-color: var(--eum-accent);
+}
+
+.studio-app-shell .focus-mode-typewriter-position input {
+  width: clamp(72px, 9vw, 110px);
+  accent-color: var(--eum-accent);
+}
+
+.studio-app-shell .focus-mode-width-control output,
+.studio-app-shell .focus-mode-zoom-control output,
+.studio-app-shell .focus-mode-typewriter-position output {
+  min-width: 42px;
+  color: var(--eum-text);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.studio-app-shell .focus-mode-toolbar button {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 9px;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  color: var(--eum-text-muted);
+  background: var(--eum-panel);
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.studio-app-shell .document-folder-tree[data-document-drag-active="true"]
+  .document-tree-open {
+  cursor: grabbing;
+}
+
+.studio-app-shell .document-tree-document.is-document-drag-source {
+  opacity: 0.48;
+}
+
+.studio-app-shell .document-tree-document:is(
+  .is-document-drop-before,
+  .is-document-drop-after
+)::after {
+  position: absolute;
+  z-index: 2;
+  right: 6px;
+  left: calc(var(--document-tree-depth, 0) * 18px + 6px);
+  height: 2px;
+  border-radius: 999px;
+  background: var(--eum-accent);
+  content: "";
+  pointer-events: none;
+}
+
+.studio-app-shell .document-tree-document.is-document-drop-before::after {
+  top: -1px;
+}
+
+.studio-app-shell .document-tree-document.is-document-drop-after::after {
+  bottom: -1px;
+}
+
+.studio-app-shell .document-tree-folder.is-document-folder-drop-target,
+.studio-app-shell .document-folder-tree > header.is-document-root-drop-target {
+  outline: 2px solid var(--eum-accent);
+  outline-offset: -2px;
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .focus-mode-zoom-control button {
+  width: 28px;
+  min-width: 28px;
+  padding: 0;
+}
+
+.studio-app-shell .focus-mode-toolbar button:hover:not(:disabled),
+.studio-app-shell .focus-mode-toolbar button[aria-pressed="true"] {
+  border-color: var(--eum-accent-border);
+  color: var(--eum-accent-strong);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .focus-mode-toolbar button:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.studio-app-shell .focus-mode-save-status {
+  max-width: 90px;
+  margin-left: auto;
+}
+
+.studio-app-shell .focus-mode-exit {
+  color: var(--eum-text) !important;
+}
+
+.studio-app-shell
+  .manuscript-editor-canvas[data-focus-presentation="true"]
+  .cm-content {
+  width: min(100%, var(--focus-content-width, 700px)) !important;
+  max-width: min(100%, var(--focus-content-width, 700px)) !important;
+  font-size: var(--focus-font-size) !important;
+  transition:
+    width 160ms ease,
+    max-width 160ms ease,
+    font-size 160ms ease;
+}
+
+.studio-app-shell
+  .writing-workspace-focus-mode
+  .manuscript-editor-canvas
+  .cm-content {
+  min-height: 100%;
+  margin: 0 auto;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.studio-app-shell
+  .manuscript-editor-canvas[data-focus-typewriter="true"]
+  .cm-content {
+  padding-top: var(--typewriter-scroll-space, 100dvh) !important;
+  padding-bottom: var(--typewriter-scroll-space, 100dvh) !important;
+}
+
+.studio-app-shell
+  .manuscript-editor-canvas[data-focus-typewriter="true"]
+  .cm-content[data-has-previous-flow="true"] {
+  padding-top: 48px !important;
+}
+
+.studio-app-shell
+  .manuscript-editor-canvas[data-focus-current-block="true"]
+  .cm-line {
+  opacity: 0.3;
+  transition: opacity 200ms ease;
+}
+
+.studio-app-shell
+  .manuscript-editor-canvas[data-focus-current-block="true"]
+  .cm-line.cm-activeLine {
+  opacity: 1;
+  background: transparent;
+}
+
+@media (max-width: 760px) {
+  .studio-app-shell .app-topbar-product {
+    display: none;
+  }
+
+  .studio-app-shell .focus-mode-toolbar {
+    align-content: center;
+    flex-wrap: wrap;
+  }
+
+  .studio-app-shell .focus-mode-toolbar-title,
+  .studio-app-shell .focus-mode-save-status {
+    display: none;
+  }
+}
+
+.studio-app-shell .save-status {
+  display: inline-flex;
+  margin-left: auto;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.studio-app-shell .bottom-event-rail {
+  display: grid;
+  width: 100%;
+  height: 34px;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: 34px minmax(0, 1fr);
+  color: var(--eum-text);
+  background: #ffffff;
+}
+
+.studio-app-shell .bottom-event-rail.is-expanded {
+  height: clamp(132px, 18vh, 184px);
+}
+
+.studio-app-shell .bottom-event-rail-header {
+  min-width: 0;
+  padding: 0;
+  background: #fbfafc;
+}
+
+.studio-app-shell .bottom-event-rail-toggle {
+  display: flex;
+  width: 100%;
+  height: 34px;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  padding: 0 14px;
+  border: 0;
+  color: var(--eum-text);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.studio-app-shell .bottom-event-rail-toggle > span {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+}
+
+.studio-app-shell .bottom-event-rail-header strong {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.studio-app-shell .bottom-event-rail-header span {
+  color: var(--eum-text-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.studio-app-shell .bottom-event-rail-toggle:hover {
+  color: var(--eum-text);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .bottom-event-rail-content {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 7px;
+  overflow: hidden;
+  padding: 7px 12px 10px;
+  border-top: 1px solid #efedf1;
+}
+
+.studio-app-shell .bottom-event-rail-documents {
+  display: flex;
+  min-width: 0;
+  gap: 14px;
+  overflow-x: auto;
+  color: var(--eum-text-faint);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.studio-app-shell .bottom-event-rail-documents .is-active {
+  color: var(--eum-accent-strong);
+  font-weight: 650;
+}
+
+.studio-app-shell .bottom-event-rail-track {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  align-items: stretch;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+}
+
+.studio-app-shell .bottom-event-card {
+  display: grid;
+  min-width: 0;
+  flex: 0 0 clamp(156px, 17vw, 208px);
+  grid-template-rows: auto auto minmax(0, 1fr);
+  align-content: start;
+  gap: 3px;
+  overflow: hidden;
+  padding: 8px 10px;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  text-align: left;
+  background: #ffffff;
+  cursor: grab;
+}
+
+.studio-app-shell .bottom-event-card:active {
+  cursor: grabbing;
+}
+
+.studio-app-shell .bottom-event-card:hover:not(:disabled) {
+  border-color: var(--eum-accent-border);
+  background: #fbf9fd;
+}
+
+.studio-app-shell .bottom-event-card.is-current {
+  border-color: var(--eum-accent-border);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .bottom-event-card.is-unpositioned {
+  opacity: 0.72;
+}
+
+.studio-app-shell .bottom-event-rail-track.is-dragging .bottom-event-card {
+  transition: opacity 120ms ease, box-shadow 120ms ease;
+}
+
+.studio-app-shell .bottom-event-card.is-dragging {
+  opacity: 0.35;
+}
+
+.studio-app-shell .bottom-event-card.is-drop-before {
+  box-shadow: -4px 0 0 var(--eum-accent-strong);
+}
+
+.studio-app-shell .bottom-event-rail-track.is-drop-at-end::after {
+  width: 3px;
+  min-width: 3px;
+  border-radius: 999px;
+  background: var(--eum-accent-strong);
+  content: "";
+}
+
+.studio-app-shell .bottom-event-card > span,
+.studio-app-shell .bottom-event-card > small {
+  overflow: hidden;
+  color: var(--eum-text-muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-app-shell .bottom-event-card > strong {
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-app-shell .bottom-event-rail-empty {
+  margin: 0;
+  align-self: center;
+  color: var(--eum-text-muted);
+  font-size: 11px;
+}
+
+.studio-app-shell .rail-reentry-right {
+  position: absolute;
+  z-index: 12;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 7%);
+}
+

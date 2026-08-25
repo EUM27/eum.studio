@@ -1,0 +1,134 @@
+/* Editor shell */
+
+.studio-app-shell.is-editor .workspace {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.studio-app-shell .editor-page-body,
+.studio-app-shell .persistent-workspace,
+.studio-app-shell .studio-shell-embedded,
+.studio-app-shell .writing-workspace-embedded {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.studio-app-shell .persistent-workspace[hidden] {
+  display: none;
+}
+
+.studio-app-shell .studio-shell-embedded {
+  padding: 0;
+  background: #ffffff;
+}
+
+.studio-app-shell .writing-workspace-embedded {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.studio-app-shell .writing-workspace-embedded > .manuscript-header {
+  grid-row: 1;
+}
+
+.studio-app-shell .writing-workspace-embedded > .workspace-body {
+  grid-row: 2;
+}
+
+.studio-app-shell .writing-workspace-embedded > .workspace-statusbar {
+  grid-row: 3;
+}
+
+.studio-app-shell .writing-workspace-embedded:has(> .startup-recovery) {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+.studio-app-shell .writing-workspace-embedded:has(> .startup-recovery)
+  > .startup-recovery {
+  grid-row: 2;
+}
+
+.studio-app-shell .writing-workspace-embedded:has(> .startup-recovery)
+  > .workspace-body {
+  grid-row: 3;
+}
+
+.studio-app-shell .writing-workspace-embedded:has(> .startup-recovery)
+  > .workspace-statusbar {
+  grid-row: 4;
+}
+
+.studio-app-shell .manuscript-header-embedded {
+  display: flex;
+  min-width: 0;
+  min-height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 7px 18px;
+  border-bottom: 1px solid var(--eum-line);
+  background: #ffffff;
+}
+
+.studio-app-shell .manuscript-title-block {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+}
+
+.studio-app-shell .manuscript-title-line {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+}
+
+.studio-app-shell .manuscript-work-title-line::after {
+  content: "/";
+  margin-left: 5px;
+  color: var(--eum-text-faint);
+}
+
+.studio-app-shell .manuscript-context,
+.studio-app-shell .manuscript-title-line h2 {
+  margin: 0;
+  overflow: hidden;
+  color: var(--eum-text);
+  font-size: 14px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-app-shell .title-edit-button,
+.studio-app-shell .title-retire-button {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  min-width: 25px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  color: var(--eum-text-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.studio-app-shell .title-edit-button:hover:not(:disabled) {
+  background: #eeeeee;
+}
+
+.studio-app-shell .title-retire-button:hover:not(:disabled),
+.studio-app-shell .title-retire-button:focus-visible {
+  color: var(--eum-danger, #b42318);
+  background: var(--eum-hover, #eeeeee);
+}
+

@@ -14,6 +14,12 @@ import type {
   RevisionBlobProfile,
   RevisionStore,
 } from "../../application/revisions/revision-store";
+import type {
+  CommitEpisodeRangeMoveInput,
+  EpisodeRangeMoveStore,
+  EpisodeRangeMoveStoreReceipt,
+  UndoEpisodeRangeMoveInput,
+} from "../../application/editor/move-range-to-episode";
 import {
   BlobContentMismatchError,
 } from "../../application/storage/blob-store";
@@ -985,6 +991,110 @@ CREATE TABLE IF NOT EXISTS scene_override_anchors (
     REFERENCES anchors (work_id, document_id, id)
     ON DELETE RESTRICT
 ) STRICT;
+
+CREATE TABLE IF NOT EXISTS scene_identities (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS scene_episode_segments (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  scene_id TEXT NOT NULL,
+  document_id TEXT NOT NULL,
+  anchor_id TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  UNIQUE (work_id, scene_id, anchor_id),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, scene_id)
+    REFERENCES scene_identities (work_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, document_id)
+    REFERENCES documents (work_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, document_id, anchor_id)
+    REFERENCES anchors (work_id, document_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS scene_episode_segments_active_scene_idx
+ON scene_episode_segments (work_id, scene_id, document_id)
+WHERE retired_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS episode_range_moves (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  undone_at TEXT,
+  work_id TEXT NOT NULL,
+  source_document_id TEXT NOT NULL,
+  target_document_id TEXT NOT NULL,
+  from_offset INTEGER NOT NULL CHECK (from_offset >= 0),
+  to_offset INTEGER NOT NULL CHECK (to_offset > from_offset),
+  placement TEXT NOT NULL CHECK (placement IN ('start', 'end')),
+  source_before_revision_id TEXT NOT NULL,
+  target_before_revision_id TEXT NOT NULL,
+  source_after_revision_id TEXT NOT NULL,
+  target_after_revision_id TEXT NOT NULL,
+  created_scene_ids_json TEXT NOT NULL,
+  scene_ids_json TEXT NOT NULL,
+  created_segment_ids_json TEXT NOT NULL,
+  retired_segment_ids_json TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('active', 'undone')),
+  UNIQUE (work_id, id),
+  CHECK (source_document_id <> target_document_id),
+  CHECK (
+    (status = 'active' AND undone_at IS NULL) OR
+    (status = 'undone' AND undone_at IS NOT NULL)
+  ),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, source_document_id)
+    REFERENCES documents (work_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, target_document_id)
+    REFERENCES documents (work_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, source_document_id, source_before_revision_id)
+    REFERENCES document_revisions (work_id, document_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, target_document_id, target_before_revision_id)
+    REFERENCES document_revisions (work_id, document_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, source_document_id, source_after_revision_id)
+    REFERENCES document_revisions (work_id, document_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, target_document_id, target_after_revision_id)
+    REFERENCES document_revisions (work_id, document_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS episode_range_moves_active_documents_idx
+ON episode_range_moves (
+  work_id,
+  source_document_id,
+  target_document_id,
+  status
+);
 
 CREATE TABLE IF NOT EXISTS scene_event_overrides (
   id TEXT PRIMARY KEY,
@@ -6599,6 +6709,450 @@ function createNodeSqliteRevisionStore(
   });
 }
 
+function writeRevisionAdvanceInTransaction(
+  database: NodeSqliteDatabase,
+  input: AppendRevisionInput,
+  published: PublishedRevisionBlob,
+): DocumentRevision {
+  const pointer = readDocumentPointerState(database, input.documentId);
+  if (pointer === null) {
+    throw new Error(`Unknown document: ${input.documentId}`);
+  }
+  if (pointer.workId !== input.workId) {
+    throw new Error(
+      `Work/document boundary violation: ${input.workId}/${input.documentId}`,
+    );
+  }
+  if (pointer.currentRevisionId !== input.expectedCurrentRevisionId) {
+    throw new Error(`Revision conflict for document ${input.documentId}`);
+  }
+  if (readRevision(database, input.revisionId) !== null) {
+    throw new Error(`Duplicate revision identity: ${input.revisionId}`);
+  }
+  insertOrVerifyManifest(database, published);
+  const committedRevision = createCommittedRevision(input, published);
+  writeLedgerRecord(database, {
+    kind: "documentRevision",
+    id: committedRevision.id,
+    workId: input.workId,
+    documentId: committedRevision.documentId,
+    ...(committedRevision.parentRevisionId === undefined
+      ? {}
+      : { parentRevisionId: committedRevision.parentRevisionId }),
+    contentRef: committedRevision.contentRef,
+    contentHash: committedRevision.contentHash,
+    length: committedRevision.length,
+    ...(committedRevision.changeSetRef === undefined
+      ? {}
+      : { changeSetRef: committedRevision.changeSetRef }),
+    cause: committedRevision.cause,
+    createdAt: committedRevision.createdAt,
+    durableAt: committedRevision.durableAt,
+  });
+  if (input.editorStateJson !== undefined) {
+    runStatement(
+      database,
+      `
+        INSERT INTO document_revision_editor_states (
+          revision_id,
+          work_id,
+          document_id,
+          editor_state_json
+        ) VALUES (?, ?, ?, ?)
+      `,
+      [
+        committedRevision.id,
+        input.workId,
+        input.documentId,
+        input.editorStateJson,
+      ],
+    );
+  }
+  runStatement(
+    database,
+    `
+      UPDATE manuscripts
+      SET
+        current_revision_id = ?,
+        durable_revision_id = ?,
+        updated_at = ?
+      WHERE
+        id = ?
+        AND work_id = ?
+        AND document_id = ?
+        AND current_revision_id = ?
+    `,
+    [
+      committedRevision.id,
+      committedRevision.id,
+      committedRevision.durableAt,
+      pointer.manuscriptId,
+      input.workId,
+      input.documentId,
+      pointer.currentRevisionId,
+    ],
+  );
+  const updatedPointer = readDocumentPointerState(database, input.documentId);
+  if (
+    updatedPointer === null ||
+    updatedPointer.workId !== input.workId ||
+    updatedPointer.manuscriptId !== pointer.manuscriptId ||
+    updatedPointer.currentRevisionId !== committedRevision.id ||
+    updatedPointer.durableRevisionId !== committedRevision.id
+  ) {
+    throw new Error("Episode move revision pointers were not updated atomically");
+  }
+  return committedRevision;
+}
+
+function writePreparedEpisodeSegment(
+  database: NodeSqliteDatabase,
+  input: CommitEpisodeRangeMoveInput,
+  segment: CommitEpisodeRangeMoveInput["createdSegments"][number],
+): void {
+  const anchor = segment.anchor;
+  writeLedgerRecord(database, {
+    kind: "anchor",
+    id: anchor.meta.id,
+    schemaVersion: anchor.meta.schemaVersion,
+    revision: anchor.meta.revision,
+    createdAt: anchor.meta.createdAt,
+    updatedAt: anchor.meta.updatedAt,
+    ...(anchor.meta.retiredAt === undefined
+      ? {}
+      : { retiredAt: anchor.meta.retiredAt }),
+    workId: input.workId,
+    documentId: anchor.documentId,
+    originRevisionId: anchor.originRevisionId,
+    resolvedRevisionId: anchor.resolvedRevisionId,
+    startOffset: anchor.startOffset,
+    endOffset: anchor.endOffset,
+    exactQuote: anchor.exactQuote,
+    prefixContext: anchor.prefixContext,
+    suffixContext: anchor.suffixContext,
+    quoteHash: anchor.quoteHash,
+    contextHash: anchor.contextHash,
+    ...(anchor.lineageRef === undefined ? {} : { lineageRef: anchor.lineageRef }),
+    status: anchor.status,
+    resolutionEvidenceJson: JSON.stringify(anchor.resolutionEvidence),
+  });
+  runStatement(
+    database,
+    `
+      INSERT INTO scene_episode_segments (
+        id,
+        schema_version,
+        revision,
+        created_at,
+        updated_at,
+        retired_at,
+        work_id,
+        scene_id,
+        document_id,
+        anchor_id
+      ) VALUES (?, 1, 1, ?, ?, NULL, ?, ?, ?, ?)
+    `,
+    [
+      segment.segmentId,
+      input.sourceRevision.createdAt,
+      input.sourceRevision.createdAt,
+      input.workId,
+      segment.sceneId,
+      anchor.documentId,
+      anchor.meta.id,
+    ],
+  );
+}
+
+function changedRows(result: unknown): number {
+  if (
+    typeof result !== "object" ||
+    result === null ||
+    !("changes" in result)
+  ) {
+    return 0;
+  }
+  const changes = (result as { readonly changes?: unknown }).changes;
+  return typeof changes === "bigint" || typeof changes === "number"
+    ? Number(changes)
+    : 0;
+}
+
+function parseStoredIdArray<TKind extends string>(
+  value: string,
+  label: string,
+): readonly EntityId<TKind>[] {
+  const parsed = JSON.parse(value) as unknown;
+  if (!Array.isArray(parsed)) {
+    throw new Error(`${label} must be an array`);
+  }
+  const ids = parsed.map((candidate, index) => {
+    if (typeof candidate !== "string" || candidate.length === 0) {
+      throw new Error(`${label}[${index}] must be a non-empty string`);
+    }
+    return entityId<TKind>(candidate);
+  });
+  if (new Set(ids).size !== ids.length) {
+    throw new Error(`${label} must contain unique identities`);
+  }
+  return Object.freeze(ids);
+}
+
+function createNodeSqliteEpisodeRangeMoveStore(
+  database: NodeSqliteDatabase,
+  assertOpen: () => void,
+  options: NodeSqliteRevisionStoreOptions,
+): EpisodeRangeMoveStore {
+  const publishPair = async (
+    source: AppendRevisionInput,
+    target: AppendRevisionInput,
+  ) => Promise.all([
+    publishRevisionBlob(source, options),
+    publishRevisionBlob(target, options),
+  ] as const);
+
+  return Object.freeze({
+    commit: async (
+      input: CommitEpisodeRangeMoveInput,
+    ): Promise<EpisodeRangeMoveStoreReceipt> => {
+      assertOpen();
+      if (
+        input.sourceEpisodeId === input.targetEpisodeId ||
+        input.sourceRevision.documentId !== input.sourceEpisodeId ||
+        input.targetRevision.documentId !== input.targetEpisodeId ||
+        input.sourceRevision.workId !== input.workId ||
+        input.targetRevision.workId !== input.workId ||
+        input.sourceRevision.expectedCurrentRevisionId === null ||
+        input.targetRevision.expectedCurrentRevisionId === null
+      ) {
+        throw new Error("Episode move revision ownership is invalid");
+      }
+      const [sourcePublished, targetPublished] = await publishPair(
+        input.sourceRevision,
+        input.targetRevision,
+      );
+      database.exec("BEGIN IMMEDIATE");
+      let transactionActive = true;
+      try {
+        const sourceRevision = writeRevisionAdvanceInTransaction(
+          database,
+          input.sourceRevision,
+          sourcePublished,
+        );
+        const targetRevision = writeRevisionAdvanceInTransaction(
+          database,
+          input.targetRevision,
+          targetPublished,
+        );
+        const changedAt = input.sourceRevision.createdAt;
+        for (const sceneId of input.createdSceneIds) {
+          runStatement(
+            database,
+            `
+              INSERT INTO scene_identities (
+                id, schema_version, revision, created_at, updated_at,
+                retired_at, work_id
+              ) VALUES (?, 1, 1, ?, ?, NULL, ?)
+            `,
+            [sceneId, changedAt, changedAt, input.workId],
+          );
+        }
+        for (const segmentId of input.retiredSegmentIds) {
+          const result = database.prepare(`
+            UPDATE scene_episode_segments
+            SET revision = revision + 1, updated_at = ?, retired_at = ?
+            WHERE id = ? AND work_id = ? AND retired_at IS NULL
+          `).run(changedAt, changedAt, segmentId, input.workId);
+          if (changedRows(result) !== 1) {
+            throw new Error(`Scene segment changed before move: ${segmentId}`);
+          }
+        }
+        for (const segment of input.createdSegments) {
+          writePreparedEpisodeSegment(database, input, segment);
+        }
+        const sceneIds = Object.freeze([
+          ...new Set(input.createdSegments.map((segment) => segment.sceneId)),
+        ]);
+        runStatement(
+          database,
+          `
+            INSERT INTO episode_range_moves (
+              id, schema_version, revision, created_at, updated_at, undone_at,
+              work_id, source_document_id, target_document_id,
+              from_offset, to_offset, placement,
+              source_before_revision_id, target_before_revision_id,
+              source_after_revision_id, target_after_revision_id,
+              created_scene_ids_json, scene_ids_json,
+              created_segment_ids_json, retired_segment_ids_json, status
+            ) VALUES (
+              ?, 1, 1, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+              'active'
+            )
+          `,
+          [
+            input.moveId,
+            changedAt,
+            changedAt,
+            input.workId,
+            input.sourceEpisodeId,
+            input.targetEpisodeId,
+            input.from,
+            input.to,
+            input.placement,
+            input.sourceRevision.expectedCurrentRevisionId,
+            input.targetRevision.expectedCurrentRevisionId,
+            sourceRevision.id,
+            targetRevision.id,
+            JSON.stringify(input.createdSceneIds),
+            JSON.stringify(sceneIds),
+            JSON.stringify(input.createdSegments.map((segment) => segment.segmentId)),
+            JSON.stringify(input.retiredSegmentIds),
+          ],
+        );
+        await options.beforeDatabaseCommit?.();
+        database.exec("COMMIT");
+        transactionActive = false;
+        return Object.freeze({
+          sourceRevision,
+          targetRevision,
+          sceneIds,
+          sourceEpisodeId: input.sourceEpisodeId,
+          targetEpisodeId: input.targetEpisodeId,
+        });
+      } catch (error) {
+        if (transactionActive) database.exec("ROLLBACK");
+        throw error;
+      }
+    },
+    undo: async (
+      input: UndoEpisodeRangeMoveInput,
+    ): Promise<EpisodeRangeMoveStoreReceipt> => {
+      assertOpen();
+      const rows = database.prepare(`
+        SELECT
+          source_document_id AS "sourceEpisodeId",
+          target_document_id AS "targetEpisodeId",
+          created_scene_ids_json AS "createdSceneIdsJson",
+          scene_ids_json AS "sceneIdsJson",
+          created_segment_ids_json AS "createdSegmentIdsJson",
+          retired_segment_ids_json AS "retiredSegmentIdsJson",
+          status
+        FROM episode_range_moves
+        WHERE id = ? AND work_id = ?
+      `).all(input.moveId, input.workId);
+      if (rows.length !== 1) {
+        throw new Error(`Unknown Episode range move: ${input.moveId}`);
+      }
+      const row = rows[0] ?? {};
+      const sourceEpisodeId = entityId<"Document">(
+        readRequiredString(row, "sourceEpisodeId", "Episode range move row"),
+      );
+      const targetEpisodeId = entityId<"Document">(
+        readRequiredString(row, "targetEpisodeId", "Episode range move row"),
+      );
+      if (
+        readRequiredString(row, "status", "Episode range move row") !== "active" ||
+        input.sourceRevision.documentId !== sourceEpisodeId ||
+        input.targetRevision.documentId !== targetEpisodeId ||
+        input.sourceRevision.workId !== input.workId ||
+        input.targetRevision.workId !== input.workId
+      ) {
+        throw new Error(`Episode range move is not undoable: ${input.moveId}`);
+      }
+      const createdSceneIds = parseStoredIdArray<"Scene">(
+        readRequiredString(row, "createdSceneIdsJson", "Episode range move row"),
+        "Episode range move created Scene identities",
+      );
+      const sceneIds = parseStoredIdArray<"Scene">(
+        readRequiredString(row, "sceneIdsJson", "Episode range move row"),
+        "Episode range move Scene identities",
+      );
+      const createdSegmentIds = parseStoredIdArray<"EpisodeSceneSegment">(
+        readRequiredString(row, "createdSegmentIdsJson", "Episode range move row"),
+        "Episode range move created segments",
+      );
+      const retiredSegmentIds = parseStoredIdArray<"EpisodeSceneSegment">(
+        readRequiredString(row, "retiredSegmentIdsJson", "Episode range move row"),
+        "Episode range move retired segments",
+      );
+      const [sourcePublished, targetPublished] = await publishPair(
+        input.sourceRevision,
+        input.targetRevision,
+      );
+      database.exec("BEGIN IMMEDIATE");
+      let transactionActive = true;
+      try {
+        const sourceRevision = writeRevisionAdvanceInTransaction(
+          database,
+          input.sourceRevision,
+          sourcePublished,
+        );
+        const targetRevision = writeRevisionAdvanceInTransaction(
+          database,
+          input.targetRevision,
+          targetPublished,
+        );
+        const changedAt = input.sourceRevision.createdAt;
+        for (const segmentId of createdSegmentIds) {
+          const result = database.prepare(`
+            UPDATE scene_episode_segments
+            SET revision = revision + 1, updated_at = ?, retired_at = ?
+            WHERE id = ? AND work_id = ? AND retired_at IS NULL
+          `).run(changedAt, changedAt, segmentId, input.workId);
+          if (changedRows(result) !== 1) {
+            throw new Error(`Created Scene segment changed before undo: ${segmentId}`);
+          }
+        }
+        for (const segmentId of retiredSegmentIds) {
+          const result = database.prepare(`
+            UPDATE scene_episode_segments
+            SET revision = revision + 1, updated_at = ?, retired_at = NULL
+            WHERE id = ? AND work_id = ? AND retired_at IS NOT NULL
+          `).run(changedAt, segmentId, input.workId);
+          if (changedRows(result) !== 1) {
+            throw new Error(`Prior Scene segment changed before undo: ${segmentId}`);
+          }
+        }
+        for (const sceneId of createdSceneIds) {
+          const result = database.prepare(`
+            UPDATE scene_identities
+            SET revision = revision + 1, updated_at = ?, retired_at = ?
+            WHERE id = ? AND work_id = ? AND retired_at IS NULL
+          `).run(changedAt, changedAt, sceneId, input.workId);
+          if (changedRows(result) !== 1) {
+            throw new Error(`Created Scene identity changed before undo: ${sceneId}`);
+          }
+        }
+        const moveUpdate = database.prepare(`
+          UPDATE episode_range_moves
+          SET
+            revision = revision + 1,
+            updated_at = ?,
+            undone_at = ?,
+            status = 'undone'
+          WHERE id = ? AND work_id = ? AND status = 'active'
+        `).run(changedAt, changedAt, input.moveId, input.workId);
+        if (changedRows(moveUpdate) !== 1) {
+          throw new Error(`Episode range move changed before undo: ${input.moveId}`);
+        }
+        await options.beforeDatabaseCommit?.();
+        database.exec("COMMIT");
+        transactionActive = false;
+        return Object.freeze({
+          sourceRevision,
+          targetRevision,
+          sceneIds,
+          sourceEpisodeId,
+          targetEpisodeId,
+        });
+      } catch (error) {
+        if (transactionActive) database.exec("ROLLBACK");
+        throw error;
+      }
+    },
+  });
+}
+
 function readStringValue(
   row: Readonly<
     Record<string, unknown>
@@ -8386,6 +8940,10 @@ export async function openNodeSqliteLedger(
       options:
         NodeSqliteRevisionStoreOptions,
     ): RevisionStore;
+    createEpisodeRangeMoveStore(
+      options:
+        NodeSqliteRevisionStoreOptions,
+    ): EpisodeRangeMoveStore;
     createResumeCheckpointCaptureTransaction(
       options:
         NodeSqliteResumeCheckpointCaptureOptions,
@@ -8454,6 +9012,17 @@ export async function openNodeSqliteLedger(
       ): RevisionStore => {
         assertOpen();
         return createNodeSqliteRevisionStore(
+          database,
+          assertOpen,
+          options,
+        );
+      },
+      createEpisodeRangeMoveStore: (
+        options:
+          NodeSqliteRevisionStoreOptions,
+      ): EpisodeRangeMoveStore => {
+        assertOpen();
+        return createNodeSqliteEpisodeRangeMoveStore(
           database,
           assertOpen,
           options,

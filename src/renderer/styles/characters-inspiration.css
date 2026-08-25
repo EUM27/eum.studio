@@ -1,0 +1,764 @@
+.studio-app-shell .character-workspace {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  overflow: hidden;
+  background: #fff;
+}
+
+.studio-app-shell .character-workspace-header {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid #ededed;
+}
+
+.studio-app-shell .character-workspace-header h2,
+.studio-app-shell .character-workspace-candidates h3,
+.studio-app-shell .character-workspace-relations h3,
+.studio-app-shell .character-workspace-evidence h3 {
+  margin: 0;
+  color: #222;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.studio-app-shell .character-workspace-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.studio-app-shell .character-workspace-header-actions button,
+.studio-app-shell .character-workspace-callout button,
+.studio-app-shell .character-generation-form button,
+.studio-app-shell .character-workspace-relations button,
+.studio-app-shell .character-workspace-evidence button,
+.studio-app-shell .character-candidate-actions > button {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 11px;
+  border: 1px solid #dedede;
+  border-radius: 8px;
+  color: #333;
+  background: #fff;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.studio-app-shell .character-workspace-header-actions button:first-child {
+  color: #fff;
+  border-color: #262626;
+  background: #262626;
+}
+
+.studio-app-shell .character-workspace-picker {
+  position: relative;
+}
+
+.studio-app-shell .character-workspace-picker [role="menu"] {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 5px);
+  right: 0;
+  min-width: 190px;
+  display: grid;
+  gap: 3px;
+  padding: 5px;
+  border: 1px solid #dedede;
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 9px 28px rgb(0 0 0 / 10%);
+}
+
+.studio-app-shell .character-workspace-picker [role="menu"] button {
+  width: 100%;
+  justify-content: flex-start;
+  color: #333;
+  border-color: transparent;
+  background: transparent;
+}
+
+.studio-app-shell .character-generation-form {
+  display: grid;
+  gap: 10px;
+  padding: 12px 18px;
+  border-bottom: 1px solid #e7e1ed;
+  background: #fbf9fc;
+}
+
+.studio-app-shell .character-generation-form > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.studio-app-shell .character-generation-form h3,
+.studio-app-shell .character-generation-form p {
+  margin: 0;
+}
+
+.studio-app-shell .character-generation-form > p,
+.studio-app-shell .character-generation-brief-summary {
+  color: #6d6675;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.studio-app-shell .character-generation-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.studio-app-shell .character-generation-fields label {
+  display: grid;
+  gap: 4px;
+  color: #666;
+  font-size: 9px;
+}
+
+.studio-app-shell .character-generation-fields input,
+.studio-app-shell .character-generation-fields textarea {
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid #dedede;
+  border-radius: 7px;
+  color: #333;
+  background: #fff;
+  font: inherit;
+  resize: vertical;
+}
+
+.studio-app-shell .character-generation-form > button {
+  justify-self: start;
+  color: #fff;
+  border-color: #262626;
+  background: #262626;
+}
+
+.studio-app-shell .character-workspace button:disabled,
+.studio-app-shell .character-workspace input:disabled,
+.studio-app-shell .character-workspace textarea:disabled,
+.studio-app-shell .character-workspace select:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.studio-app-shell .character-workspace-callout {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 18px;
+  border-bottom: 1px solid #e9e5f0;
+  color: #5e566b;
+  background: #f7f4fa;
+  font-size: 11px;
+}
+
+.studio-app-shell .character-workspace-callout span {
+  min-width: 0;
+  flex: 1;
+}
+
+.studio-app-shell .character-workspace-callout.is-permission {
+  color: #674d24;
+  border-color: #eee1c7;
+  background: #fff9ed;
+}
+
+.studio-app-shell .character-workspace-selection {
+  margin: 0;
+  padding: 7px 18px;
+  border-bottom: 1px solid #ededed;
+  color: #777;
+  font-size: 10px;
+}
+
+.studio-app-shell .character-workspace-body {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns:
+    minmax(160px, 0.55fr)
+    minmax(260px, 1.1fr)
+    minmax(240px, 0.85fr);
+  overflow: hidden;
+}
+
+.studio-app-shell .character-workspace-list,
+.studio-app-shell .character-workspace-detail,
+.studio-app-shell .character-workspace-candidates {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.studio-app-shell .character-workspace-list,
+.studio-app-shell .character-workspace-detail {
+  border-right: 1px solid #ededed;
+}
+
+.studio-app-shell .character-workspace-list {
+  padding: 12px;
+  background: #fafafa;
+}
+
+.studio-app-shell .character-workspace-list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+
+.studio-app-shell .character-workspace-list-heading strong {
+  font-size: 11px;
+}
+
+.studio-app-shell .character-workspace-list-heading button {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  background: #ffffff;
+  font-size: 9px;
+}
+
+.studio-app-shell .character-workspace-search {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 9px;
+  border: 1px solid #dfdfdf;
+  border-radius: 8px;
+  color: #8a8a8a;
+  background: #fff;
+}
+
+.studio-app-shell .character-workspace-search input {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 11px;
+}
+
+.studio-app-shell .character-workspace-list ul,
+.studio-app-shell .character-workspace-relations ul,
+.studio-app-shell .character-workspace-evidence ul,
+.studio-app-shell .character-workspace-candidates ul {
+  padding: 0;
+  margin: 10px 0 0;
+  list-style: none;
+}
+
+.studio-app-shell .character-workspace-list li + li {
+  margin-top: 4px;
+}
+
+.studio-app-shell .character-workspace-list li > button {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 9px;
+  border: 0;
+  border-radius: 8px;
+  color: #555;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.studio-app-shell .character-workspace-list li > button:hover,
+.studio-app-shell .character-workspace-list li > button[aria-pressed="true"] {
+  color: #242424;
+  background: #ececec;
+}
+
+.studio-app-shell .character-workspace-list li span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.studio-app-shell .character-workspace-list li strong,
+.studio-app-shell .character-workspace-list li small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-app-shell .character-workspace-list li strong {
+  font-size: 12px;
+}
+
+.studio-app-shell .character-workspace-list li small {
+  color: #888;
+  font-size: 10px;
+}
+
+.studio-app-shell .character-workspace-detail {
+  padding: 16px 18px 22px;
+}
+
+.studio-app-shell .character-workspace-detail .character-manager-fields {
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.studio-app-shell .character-workspace-relations {
+  max-width: 680px;
+  padding-top: 18px;
+  margin: 18px auto 0;
+  border-top: 1px solid #ededed;
+}
+
+.studio-app-shell .character-workspace-relations > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.studio-app-shell .character-workspace-relations > header span {
+  color: #777;
+  font-size: 10px;
+}
+
+.studio-app-shell .character-workspace-relations > p {
+  color: #777;
+  font-size: 10px;
+}
+
+.studio-app-shell .character-relation-create {
+  display: grid;
+  grid-template-columns: minmax(0, 0.75fr) minmax(0, 1fr);
+  gap: 9px;
+  padding: 11px;
+  margin-top: 10px;
+  border: 1px solid #e4e4e4;
+  border-radius: 9px;
+  background: #fafafa;
+}
+
+.studio-app-shell .character-relation-create label,
+.studio-app-shell .character-relation-item label {
+  display: grid;
+  gap: 5px;
+  color: #666;
+  font-size: 9px;
+}
+
+.studio-app-shell .character-relation-create label:nth-of-type(3),
+.studio-app-shell .character-relation-create > button {
+  grid-column: 1 / -1;
+}
+
+.studio-app-shell .character-relation-create input,
+.studio-app-shell .character-relation-create select,
+.studio-app-shell .character-relation-create textarea,
+.studio-app-shell .character-relation-item input,
+.studio-app-shell .character-relation-item textarea {
+  min-width: 0;
+  border: 1px solid #dcdcdc;
+  border-radius: 7px;
+  color: #333;
+  background: #fff;
+  font: inherit;
+}
+
+.studio-app-shell .character-relation-create input,
+.studio-app-shell .character-relation-create select,
+.studio-app-shell .character-relation-item input {
+  min-height: 31px;
+  padding: 0 8px;
+}
+
+.studio-app-shell .character-relation-create textarea,
+.studio-app-shell .character-relation-item textarea {
+  padding: 7px 8px;
+  resize: vertical;
+}
+
+.studio-app-shell .character-relation-item {
+  display: grid;
+  gap: 8px;
+  padding: 11px;
+  border: 1px solid #e4e4e4;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.studio-app-shell .character-relation-item + .character-relation-item {
+  margin-top: 7px;
+}
+
+.studio-app-shell .character-relation-item > header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #444;
+  font-size: 10px;
+}
+
+.studio-app-shell .character-relation-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.studio-app-shell .character-workspace-evidence {
+  max-width: 680px;
+  padding-top: 18px;
+  margin: 18px auto 0;
+  border-top: 1px solid #ededed;
+}
+
+.studio-app-shell .character-workspace-evidence > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.studio-app-shell .character-workspace-evidence li + li {
+  margin-top: 5px;
+}
+
+.studio-app-shell .character-workspace-candidates {
+  padding: 14px;
+  background: #fcfcfc;
+}
+
+.studio-app-shell .character-workspace-candidates > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #ededed;
+}
+
+.studio-app-shell .character-workspace-candidates > header > span {
+  min-width: 24px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: #5e566b;
+  background: #ebe7f0;
+  font-size: 10px;
+  text-align: center;
+}
+
+.studio-app-shell .character-candidate-list {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+}
+
+.studio-app-shell .character-candidate-list > section > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: #777;
+  font-size: 9px;
+}
+
+.studio-app-shell .character-candidate-card {
+  padding: 11px;
+  border: 1px solid #e1e1e1;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.studio-app-shell .character-candidate-card + .character-candidate-card {
+  margin-top: 8px;
+}
+
+.studio-app-shell .character-candidate-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.studio-app-shell .character-candidate-card > header > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.studio-app-shell .character-candidate-card strong {
+  color: #222;
+  font-size: 12px;
+}
+
+.studio-app-shell .character-candidate-card p {
+  margin: 8px 0 0;
+  color: #666;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.studio-app-shell .character-candidate-status {
+  flex: none;
+  padding: 3px 6px;
+  border-radius: 999px;
+  color: #665a73;
+  background: #eee9f3;
+  font-size: 8px;
+}
+
+.studio-app-shell .character-candidate-status:not(.is-pending) {
+  color: #55634f;
+  background: #e8eee5;
+}
+
+.studio-app-shell .character-candidate-evidence-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.studio-app-shell .character-candidate-evidence-list span {
+  padding: 3px 6px;
+  border: 1px solid #e5e5e5;
+  border-radius: 999px;
+  color: #777;
+  font-size: 8px;
+}
+
+.studio-app-shell .character-candidate-match {
+  color: #765e32 !important;
+}
+
+.studio-app-shell .character-candidate-actions {
+  display: grid;
+  gap: 7px;
+  padding-top: 10px;
+  margin-top: 10px;
+  border-top: 1px solid #ededed;
+}
+
+.studio-app-shell .character-candidate-actions > label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  color: #777;
+  font-size: 9px;
+}
+
+.studio-app-shell .character-candidate-actions select {
+  min-width: 0;
+  min-height: 30px;
+  border: 1px solid #dedede;
+  border-radius: 7px;
+  background: #fff;
+  font-size: 10px;
+}
+
+.studio-app-shell .character-candidate-actions fieldset {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px 8px;
+  padding: 8px;
+  border: 1px solid #e4e4e4;
+  border-radius: 8px;
+}
+
+.studio-app-shell .character-candidate-actions legend {
+  color: #777;
+  font-size: 9px;
+}
+
+.studio-app-shell .character-candidate-actions fieldset label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #555;
+  font-size: 9px;
+}
+
+.studio-app-shell .character-workspace-error {
+  margin: 0;
+  padding: 8px 18px;
+  border-top: 1px solid #f0d6d6;
+  color: #9b3030;
+  background: #fff5f5;
+  font-size: 10px;
+}
+
+.studio-app-shell .inspiration-draw-tool {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 10px;
+  overflow: auto;
+  padding: 12px;
+  background: #fafafa;
+  scrollbar-width: thin;
+}
+
+.studio-app-shell .inspiration-draw-tool > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.studio-app-shell .inspiration-draw-tool > header > div {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+}
+
+.studio-app-shell .inspiration-draw-tool > header strong {
+  font-size: 12px;
+}
+
+.studio-app-shell .inspiration-draw-tool > header button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+.studio-app-shell .inspiration-draw-name {
+  display: grid;
+  gap: 5px;
+  color: var(--eum-text-muted);
+  font-size: 9px;
+}
+
+.studio-app-shell .inspiration-draw-name input,
+.studio-app-shell .inspiration-keyword-editor input {
+  min-width: 0;
+  height: 34px;
+  padding: 0 9px;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  background: #ffffff;
+  font-size: 11px;
+}
+
+.studio-app-shell .inspiration-draw-results {
+  display: grid;
+  gap: 6px;
+}
+
+.studio-app-shell .inspiration-draw-results > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  padding: 9px;
+  border: 1px solid var(--eum-line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.studio-app-shell .inspiration-draw-results span,
+.studio-app-shell .inspiration-draw-results small,
+.studio-app-shell .inspiration-draw-results p {
+  margin: 0;
+  color: var(--eum-text-muted);
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.studio-app-shell .inspiration-draw-results strong {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+
+.studio-app-shell .inspiration-draw-save {
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid var(--eum-accent);
+  border-radius: 7px;
+  color: #ffffff;
+  background: var(--eum-accent);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.studio-app-shell .inspiration-draw-save:hover:not(:disabled) {
+  border-color: var(--eum-accent-strong);
+  background: var(--eum-accent-strong);
+}
+
+.studio-app-shell .inspiration-keyword-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.studio-app-shell .inspiration-keyword-editor button {
+  padding: 0 10px;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  background: #ffffff;
+  font-size: 10px;
+}
+
+.studio-app-shell .inspiration-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.studio-app-shell .inspiration-keywords > button {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 7px;
+  border: 1px solid var(--eum-line);
+  border-radius: 999px;
+  background: #ffffff;
+  font-size: 9px;
+}
+
+.studio-app-shell .inspiration-keywords > button > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-app-shell .inspiration-keywords > small {
+  color: var(--eum-text-muted);
+  font-size: 9px;
+}
+
+.studio-app-shell .character-workspace-detail + .character-draw-tool {
+  border-left: 0;
+}
+

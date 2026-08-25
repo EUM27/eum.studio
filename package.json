@@ -11,6 +11,8 @@
     "build:renderer": "vite build",
     "typecheck": "tsc -p tsconfig.renderer.json --noEmit && tsc -p tsconfig.electron.json --noEmit && tsc -p tsconfig.preload.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "lint": "eslint .",
+    "architecture:report": "node scripts/architecture-report.mjs",
+    "architecture:check": "node scripts/check-architecture-boundaries.mjs",
     "test": "vitest run",
     "test:run": "vitest run",
     "test:e2e": "npm run build && playwright test",

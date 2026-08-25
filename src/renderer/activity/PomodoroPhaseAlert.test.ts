@@ -13,7 +13,7 @@ import {
 } from "./PomodoroPhaseAlert";
 
 const shellStyles = readFileSync(
-  new URL("../shell/studio-app-shell.css", import.meta.url),
+  new URL("../styles/document-rail-compat.css", import.meta.url),
   "utf8",
 );
 
