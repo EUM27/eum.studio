@@ -19,6 +19,7 @@ import {
   WORKSPACE_RENAME_DOCUMENT_FOLDER_CHANNEL,
   WORKSPACE_RENAME_WORK_CHANNEL,
   WORKSPACE_RETIRE_DOCUMENT_CHANNEL,
+  WORKSPACE_RETIRE_ALL_DOCUMENTS_CHANNEL,
   WORKSPACE_RETIRE_DOCUMENT_FOLDER_CHANNEL,
   WORKSPACE_RETIRE_WORK_CHANNEL,
   WORKSPACE_SELECT_COVER_CHANNEL,
@@ -37,6 +38,7 @@ import {
   parseRenameDocumentCommand,
   parseRenameWorkCommand,
   parseRetireDocumentCommand,
+  parseRetireAllDocumentsCommand,
   parseRetireDocumentFolderCommand,
   parseRetireWorkCommand,
   type ActivateWorkspaceLocationCommand,
@@ -54,6 +56,7 @@ import {
   type RenameDocumentCommand,
   type RenameWorkCommand,
   type RetireDocumentCommand,
+  type RetireAllDocumentsCommand,
   type RetireDocumentFolderCommand,
   type RetireWorkCommand,
   type WorkspaceCatalogProjection,
@@ -115,6 +118,9 @@ export type WorkspaceIpcRuntime = Readonly<{
   retireWork: (command: RetireWorkCommand) => Promise<WorkspaceCatalogProjection>;
   retireDocument: (
     command: RetireDocumentCommand,
+  ) => Promise<WorkspaceCatalogProjection>;
+  retireAllDocuments: (
+    command: RetireAllDocumentsCommand,
   ) => Promise<WorkspaceCatalogProjection>;
   moveDocument: (command: MoveDocumentCommand) => Promise<WorkspaceCatalogProjection>;
   createDocumentFolder: (
@@ -189,6 +195,9 @@ export function registerWorkspaceIpc(input: Readonly<{
     (command) => input.runtime.retireWork(command));
   handle(WORKSPACE_RETIRE_DOCUMENT_CHANNEL, parseRetireDocumentCommand,
     (command) => input.runtime.retireDocument(command));
+  handle(WORKSPACE_RETIRE_ALL_DOCUMENTS_CHANNEL,
+    parseRetireAllDocumentsCommand,
+    (command) => input.runtime.retireAllDocuments(command));
   handle(WORKSPACE_MOVE_DOCUMENT_CHANNEL, parseMoveDocumentCommand,
     (command) => input.runtime.moveDocument(command));
   handle(WORKSPACE_CREATE_DOCUMENT_FOLDER_CHANNEL,

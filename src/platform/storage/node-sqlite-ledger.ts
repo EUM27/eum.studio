@@ -6898,6 +6898,42 @@ function parseStoredIdArray<TKind extends string>(
   return Object.freeze(ids);
 }
 
+function clearWorkResumeCheckpointForAdvancedDocuments(
+  database: NodeSqliteDatabase,
+  input: Readonly<{
+    workId: EntityId<"Work">;
+    sourceEpisodeId: EntityId<"Document">;
+    targetEpisodeId: EntityId<"Document">;
+    updatedAt: string;
+  }>,
+): void {
+  const result = database.prepare(`
+    UPDATE works
+    SET
+      resume_checkpoint_id = NULL,
+      revision = revision + 1,
+      updated_at = ?
+    WHERE
+      id = ?
+      AND resume_checkpoint_id IN (
+        SELECT id
+        FROM resume_checkpoints
+        WHERE
+          work_id = ?
+          AND document_id IN (?, ?)
+      )
+  `).run(
+    input.updatedAt,
+    input.workId,
+    input.workId,
+    input.sourceEpisodeId,
+    input.targetEpisodeId,
+  );
+  if (changedRows(result) > 1) {
+    throw new Error("Episode move cleared an ambiguous ResumeCheckpoint");
+  }
+}
+
 function createNodeSqliteEpisodeRangeMoveStore(
   database: NodeSqliteDatabase,
   assertOpen: () => void,
@@ -6945,6 +6981,12 @@ function createNodeSqliteEpisodeRangeMoveStore(
           targetPublished,
         );
         const changedAt = input.sourceRevision.createdAt;
+        clearWorkResumeCheckpointForAdvancedDocuments(database, {
+          workId: input.workId,
+          sourceEpisodeId: input.sourceEpisodeId,
+          targetEpisodeId: input.targetEpisodeId,
+          updatedAt: changedAt,
+        });
         for (const sceneId of input.createdSceneIds) {
           runStatement(
             database,
@@ -7093,6 +7135,12 @@ function createNodeSqliteEpisodeRangeMoveStore(
           targetPublished,
         );
         const changedAt = input.sourceRevision.createdAt;
+        clearWorkResumeCheckpointForAdvancedDocuments(database, {
+          workId: input.workId,
+          sourceEpisodeId,
+          targetEpisodeId,
+          updatedAt: changedAt,
+        });
         for (const segmentId of createdSegmentIds) {
           const result = database.prepare(`
             UPDATE scene_episode_segments

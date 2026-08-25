@@ -516,7 +516,13 @@ export function planEpisodeSceneIdentityChanges(input: Readonly<{
   const retiredSegmentIds = new Set<EntityId<"EpisodeSceneSegment">>();
   const createdSegments: SceneEpisodeSegmentRange[] = [];
   for (const scene of input.scenes) {
-    if (!scene.explicitlyStructured && scene.sceneId === null) continue;
+    const continuesAcrossEpisodeBoundary =
+      scene.range.start < input.from && input.from < scene.range.end;
+    if (
+      !continuesAcrossEpisodeBoundary &&
+      !scene.explicitlyStructured &&
+      scene.sceneId === null
+    ) continue;
     if (overlap(scene.range, movedRange) === null) continue;
     const sceneId = scene.sceneId ?? input.createSceneId();
     if (scene.sceneId === null) createdSceneIds.add(sceneId);

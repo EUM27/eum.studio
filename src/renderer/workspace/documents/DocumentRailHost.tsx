@@ -31,6 +31,7 @@ type DocumentTreeCommands = Pick<
   | "onRenameDocument"
   | "onRenameFolder"
   | "onRetireDocument"
+  | "onRetireAllDocuments"
   | "onRetireFolder"
 >;
 

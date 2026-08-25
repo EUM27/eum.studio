@@ -862,6 +862,7 @@ import {
   parseRenameDocumentCommand,
   parseRenameWorkCommand,
   parseRetireDocumentCommand,
+  parseRetireAllDocumentsCommand,
   parseRetireDocumentFolderCommand,
   parseRetireWorkCommand,
   parseWorkspaceCatalogProjection,
@@ -878,6 +879,7 @@ import {
   type RenameDocumentCommand,
   type RenameWorkCommand,
   type RetireDocumentCommand,
+  type RetireAllDocumentsCommand,
   type RetireDocumentFolderCommand,
   type RetireWorkCommand,
   type WorkspaceCatalogProjection,
@@ -1572,6 +1574,7 @@ export type LocalWorkspaceRuntime =
     renameDocument(value: unknown): Promise<WorkspaceCatalogProjection>;
     retireWork(value: unknown): Promise<WorkspaceCatalogProjection>;
     retireDocument(value: unknown): Promise<WorkspaceCatalogProjection>;
+    retireAllDocuments(value: unknown): Promise<WorkspaceCatalogProjection>;
     moveDocument(value: unknown): Promise<WorkspaceCatalogProjection>;
     createDocumentFolder(value: unknown): Promise<WorkspaceCatalogProjection>;
     renameDocumentFolder(value: unknown): Promise<WorkspaceCatalogProjection>;
@@ -4551,6 +4554,20 @@ class DefaultLocalWorkspaceRuntime
     const execution = this.#createPending.then(async () => {
       await this.#savePending;
       return this.#retireDocumentSerially(command);
+    });
+    this.#createPending = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    return execution;
+  }
+
+  retireAllDocuments(value: unknown): Promise<WorkspaceCatalogProjection> {
+    this.#assertOpen();
+    const command = parseRetireAllDocumentsCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#retireAllDocumentsSerially(command);
     });
     this.#createPending = execution.then(
       () => undefined,
@@ -13976,14 +13993,17 @@ class DefaultLocalWorkspaceRuntime
         this.#options.defaults.anchorEvidenceChecksumAlgorithm,
       ),
     });
-    const sceneOverrides = await Promise.all(
+    const projectedSceneOverrides = await Promise.all(
       [...grouped.values()].map(async (groupRows) => {
         const first = groupRows[0];
         if (first === undefined) {
           throw new Error("SceneOverride must contain at least one Anchor");
         }
         const target = this.#documentTargets.get(first.documentId);
-        if (target === undefined || target.workId !== first.workId) {
+        if (target === undefined) {
+          return null;
+        }
+        if (target.workId !== first.workId) {
           throw new Error(
             `SceneOverride document is outside its Work: ${first.sceneOverrideId}`,
           );
@@ -14028,6 +14048,9 @@ class DefaultLocalWorkspaceRuntime
           createdAt: first.createdAt,
         });
       }),
+    );
+    const sceneOverrides = projectedSceneOverrides.filter(
+      (projection): projection is SceneOverrideProjection => projection !== null,
     );
     return parseSceneOverrideListProjection({
       schemaVersion: 1,
@@ -20722,6 +20745,74 @@ class DefaultLocalWorkspaceRuntime
       );
       if (Number(updatedWork.changes) !== 1) {
         throw new Error(`Work changed before Document retirement: ${command.workId}`);
+      }
+      this.#database.exec("COMMIT");
+    } catch (error) {
+      this.#database.exec("ROLLBACK");
+      throw error;
+    }
+    await this.#reload(preferredLocation);
+    return this.#catalog;
+  }
+
+  async #retireAllDocumentsSerially(
+    command: RetireAllDocumentsCommand,
+  ): Promise<WorkspaceCatalogProjection> {
+    const owner = this.#catalog.works.find(
+      (work) => work.workId === command.workId,
+    );
+    if (owner === undefined) {
+      throw new Error(`Unknown Work: ${command.workId}`);
+    }
+    if (owner.documents.length === 0) {
+      return this.#catalog;
+    }
+    const activeWorkId = this.#catalog.activeWorkId;
+    const activeDocumentId = this.#catalog.activeDocumentId;
+    const preferredLocation = activeWorkId === command.workId
+      ? {
+          schemaVersion: 1 as const,
+          workId: command.workId,
+          documentId: null,
+        }
+      : activeWorkId === null
+        ? undefined
+        : {
+            schemaVersion: 1 as const,
+            workId: activeWorkId,
+            documentId: activeDocumentId,
+          };
+    const retiredAt = new Date().toISOString();
+    this.#database.exec("BEGIN IMMEDIATE");
+    try {
+      const updatedDocuments = this.#database.prepare(`
+        UPDATE documents
+        SET
+          retired_at = ?,
+          revision = revision + 1,
+          updated_at = ?
+        WHERE
+          work_id = ?
+          AND retired_at IS NULL
+          AND archived_at IS NULL
+      `).run(retiredAt, retiredAt, command.workId);
+      if (Number(updatedDocuments.changes) !== owner.documents.length) {
+        throw new Error(
+          `Documents changed before all-Document retirement: ${command.workId}`,
+        );
+      }
+      const updatedWork = this.#database.prepare(`
+        UPDATE works
+        SET
+          resume_checkpoint_id = NULL,
+          revision = revision + 1,
+          updated_at = ?
+        WHERE id = ? AND retired_at IS NULL
+      `).run(retiredAt, command.workId);
+      if (Number(updatedWork.changes) !== 1) {
+        throw new Error(
+          `Work changed before all-Document retirement: ${command.workId}`,
+        );
       }
       this.#database.exec("COMMIT");
     } catch (error) {

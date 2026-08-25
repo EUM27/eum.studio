@@ -224,6 +224,7 @@ export function WorkspaceView(input: Readonly<{
     renameDocument,
     renameDocumentFolder,
     retireDocument,
+    retireAllDocuments,
     retireDocumentFolder,
     retireWork,
     startWorkTitleEdit,
@@ -681,6 +682,12 @@ export function WorkspaceView(input: Readonly<{
                       document.documentId,
                     );
                   },
+                  onRetireAllDocuments: async () => {
+                    if (activeWork === undefined) {
+                      throw new Error("The active Work is unavailable");
+                    }
+                    await retireAllDocuments(activeWork.workId);
+                  },
                   onRetireFolder: retireDocumentFolder,
                 },
               }}
@@ -732,6 +739,11 @@ export function WorkspaceView(input: Readonly<{
                 }}
                 openDocuments={openDocuments}
                 runtime={runtime.status === "ready" ? runtime : null}
+                sceneProjection={
+                  input.structureKernel.sceneProjection?.workId === activeWorkId
+                    ? input.structureKernel.sceneProjection
+                    : null
+                }
                 telemetryStore={telemetryStore}
                 titleEditTarget={titleEditTarget}
                 workspaceActionState={workspaceActionState}

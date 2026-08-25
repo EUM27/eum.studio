@@ -86,6 +86,11 @@ export type RetireDocumentCommand = {
   readonly documentId: EntityId<"Document">;
 };
 
+export type RetireAllDocumentsCommand = {
+  readonly schemaVersion: 1;
+  readonly workId: EntityId<"Work">;
+};
+
 export type MoveDocumentCommand = {
   readonly schemaVersion: 1;
   readonly workId: EntityId<"Work">;
@@ -380,6 +385,27 @@ export function parseRetireDocumentCommand(
     documentId: readIdentity<"Document">(
       input.documentId,
       "RetireDocumentCommand.documentId",
+    ),
+  });
+}
+
+export function parseRetireAllDocumentsCommand(
+  value: unknown,
+): RetireAllDocumentsCommand {
+  const input = readRecord(value, "RetireAllDocumentsCommand");
+  assertOnlyFields(
+    input,
+    ["schemaVersion", "workId"],
+    "RetireAllDocumentsCommand",
+  );
+  if (input.schemaVersion !== 1) {
+    throw new Error("RetireAllDocumentsCommand.schemaVersion must be 1");
+  }
+  return Object.freeze({
+    schemaVersion: 1,
+    workId: readIdentity<"Work">(
+      input.workId,
+      "RetireAllDocumentsCommand.workId",
     ),
   });
 }

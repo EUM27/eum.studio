@@ -86,6 +86,16 @@ import {
   setSceneBoundaryPreviewsEffect,
   type ManuscriptSceneBoundaryPreview,
 } from "./scene-boundary-preview-extension";
+import {
+  createManuscriptSceneRangeExtension,
+  setManuscriptSceneRangesEffect,
+  type ManuscriptSceneRange,
+} from "./manuscript-scene-range-extension";
+import {
+  createSceneBoundaryHistoryExtension,
+  recordSceneBoundaryHistoryEffect,
+  type SceneBoundaryHistoryEntry,
+} from "./scene-boundary-history-extension";
 import type { LoreCue } from "../../application/lore/lore-cue-projection";
 import {
   extractManuscriptTransaction,
@@ -188,7 +198,7 @@ export type ManuscriptEditorProps = {
   readonly focusPresentation?: ManuscriptFocusPresentation;
   readonly forwardWriteProtectedLength?: number | null;
   readonly heatmapMode?: ManuscriptHeatmapMode;
-  readonly hasNextEpisode: boolean;
+  readonly canMoveToNextEpisode: boolean;
   readonly inputProfile: ManuscriptInputProfile;
   readonly loreEntries: readonly LoreEntryProjection[];
   readonly layoutSettings?: ManuscriptLayoutSettings;
@@ -201,6 +211,7 @@ export type ManuscriptEditorProps = {
       >
     | null;
   readonly sceneBoundaryPreviews?: readonly ManuscriptSceneBoundaryPreview[];
+  readonly sceneRanges?: readonly ManuscriptSceneRange[];
   readonly onDocumentActivated: (
     document: ManuscriptDocumentSource,
     summary: ManuscriptDocumentStateSummary,
@@ -222,6 +233,11 @@ export type ManuscriptEditorProps = {
   readonly onOpenAnalysis?: () => void;
   readonly onAddEvent: () => void;
   readonly onAddScene: () => void;
+  readonly onSplitScene: () => void;
+  readonly onSceneBoundaryHistoryToggle: (
+    entry: SceneBoundaryHistoryEntry,
+    active: boolean,
+  ) => void;
   readonly onBlur: (
     document: ManuscriptDocumentSource,
   ) => void;
@@ -278,6 +294,10 @@ export type ManuscriptEditorHandle = {
     document: ManuscriptDocumentSource,
     offset: number,
   ) => boolean;
+  readonly recordSceneBoundaryHistory: (
+    document: ManuscriptDocumentSource,
+    entry: SceneBoundaryHistoryEntry,
+  ) => boolean;
 };
 
 export type ManuscriptContextSelection = Readonly<{
@@ -329,7 +349,7 @@ export const ManuscriptEditor = forwardRef<
     focusPresentation,
     forwardWriteProtectedLength = null,
     heatmapMode = "off",
-    hasNextEpisode,
+    canMoveToNextEpisode,
     inputProfile,
     layoutSettings,
     loreEntries,
@@ -345,6 +365,8 @@ export const ManuscriptEditor = forwardRef<
     onLoreCueHover,
     onAddEvent,
     onAddScene,
+    onSplitScene,
+    onSceneBoundaryHistoryToggle,
     onOpenLoreCue,
     onOpenContinuousReading,
     onOpenPreflight,
@@ -354,6 +376,7 @@ export const ManuscriptEditor = forwardRef<
     readOnly,
     resumeLocation,
     sceneBoundaryPreviews = [],
+    sceneRanges = [],
   },
   ref,
 ) {
@@ -373,6 +396,8 @@ export const ManuscriptEditor = forwardRef<
   loreEntriesRef.current = loreEntries;
   const sceneBoundaryPreviewsRef = useRef(sceneBoundaryPreviews);
   sceneBoundaryPreviewsRef.current = sceneBoundaryPreviews;
+  const sceneRangesRef = useRef(sceneRanges);
+  sceneRangesRef.current = sceneRanges;
   const [activeFormatting, setActiveFormatting] =
     useState<ActiveManuscriptFormatting>(() => ({
       bold: false,
@@ -424,14 +449,18 @@ export const ManuscriptEditor = forwardRef<
   const notifyLoreCueHover = useEffectEvent(onLoreCueHover);
   const notifyAddEvent = useEffectEvent(onAddEvent);
   const notifyAddScene = useEffectEvent(onAddScene);
+  const notifySplitScene = useEffectEvent(onSplitScene);
+  const notifySceneBoundaryHistoryToggle = useEffectEvent(
+    onSceneBoundaryHistoryToggle,
+  );
   const notifyOpenLoreCue = useEffectEvent(onOpenLoreCue);
   const notifyMoveToNextEpisode = useEffectEvent(onMoveToNextEpisode);
   const notifyTransaction = useEffectEvent(onTransaction);
   const notifyUndoExternal = useEffectEvent(
     () => onUndoExternal?.() ?? false,
   );
-  const hasNextEpisodeRef = useRef(hasNextEpisode);
-  hasNextEpisodeRef.current = hasNextEpisode;
+  const canMoveToNextEpisodeRef = useRef(canMoveToNextEpisode);
+  canMoveToNextEpisodeRef.current = canMoveToNextEpisode;
   const materializeDocumentText = (
     document: ManuscriptDocumentSource,
   ): string => {
@@ -672,6 +701,29 @@ export const ManuscriptEditor = forwardRef<
         view.focus();
         return true;
       },
+      recordSceneBoundaryHistory(document, entry) {
+        const view = viewRef.current;
+        const active = activeDocumentRef.current;
+        if (
+          view === null ||
+          active?.documentId !== document.documentId ||
+          active.workId !== document.workId ||
+          entry.documentId !== document.documentId ||
+          entry.workId !== document.workId
+        ) {
+          return false;
+        }
+        view.dispatch({
+          effects: recordSceneBoundaryHistoryEffect.of(entry),
+          annotations: [
+            Transaction.userEvent.of("input.scene-boundary"),
+            Transaction.addToHistory.of(true),
+            isolateHistory.of("full"),
+          ],
+        });
+        view.focus();
+        return true;
+      },
     }),
     [formattingProfile, readOnly],
   );
@@ -744,6 +796,10 @@ export const ManuscriptEditor = forwardRef<
           ),
           createSceneBoundaryPreviewExtension(
             sceneBoundaryPreviewsRef.current,
+          ),
+          createManuscriptSceneRangeExtension(sceneRangesRef.current),
+          createSceneBoundaryHistoryExtension(
+            notifySceneBoundaryHistoryToggle,
           ),
           createLoreCueExtension(
             {
@@ -819,7 +875,7 @@ export const ManuscriptEditor = forwardRef<
                 clientX: event.clientX,
                 clientY: event.clientY,
                 canMoveToNextEpisode:
-                  hasNextEpisodeRef.current &&
+                  canMoveToNextEpisodeRef.current &&
                   Math.min(selection.anchor, selection.head) <
                     view.state.doc.length &&
                   !readOnly,
@@ -915,6 +971,11 @@ export const ManuscriptEditor = forwardRef<
       effects: setSceneBoundaryPreviewsEffect.of(
         sceneBoundaryPreviewsRef.current,
       ),
+    });
+  });
+  const syncManuscriptSceneRanges = useEffectEvent((view: EditorView) => {
+    view.dispatch({
+      effects: setManuscriptSceneRangesEffect.of(sceneRangesRef.current),
     });
   });
   const syncHeatmapMode = useEffectEvent((
@@ -1200,6 +1261,13 @@ export const ManuscriptEditor = forwardRef<
       syncSceneBoundaryPreviews(view);
     }
   }, [sceneBoundaryPreviews]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (view !== null) {
+      syncManuscriptSceneRanges(view);
+    }
+  }, [sceneRanges]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -2044,6 +2112,7 @@ export const ManuscriptEditor = forwardRef<
           cutDisabled={!contextMenu.canCut}
           onAddEvent={notifyAddEvent}
           onAddScene={notifyAddScene}
+          onSplitScene={notifySplitScene}
           onCopy={() => copyOrCutSelection(false)}
           onCut={() => copyOrCutSelection(true)}
           onMoveToNextEpisode={notifyMoveToNextEpisode}

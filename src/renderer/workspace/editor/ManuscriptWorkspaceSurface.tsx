@@ -1,8 +1,9 @@
 import type { ComponentProps, RefObject } from "react";
-import { useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import { X } from "lucide-react";
 
 import type { ManuscriptDocumentSource } from "../../../application/editor/manuscript-document-profile";
+import type { SceneProjectionList } from "../../../application/structure/scene-projection";
 import { FocusModeToolbar, type FocusModeToolbarProps } from "../../editor/FocusModeToolbar";
 import {
   ManuscriptEditor,
@@ -78,6 +79,7 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
   }>;
   openDocuments: readonly ManuscriptDocumentSource[];
   runtime: ReadyWorkspaceRuntime | null;
+  sceneProjection: SceneProjectionList | null;
   telemetryStore: ManuscriptTelemetryStore;
   titleEditTarget: string | null;
   workspaceActionState: string;
@@ -94,6 +96,7 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
     navigation,
     openDocuments,
     runtime,
+    sceneProjection,
     telemetryStore,
     titleEditTarget,
     workspaceActionState,
@@ -107,6 +110,22 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
   const loreCue = controllers.loreCue;
   const readingLayout = controllers.readingLayout;
   const scene = controllers.scene;
+  const manuscriptSceneRanges = useMemo(() => {
+    if (activeDocument === null || sceneProjection === null) return [];
+    return sceneProjection.scenes
+      .filter((candidate) =>
+        candidate.documentId === activeDocument.documentId &&
+        candidate.range !== null
+      )
+      .map((candidate) => Object.freeze({
+        sceneKey: candidate.sceneKey,
+        sceneIndex: candidate.sceneIndex,
+        start: candidate.range!.start,
+        end: candidate.range!.end,
+        integrity: candidate.integrity,
+        spansEpisodes: (candidate.sceneIdentity?.segments.length ?? 0) > 1,
+      }));
+  }, [activeDocument, sceneProjection]);
 
   return (
     <div
@@ -229,12 +248,18 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
               }
             : {})}
           loreEntries={loreEntries}
-          hasNextEpisode={episodeMove.hasNextEpisode}
+          canMoveToNextEpisode={episodeMove.canMoveToNextEpisode}
           orderedDocuments={activeWorkDocuments}
           onBlur={activity.handleDocumentBlur}
           onAddEvent={event.openContextEventDialog}
           onAddScene={() => {
             void scene.createSceneBoundary();
+          }}
+          onSplitScene={() => {
+            void scene.createSceneBoundary("split");
+          }}
+          onSceneBoundaryHistoryToggle={(entry, active) => {
+            void scene.applySceneBoundaryHistory(entry, active);
           }}
           onCompositionEnd={callbacks.onCompositionEnd}
           onDocumentActivated={callbacks.onDocumentActivated}
@@ -268,6 +293,7 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
               : null
           }
           sceneBoundaryPreviews={scene.sceneBoundaryPreviews}
+          sceneRanges={manuscriptSceneRanges}
         />
       )}
       {editorTools.preflightActionError !== null && (

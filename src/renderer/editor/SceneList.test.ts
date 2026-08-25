@@ -146,7 +146,6 @@ describe("SceneList", () => {
     expect(markup).toContain("미배정 예정 사건");
     expect(markup).toContain("이 장면에 포함");
     expect(markup).toContain("이 장면으로 음악 찾기");
-    expect(markup).toContain("장면 삭제");
     expect(markup).toContain("선호 영상");
     expect(markup).toContain("닫힌 방 방 밤 문이 닫힌다.");
     expect(markup).not.toContain("SceneOverride");

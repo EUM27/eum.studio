@@ -600,6 +600,7 @@ type ApplicationRuntime = {
   renameDocument(value: unknown): Promise<WorkspaceCatalogProjection>;
   retireWork(value: unknown): Promise<WorkspaceCatalogProjection>;
   retireDocument(value: unknown): Promise<WorkspaceCatalogProjection>;
+  retireAllDocuments(value: unknown): Promise<WorkspaceCatalogProjection>;
   moveDocument(value: unknown): Promise<WorkspaceCatalogProjection>;
   createDocumentFolder(value: unknown): Promise<WorkspaceCatalogProjection>;
   renameDocumentFolder(value: unknown): Promise<WorkspaceCatalogProjection>;
@@ -1667,6 +1668,8 @@ async function registerApplicationHandlers(): Promise<void> {
         localRuntime.retireWork(value),
       retireDocument: (value) =>
         localRuntime.retireDocument(value),
+      retireAllDocuments: (value) =>
+        localRuntime.retireAllDocuments(value),
       moveDocument: (value) =>
         localRuntime.moveDocument(value),
       createDocumentFolder: (value) =>
@@ -2260,6 +2263,11 @@ async function registerApplicationHandlers(): Promise<void> {
       retireDocument: async () => {
         throw new Error(
           "Document retirement is unavailable in a configured manuscript runtime",
+        );
+      },
+      retireAllDocuments: async () => {
+        throw new Error(
+          "All-Document retirement is unavailable in a configured manuscript runtime",
         );
       },
       moveDocument: async () => {

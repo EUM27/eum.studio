@@ -14,6 +14,7 @@ import {
   parseRenameDocumentCommand,
   parseRenameWorkCommand,
   parseRetireDocumentCommand,
+  parseRetireAllDocumentsCommand,
   parseRetireDocumentFolderCommand,
   parseRetireWorkCommand,
   parseWorkspaceCatalogProjection,
@@ -32,6 +33,7 @@ import {
   type RenameDocumentCommand,
   type RenameWorkCommand,
   type RetireDocumentCommand,
+  type RetireAllDocumentsCommand,
   type RetireDocumentFolderCommand,
   type RetireWorkCommand,
   type WorkspaceCatalogProjection,
@@ -87,6 +89,8 @@ export const WORKSPACE_RENAME_DOCUMENT_CHANNEL =
 export const WORKSPACE_RETIRE_WORK_CHANNEL = "studio:workspace:retire-work";
 export const WORKSPACE_RETIRE_DOCUMENT_CHANNEL =
   "studio:workspace:retire-document";
+export const WORKSPACE_RETIRE_ALL_DOCUMENTS_CHANNEL =
+  "studio:workspace:retire-all-documents";
 export const WORKSPACE_MOVE_DOCUMENT_CHANNEL = "studio:workspace:move-document";
 export const WORKSPACE_CREATE_DOCUMENT_FOLDER_CHANNEL =
   "studio:workspace:create-document-folder";
@@ -117,6 +121,7 @@ export type WorkspaceBridgeChannel =
   | typeof WORKSPACE_RENAME_DOCUMENT_CHANNEL
   | typeof WORKSPACE_RETIRE_WORK_CHANNEL
   | typeof WORKSPACE_RETIRE_DOCUMENT_CHANNEL
+  | typeof WORKSPACE_RETIRE_ALL_DOCUMENTS_CHANNEL
   | typeof WORKSPACE_MOVE_DOCUMENT_CHANNEL
   | typeof WORKSPACE_CREATE_DOCUMENT_FOLDER_CHANNEL
   | typeof WORKSPACE_RENAME_DOCUMENT_FOLDER_CHANNEL
@@ -133,6 +138,7 @@ export type WorkspaceBridgePayload =
   | RenameDocumentCommand
   | RetireWorkCommand
   | RetireDocumentCommand
+  | RetireAllDocumentsCommand
   | ActivateWorkspaceLocationCommand
   | CaptureWorkspaceResumeCommand;
 
@@ -176,6 +182,9 @@ export type WorkspaceBridge = Readonly<{
   ) => Promise<WorkspaceCatalogProjection>;
   retireDocument: (
     command: RetireDocumentCommand,
+  ) => Promise<WorkspaceCatalogProjection>;
+  retireAllDocuments: (
+    command: RetireAllDocumentsCommand,
   ) => Promise<WorkspaceCatalogProjection>;
   moveDocument: (
     command: MoveDocumentCommand,
@@ -352,6 +361,18 @@ export function createWorkspaceBridge(
         return parseWorkspaceCatalogProjection(value);
       } catch {
         throw new Error("Invalid Document retirement result");
+      }
+    },
+    retireAllDocuments: async (input) => {
+      const command = parseRetireAllDocumentsCommand(input);
+      const value = await invoke(
+        WORKSPACE_RETIRE_ALL_DOCUMENTS_CHANNEL,
+        command,
+      );
+      try {
+        return parseWorkspaceCatalogProjection(value);
+      } catch {
+        throw new Error("Invalid all-Document retirement result");
       }
     },
     moveDocument: async (input) => {

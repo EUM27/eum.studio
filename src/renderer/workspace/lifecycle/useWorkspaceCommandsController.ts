@@ -225,12 +225,43 @@ export function useWorkspaceCommandsController(input: Readonly<{
         workId,
         documentId,
       });
+      await input.ports.refreshSceneProjection(workId);
       await input.ports.reloadRuntime(catalog.activeDocumentId);
       input.ports.clearManuscriptSearch();
       input.ports.publishCatalog(catalog);
       return catalog;
     } catch (error) {
       input.ports.setActionError("회차를 삭제하지 못했습니다.");
+      throw error;
+    } finally {
+      input.ports.setActionState("idle");
+    }
+  }, [currentRuntimeDocument, input]);
+
+  const retireAllDocuments = useCallback(async (
+    workId: WorkspaceWorkSummary["workId"],
+  ): Promise<WorkspaceCatalogProjection> => {
+    if (input.runtime.status !== "ready") {
+      throw new Error("The manuscript workspace is not ready");
+    }
+    input.ports.setActionState("retiring-all-documents");
+    input.ports.setActionError(null);
+    try {
+      const currentDocument = currentRuntimeDocument();
+      if (currentDocument !== null) {
+        await input.ports.persistDocument(currentDocument);
+      }
+      const catalog = await input.client.retireAllDocuments({
+        schemaVersion: 1,
+        workId,
+      });
+      await input.ports.refreshSceneProjection(workId);
+      await input.ports.reloadRuntime(catalog.activeDocumentId);
+      input.ports.clearManuscriptSearch();
+      input.ports.publishCatalog(catalog);
+      return catalog;
+    } catch (error) {
+      input.ports.setActionError("회차를 전체 삭제하지 못했습니다.");
       throw error;
     } finally {
       input.ports.setActionState("idle");
@@ -352,6 +383,7 @@ export function useWorkspaceCommandsController(input: Readonly<{
     renameDocument,
     retireWork,
     retireDocument,
+    retireAllDocuments,
     moveDocument,
     createDocumentFolder,
     renameDocumentFolder,

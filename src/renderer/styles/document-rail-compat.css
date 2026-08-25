@@ -283,6 +283,88 @@
   font-weight: 650;
 }
 
+.studio-app-shell .document-folder-header-actions .document-retire-all-button {
+  color: var(--eum-text-faint);
+}
+
+.studio-app-shell
+  .document-folder-header-actions
+  .document-retire-all-button:hover:not(:disabled) {
+  color: var(--eum-danger, #b42318);
+  background: var(--eum-hover, #eeeeee);
+}
+
+.episode-delete-warning-backdrop {
+  position: fixed;
+  z-index: 720;
+  inset: 0;
+  display: grid;
+  padding: 20px;
+  place-items: center;
+  background: rgb(20 18 22 / 32%);
+}
+
+.episode-delete-warning-dialog {
+  display: grid;
+  width: min(420px, calc(100vw - 40px));
+  gap: 14px;
+  padding: 22px;
+  border: 1px solid var(--eum-line);
+  border-radius: 10px;
+  color: var(--eum-text);
+  background: var(--eum-panel, #ffffff);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 22%);
+}
+
+.episode-delete-warning-dialog h3,
+.episode-delete-warning-dialog p {
+  margin: 0;
+}
+
+.episode-delete-warning-dialog h3 {
+  font-size: 16px;
+}
+
+.episode-delete-warning-dialog p {
+  color: var(--eum-text-muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.episode-delete-warning-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.episode-delete-warning-option input {
+  margin: 0;
+  accent-color: var(--eum-accent);
+}
+
+.episode-delete-warning-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.episode-delete-warning-actions button {
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--eum-line);
+  border-radius: 6px;
+  color: var(--eum-text);
+  background: var(--eum-panel, #ffffff);
+  cursor: pointer;
+}
+
+.episode-delete-warning-actions .is-danger {
+  border-color: var(--eum-danger, #b42318);
+  color: #ffffff;
+  background: var(--eum-danger, #b42318);
+}
+
 .studio-app-shell .document-retire-button {
   display: grid;
   width: 28px;
@@ -490,7 +572,7 @@
 }
 
 .studio-app-shell .session-feedback-drag-handle,
-.studio-app-shell .focus-mode-drag-handle {
+.studio-app-shell .manuscript-focus-drag-handle {
   display: grid;
   width: 22px;
   height: 28px;
@@ -509,7 +591,7 @@
 
 .studio-app-shell :is(
   .session-feedback-drag-handle,
-  .focus-mode-drag-handle
+  .manuscript-focus-drag-handle
 ):hover {
   color: var(--eum-accent-strong);
   background: var(--eum-accent-soft);
@@ -517,10 +599,10 @@
 
 .studio-app-shell :is(
   .session-feedback-panel,
-  .focus-mode-floating-surface
+  .manuscript-focus-floating-surface
 ).is-dragging :is(
   .session-feedback-drag-handle,
-  .focus-mode-drag-handle
+  .manuscript-focus-drag-handle
 ) {
   cursor: grabbing;
 }

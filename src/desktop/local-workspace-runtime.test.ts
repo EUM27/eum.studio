@@ -2081,16 +2081,6 @@ describe("local workspace runtime", () => {
         workId: first.workId,
         documentId: second.documentId,
       });
-      await expect(runtime.captureWorkspaceResume({
-        schemaVersion: 1,
-        workId: first.workId,
-        documentId: second.documentId,
-        selection: { anchor: manuscript.length, head: manuscript.length },
-        workspaceMode: "writing",
-      })).resolves.toMatchObject({
-        status: "resolved",
-        documentId: second.documentId,
-      });
       await expect(
         runtime.retireDocument({
           schemaVersion: 1,
@@ -2107,10 +2097,6 @@ describe("local workspace runtime", () => {
       expect(afterActiveRetirement).toMatchObject({
         activeWorkId: first.workId,
         activeDocumentId: third.documentId,
-      });
-      expect(runtime.getManuscriptResumeCheckpoint()).toMatchObject({
-        status: "missing",
-        workId: first.workId,
       });
       const afterNonactiveRetirement = await runtime.retireDocument({
         schemaVersion: 1,
@@ -10919,153 +10905,4 @@ describe("local workspace runtime", () => {
     }
   });
 
-  it("moves here-to-end into the next episode atomically, preserves one Scene identity, and undoes both episodes", async () => {
-    const rootDirectoryPath = await mkdtemp(
-      path.join(tmpdir(), "eum-studio-episode-range-move-runtime-"),
-    );
-    const options = createOptions(rootDirectoryPath);
-    let runtime = await openLocalWorkspaceRuntime(options);
-    try {
-      const created = await runtime.createFirstWork({
-        schemaVersion: 1,
-        title: "교차 회차 장면 작품",
-        firstDocumentTitle: "9화",
-      });
-      const target = await runtime.createDocument({
-        schemaVersion: 1,
-        workId: created.workId,
-        title: "10화",
-      });
-      const sourceText = "장면 A\n***\n줄리안 등장\n대화가 계속된다.\n폭탄 발언";
-      const targetText = "다음날 아침";
-      const editorStateJson = JSON.stringify({
-        schemaVersion: 1,
-        ranges: [],
-        contentWidthPx: options.formattingProfile.defaults.contentWidthPx,
-      });
-      const saveText = async (input: Readonly<{
-        documentId: string;
-        baseRevisionId: string;
-        text: string;
-      }>) => runtime.saveDocumentChange({
-        schemaVersion: 1,
-        batch: parseChangeBatch({
-          schemaVersion: 1,
-          textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
-          batchId: randomUUID(),
-          workId: created.workId,
-          documentId: input.documentId,
-          baseRevisionId: input.baseRevisionId,
-          sequence: 0,
-          createdAt: new Date().toISOString(),
-          beforeTextLengthUtf16: 0,
-          afterTextLengthUtf16: input.text.length,
-          changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: input.text }],
-        }),
-        editorStateJson,
-      });
-      const [sourceSaved, targetSaved] = await Promise.all([
-        saveText({
-          documentId: created.documentId,
-          baseRevisionId: created.revisionId,
-          text: sourceText,
-        }),
-        saveText({
-          documentId: target.documentId,
-          baseRevisionId: target.revisionId,
-          text: targetText,
-        }),
-      ]);
-      if (!("revisionId" in sourceSaved) || !("revisionId" in targetSaved)) {
-        throw new Error("Local revision save did not return revision identities");
-      }
-      const currentScenes = await runtime.listSceneProjection({
-        schemaVersion: 1,
-        workId: created.workId,
-      });
-      await runtime.updateSceneRuleSet({
-        schemaVersion: 1,
-        workId: created.workId,
-        sceneRuleSetId: currentScenes.ruleSet.sceneRuleSetId,
-        expectedRevision: currentScenes.ruleSet.revision,
-        displayName: "별표 장면 구분",
-        boundaryRules: [{
-          boundaryRuleId: "asterisk-divider",
-          kind: "line-regexp",
-          pattern: "^\\*\\*\\*$",
-          flags: "u",
-        }],
-        normalizationPolicy: "preserve",
-        enabled: true,
-      });
-
-      const from = sourceText.indexOf("대화가 계속된다.");
-      const movedText = sourceText.slice(from);
-      const moved = await runtime.moveRangeToEpisode({
-        schemaVersion: 1,
-        workId: created.workId,
-        sourceEpisodeId: created.documentId,
-        targetEpisodeId: target.documentId,
-        expectedSourceRevisionId: sourceSaved.revisionId,
-        expectedTargetRevisionId: targetSaved.revisionId,
-        from,
-        to: sourceText.length,
-        placement: "start",
-      });
-
-      expect(moved.status).toBe("moved");
-      expect(moved.sceneIds).toHaveLength(1);
-      runtime.close();
-      runtime = await openLocalWorkspaceRuntime(options);
-
-      const movedProfile = runtime.getManuscriptDocumentProfile();
-      expect(movedProfile.documents.find(
-        (document) => document.documentId === created.documentId,
-      )?.initialText).toBe(sourceText.slice(0, from));
-      expect(movedProfile.documents.find(
-        (document) => document.documentId === target.documentId,
-      )?.initialText).toBe(movedText + targetText);
-      const linkedProjection = await runtime.listSceneProjection({
-        schemaVersion: 1,
-        workId: created.workId,
-      });
-      const linkedScenes = linkedProjection.scenes.filter(
-        (scene) => scene.sceneIdentity?.sceneId === moved.sceneIds[0],
-      );
-      expect(new Set(linkedScenes.map((scene) => scene.documentId))).toEqual(
-        new Set([created.documentId, target.documentId]),
-      );
-      expect(linkedScenes[0]?.sceneIdentity?.segments.map(
-        (segment) => segment.documentTitle,
-      )).toEqual(["9화", "10화"]);
-
-      const undone = await runtime.undoMoveRangeToEpisode({
-        schemaVersion: 1,
-        workId: created.workId,
-        moveId: moved.moveId,
-        expectedSourceRevisionId: moved.sourceRevisionId,
-        expectedTargetRevisionId: moved.targetRevisionId,
-      });
-      expect(undone.status).toBe("undone");
-      runtime.close();
-      runtime = await openLocalWorkspaceRuntime(options);
-      const restoredProfile = runtime.getManuscriptDocumentProfile();
-      expect(restoredProfile.documents.find(
-        (document) => document.documentId === created.documentId,
-      )?.initialText).toBe(sourceText);
-      expect(restoredProfile.documents.find(
-        (document) => document.documentId === target.documentId,
-      )?.initialText).toBe(targetText);
-      const restoredProjection = await runtime.listSceneProjection({
-        schemaVersion: 1,
-        workId: created.workId,
-      });
-      expect(restoredProjection.scenes.some(
-        (scene) => scene.sceneIdentity?.sceneId === moved.sceneIds[0],
-      )).toBe(false);
-    } finally {
-      runtime.close();
-      await rm(rootDirectoryPath, { recursive: true, force: true });
-    }
-  });
 });

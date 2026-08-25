@@ -1139,6 +1139,22 @@
   padding-block: var(--manuscript-paragraph-spacing, 0px);
 }
 
+.studio-app-shell .manuscript-editor .cm-manuscript-scene-range {
+  border-radius: 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.studio-app-shell .manuscript-editor .cm-manuscript-scene-range.is-odd {
+  background: color-mix(in srgb, #7968c8 9%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, #7968c8 46%, transparent);
+}
+
+.studio-app-shell .manuscript-editor .cm-manuscript-scene-range.is-even {
+  background: color-mix(in srgb, #4c91b8 8%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, #4c91b8 42%, transparent);
+}
+
 .studio-app-shell .previous-flow-context {
   position: relative;
   display: grid;

@@ -23,6 +23,9 @@ import type {
 import type {
   ManuscriptSceneBoundaryPreview,
 } from "../../editor/scene-boundary-preview-extension";
+import type {
+  SceneBoundaryHistoryEntry,
+} from "../../editor/scene-boundary-history-extension";
 import type { SceneDraftActionState } from "../../editor/SceneDraftPanel";
 import type {
   SceneExtractionActionState,
@@ -256,6 +259,10 @@ export function useSceneWorkspaceController(input: Readonly<{
     readDocumentState: (
       document: ManuscriptDocumentSource,
     ) => ManuscriptDocumentStateSummary | null | undefined;
+    recordSceneBoundaryHistory: (
+      document: ManuscriptDocumentSource,
+      entry: SceneBoundaryHistoryEntry,
+    ) => boolean;
   }>;
   openWritingSurface: () => void;
   persistDocument: (document: ManuscriptDocumentSource) => Promise<void>;
@@ -338,7 +345,7 @@ export function useSceneWorkspaceController(input: Readonly<{
     input.state.setSceneActionError(null);
     try {
       await input.persistDocument(input.activeDocument);
-      await input.structureClient.createSceneOverride({
+      const created = await input.structureClient.createSceneOverride({
         schemaVersion: 1,
         workId: input.activeDocument.workId,
         documentId: input.activeDocument.documentId,
@@ -347,12 +354,71 @@ export function useSceneWorkspaceController(input: Readonly<{
         operation,
         note: "",
       });
+      if (operation === "split") {
+        input.editor.recordSceneBoundaryHistory(input.activeDocument, {
+          historyId: created.sceneOverrideId,
+          workId: input.activeDocument.workId,
+          documentId: input.activeDocument.documentId,
+          selection: { anchor: selection.anchor, head: selection.head },
+          exactQuote: manuscript.slice(selection.from, selection.to),
+        });
+      }
       await input.refreshSceneProjection(input.activeDocument.workId);
     } catch {
       input.state.setSceneActionError(
         operation === "split"
           ? "현재 위치에서 장면을 분할하지 못했습니다."
           : "현재 위치에 장면 경계를 저장하지 못했습니다.",
+      );
+    } finally {
+      input.state.setSceneActionState("idle");
+    }
+  }, [input]);
+
+  const applySceneBoundaryHistory = useCallback(async (
+    entry: SceneBoundaryHistoryEntry,
+    active: boolean,
+  ): Promise<void> => {
+    const document = input.activeDocument;
+    if (
+      document === null ||
+      document.workId !== entry.workId ||
+      document.documentId !== entry.documentId ||
+      input.state.sceneActionState !== "idle"
+    ) {
+      input.state.setSceneActionError("장면 나눔 실행취소 대상을 열 수 없습니다.");
+      return;
+    }
+    const manuscript = input.editor.materializeDocumentText(document);
+    const from = Math.min(entry.selection.anchor, entry.selection.head);
+    const to = Math.max(entry.selection.anchor, entry.selection.head);
+    if (
+      manuscript === undefined ||
+      to > manuscript.length ||
+      manuscript.slice(from, to) !== entry.exactQuote
+    ) {
+      input.state.setSceneActionError("장면 나눔 실행취소 위치가 현재 원고와 다릅니다.");
+      return;
+    }
+    input.state.setSceneActionState("creating");
+    input.state.setSceneActionError(null);
+    try {
+      await input.persistDocument(document);
+      await input.structureClient.createSceneOverride({
+        schemaVersion: 1,
+        workId: entry.workId,
+        documentId: entry.documentId,
+        selection: entry.selection,
+        exactQuote: entry.exactQuote,
+        operation: active ? "split" : "merge",
+        note: "",
+      });
+      await input.refreshSceneProjection(entry.workId);
+    } catch {
+      input.state.setSceneActionError(
+        active
+          ? "장면 나눔을 다시 적용하지 못했습니다."
+          : "장면 나눔을 취소하지 못했습니다.",
       );
     } finally {
       input.state.setSceneActionState("idle");
@@ -865,6 +931,7 @@ export function useSceneWorkspaceController(input: Readonly<{
   return {
     sceneBoundaryPreviews,
     createSceneBoundary,
+    applySceneBoundaryHistory,
     mergeSceneWithPrevious,
     updateSceneRuleSet,
     setSceneEventOverride,

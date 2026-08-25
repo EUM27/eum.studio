@@ -8,6 +8,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   ChevronDown,
   ChevronRight,
@@ -54,6 +55,17 @@ const DOCUMENT_DRAG_START_DISTANCE = 6;
 const DOCUMENT_DRAG_AUTO_SCROLL_EDGE = 42;
 const DOCUMENT_DRAG_AUTO_SCROLL_STEP = 12;
 const DEFAULT_DOCUMENT_FOLDER_TITLE = "제목없음";
+const EPISODE_DELETE_WARNING_SUPPRESSED_STORAGE_KEY =
+  "eum_episode_delete_warning_suppressed_v1";
+
+type EpisodeRetirementRequest =
+  | Readonly<{
+      kind: "document";
+      document: WorkspaceDocumentSummary;
+    }>
+  | Readonly<{
+      kind: "all";
+    }>;
 
 export function DocumentFolderTree({
   work,
@@ -67,6 +79,7 @@ export function DocumentFolderTree({
   onRenameFolder,
   onPlaceDocument,
   onRetireDocument,
+  onRetireAllDocuments,
   onRetireFolder,
 }: {
   readonly work: WorkspaceWorkSummary;
@@ -97,6 +110,7 @@ export function DocumentFolderTree({
   readonly onRetireDocument: (
     document: WorkspaceDocumentSummary,
   ) => Promise<void>;
+  readonly onRetireAllDocuments: () => Promise<void>;
   readonly onRetireFolder: (
     folder: WorkspaceDocumentFolderSummary,
   ) => Promise<void>;
@@ -125,6 +139,53 @@ export function DocumentFolderTree({
     WorkspaceDocumentFolderSummary["folderId"] | null
   >(null);
   const [renameFolderTitle, setRenameFolderTitle] = useState("");
+  const [episodeRetirementRequest, setEpisodeRetirementRequest] =
+    useState<EpisodeRetirementRequest | null>(null);
+  const [suppressEpisodeDeleteWarning, setSuppressEpisodeDeleteWarning] =
+    useState(false);
+  const episodeDeleteWarningSuppressed = (): boolean => {
+    try {
+      return window.localStorage.getItem(
+        EPISODE_DELETE_WARNING_SUPPRESSED_STORAGE_KEY,
+      ) === "true";
+    } catch {
+      return false;
+    }
+  };
+  const runEpisodeRetirement = (request: EpisodeRetirementRequest): void => {
+    const operation = request.kind === "document"
+      ? onRetireDocument(request.document)
+      : onRetireAllDocuments();
+    void operation.catch(() => undefined);
+  };
+  const requestEpisodeRetirement = (
+    request: EpisodeRetirementRequest,
+  ): void => {
+    if (disabled) return;
+    if (episodeDeleteWarningSuppressed()) {
+      runEpisodeRetirement(request);
+      return;
+    }
+    setSuppressEpisodeDeleteWarning(false);
+    setEpisodeRetirementRequest(request);
+  };
+  const confirmEpisodeRetirement = (): void => {
+    const request = episodeRetirementRequest;
+    if (request === null) return;
+    if (suppressEpisodeDeleteWarning) {
+      try {
+        window.localStorage.setItem(
+          EPISODE_DELETE_WARNING_SUPPRESSED_STORAGE_KEY,
+          "true",
+        );
+      } catch {
+        // The deletion still proceeds when UI preference storage is unavailable.
+      }
+    }
+    setEpisodeRetirementRequest(null);
+    setSuppressEpisodeDeleteWarning(false);
+    runEpisodeRetirement(request);
+  };
   const foldersByParentId = useMemo(() => {
     const groups = new Map<
       WorkspaceDocumentFolderSummary["folderId"] | null,
@@ -521,10 +582,7 @@ export function DocumentFolderTree({
         className="document-retire-button"
         disabled={disabled}
         onClick={() => {
-          if (!window.confirm(
-            `‘${document.title}’ 회차를 삭제할까요?\n원고와 기록은 복구를 위해 보존됩니다.`,
-          )) return;
-          void onRetireDocument(document).catch(() => undefined);
+          requestEpisodeRetirement({ kind: "document", document });
         }}
         title="회차 삭제"
         type="button"
@@ -692,6 +750,16 @@ export function DocumentFolderTree({
           >
             <FolderPlus aria-hidden="true" size={14} />
           </button>
+          <button
+            aria-label="회차 전체 삭제"
+            className="document-retire-all-button"
+            disabled={disabled || work.documents.length === 0}
+            onClick={() => requestEpisodeRetirement({ kind: "all" })}
+            title="회차 전체 삭제"
+            type="button"
+          >
+            <Trash2 aria-hidden="true" size={14} />
+          </button>
         </span>
       </header>
       <div
@@ -706,6 +774,64 @@ export function DocumentFolderTree({
           renderDocument(document, 0),
         )}
       </div>
+      {episodeRetirementRequest !== null && createPortal(
+        <div className="episode-delete-warning-backdrop">
+          <section
+            aria-label={
+              episodeRetirementRequest.kind === "all"
+                ? "회차 전체 삭제 경고"
+                : "회차 삭제 경고"
+            }
+            aria-modal="true"
+            className="episode-delete-warning-dialog"
+            role="dialog"
+          >
+            <h3>
+              {episodeRetirementRequest.kind === "all"
+                ? "회차를 전체 삭제할까요?"
+                : "회차를 삭제할까요?"}
+            </h3>
+            <p>
+              {episodeRetirementRequest.kind === "all"
+                ? `‘${work.title}’의 회차 ${work.documents.length}개를 모두 삭제합니다.`
+                : `‘${episodeRetirementRequest.document.title}’ 회차를 삭제합니다.`}
+              {" 원고와 기록은 복구를 위해 보존됩니다."}
+            </p>
+            <label className="episode-delete-warning-option">
+              <input
+                checked={suppressEpisodeDeleteWarning}
+                onChange={(event) => {
+                  setSuppressEpisodeDeleteWarning(event.currentTarget.checked);
+                }}
+                type="checkbox"
+              />
+              <span>다음부터 회차 삭제 경고 표시하지 않기</span>
+            </label>
+            <div className="episode-delete-warning-actions">
+              <button
+                onClick={() => {
+                  setEpisodeRetirementRequest(null);
+                  setSuppressEpisodeDeleteWarning(false);
+                }}
+                type="button"
+              >
+                취소
+              </button>
+              <button
+                className="is-danger"
+                onClick={confirmEpisodeRetirement}
+                type="button"
+              >
+                {episodeRetirementRequest.kind === "all"
+                  ? "전체 삭제"
+                  : "삭제"}
+              </button>
+            </div>
+          </section>
+        </div>,
+        document.querySelector<HTMLElement>(".studio-app-shell") ??
+          document.body,
+      )}
     </section>
   );
 }

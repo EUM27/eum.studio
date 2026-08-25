@@ -9,6 +9,7 @@ export type WorkspaceActionState =
   | "renaming-document"
   | "retiring-work"
   | "retiring-document"
+  | "retiring-all-documents"
   | "moving-document"
   | "managing-document-folders"
   | "setting-document-completion";

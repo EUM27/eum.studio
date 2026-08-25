@@ -11,6 +11,7 @@ export function ManuscriptContextMenu(input: {
   readonly pasteDisabled: boolean;
   readonly onAddEvent: () => void;
   readonly onAddScene: () => void;
+  readonly onSplitScene: () => void;
   readonly onCopy: () => void;
   readonly onCut: () => void;
   readonly onMoveToNextEpisode: () => void;
@@ -110,6 +111,16 @@ export function ManuscriptContextMenu(input: {
         type="button"
       >
         장면 추가
+      </button>
+      <button
+        onClick={() => {
+          input.onClose();
+          input.onSplitScene();
+        }}
+        role="menuitem"
+        type="button"
+      >
+        장면 나누기
       </button>
       <button
         onClick={() => {

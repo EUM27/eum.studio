@@ -6,6 +6,7 @@ import { deriveWorkStructureOverview } from "../../application/structure/work-st
 import type { WorkspaceWorkSummary } from "../../application/workspace/workspace-contract";
 import { entityId, type EntityId } from "../../domain/writing";
 import type { ManuscriptEditorHandle } from "../editor/ManuscriptEditor";
+import type { SceneBoundaryHistoryEntry } from "../editor/scene-boundary-history-extension";
 import { useForeshadowController } from "../features/foreshadow/useForeshadowController";
 import { useFragmentsController } from "../features/fragments/useFragmentsController";
 import { useLoreForeshadowLinkController } from "../features/lore/useLoreForeshadowLinkController";
@@ -177,6 +178,14 @@ export function useWorkspaceStoryFeatureKernel(input: Readonly<{
         manuscriptEditorRef.current?.materializeDocumentText(document),
       readDocumentState: (document: ManuscriptDocumentSource) =>
         manuscriptEditorRef.current?.readDocumentState(document),
+      recordSceneBoundaryHistory: (
+        document: ManuscriptDocumentSource,
+        entry: SceneBoundaryHistoryEntry,
+      ) =>
+        manuscriptEditorRef.current?.recordSceneBoundaryHistory(
+          document,
+          entry,
+        ) ?? false,
     }), []); // eslint-disable-line react-hooks/exhaustive-deps -- ref objects are stable editor ports
     const openWritingSurfaceForSceneDraft = useCallback(() => {
       preserveCurrentWorkLocation();
@@ -371,6 +380,7 @@ export function useWorkspaceStoryFeatureKernel(input: Readonly<{
     activeDocument: activeDocument ?? null,
     documents: activeWorkDocuments,
     editorClient: input.client.editor,
+    workspaceClient: input.client.workspace,
     editorRef: manuscriptEditorRef,
     durableSaveQueueRef,
     reloadRuntime: input.reloadRuntimeAfterEpisodeMove,

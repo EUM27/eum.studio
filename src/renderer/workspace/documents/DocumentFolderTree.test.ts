@@ -76,6 +76,7 @@ describe("DocumentFolderTree", () => {
       onRenameFolder: vi.fn(async () => undefined),
       onPlaceDocument: vi.fn(async () => undefined),
       onRetireDocument: vi.fn(async () => undefined),
+      onRetireAllDocuments: vi.fn(async () => undefined),
       onRetireFolder: vi.fn(async () => undefined),
     }));
 
@@ -88,7 +89,6 @@ describe("DocumentFolderTree", () => {
     expect(markup).toContain('aria-current="page"');
     expect(markup).toContain("프롤로그");
     expect(markup).toContain("1회차");
-    expect(markup).toContain('aria-label="1회차 회차 삭제"');
     expect(markup).toContain("폴더 추가");
   });
 });

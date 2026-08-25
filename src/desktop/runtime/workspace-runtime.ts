@@ -22,6 +22,7 @@ export function pickWorkspaceRuntime(
     renameDocument: (command) => runtime.renameDocument(command),
     retireWork: (command) => runtime.retireWork(command),
     retireDocument: (command) => runtime.retireDocument(command),
+    retireAllDocuments: (command) => runtime.retireAllDocuments(command),
     moveDocument: (command) => runtime.moveDocument(command),
     createDocumentFolder: (command) =>
       runtime.createDocumentFolder(command),
