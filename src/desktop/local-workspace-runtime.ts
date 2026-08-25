@@ -2267,6 +2267,11 @@ JOIN scene_identities AS scene
   ON scene.work_id = segment.work_id
   AND scene.id = segment.scene_id
   AND scene.retired_at IS NULL
+JOIN documents AS document
+  ON document.work_id = segment.work_id
+  AND document.id = segment.document_id
+  AND document.retired_at IS NULL
+  AND document.archived_at IS NULL
 WHERE
   segment.work_id = ?
   AND segment.retired_at IS NULL
@@ -20719,6 +20724,35 @@ class DefaultLocalWorkspaceRuntime
           `Document changed before retirement: ${command.documentId}`,
         );
       }
+      this.#database.prepare(`
+        UPDATE scene_episode_segments
+        SET
+          retired_at = ?,
+          revision = revision + 1,
+          updated_at = ?
+        WHERE
+          work_id = ?
+          AND document_id = ?
+          AND retired_at IS NULL
+      `).run(retiredAt, retiredAt, command.workId, command.documentId);
+      this.#database.prepare(`
+        UPDATE scene_identities
+        SET
+          retired_at = ?,
+          revision = revision + 1,
+          updated_at = ?
+        WHERE
+          work_id = ?
+          AND retired_at IS NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM scene_episode_segments AS segment
+            WHERE
+              segment.work_id = scene_identities.work_id
+              AND segment.scene_id = scene_identities.id
+              AND segment.retired_at IS NULL
+          )
+      `).run(retiredAt, retiredAt, command.workId);
       const updatedWork = this.#database.prepare(`
         UPDATE works
         SET
@@ -20801,6 +20835,22 @@ class DefaultLocalWorkspaceRuntime
           `Documents changed before all-Document retirement: ${command.workId}`,
         );
       }
+      this.#database.prepare(`
+        UPDATE scene_episode_segments
+        SET
+          retired_at = ?,
+          revision = revision + 1,
+          updated_at = ?
+        WHERE work_id = ? AND retired_at IS NULL
+      `).run(retiredAt, retiredAt, command.workId);
+      this.#database.prepare(`
+        UPDATE scene_identities
+        SET
+          retired_at = ?,
+          revision = revision + 1,
+          updated_at = ?
+        WHERE work_id = ? AND retired_at IS NULL
+      `).run(retiredAt, retiredAt, command.workId);
       const updatedWork = this.#database.prepare(`
         UPDATE works
         SET
