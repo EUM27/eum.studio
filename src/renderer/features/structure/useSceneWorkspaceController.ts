@@ -467,6 +467,47 @@ export function useSceneWorkspaceController(input: Readonly<{
     }
   }, [input]);
 
+  const mergeCurrentSceneWithPrevious = useCallback(async () => {
+    if (
+      input.activeDocument === null ||
+      input.sceneProjection === null ||
+      input.state.sceneActionState !== "idle"
+    ) return;
+    const summary = input.editor.readDocumentState(input.activeDocument);
+    const selection = summary?.selection.ranges[summary.selection.mainIndex];
+    if (selection === undefined) {
+      input.state.setSceneActionError("합칠 현재 장면 위치를 읽지 못했습니다.");
+      return;
+    }
+    const scenes = input.sceneProjection.scenes
+      .filter(
+        (scene) =>
+          scene.documentId === input.activeDocument?.documentId &&
+          scene.range !== null &&
+          scene.range.start < scene.range.end,
+      )
+      .sort(
+        (left, right) =>
+          left.sceneIndex - right.sceneIndex ||
+          left.sceneKey.localeCompare(right.sceneKey),
+      );
+    const offset = selection.from;
+    const currentIndex = scenes.findIndex((scene, index) =>
+      scene.range !== null &&
+      scene.range.start <= offset &&
+      (offset < scene.range.end ||
+        (index === scenes.length - 1 && offset === scene.range.end))
+    );
+    if (currentIndex <= 0) {
+      input.state.setSceneActionError("앞 장면과 합칠 수 있는 위치가 아닙니다.");
+      return;
+    }
+    await mergeSceneWithPrevious(
+      scenes[currentIndex]!,
+      scenes[currentIndex - 1]!,
+    );
+  }, [input, mergeSceneWithPrevious]);
+
   const deleteScene = useCallback(async (scene: SceneProjection) => {
     if (
       input.activeDocument === null ||
@@ -969,6 +1010,7 @@ export function useSceneWorkspaceController(input: Readonly<{
     createSceneBoundary,
     applySceneBoundaryHistory,
     deleteScene,
+    mergeCurrentSceneWithPrevious,
     mergeSceneWithPrevious,
     updateSceneRuleSet,
     setSceneEventOverride,

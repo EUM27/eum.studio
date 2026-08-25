@@ -1,4 +1,5 @@
 import {
+  EditorSelection,
   StateEffect,
   StateField,
   type Extension,
@@ -8,6 +9,7 @@ import {
 import {
   Decoration,
   EditorView,
+  dropCursor,
   type DecorationSet,
 } from "@codemirror/view";
 
@@ -68,6 +70,10 @@ function buildManuscriptSceneDecorations(
             "data-scene-key": range.sceneKey,
             "data-scene-integrity": range.integrity,
             "data-scene-spans-episodes": String(range.spansEpisodes),
+            draggable: range.integrity === "resolved" ? "true" : "false",
+            title: range.integrity === "resolved"
+              ? "장면 범위를 드래그해 이동"
+              : "장면 범위를 확인한 뒤 이동할 수 있습니다",
           },
         }).range(range.start, range.end),
       );
@@ -79,7 +85,7 @@ function buildManuscriptSceneDecorations(
 export function createManuscriptSceneRangeExtension(
   initialRanges: readonly ManuscriptSceneRange[],
 ): Extension {
-  return StateField.define<{
+  const sceneRangeField = StateField.define<{
     readonly ranges: readonly ManuscriptSceneRange[];
     readonly decorations: DecorationSet;
   }>({
@@ -113,4 +119,27 @@ export function createManuscriptSceneRangeExtension(
     provide: (field) =>
       EditorView.decorations.from(field, (value) => value.decorations),
   });
+  return [
+    sceneRangeField,
+    dropCursor(),
+    EditorView.domEventHandlers({
+      dragstart: (event, view) => {
+        const target = event.target instanceof Element
+          ? event.target.closest<HTMLElement>(".cm-manuscript-scene-range")
+          : null;
+        const sceneKey = target?.dataset.sceneKey;
+        if (sceneKey === undefined || view.state.readOnly) return false;
+        const range = view.state.field(sceneRangeField).ranges.find(
+          (candidate) => candidate.sceneKey === sceneKey,
+        );
+        if (range === undefined || range.integrity !== "resolved") {
+          return true;
+        }
+        view.dispatch({
+          selection: EditorSelection.range(range.start, range.end),
+        });
+        return false;
+      },
+    }),
+  ];
 }

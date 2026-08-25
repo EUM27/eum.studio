@@ -8,6 +8,7 @@ export function ManuscriptContextMenu(input: {
   readonly clientY: number;
   readonly copyDisabled: boolean;
   readonly cutDisabled: boolean;
+  readonly mergeSceneDisabled: boolean;
   readonly pasteDisabled: boolean;
   readonly onAddEvent: () => void;
   readonly onAddScene: () => void;
@@ -15,6 +16,7 @@ export function ManuscriptContextMenu(input: {
   readonly onCopy: () => void;
   readonly onCut: () => void;
   readonly onMoveToNextEpisode: () => void;
+  readonly onMergeScene: () => void;
   readonly onPaste: () => void;
   readonly moveToNextEpisodeDisabled: boolean;
   readonly onClose: () => void;
@@ -121,6 +123,17 @@ export function ManuscriptContextMenu(input: {
         type="button"
       >
         장면 나누기
+      </button>
+      <button
+        disabled={input.mergeSceneDisabled}
+        onClick={() => {
+          input.onClose();
+          input.onMergeScene();
+        }}
+        role="menuitem"
+        type="button"
+      >
+        앞 장면과 합치기
       </button>
       <button
         onClick={() => {

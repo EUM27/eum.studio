@@ -255,6 +255,9 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
           onAddScene={() => {
             void scene.createSceneBoundary();
           }}
+          onMergeScene={() => {
+            void scene.mergeCurrentSceneWithPrevious();
+          }}
           onSplitScene={() => {
             void scene.createSceneBoundary("split");
           }}

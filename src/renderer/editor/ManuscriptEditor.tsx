@@ -233,6 +233,7 @@ export type ManuscriptEditorProps = {
   readonly onOpenAnalysis?: () => void;
   readonly onAddEvent: () => void;
   readonly onAddScene: () => void;
+  readonly onMergeScene: () => void;
   readonly onSplitScene: () => void;
   readonly onSceneBoundaryHistoryToggle: (
     entry: SceneBoundaryHistoryEntry,
@@ -365,6 +366,7 @@ export const ManuscriptEditor = forwardRef<
     onLoreCueHover,
     onAddEvent,
     onAddScene,
+    onMergeScene,
     onSplitScene,
     onSceneBoundaryHistoryToggle,
     onOpenLoreCue,
@@ -428,7 +430,9 @@ export const ManuscriptEditor = forwardRef<
     clientX: number;
     clientY: number;
     canMoveToNextEpisode: boolean;
+    canMergeScene: boolean;
     canPaste: boolean;
+    sceneOffset: number;
   }> | null>(null);
   const readOnlyCompartmentRef = useRef(
     new Compartment(),
@@ -449,6 +453,7 @@ export const ManuscriptEditor = forwardRef<
   const notifyLoreCueHover = useEffectEvent(onLoreCueHover);
   const notifyAddEvent = useEffectEvent(onAddEvent);
   const notifyAddScene = useEffectEvent(onAddScene);
+  const notifyMergeScene = useEffectEvent(onMergeScene);
   const notifySplitScene = useEffectEvent(onSplitScene);
   const notifySceneBoundaryHistoryToggle = useEffectEvent(
     onSceneBoundaryHistoryToggle,
@@ -879,9 +884,23 @@ export const ManuscriptEditor = forwardRef<
                   Math.min(selection.anchor, selection.head) <
                     view.state.doc.length &&
                   !readOnly,
+                canMergeScene:
+                  !readOnly &&
+                  sceneRangesRef.current
+                    .filter((range) => range.start < range.end)
+                    .sort((left, right) =>
+                      left.start - right.start || left.end - right.end
+                    )
+                    .findIndex((range, index, ranges) =>
+                      range.start <= pointerOffset &&
+                      (pointerOffset < range.end ||
+                        (index === ranges.length - 1 &&
+                          pointerOffset === range.end))
+                    ) > 0,
                 canPaste:
                   !readOnly &&
                   typeof navigator.clipboard?.readText === "function",
+                sceneOffset: pointerOffset,
               });
               return true;
             },
@@ -2110,9 +2129,27 @@ export const ManuscriptEditor = forwardRef<
           clientY={contextMenu.clientY}
           copyDisabled={!contextMenu.canCopy}
           cutDisabled={!contextMenu.canCut}
+          mergeSceneDisabled={!contextMenu.canMergeScene}
           onAddEvent={notifyAddEvent}
           onAddScene={notifyAddScene}
-          onSplitScene={notifySplitScene}
+          onMergeScene={() => {
+            const view = viewRef.current;
+            if (view !== null) {
+              view.dispatch({
+                selection: EditorSelection.cursor(contextMenu.sceneOffset),
+              });
+            }
+            notifyMergeScene();
+          }}
+          onSplitScene={() => {
+            const view = viewRef.current;
+            if (view !== null) {
+              view.dispatch({
+                selection: EditorSelection.cursor(contextMenu.sceneOffset),
+              });
+            }
+            notifySplitScene();
+          }}
           onCopy={() => copyOrCutSelection(false)}
           onCut={() => copyOrCutSelection(true)}
           onMoveToNextEpisode={notifyMoveToNextEpisode}

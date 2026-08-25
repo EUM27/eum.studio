@@ -1145,6 +1145,18 @@
   -webkit-box-decoration-break: clone;
 }
 
+.studio-app-shell
+  .manuscript-editor
+  .cm-manuscript-scene-range[draggable="true"] {
+  cursor: grab;
+}
+
+.studio-app-shell
+  .manuscript-editor
+  .cm-manuscript-scene-range[draggable="true"]:active {
+  cursor: grabbing;
+}
+
 .studio-app-shell .manuscript-editor .cm-manuscript-scene-range.is-odd {
   background: color-mix(in srgb, #7968c8 9%, transparent);
   box-shadow: inset 2px 0 0 color-mix(in srgb, #7968c8 46%, transparent);
