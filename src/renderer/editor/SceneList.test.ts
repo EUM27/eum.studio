@@ -131,6 +131,7 @@ describe("SceneList", () => {
       onOpenScene: vi.fn(),
       onSplitScene: vi.fn(),
       onMergeWithPrevious: vi.fn(),
+      onDeleteScene: vi.fn(),
       onSetEventOverride: vi.fn(),
       onUpdateRuleSet: vi.fn(),
     }));
@@ -161,6 +162,7 @@ describe("SceneList", () => {
       onOpenScene: vi.fn(),
       onSplitScene: vi.fn(),
       onMergeWithPrevious: vi.fn(),
+      onDeleteScene: vi.fn(),
       onSetEventOverride: vi.fn(),
       onUpdateRuleSet: vi.fn(),
     }));

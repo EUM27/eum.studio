@@ -467,6 +467,42 @@ export function useSceneWorkspaceController(input: Readonly<{
     }
   }, [input]);
 
+  const deleteScene = useCallback(async (scene: SceneProjection) => {
+    if (
+      input.activeDocument === null ||
+      input.state.sceneActionState !== "idle" ||
+      scene.documentId !== input.activeDocument.documentId ||
+      scene.range === null
+    ) return;
+    const manuscript = input.editor.materializeDocumentText(input.activeDocument);
+    if (manuscript === undefined) {
+      input.state.setSceneActionError("삭제할 장면 범위를 읽지 못했습니다.");
+      return;
+    }
+    input.state.setSceneActionState("creating");
+    input.state.setSceneActionError(null);
+    try {
+      await input.persistDocument(input.activeDocument);
+      await input.structureClient.createSceneOverride({
+        schemaVersion: 1,
+        workId: input.activeDocument.workId,
+        documentId: input.activeDocument.documentId,
+        selection: {
+          anchor: scene.range.start,
+          head: scene.range.end,
+        },
+        exactQuote: manuscript.slice(scene.range.start, scene.range.end),
+        operation: "delete",
+        note: "",
+      });
+      await input.refreshSceneProjection(input.activeDocument.workId);
+    } catch {
+      input.state.setSceneActionError("장면을 삭제하지 못했습니다.");
+    } finally {
+      input.state.setSceneActionState("idle");
+    }
+  }, [input]);
+
   const updateSceneRuleSet = useCallback(async (
     draft: Pick<
       UpdateSceneRuleSetCommand,
@@ -932,6 +968,7 @@ export function useSceneWorkspaceController(input: Readonly<{
     sceneBoundaryPreviews,
     createSceneBoundary,
     applySceneBoundaryHistory,
+    deleteScene,
     mergeSceneWithPrevious,
     updateSceneRuleSet,
     setSceneEventOverride,

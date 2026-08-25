@@ -109,8 +109,8 @@ export function useMoveRangeToEpisodeController(input: Readonly<{
         to: range.to,
         placement: "start",
       });
-      await current.refreshSceneProjection(source.workId);
       await current.reloadRuntime(source.documentId);
+      await current.refreshSceneProjection(source.workId);
       lastMoveRef.current = receipt;
       setLastMove(receipt);
     } catch (error) {

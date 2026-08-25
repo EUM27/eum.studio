@@ -85,6 +85,7 @@ export function SceneList(input: {
     scene: SceneProjection,
     previousScene: SceneProjection,
   ) => void;
+  readonly onDeleteScene: (scene: SceneProjection) => void;
   readonly onSetEventOverride: (
     scene: SceneProjection,
     eventBlockId: EntityId<"EventBlock">,
@@ -454,18 +455,13 @@ export function SceneList(input: {
                   <button
                     disabled={
                       input.busy ||
-                      scene.range === null ||
-                      (previousScene === undefined && nextScene === undefined)
+                      scene.range === null
                     }
                     onClick={() => {
                       if (!window.confirm(
-                        "이 장면 구분을 삭제할까요?\n원고는 삭제되지 않고 인접 장면과 합쳐집니다.",
+                        "이 장면을 삭제할까요?\n원고 텍스트는 삭제되지 않습니다.",
                       )) return;
-                      if (previousScene !== undefined) {
-                        input.onMergeWithPrevious(scene, previousScene);
-                      } else if (nextScene !== undefined) {
-                        input.onMergeWithPrevious(nextScene, scene);
-                      }
+                      input.onDeleteScene(scene);
                     }}
                     type="button"
                   >

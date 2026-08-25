@@ -206,7 +206,7 @@ export type Poc3SceneOverrideRecord =
     readonly kind: "sceneOverride";
     readonly workId: string;
     readonly documentId: string;
-    readonly operation: "add" | "ignore" | "merge" | "split";
+    readonly operation: "add" | "delete" | "ignore" | "merge" | "split";
     readonly anchorIds: readonly string[];
     readonly baseRuleSetRevision: number;
     readonly note?: string;

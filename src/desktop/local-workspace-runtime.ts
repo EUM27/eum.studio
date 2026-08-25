@@ -24260,6 +24260,7 @@ function readStoredSceneOverrideRows(
         const operation = readRequiredString(row, "operation", label);
         if (
           operation !== "add" &&
+          operation !== "delete" &&
           operation !== "ignore" &&
           operation !== "merge" &&
           operation !== "split"

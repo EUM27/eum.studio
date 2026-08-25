@@ -172,6 +172,9 @@ export function SceneStructureContent(input: SceneStructureContentProps) {
         onMergeWithPrevious={(sceneProjection, previousScene) => {
           void scene.mergeSceneWithPrevious(sceneProjection, previousScene);
         }}
+        onDeleteScene={(sceneProjection) => {
+          void scene.deleteScene(sceneProjection);
+        }}
         onOpenMusicSettings={() => input.onOpenSettings?.()}
         onOpenScene={input.navigation.focusScene}
         onPlayFavoriteMusicVideo={(video) => music.playMusicQueue([video])}

@@ -938,6 +938,10 @@ export function deriveSceneProjection(
 
   let status: SceneProjectionList["status"] = "clean";
   const scenes: SceneProjection[] = [];
+  const deletedRangesByDocument = new Map<
+    EntityId<"Document">,
+    Array<Readonly<{ from: number; to: number }>>
+  >();
   for (const document of documents) {
     const boundaries = [...ruleBoundaries(document, ruleSet)];
     const affectedRanges: Array<{ readonly from: number; readonly to: number }> = [];
@@ -980,6 +984,14 @@ export function deriveSceneProjection(
               source: "override" as const,
             }));
           }
+          affectedRanges.push(boundary.range);
+          continue;
+        }
+        if (override.operation === "delete") {
+          const deletedRanges =
+            deletedRangesByDocument.get(document.documentId) ?? [];
+          deletedRanges.push(boundary.range);
+          deletedRangesByDocument.set(document.documentId, deletedRanges);
           affectedRanges.push(boundary.range);
           continue;
         }
@@ -1063,7 +1075,17 @@ export function deriveSceneProjection(
     });
   }
 
-  const scenesByKey = new Map(scenes.map((scene) => [scene.sceneKey, scene] as const));
+  const visibleScenes = scenes.filter((scene) => {
+    if (scene.range === null) return true;
+    return !(deletedRangesByDocument.get(scene.documentId) ?? []).some(
+      (deletedRange) =>
+        deletedRange.from === scene.range?.start &&
+        deletedRange.to === scene.range.end,
+    );
+  });
+  const scenesByKey = new Map(
+    visibleScenes.map((scene) => [scene.sceneKey, scene] as const),
+  );
   const overrideByPair = new Map<string, SceneEventOverrideProjection>();
   for (const override of sceneEventOverrides) {
     if (!eventIds.has(override.eventBlockId) || !scenesByKey.has(override.sceneKey)) {
@@ -1073,7 +1095,7 @@ export function deriveSceneProjection(
     overrideByPair.set(`${override.sceneKey}\u0000${override.eventBlockId}`, override);
   }
   const assignedEventIds = new Set<EntityId<"EventBlock">>();
-  const projectedScenes = scenes.map((scene) => {
+  const projectedScenes = visibleScenes.map((scene) => {
     const automaticIds = new Set<EntityId<"EventBlock">>();
     if (scene.range !== null) {
       for (const eventBlock of eventBlocks) {

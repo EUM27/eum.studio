@@ -3,7 +3,12 @@ import {
   type EntityId,
 } from "../../domain/writing";
 
-export type SceneOverrideOperation = "add" | "ignore" | "merge" | "split";
+export type SceneOverrideOperation =
+  | "add"
+  | "delete"
+  | "ignore"
+  | "merge"
+  | "split";
 
 export type CreateSceneOverrideCommand = {
   readonly schemaVersion: 1;
@@ -125,7 +130,13 @@ function id<TEntity extends string>(
 }
 
 function operation(value: unknown, label: string): SceneOverrideOperation {
-  if (value !== "add" && value !== "ignore" && value !== "merge" && value !== "split") {
+  if (
+    value !== "add" &&
+    value !== "delete" &&
+    value !== "ignore" &&
+    value !== "merge" &&
+    value !== "split"
+  ) {
     throw new Error(`${label} is invalid`);
   }
   return value;
