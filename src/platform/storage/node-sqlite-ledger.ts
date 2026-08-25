@@ -3447,6 +3447,118 @@ function writeLedgerRecord(
         );
       });
       return;
+    case "sceneIdentity":
+      runStatement(
+        database,
+        `
+          INSERT INTO scene_identities (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            work_id
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.workId,
+        ],
+      );
+      return;
+    case "sceneEpisodeSegment":
+      runStatement(
+        database,
+        `
+          INSERT INTO scene_episode_segments (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            work_id,
+            scene_id,
+            document_id,
+            anchor_id
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.workId,
+          record.sceneId,
+          record.documentId,
+          record.anchorId,
+        ],
+      );
+      return;
+    case "sceneEpisodeSegmentRetirement":
+      {
+        const retirement = database.prepare(`
+          UPDATE scene_episode_segments
+          SET
+            revision = revision + 1,
+            updated_at = ?,
+            retired_at = ?
+          WHERE
+            id = ?
+            AND work_id = ?
+            AND retired_at IS NULL
+        `).run(
+          record.retiredAt,
+          record.retiredAt,
+          record.id,
+          record.workId,
+        ) as { readonly changes: number | bigint };
+        if (Number(retirement.changes) !== 1) {
+          throw new Error(`Scene segment retirement conflict: ${record.id}`);
+        }
+      }
+      return;
+    case "sceneIdentityRetirement":
+      {
+        const retirement = database.prepare(`
+          UPDATE scene_identities
+          SET
+            revision = revision + 1,
+            updated_at = ?,
+            retired_at = ?
+          WHERE
+            id = ?
+            AND work_id = ?
+            AND retired_at IS NULL
+            AND NOT EXISTS (
+              SELECT 1
+              FROM scene_episode_segments AS segment
+              WHERE
+                segment.work_id = scene_identities.work_id
+                AND segment.scene_id = scene_identities.id
+                AND segment.retired_at IS NULL
+            )
+        `).run(
+          record.retiredAt,
+          record.retiredAt,
+          record.id,
+          record.workId,
+        ) as { readonly changes: number | bigint };
+        if (Number(retirement.changes) !== 1) {
+          throw new Error(`Scene identity retirement conflict: ${record.id}`);
+        }
+      }
+      return;
     case "sceneEventOverride":
       runStatement(
         database,

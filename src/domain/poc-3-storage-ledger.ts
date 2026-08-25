@@ -212,6 +212,35 @@ export type Poc3SceneOverrideRecord =
     readonly note?: string;
   };
 
+export type Poc3SceneIdentityRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "sceneIdentity";
+    readonly workId: string;
+  };
+
+export type Poc3SceneEpisodeSegmentRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "sceneEpisodeSegment";
+    readonly workId: string;
+    readonly sceneId: string;
+    readonly documentId: string;
+    readonly anchorId: string;
+  };
+
+export type Poc3SceneEpisodeSegmentRetirementRecord = {
+  readonly kind: "sceneEpisodeSegmentRetirement";
+  readonly id: string;
+  readonly workId: string;
+  readonly retiredAt: string;
+};
+
+export type Poc3SceneIdentityRetirementRecord = {
+  readonly kind: "sceneIdentityRetirement";
+  readonly id: string;
+  readonly workId: string;
+  readonly retiredAt: string;
+};
+
 export type Poc3SceneEventOverrideRecord =
   Poc3LedgerRecordMeta & {
     readonly kind: "sceneEventOverride";
@@ -999,6 +1028,10 @@ export type Poc3LedgerRecord =
   | Poc3AnchorRecord
   | Poc3RangeGroupRecord
   | Poc3SceneOverrideRecord
+  | Poc3SceneIdentityRecord
+  | Poc3SceneEpisodeSegmentRecord
+  | Poc3SceneEpisodeSegmentRetirementRecord
+  | Poc3SceneIdentityRetirementRecord
   | Poc3SceneEventOverrideRecord
   | Poc3SceneEventOverrideRetirementRecord
   | Poc3EventBlockRecord

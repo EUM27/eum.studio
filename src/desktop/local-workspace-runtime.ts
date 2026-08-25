@@ -13918,12 +13918,13 @@ class DefaultLocalWorkspaceRuntime
     const createdAt = new Date().toISOString();
     const sceneOverrideId = entityId<"SceneOverride">(randomUUID());
     const anchorId = entityId<"Anchor">(randomUUID());
+    const describeEvidence = createNodeCryptoAnchorEvidenceDescriptor(
+      this.#options.defaults.anchorEvidenceChecksumAlgorithm,
+    );
     const anchor = await new CreateAnchor({
       catalog,
       revisionStore: this.#revisionStore,
-      describeEvidence: createNodeCryptoAnchorEvidenceDescriptor(
-        this.#options.defaults.anchorEvidenceChecksumAlgorithm,
-      ),
+      describeEvidence,
     }).execute({
       meta: {
         id: anchorId,
@@ -13941,6 +13942,258 @@ class DefaultLocalWorkspaceRuntime
       commandRef: sceneOverrideId,
       actorRef: work.studioId,
     });
+    const sceneIdentityRecords: Poc3LedgerRecord[] = [];
+    if (command.operation === "split") {
+      const sceneProjection = await this.#listSceneProjectionSerially({
+        schemaVersion: 1,
+        workId: command.workId,
+      });
+      const sourceScene = sceneProjection.scenes.find(
+        (scene) =>
+          scene.documentId === command.documentId &&
+          scene.range !== null &&
+          scene.range.start < from &&
+          to < scene.range.end,
+      );
+      if (sourceScene === undefined || sourceScene.range === null) {
+        throw new Error("Scene split must stay inside one current Scene");
+      }
+      const leftSceneId = sourceScene.sceneIdentity?.sceneId ??
+        entityId<"Scene">(randomUUID());
+      const rightSceneId = entityId<"Scene">(randomUUID());
+      if (sourceScene.sceneIdentity === undefined) {
+        sceneIdentityRecords.push({
+          kind: "sceneIdentity",
+          ...createRecordMeta(createdAt),
+          id: leftSceneId,
+          workId: command.workId,
+        });
+      }
+      sceneIdentityRecords.push({
+        kind: "sceneIdentity",
+        ...createRecordMeta(createdAt),
+        id: rightSceneId,
+        workId: command.workId,
+      });
+
+      const segmentsToReplace = (sourceScene.sceneIdentity?.segments ?? [])
+        .filter(
+          (segment) =>
+            segment.range !== null &&
+            (segment.documentIndex > sourceScene.documentIndex ||
+              (segment.documentId === command.documentId &&
+                segment.range.start < sourceScene.range!.end &&
+                segment.range.end > sourceScene.range!.start)),
+        );
+      for (const segment of segmentsToReplace) {
+        sceneIdentityRecords.push({
+          kind: "sceneEpisodeSegmentRetirement",
+          id: segment.segmentId,
+          workId: command.workId,
+          retiredAt: createdAt,
+        });
+      }
+
+      const segmentRanges: Array<Readonly<{
+        sceneId: EntityId<"Scene">;
+        documentId: EntityId<"Document">;
+        start: number;
+        end: number;
+      }>> = [
+        Object.freeze({
+          sceneId: leftSceneId,
+          documentId: command.documentId,
+          start: sourceScene.range.start,
+          end: from,
+        }),
+        Object.freeze({
+          sceneId: rightSceneId,
+          documentId: command.documentId,
+          start: to,
+          end: sourceScene.range.end,
+        }),
+        ...segmentsToReplace.flatMap((segment) => {
+          if (
+            segment.range === null ||
+            segment.documentId === command.documentId
+          ) return [];
+          return [Object.freeze({
+            sceneId: rightSceneId,
+            documentId: segment.documentId,
+            start: segment.range.start,
+            end: segment.range.end,
+          })];
+        }),
+      ];
+      for (const segmentRange of segmentRanges) {
+        if (segmentRange.start >= segmentRange.end) continue;
+        const segmentTarget = this.#documentTargets.get(segmentRange.documentId);
+        if (
+          segmentTarget === undefined ||
+          segmentTarget.workId !== command.workId ||
+          segmentRange.end > segmentTarget.text.length
+        ) {
+          throw new Error("Scene split segment is outside the current Work");
+        }
+        const segmentId = entityId<"EpisodeSceneSegment">(randomUUID());
+        const segmentAnchor = createAnchorForKnownRevisionContent({
+          meta: {
+            id: entityId<"Anchor">(randomUUID()),
+            schemaVersion: LOCAL_WORKSPACE_LEDGER_SCHEMA_VERSION,
+            revision: 1,
+            createdAt,
+            updatedAt: createdAt,
+          },
+          documentId: segmentRange.documentId,
+          documentRevisionId: segmentTarget.currentRevisionId,
+          content: segmentTarget.text,
+          startOffset: segmentRange.start,
+          endOffset: segmentRange.end,
+          policy: this.#options.defaults.anchorPolicy,
+          commandRef: sceneOverrideId,
+          actorRef: work.studioId,
+          describeEvidence,
+        });
+        sceneIdentityRecords.push(
+          createAnchorLedgerRecord(command.workId, segmentAnchor),
+          {
+            kind: "sceneEpisodeSegment",
+            ...createRecordMeta(createdAt),
+            id: segmentId,
+            workId: command.workId,
+            sceneId: segmentRange.sceneId,
+            documentId: segmentRange.documentId,
+            anchorId: segmentAnchor.meta.id,
+          },
+        );
+      }
+    } else if (command.operation === "merge") {
+      const sceneProjection = await this.#listSceneProjectionSerially({
+        schemaVersion: 1,
+        workId: command.workId,
+      });
+      const leftScene = [...sceneProjection.scenes]
+        .reverse()
+        .find(
+          (scene) =>
+            scene.documentId === command.documentId &&
+            scene.range !== null &&
+            scene.range.end === from,
+        );
+      const rightScene = sceneProjection.scenes.find(
+        (scene) =>
+          scene.documentId === command.documentId &&
+          scene.range !== null &&
+          scene.range.start === to,
+      );
+      if (
+        leftScene !== undefined &&
+        leftScene.range !== null &&
+        rightScene !== undefined &&
+        rightScene.range !== null &&
+        (leftScene.sceneIdentity !== undefined ||
+          rightScene.sceneIdentity !== undefined)
+      ) {
+        const mergedSceneId = leftScene.sceneIdentity?.sceneId ??
+          rightScene.sceneIdentity?.sceneId;
+        if (mergedSceneId === undefined) {
+          throw new Error("Scene merge identity is missing");
+        }
+        const segmentsById = new Map(
+          [
+            ...(leftScene.sceneIdentity?.segments ?? []),
+            ...(rightScene.sceneIdentity?.segments ?? []),
+          ].map((segment) => [segment.segmentId, segment] as const),
+        );
+        for (const segment of segmentsById.values()) {
+          sceneIdentityRecords.push({
+            kind: "sceneEpisodeSegmentRetirement",
+            id: segment.segmentId,
+            workId: command.workId,
+            retiredAt: createdAt,
+          });
+        }
+        const rangesByDocument = new Map<
+          EntityId<"Document">,
+          Array<{ start: number; end: number }>
+        >();
+        for (const segment of segmentsById.values()) {
+          if (segment.range === null) continue;
+          const ranges = rangesByDocument.get(segment.documentId) ?? [];
+          ranges.push({
+            start: segment.range.start,
+            end: segment.range.end,
+          });
+          rangesByDocument.set(segment.documentId, ranges);
+        }
+        rangesByDocument.set(command.documentId, [{
+          start: leftScene.range.start,
+          end: rightScene.range.end,
+        }]);
+        for (const [documentId, ranges] of rangesByDocument) {
+          const orderedRanges = [...ranges].sort(
+            (left, right) => left.start - right.start || left.end - right.end,
+          );
+          const mergedRanges: Array<{ start: number; end: number }> = [];
+          for (const range of orderedRanges) {
+            const previous = mergedRanges.at(-1);
+            if (previous !== undefined && range.start <= previous.end) {
+              previous.end = Math.max(previous.end, range.end);
+            } else {
+              mergedRanges.push({ ...range });
+            }
+          }
+          const segmentTarget = this.#documentTargets.get(documentId);
+          if (segmentTarget === undefined || segmentTarget.workId !== command.workId) {
+            throw new Error("Scene merge segment is outside the current Work");
+          }
+          for (const range of mergedRanges) {
+            if (range.start >= range.end || range.end > segmentTarget.text.length) {
+              throw new Error("Scene merge segment range is invalid");
+            }
+            const segmentAnchor = createAnchorForKnownRevisionContent({
+              meta: {
+                id: entityId<"Anchor">(randomUUID()),
+                schemaVersion: LOCAL_WORKSPACE_LEDGER_SCHEMA_VERSION,
+                revision: 1,
+                createdAt,
+                updatedAt: createdAt,
+              },
+              documentId,
+              documentRevisionId: segmentTarget.currentRevisionId,
+              content: segmentTarget.text,
+              startOffset: range.start,
+              endOffset: range.end,
+              policy: this.#options.defaults.anchorPolicy,
+              commandRef: sceneOverrideId,
+              actorRef: work.studioId,
+              describeEvidence,
+            });
+            sceneIdentityRecords.push(
+              createAnchorLedgerRecord(command.workId, segmentAnchor),
+              {
+                kind: "sceneEpisodeSegment",
+                ...createRecordMeta(createdAt),
+                id: entityId<"EpisodeSceneSegment">(randomUUID()),
+                workId: command.workId,
+                sceneId: mergedSceneId,
+                documentId,
+                anchorId: segmentAnchor.meta.id,
+              },
+            );
+          }
+        }
+        const rightSceneId = rightScene.sceneIdentity?.sceneId;
+        if (rightSceneId !== undefined && rightSceneId !== mergedSceneId) {
+          sceneIdentityRecords.push({
+            kind: "sceneIdentityRetirement",
+            id: rightSceneId,
+            workId: command.workId,
+            retiredAt: createdAt,
+          });
+        }
+      }
+    }
     await this.#ledger.transaction(async (transaction: StorageTransaction) => {
       transaction.write(createAnchorLedgerRecord(command.workId, anchor));
       transaction.write({
@@ -13954,6 +14207,9 @@ class DefaultLocalWorkspaceRuntime
         baseRuleSetRevision,
         ...(command.note.length === 0 ? {} : { note: command.note }),
       });
+      for (const record of sceneIdentityRecords) {
+        transaction.write(record);
+      }
     });
     const projection = await this.#listSceneOverridesSerially({
       schemaVersion: 1,
