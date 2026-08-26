@@ -1003,7 +1003,11 @@ export function deriveSceneProjection(
           )
           .filter((index) => index >= 0)
           .sort((first, second) => second - first);
-        if (matchingIndexes.length === 0) {
+        const mergesEpisodeBoundary =
+          override.operation === "merge" &&
+          boundary.range.from === 0 &&
+          boundary.range.to === 0;
+        if (matchingIndexes.length === 0 && !mergesEpisodeBoundary) {
           documentIntegrity = documentIntegrity === "broken"
             ? "broken"
             : "needsReview";
@@ -1161,8 +1165,17 @@ export function deriveSceneProjection(
         segment.range.start < scene.range!.end &&
         segment.range.end > scene.range!.start,
     );
+    const exactSegments = matchingSegments.filter(
+      (segment) =>
+        segment.range !== null &&
+        segment.range.start === scene.range!.start &&
+        segment.range.end === scene.range!.end,
+    );
+    const identitySegments = exactSegments.length > 0
+      ? exactSegments
+      : matchingSegments;
     const sceneIds = [...new Set(
-      matchingSegments.map((segment) => segment.sceneId),
+      identitySegments.map((segment) => segment.sceneId),
     )];
     if (sceneIds.length === 0) return scene;
     if (sceneIds.length > 1) {

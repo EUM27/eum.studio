@@ -155,6 +155,12 @@ export function SceneStructureContent(input: SceneStructureContentProps) {
       )}
       <SceneList
         activeDocumentId={input.activeDocument?.documentId ?? null}
+        documentTitles={Object.fromEntries(
+          input.activeWork.documents.map((document) => [
+            document.documentId,
+            document.title,
+          ]),
+        )}
         annotations={structure.sceneAnnotations.filter(
           (annotation) => annotation.workId === activeWorkId,
         )}

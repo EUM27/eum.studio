@@ -867,6 +867,8 @@ export function WorkspaceView(input: Readonly<{
               editorTools: editorToolsController,
               event: eventWorkspaceController,
               eventState: eventWorkspaceState,
+              scene: sceneWorkspaceController,
+              sceneState: sceneWorkspaceState,
               focus: focusModeController,
               music: musicController,
               readingLayout: readingLayoutController,
@@ -877,12 +879,18 @@ export function WorkspaceView(input: Readonly<{
             embedded={embedded}
             eventRail={eventRail}
             eventRailHost={eventRailHost}
+            sceneProjection={
+              input.structureKernel.sceneProjection?.workId === activeWorkId
+                ? input.structureKernel.sceneProjection
+                : null
+            }
             focusText={musicFocusText}
             musicPlayerHost={musicPlayerHost}
             navigation={{
               openCompletedRevisionFromSchedule,
               openDocumentFromSchedule,
               openEventRailSource,
+              openScene: focusScene,
             }}
             onOpenSettings={onOpenSettings}
             onThemeChange={onThemeChange}

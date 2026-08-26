@@ -9,6 +9,7 @@ import { X } from "lucide-react";
 import type { ManuscriptDocumentSource } from "../../application/editor/manuscript-document-profile";
 import type { YouTubeMusicConnectionStatus } from "../../application/music/youtube-music-connection";
 import type { WorkspaceWorkSummary } from "../../application/workspace/workspace-contract";
+import type { SceneProjectionList } from "../../application/structure/scene-projection";
 import { DailyGoalStatus } from "../activity/DailyGoalDialog";
 import {
   SessionFeedbackPanel,
@@ -25,6 +26,10 @@ import type {
   useEventWorkspaceController,
   useEventWorkspaceState,
 } from "../features/structure/useEventWorkspaceController";
+import type {
+  useSceneWorkspaceController,
+  useSceneWorkspaceState,
+} from "../features/structure/useSceneWorkspaceController";
 import type { useStructureController } from "../features/structure/useStructureController";
 import type { useVersionController } from "../features/version/useVersionController";
 import { MusicLibraryDialog } from "../music/MusicLibraryDialog";
@@ -85,6 +90,8 @@ export function WorkspaceStatusToolsHost(input: Readonly<{
     editorTools: ReturnType<typeof useEditorToolsController>;
     event: ReturnType<typeof useEventWorkspaceController>;
     eventState: ReturnType<typeof useEventWorkspaceState>;
+    scene: ReturnType<typeof useSceneWorkspaceController>;
+    sceneState: ReturnType<typeof useSceneWorkspaceState>;
     focus: ReturnType<typeof useFocusModeController>;
     music: ReturnType<typeof useMusicController>;
     readingLayout: ReturnType<typeof useReadingLayoutController>;
@@ -95,6 +102,7 @@ export function WorkspaceStatusToolsHost(input: Readonly<{
   embedded: boolean;
   eventRail: ReturnType<typeof useStructureController>["eventRail"];
   eventRailHost: HTMLElement | null | undefined;
+  sceneProjection: SceneProjectionList | null;
   focusText: string | null;
   musicPlayerHost: HTMLElement | null | undefined;
   navigation: Readonly<{
@@ -107,6 +115,7 @@ export function WorkspaceStatusToolsHost(input: Readonly<{
     openEventRailSource: ComponentProps<
       typeof BottomEventRail
     >["onOpenSource"];
+    openScene: ComponentProps<typeof BottomEventRail>["onOpenScene"];
   }>;
   onOpenSettings: (() => void) | undefined;
   onThemeChange: ((theme: StarlightThemeKey) => void) | undefined;
@@ -124,6 +133,8 @@ export function WorkspaceStatusToolsHost(input: Readonly<{
   const editorTools = input.controllers.editorTools;
   const event = input.controllers.event;
   const eventState = input.controllers.eventState;
+  const scene = input.controllers.scene;
+  const sceneState = input.controllers.sceneState;
   const focus = input.controllers.focus;
   const music = input.controllers.music;
   const readingLayout = input.controllers.readingLayout;
@@ -146,8 +157,20 @@ export function WorkspaceStatusToolsHost(input: Readonly<{
                 ? input.activeManuscriptPosition.offset
                 : null
             }
+            documentTitles={Object.fromEntries(
+              activeWork.documents.map((document) => [
+                document.documentId,
+                document.title,
+              ]),
+            )}
             eventBusy={eventState.eventActionState !== "idle"}
+            sceneBusy={sceneState.sceneActionState !== "idle"}
+            onDetachEventRange={event.retireEventSource}
+            onDeleteSceneGroup={scene.deleteSceneGroup}
             onMoveEvent={event.moveEventBlock}
+            {...(input.navigation.openScene === undefined
+              ? {}
+              : { onOpenScene: input.navigation.openScene })}
             onOpenSource={(location) => {
               void input.navigation.openEventRailSource(location);
             }}
@@ -156,6 +179,7 @@ export function WorkspaceStatusToolsHost(input: Readonly<{
                 ? input.eventRail
                 : null
             }
+            sceneProjection={input.sceneProjection}
           />,
           input.eventRailHost,
         )}

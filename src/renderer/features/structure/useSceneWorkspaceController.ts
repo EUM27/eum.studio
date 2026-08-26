@@ -237,6 +237,7 @@ export function useSceneWorkspaceState() {
 
 export function useSceneWorkspaceController(input: Readonly<{
   activeDocument: ManuscriptDocumentSource | null;
+  documents: readonly ManuscriptDocumentSource[];
   activeWorkId: EntityId<"Work"> | null;
   activeWorkPlots: readonly PlotThreadProjection[];
   assistantConversationId: EntityId<"AssistantConversation">;
@@ -428,38 +429,45 @@ export function useSceneWorkspaceController(input: Readonly<{
   const mergeSceneWithPrevious = useCallback(async (
     scene: SceneProjection,
     previousScene: SceneProjection,
+    currentDocument = input.activeDocument,
   ) => {
     if (
-      input.activeDocument === null ||
+      currentDocument === null ||
       input.state.sceneActionState !== "idle" ||
-      scene.documentId !== input.activeDocument.documentId ||
-      previousScene.documentId !== input.activeDocument.documentId ||
+      scene.documentId !== currentDocument.documentId ||
       scene.range === null ||
       previousScene.range === null
     ) return;
-    const manuscript = input.editor.materializeDocumentText(input.activeDocument);
+    const crossesEpisodeBoundary =
+      previousScene.documentId !== scene.documentId;
+    if (
+      crossesEpisodeBoundary &&
+      (previousScene.documentIndex + 1 !== scene.documentIndex ||
+        scene.range.start !== 0)
+    ) return;
+    const manuscript = input.editor.materializeDocumentText(currentDocument);
     if (manuscript === undefined) {
       input.state.setSceneActionError(
         "현재 원고의 장면 경계를 읽지 못했습니다.",
       );
       return;
     }
-    const from = previousScene.range.end;
-    const to = scene.range.start;
+    const from = crossesEpisodeBoundary ? 0 : previousScene.range.end;
+    const to = crossesEpisodeBoundary ? 0 : scene.range.start;
     input.state.setSceneActionState("creating");
     input.state.setSceneActionError(null);
     try {
-      await input.persistDocument(input.activeDocument);
+      await input.persistDocument(currentDocument);
       await input.structureClient.createSceneOverride({
         schemaVersion: 1,
-        workId: input.activeDocument.workId,
-        documentId: input.activeDocument.documentId,
+        workId: currentDocument.workId,
+        documentId: currentDocument.documentId,
         selection: { anchor: from, head: to },
         exactQuote: manuscript.slice(from, to),
         operation: "merge",
         note: "",
       });
-      await input.refreshSceneProjection(input.activeDocument.workId);
+      await input.refreshSceneProjection(currentDocument.workId);
     } catch {
       input.state.setSceneActionError("앞 장면과 병합하지 못했습니다.");
     } finally {
@@ -467,32 +475,45 @@ export function useSceneWorkspaceController(input: Readonly<{
     }
   }, [input]);
 
-  const mergeCurrentSceneWithPrevious = useCallback(async () => {
+  const mergeCurrentSceneWithPrevious = useCallback(async (
+    currentDocument: ManuscriptDocumentSource,
+    offset: number,
+  ) => {
     if (
-      input.activeDocument === null ||
-      input.sceneProjection === null ||
       input.state.sceneActionState !== "idle"
     ) return;
-    const summary = input.editor.readDocumentState(input.activeDocument);
-    const selection = summary?.selection.ranges[summary.selection.mainIndex];
-    if (selection === undefined) {
+    if (!Number.isSafeInteger(offset) || offset < 0) {
       input.state.setSceneActionError("합칠 현재 장면 위치를 읽지 못했습니다.");
       return;
     }
-    const scenes = input.sceneProjection.scenes
+    let latestProjection: SceneProjectionList;
+    try {
+      await input.persistDocument(currentDocument);
+      latestProjection = await input.refreshSceneProjection(
+        currentDocument.workId,
+      );
+    } catch (reason) {
+      input.state.setSceneActionError(
+        reason instanceof Error
+          ? reason.message
+          : "현재 장면 목록을 새로 읽지 못했습니다.",
+      );
+      return;
+    }
+    const scenes = latestProjection.scenes
       .filter(
         (scene) =>
-          scene.documentId === input.activeDocument?.documentId &&
           scene.range !== null &&
           scene.range.start < scene.range.end,
       )
       .sort(
         (left, right) =>
+          left.documentIndex - right.documentIndex ||
           left.sceneIndex - right.sceneIndex ||
           left.sceneKey.localeCompare(right.sceneKey),
       );
-    const offset = selection.from;
     const currentIndex = scenes.findIndex((scene, index) =>
+      scene.documentId === currentDocument.documentId &&
       scene.range !== null &&
       scene.range.start <= offset &&
       (offset < scene.range.end ||
@@ -505,44 +526,80 @@ export function useSceneWorkspaceController(input: Readonly<{
     await mergeSceneWithPrevious(
       scenes[currentIndex]!,
       scenes[currentIndex - 1]!,
+      currentDocument,
     );
   }, [input, mergeSceneWithPrevious]);
 
-  const deleteScene = useCallback(async (scene: SceneProjection) => {
-    if (
-      input.activeDocument === null ||
-      input.state.sceneActionState !== "idle" ||
-      scene.documentId !== input.activeDocument.documentId ||
-      scene.range === null
-    ) return;
-    const manuscript = input.editor.materializeDocumentText(input.activeDocument);
-    if (manuscript === undefined) {
-      input.state.setSceneActionError("삭제할 장면 범위를 읽지 못했습니다.");
-      return;
-    }
+  const deleteScenes = useCallback(async (
+    requestedScenes: readonly SceneProjection[],
+  ) => {
+    if (input.state.sceneActionState !== "idle") return;
+    const scenes = requestedScenes.filter(
+      (scene, index, candidates) =>
+        scene.range !== null &&
+        candidates.findIndex(
+          (candidate) => candidate.sceneKey === scene.sceneKey,
+        ) === index,
+    );
+    if (scenes.length === 0) return;
+    const prepared = scenes.map((scene) => {
+      const document = input.documents.find(
+        (candidate) => candidate.documentId === scene.documentId,
+      );
+      const manuscript = document === undefined
+        ? undefined
+        : input.editor.materializeDocumentText(document);
+      if (document === undefined || manuscript === undefined || scene.range === null) {
+        throw new Error("삭제할 장면 범위를 읽지 못했습니다.");
+      }
+      return Object.freeze({ document, manuscript, scene, range: scene.range });
+    });
     input.state.setSceneActionState("creating");
     input.state.setSceneActionError(null);
     try {
-      await input.persistDocument(input.activeDocument);
-      await input.structureClient.createSceneOverride({
-        schemaVersion: 1,
-        workId: input.activeDocument.workId,
-        documentId: input.activeDocument.documentId,
-        selection: {
-          anchor: scene.range.start,
-          head: scene.range.end,
-        },
-        exactQuote: manuscript.slice(scene.range.start, scene.range.end),
-        operation: "delete",
-        note: "",
-      });
-      await input.refreshSceneProjection(input.activeDocument.workId);
-    } catch {
-      input.state.setSceneActionError("장면을 삭제하지 못했습니다.");
+      const documents = prepared.filter(
+        (entry, index, candidates) =>
+          candidates.findIndex(
+            (candidate) =>
+              candidate.document.documentId === entry.document.documentId,
+          ) === index,
+      );
+      for (const { document } of documents) {
+        await input.persistDocument(document);
+      }
+      for (const { document, manuscript, range } of prepared) {
+        await input.structureClient.createSceneOverride({
+          schemaVersion: 1,
+          workId: document.workId,
+          documentId: document.documentId,
+          selection: {
+            anchor: range.start,
+            head: range.end,
+          },
+          exactQuote: manuscript.slice(range.start, range.end),
+          operation: "delete",
+          note: "",
+        });
+      }
+      await input.refreshSceneProjection(prepared[0]!.document.workId);
+    } catch (reason) {
+      input.state.setSceneActionError(
+        reason instanceof Error ? reason.message : "장면을 삭제하지 못했습니다.",
+      );
     } finally {
       input.state.setSceneActionState("idle");
     }
   }, [input]);
+
+  const deleteScene = useCallback(async (scene: SceneProjection) => {
+    await deleteScenes([scene]);
+  }, [deleteScenes]);
+
+  const deleteSceneGroup = useCallback(async (
+    scenes: readonly SceneProjection[],
+  ) => {
+    await deleteScenes(scenes);
+  }, [deleteScenes]);
 
   const updateSceneRuleSet = useCallback(async (
     draft: Pick<
@@ -1010,6 +1067,7 @@ export function useSceneWorkspaceController(input: Readonly<{
     createSceneBoundary,
     applySceneBoundaryHistory,
     deleteScene,
+    deleteSceneGroup,
     mergeCurrentSceneWithPrevious,
     mergeSceneWithPrevious,
     updateSceneRuleSet,

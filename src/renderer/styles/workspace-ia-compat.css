@@ -1302,7 +1302,76 @@
   padding-bottom: 2px;
 }
 
+.studio-app-shell .bottom-event-rail-track-label {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0 4px;
+  color: var(--eum-text-faint);
+  font-size: 9px;
+  font-weight: 700;
+  writing-mode: vertical-rl;
+}
+
+.studio-app-shell .bottom-event-rail-track-label.is-scene {
+  color: color-mix(in srgb, var(--eum-text-muted) 45%, #6652a3);
+}
+
+.studio-app-shell .bottom-scene-card {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  grid-template-rows: auto auto auto;
+  align-content: start;
+  gap: 3px;
+  overflow: hidden;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, #7968c8 38%, var(--eum-line));
+  border-radius: 7px;
+  color: var(--eum-text);
+  text-align: left;
+  background: color-mix(in srgb, #7968c8 8%, var(--eum-panel));
+  cursor: pointer;
+}
+
+.studio-app-shell .bottom-scene-card-shell {
+  position: relative;
+  min-width: 0;
+  flex: 0 0 clamp(136px, 15vw, 184px);
+}
+
+.studio-app-shell .bottom-scene-card:hover:not(:disabled),
+.studio-app-shell .bottom-scene-card.is-current {
+  border-color: color-mix(in srgb, #7968c8 64%, var(--eum-line));
+  background: color-mix(in srgb, #7968c8 16%, var(--eum-panel));
+}
+
+.studio-app-shell .bottom-scene-card.is-unresolved,
+.studio-app-shell .bottom-scene-card:disabled {
+  opacity: 0.58;
+  cursor: default;
+}
+
+.studio-app-shell .bottom-scene-card > span,
+.studio-app-shell .bottom-scene-card > small {
+  overflow: hidden;
+  color: var(--eum-text-muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-app-shell .bottom-scene-card > strong {
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .studio-app-shell .bottom-event-card {
+  position: relative;
   display: grid;
   min-width: 0;
   flex: 0 0 clamp(156px, 17vw, 208px);
@@ -1316,6 +1385,75 @@
   text-align: left;
   background: #ffffff;
   cursor: grab;
+}
+
+.studio-app-shell .bottom-event-card-open {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  align-content: start;
+  gap: 3px;
+  padding: 0 24px 0 0;
+  border: 0;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+
+.studio-app-shell .bottom-event-card-open:disabled {
+  cursor: grab;
+}
+
+.studio-app-shell .bottom-event-card-open > span,
+.studio-app-shell .bottom-event-card-open > small {
+  overflow: hidden;
+  color: var(--eum-text-muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-app-shell .bottom-event-card-open > strong {
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-app-shell .bottom-range-detach {
+  position: absolute;
+  z-index: 2;
+  top: 5px;
+  right: 5px;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--eum-text-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.studio-app-shell .bottom-range-detach:hover:not(:disabled) {
+  border-color: color-mix(in srgb, #b42318 36%, var(--eum-line));
+  color: #b42318;
+  background: color-mix(in srgb, #b42318 9%, var(--eum-panel));
+}
+
+.studio-app-shell .bottom-range-detach.is-scene {
+  color: color-mix(in srgb, var(--eum-text-muted) 45%, #6652a3);
+}
+
+.studio-app-shell .bottom-range-detach:disabled {
+  opacity: 0.34;
+  cursor: default;
 }
 
 .studio-app-shell .bottom-event-card:active {

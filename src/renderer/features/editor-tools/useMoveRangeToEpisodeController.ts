@@ -71,10 +71,7 @@ export function useMoveRangeToEpisodeController(input: Readonly<{
     }
     const sourceText = editor.materializeDocumentText(source);
     const range = resolveHereToEpisodeEndRange(selection, sourceText.length);
-    if (range.from === range.to) {
-      setActionError("현재 위치 뒤에 다음 화로 보낼 내용이 없습니다.");
-      return;
-    }
+    const hasMovedText = range.from < range.to;
     actionStateRef.current = "moving";
     setActionState("moving");
     setActionError(null);
@@ -92,10 +89,20 @@ export function useMoveRangeToEpisodeController(input: Readonly<{
         await queue.flush(target.documentId);
       }
       const targetEpisodeId = target?.documentId ?? targetIdentity?.documentId;
+      if (targetEpisodeId === undefined) {
+        throw new Error("다음 회차를 준비하지 못했습니다.");
+      }
+      if (!hasMovedText) {
+        await current.reloadRuntime(targetEpisodeId);
+        await current.refreshSceneProjection(source.workId);
+        lastMoveRef.current = null;
+        setLastMove(null);
+        return;
+      }
       const expectedTargetRevisionId = target === null
         ? targetIdentity?.revisionId
         : queue.getCurrentRevisionId(target.documentId);
-      if (targetEpisodeId === undefined || expectedTargetRevisionId === undefined) {
+      if (expectedTargetRevisionId === undefined) {
         throw new Error("다음 회차를 준비하지 못했습니다.");
       }
       const receipt = await current.editorClient.moveRangeToEpisode({

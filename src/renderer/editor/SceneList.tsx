@@ -78,6 +78,7 @@ export function SceneList(input: {
   readonly favoriteMusicVideos: readonly YouTubeVideoProjection[];
   readonly musicPlaybackAvailable: boolean;
   readonly activeDocumentId: EntityId<"Document"> | null;
+  readonly documentTitles?: Readonly<Record<string, string>>;
   readonly busy: boolean;
   readonly onOpenScene: (scene: SceneProjection) => void;
   readonly onSplitScene: (scene: SceneProjection) => void;
@@ -342,7 +343,9 @@ export function SceneList(input: {
               ? []
               : [...new Set(
                   scene.sceneIdentity.segments.map(
-                    (segment) => segment.documentTitle,
+                    (segment) =>
+                      input.documentTitles?.[segment.documentId] ??
+                      segment.documentTitle,
                   ),
                 )];
             const annotation = input.annotations.find(

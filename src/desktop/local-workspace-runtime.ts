@@ -14081,7 +14081,7 @@ class DefaultLocalWorkspaceRuntime
         schemaVersion: 1,
         workId: command.workId,
       });
-      const leftScene = [...sceneProjection.scenes]
+      let leftScene = [...sceneProjection.scenes]
         .reverse()
         .find(
           (scene) =>
@@ -14089,24 +14089,54 @@ class DefaultLocalWorkspaceRuntime
             scene.range !== null &&
             scene.range.end === from,
         );
-      const rightScene = sceneProjection.scenes.find(
+      let rightScene = sceneProjection.scenes.find(
         (scene) =>
           scene.documentId === command.documentId &&
           scene.range !== null &&
           scene.range.start === to,
       );
       if (
+        leftScene === undefined &&
+        from === 0 &&
+        to === 0 &&
+        rightScene !== undefined
+      ) {
+        leftScene = [...sceneProjection.scenes]
+          .filter(
+            (scene) =>
+              scene.range !== null &&
+              scene.documentIndex < rightScene!.documentIndex,
+          )
+          .sort(
+            (left, right) =>
+              right.documentIndex - left.documentIndex ||
+              right.sceneIndex - left.sceneIndex,
+          )[0];
+      }
+      if (
         leftScene !== undefined &&
         leftScene.range !== null &&
         rightScene !== undefined &&
         rightScene.range !== null &&
-        (leftScene.sceneIdentity !== undefined ||
-          rightScene.sceneIdentity !== undefined)
+        (leftScene.documentId === rightScene.documentId ||
+          leftScene.documentIndex + 1 === rightScene.documentIndex)
       ) {
         const mergedSceneId = leftScene.sceneIdentity?.sceneId ??
-          rightScene.sceneIdentity?.sceneId;
-        if (mergedSceneId === undefined) {
-          throw new Error("Scene merge identity is missing");
+          rightScene.sceneIdentity?.sceneId ??
+          entityId<"Scene">(randomUUID());
+        if (
+          leftScene.sceneIdentity === undefined &&
+          rightScene.sceneIdentity === undefined
+        ) {
+          sceneIdentityRecords.push({
+            kind: "sceneIdentity",
+            schemaVersion: 1,
+            revision: 1,
+            createdAt,
+            updatedAt: createdAt,
+            id: mergedSceneId,
+            workId: command.workId,
+          });
         }
         const segmentsById = new Map(
           [
@@ -14135,10 +14165,25 @@ class DefaultLocalWorkspaceRuntime
           });
           rangesByDocument.set(segment.documentId, ranges);
         }
-        rangesByDocument.set(command.documentId, [{
-          start: leftScene.range.start,
-          end: rightScene.range.end,
-        }]);
+        if (leftScene.documentId === rightScene.documentId) {
+          rangesByDocument.set(command.documentId, [{
+            start: leftScene.range.start,
+            end: rightScene.range.end,
+          }]);
+        } else {
+          const leftRanges = rangesByDocument.get(leftScene.documentId) ?? [];
+          leftRanges.push({
+            start: leftScene.range.start,
+            end: leftScene.range.end,
+          });
+          rangesByDocument.set(leftScene.documentId, leftRanges);
+          const rightRanges = rangesByDocument.get(rightScene.documentId) ?? [];
+          rightRanges.push({
+            start: rightScene.range.start,
+            end: rightScene.range.end,
+          });
+          rangesByDocument.set(rightScene.documentId, rightRanges);
+        }
         for (const [documentId, ranges] of rangesByDocument) {
           const orderedRanges = [...ranges].sort(
             (left, right) => left.start - right.start || left.end - right.end,
@@ -14204,6 +14249,33 @@ class DefaultLocalWorkspaceRuntime
             retiredAt: createdAt,
           });
         }
+      }
+    } else if (command.operation === "delete") {
+      const sceneProjection = await this.#listSceneProjectionSerially({
+        schemaVersion: 1,
+        workId: command.workId,
+      });
+      const sourceScene = sceneProjection.scenes.find(
+        (scene) =>
+          scene.documentId === command.documentId &&
+          scene.range?.start === from &&
+          scene.range.end === to,
+      );
+      if (sourceScene?.sceneIdentity !== undefined) {
+        for (const segment of sourceScene.sceneIdentity.segments) {
+          sceneIdentityRecords.push({
+            kind: "sceneEpisodeSegmentRetirement",
+            id: segment.segmentId,
+            workId: command.workId,
+            retiredAt: createdAt,
+          });
+        }
+        sceneIdentityRecords.push({
+          kind: "sceneIdentityRetirement",
+          id: sourceScene.sceneIdentity.sceneId,
+          workId: command.workId,
+          retiredAt: createdAt,
+        });
       }
     }
     await this.#ledger.transaction(async (transaction: StorageTransaction) => {
