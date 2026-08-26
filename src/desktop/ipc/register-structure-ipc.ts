@@ -5,6 +5,7 @@ import {
   STRUCTURE_CREATE_ANCHORLESS_EVENT_CHANNEL,
   STRUCTURE_CREATE_EVENT_BLOCK_CHANNEL,
   STRUCTURE_CREATE_SCENE_OVERRIDE_CHANNEL,
+  STRUCTURE_RELOCATE_SCENE_SEGMENT_CHANNEL,
   STRUCTURE_DECIDE_SCENE_EXTRACTION_ANNOTATION_CHANNEL,
   STRUCTURE_DECIDE_SCENE_EXTRACTION_BOUNDARY_CHANNEL,
   STRUCTURE_LINK_EVENT_SOURCE_CHANNEL,
@@ -52,8 +53,10 @@ import {
 import {
   parseCreateSceneOverrideCommand,
   parseListSceneOverridesCommand,
+  parseRelocateSceneSegmentCommand,
   type CreateSceneOverrideCommand,
   type ListSceneOverridesCommand,
+  type RelocateSceneSegmentCommand,
   type SceneOverrideListProjection,
   type SceneOverrideProjection,
 } from "../../application/structure/scene-override-contract";
@@ -122,6 +125,9 @@ export type StructureIpcRuntime = Readonly<{
   createSceneOverride: (
     command: CreateSceneOverrideCommand,
   ) => Promise<SceneOverrideProjection>;
+  relocateSceneSegment: (
+    command: RelocateSceneSegmentCommand,
+  ) => Promise<SceneProjectionList>;
   listSceneOverrides: (
     command: ListSceneOverridesCommand,
   ) => Promise<SceneOverrideListProjection>;
@@ -198,6 +204,8 @@ export function registerStructureIpc(input: Readonly<{
     (command) => input.runtime.listEventRail(command));
   handle(STRUCTURE_CREATE_SCENE_OVERRIDE_CHANNEL, parseCreateSceneOverrideCommand,
     (command) => input.runtime.createSceneOverride(command));
+  handle(STRUCTURE_RELOCATE_SCENE_SEGMENT_CHANNEL, parseRelocateSceneSegmentCommand,
+    (command) => input.runtime.relocateSceneSegment(command));
   handle(STRUCTURE_LIST_SCENE_OVERRIDES_CHANNEL, parseListSceneOverridesCommand,
     (command) => input.runtime.listSceneOverrides(command));
   handle(STRUCTURE_LIST_SCENE_PROJECTION_CHANNEL, parseListSceneProjectionCommand,

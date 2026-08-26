@@ -90,6 +90,7 @@ import {
   createManuscriptSceneRangeExtension,
   setManuscriptSceneRangesEffect,
   type ManuscriptSceneRange,
+  type ManuscriptSceneRangeMove,
 } from "./manuscript-scene-range-extension";
 import {
   createSceneBoundaryHistoryExtension,
@@ -237,7 +238,14 @@ export type ManuscriptEditorProps = {
     document: ManuscriptDocumentSource,
     offset: number,
   ) => void;
-  readonly onSplitScene: () => void;
+  readonly onMoveSceneRange: (
+    document: ManuscriptDocumentSource,
+    move: ManuscriptSceneRangeMove,
+  ) => void;
+  readonly onSplitScene: (
+    document: ManuscriptDocumentSource,
+    offset: number,
+  ) => void;
   readonly onSceneBoundaryHistoryToggle: (
     entry: SceneBoundaryHistoryEntry,
     active: boolean,
@@ -370,6 +378,7 @@ export const ManuscriptEditor = forwardRef<
     onAddEvent,
     onAddScene,
     onMergeScene,
+    onMoveSceneRange,
     onSplitScene,
     onSceneBoundaryHistoryToggle,
     onOpenLoreCue,
@@ -457,6 +466,7 @@ export const ManuscriptEditor = forwardRef<
   const notifyAddEvent = useEffectEvent(onAddEvent);
   const notifyAddScene = useEffectEvent(onAddScene);
   const notifyMergeScene = useEffectEvent(onMergeScene);
+  const notifyMoveSceneRange = useEffectEvent(onMoveSceneRange);
   const notifySplitScene = useEffectEvent(onSplitScene);
   const notifySceneBoundaryHistoryToggle = useEffectEvent(
     onSceneBoundaryHistoryToggle,
@@ -805,7 +815,13 @@ export const ManuscriptEditor = forwardRef<
           createSceneBoundaryPreviewExtension(
             sceneBoundaryPreviewsRef.current,
           ),
-          createManuscriptSceneRangeExtension(sceneRangesRef.current),
+          createManuscriptSceneRangeExtension(
+            sceneRangesRef.current,
+            (move) => {
+              const active = activeDocumentRef.current;
+              if (active !== null) notifyMoveSceneRange(active, move);
+            },
+          ),
           createSceneBoundaryHistoryExtension(
             notifySceneBoundaryHistoryToggle,
           ),
@@ -2158,7 +2174,10 @@ export const ManuscriptEditor = forwardRef<
                 selection: EditorSelection.cursor(contextMenu.sceneOffset),
               });
             }
-            notifySplitScene();
+            const document = activeDocumentRef.current;
+            if (document !== null) {
+              notifySplitScene(document, contextMenu.sceneOffset);
+            }
           }}
           onCopy={() => copyOrCutSelection(false)}
           onCut={() => copyOrCutSelection(true)}

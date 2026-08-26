@@ -15,11 +15,23 @@ import {
 
 export type ManuscriptSceneRange = Readonly<{
   sceneKey: string;
+  sceneId: string | null;
+  startAnchorId: string;
+  endAnchorId: string | null;
   sceneIndex: number;
   start: number;
   end: number;
   integrity: "resolved" | "needsReview" | "broken";
   spansEpisodes: boolean;
+}>;
+
+export type ManuscriptSceneRangeMove = Readonly<{
+  sceneKey: string;
+  sceneId: string | null;
+  startAnchorId: string;
+  endAnchorId: string | null;
+  previousRange: Readonly<{ start: number; end: number }>;
+  nextRange: Readonly<{ start: number; end: number }>;
 }>;
 
 export const setManuscriptSceneRangesEffect =
@@ -84,7 +96,9 @@ function buildManuscriptSceneDecorations(
 
 export function createManuscriptSceneRangeExtension(
   initialRanges: readonly ManuscriptSceneRange[],
+  onMove?: (move: ManuscriptSceneRangeMove) => void,
 ): Extension {
+  let draggedSceneKey: string | null = null;
   const sceneRangeField = StateField.define<{
     readonly ranges: readonly ManuscriptSceneRange[];
     readonly decorations: DecorationSet;
@@ -135,9 +149,86 @@ export function createManuscriptSceneRangeExtension(
         if (range === undefined || range.integrity !== "resolved") {
           return true;
         }
+        draggedSceneKey = sceneKey;
+        if (event.dataTransfer !== null) {
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData(
+            "text/plain",
+            view.state.sliceDoc(range.start, range.end),
+          );
+        }
         view.dispatch({
           selection: EditorSelection.range(range.start, range.end),
         });
+        return false;
+      },
+      dragover: (event, view) => {
+        if (draggedSceneKey === null || view.state.readOnly) return false;
+        event.preventDefault();
+        if (event.dataTransfer !== null) {
+          event.dataTransfer.dropEffect = "move";
+        }
+        return false;
+      },
+      drop: (event, view) => {
+        const sceneKey = draggedSceneKey;
+        draggedSceneKey = null;
+        if (sceneKey === null || view.state.readOnly) return false;
+        event.preventDefault();
+        const destination = view.posAtCoords({
+          x: event.clientX,
+          y: event.clientY,
+        });
+        const range = view.state.field(sceneRangeField).ranges.find(
+          (candidate) => candidate.sceneKey === sceneKey,
+        );
+        if (
+          destination === null ||
+          range === undefined ||
+          range.integrity !== "resolved" ||
+          destination >= range.start && destination <= range.end
+        ) {
+          return true;
+        }
+        const text = view.state.sliceDoc(range.start, range.end);
+        const rangeLength = range.end - range.start;
+        const nextStart = destination < range.start
+          ? destination
+          : destination - rangeLength;
+        view.dispatch({
+          changes: destination < range.start
+            ? [
+                { from: destination, insert: text },
+                { from: range.start, to: range.end },
+              ]
+            : [
+                { from: range.start, to: range.end },
+                { from: destination, insert: text },
+              ],
+          selection: EditorSelection.range(
+            nextStart,
+            nextStart + rangeLength,
+          ),
+          scrollIntoView: true,
+        });
+        onMove?.(Object.freeze({
+          sceneKey: range.sceneKey,
+          sceneId: range.sceneId,
+          startAnchorId: range.startAnchorId,
+          endAnchorId: range.endAnchorId,
+          previousRange: Object.freeze({
+            start: range.start,
+            end: range.end,
+          }),
+          nextRange: Object.freeze({
+            start: nextStart,
+            end: nextStart + rangeLength,
+          }),
+        }));
+        return true;
+      },
+      dragend: () => {
+        draggedSceneKey = null;
         return false;
       },
     }),

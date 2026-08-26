@@ -28,6 +28,20 @@ export type ListSceneOverridesCommand = {
   readonly workId: EntityId<"Work">;
 };
 
+export type RelocateSceneSegmentCommand = {
+  readonly schemaVersion: 1;
+  readonly workId: EntityId<"Work">;
+  readonly documentId: EntityId<"Document">;
+  readonly sceneId: EntityId<"Scene"> | null;
+  readonly startAnchorId: EntityId<"Anchor">;
+  readonly endAnchorId: EntityId<"Anchor"> | null;
+  readonly previousFrom: number;
+  readonly previousTo: number;
+  readonly from: number;
+  readonly to: number;
+  readonly exactQuote: string;
+};
+
 export type SceneOverrideBoundaryProjection = {
   readonly anchorId: EntityId<"Anchor">;
   readonly documentRevisionId: EntityId<"DocumentRevision">;
@@ -188,6 +202,59 @@ export function parseListSceneOverridesCommand(
   return Object.freeze({
     schemaVersion: 1,
     workId: id<"Work">(input, "workId", label),
+  });
+}
+
+export function parseRelocateSceneSegmentCommand(
+  value: unknown,
+): RelocateSceneSegmentCommand {
+  const label = "RelocateSceneSegmentCommand";
+  const input = record(value, label);
+  exactFields(
+    input,
+    [
+      "schemaVersion",
+      "workId",
+      "documentId",
+      "sceneId",
+      "startAnchorId",
+      "endAnchorId",
+      "previousFrom",
+      "previousTo",
+      "from",
+      "to",
+      "exactQuote",
+    ],
+    label,
+  );
+  schema(input, label);
+  const from = integer(input, "from", label);
+  const to = integer(input, "to", label);
+  const previousFrom = integer(input, "previousFrom", label);
+  const previousTo = integer(input, "previousTo", label);
+  if (to <= from) {
+    throw new Error(`${label}.to must be greater than from`);
+  }
+  if (previousTo <= previousFrom) {
+    throw new Error(`${label}.previousTo must be greater than previousFrom`);
+  }
+  const sceneId = input.sceneId === null
+    ? null
+    : id<"Scene">(input, "sceneId", label);
+  return Object.freeze({
+    schemaVersion: 1,
+    workId: id<"Work">(input, "workId", label),
+    documentId: id<"Document">(input, "documentId", label),
+    sceneId,
+    startAnchorId: id<"Anchor">(input, "startAnchorId", label),
+    endAnchorId: input.endAnchorId === null
+      ? null
+      : id<"Anchor">(input, "endAnchorId", label),
+    previousFrom,
+    previousTo,
+    from,
+    to,
+    exactQuote: stringValue(input, "exactQuote", label),
   });
 }
 

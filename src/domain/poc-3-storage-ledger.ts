@@ -212,6 +212,14 @@ export type Poc3SceneOverrideRecord =
     readonly note?: string;
   };
 
+export type Poc3SceneOverrideRetirementRecord = {
+  readonly kind: "sceneOverrideRetirement";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly retiredAt: string;
+};
+
 export type Poc3SceneIdentityRecord =
   Poc3LedgerRecordMeta & {
     readonly kind: "sceneIdentity";
@@ -1028,6 +1036,7 @@ export type Poc3LedgerRecord =
   | Poc3AnchorRecord
   | Poc3RangeGroupRecord
   | Poc3SceneOverrideRecord
+  | Poc3SceneOverrideRetirementRecord
   | Poc3SceneIdentityRecord
   | Poc3SceneEpisodeSegmentRecord
   | Poc3SceneEpisodeSegmentRetirementRecord

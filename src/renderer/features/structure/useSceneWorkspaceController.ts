@@ -20,6 +20,7 @@ import { entityId, type EntityId } from "../../../domain/writing";
 import type {
   ManuscriptDocumentStateSummary,
 } from "../../editor/ManuscriptEditor";
+import type { ManuscriptSceneRangeMove } from "../../editor/manuscript-scene-range-extension";
 import type {
   ManuscriptSceneBoundaryPreview,
 } from "../../editor/scene-boundary-preview-extension";
@@ -36,6 +37,7 @@ import type { useStructureController } from "./useStructureController";
 type SceneStructureClient = Pick<
   StudioBridge["structure"],
   | "createSceneOverride"
+  | "relocateSceneSegment"
   | "updateSceneRuleSet"
   | "setSceneEventOverride"
   | "runSceneExtraction"
@@ -330,41 +332,58 @@ export function useSceneWorkspaceController(input: Readonly<{
 
   const createSceneBoundary = useCallback(async (
     operation: "add" | "split" = "add",
+    currentDocument = input.activeDocument,
+    explicitOffset?: number,
   ) => {
     if (
-      input.activeDocument === null ||
+      currentDocument === null ||
       input.state.sceneActionState !== "idle"
     ) return;
-    const summary = input.editor.readDocumentState(input.activeDocument);
-    const selection = summary?.selection.ranges[summary.selection.mainIndex];
-    const manuscript = input.editor.materializeDocumentText(input.activeDocument);
-    if (selection === undefined || manuscript === undefined) {
+    const summary = explicitOffset === undefined
+      ? input.editor.readDocumentState(currentDocument)
+      : null;
+    const selection = explicitOffset === undefined
+      ? summary?.selection.ranges[summary.selection.mainIndex]
+      : Number.isSafeInteger(explicitOffset) && explicitOffset >= 0
+        ? Object.freeze({
+            anchor: explicitOffset,
+            head: explicitOffset,
+            from: explicitOffset,
+            to: explicitOffset,
+          })
+        : undefined;
+    const manuscript = input.editor.materializeDocumentText(currentDocument);
+    if (
+      selection === undefined ||
+      manuscript === undefined ||
+      selection.to > manuscript.length
+    ) {
       input.state.setSceneActionError("현재 원고 위치를 읽지 못했습니다.");
       return;
     }
     input.state.setSceneActionState("creating");
     input.state.setSceneActionError(null);
     try {
-      await input.persistDocument(input.activeDocument);
+      await input.persistDocument(currentDocument);
       const created = await input.structureClient.createSceneOverride({
         schemaVersion: 1,
-        workId: input.activeDocument.workId,
-        documentId: input.activeDocument.documentId,
+        workId: currentDocument.workId,
+        documentId: currentDocument.documentId,
         selection: { anchor: selection.anchor, head: selection.head },
         exactQuote: manuscript.slice(selection.from, selection.to),
         operation,
         note: "",
       });
       if (operation === "split") {
-        input.editor.recordSceneBoundaryHistory(input.activeDocument, {
+        input.editor.recordSceneBoundaryHistory(currentDocument, {
           historyId: created.sceneOverrideId,
-          workId: input.activeDocument.workId,
-          documentId: input.activeDocument.documentId,
+          workId: currentDocument.workId,
+          documentId: currentDocument.documentId,
           selection: { anchor: selection.anchor, head: selection.head },
           exactQuote: manuscript.slice(selection.from, selection.to),
         });
       }
-      await input.refreshSceneProjection(input.activeDocument.workId);
+      await input.refreshSceneProjection(currentDocument.workId);
     } catch {
       input.state.setSceneActionError(
         operation === "split"
@@ -529,6 +548,57 @@ export function useSceneWorkspaceController(input: Readonly<{
       currentDocument,
     );
   }, [input, mergeSceneWithPrevious]);
+
+  const relocateSceneRange = useCallback(async (
+    document: ManuscriptDocumentSource,
+    move: ManuscriptSceneRangeMove,
+  ) => {
+    if (input.state.sceneActionState !== "idle") return;
+    const manuscript = input.editor.materializeDocumentText(document);
+    if (
+      manuscript === undefined ||
+      move.nextRange.start < 0 ||
+      move.nextRange.end <= move.nextRange.start ||
+      move.nextRange.end > manuscript.length
+    ) {
+      input.state.setSceneActionError("이동한 장면 범위를 읽지 못했습니다.");
+      return;
+    }
+    input.state.setSceneActionState("creating");
+    input.state.setSceneActionError(null);
+    try {
+      await input.persistDocument(document);
+      await input.structureClient.relocateSceneSegment({
+        schemaVersion: 1,
+        workId: document.workId,
+        documentId: document.documentId,
+        sceneId: move.sceneId === null
+          ? null
+          : entityId<"Scene">(move.sceneId),
+        startAnchorId: entityId<"Anchor">(move.startAnchorId),
+        endAnchorId: move.endAnchorId === null
+          ? null
+          : entityId<"Anchor">(move.endAnchorId),
+        previousFrom: move.previousRange.start,
+        previousTo: move.previousRange.end,
+        from: move.nextRange.start,
+        to: move.nextRange.end,
+        exactQuote: manuscript.slice(
+          move.nextRange.start,
+          move.nextRange.end,
+        ),
+      });
+      await input.refreshSceneProjection(document.workId);
+    } catch (reason) {
+      input.state.setSceneActionError(
+        reason instanceof Error
+          ? reason.message
+          : "장면 범위를 이동하지 못했습니다.",
+      );
+    } finally {
+      input.state.setSceneActionState("idle");
+    }
+  }, [input]);
 
   const deleteScenes = useCallback(async (
     requestedScenes: readonly SceneProjection[],
@@ -1070,6 +1140,7 @@ export function useSceneWorkspaceController(input: Readonly<{
     deleteSceneGroup,
     mergeCurrentSceneWithPrevious,
     mergeSceneWithPrevious,
+    relocateSceneRange,
     updateSceneRuleSet,
     setSceneEventOverride,
     captureSceneExtractionSelection,

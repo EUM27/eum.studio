@@ -35,6 +35,7 @@ import {
 } from "../application/structure/event-rail-projection";
 import {
   parseListSceneOverridesCommand,
+  parseRelocateSceneSegmentCommand,
   parseSceneOverrideListProjection,
   type SceneOverrideListProjection,
   type SceneOverrideProjection,
@@ -618,6 +619,7 @@ type ApplicationRuntime = {
   listEventBlocks(value: unknown): Promise<EventBlockListProjection>;
   listEventRail(value: unknown): Promise<EventRailProjection>;
   createSceneOverride(value: unknown): Promise<SceneOverrideProjection>;
+  relocateSceneSegment(value: unknown): Promise<SceneProjectionList>;
   listSceneOverrides(value: unknown): Promise<SceneOverrideListProjection>;
   listSceneProjection(value: unknown): Promise<SceneProjectionList>;
   updateSceneRuleSet(value: unknown): Promise<SceneProjectionList>;
@@ -1704,6 +1706,8 @@ async function registerApplicationHandlers(): Promise<void> {
         localRuntime.listEventRail(value),
       createSceneOverride: (value) =>
         localRuntime.createSceneOverride(value),
+      relocateSceneSegment: (value) =>
+        localRuntime.relocateSceneSegment(value),
       listSceneOverrides: (value) =>
         localRuntime.listSceneOverrides(value),
       listSceneProjection: (value) =>
@@ -2365,6 +2369,12 @@ async function registerApplicationHandlers(): Promise<void> {
       createSceneOverride: async () => {
         throw new Error(
           "SceneOverride creation is unavailable in a configured manuscript runtime",
+        );
+      },
+      relocateSceneSegment: async (value) => {
+        parseRelocateSceneSegmentCommand(value);
+        throw new Error(
+          "Scene range movement is unavailable in a configured manuscript runtime",
         );
       },
       listSceneOverrides: async (value) => {

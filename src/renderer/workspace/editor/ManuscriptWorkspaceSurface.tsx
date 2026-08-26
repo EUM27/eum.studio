@@ -119,6 +119,9 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
       )
       .map((candidate) => Object.freeze({
         sceneKey: candidate.sceneKey,
+        sceneId: candidate.sceneIdentity?.sceneId ?? null,
+        startAnchorId: candidate.startAnchorId,
+        endAnchorId: candidate.endAnchorId,
         sceneIndex: candidate.sceneIndex,
         start: candidate.range!.start,
         end: candidate.range!.end,
@@ -258,8 +261,11 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
           onMergeScene={(document, offset) => {
             void scene.mergeCurrentSceneWithPrevious(document, offset);
           }}
-          onSplitScene={() => {
-            void scene.createSceneBoundary("split");
+          onMoveSceneRange={(document, move) => {
+            void scene.relocateSceneRange(document, move);
+          }}
+          onSplitScene={(document, offset) => {
+            void scene.createSceneBoundary("split", document, offset);
           }}
           onSceneBoundaryHistoryToggle={(entry, active) => {
             void scene.applySceneBoundaryHistory(entry, active);

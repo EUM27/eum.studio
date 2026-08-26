@@ -3447,6 +3447,31 @@ function writeLedgerRecord(
         );
       });
       return;
+    case "sceneOverrideRetirement":
+      {
+        const retirement = database.prepare(`
+          UPDATE scene_overrides
+          SET
+            revision = revision + 1,
+            updated_at = ?,
+            retired_at = ?
+          WHERE
+            id = ?
+            AND work_id = ?
+            AND revision = ?
+            AND retired_at IS NULL
+        `).run(
+          record.retiredAt,
+          record.retiredAt,
+          record.id,
+          record.workId,
+          record.expectedRevision,
+        ) as { readonly changes: number | bigint };
+        if (Number(retirement.changes) !== 1) {
+          throw new Error(`SceneOverride revision conflict: ${record.id}`);
+        }
+      }
+      return;
     case "sceneIdentity":
       runStatement(
         database,

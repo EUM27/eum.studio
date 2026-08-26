@@ -406,10 +406,12 @@ import {
 import {
   parseCreateSceneOverrideCommand,
   parseListSceneOverridesCommand,
+  parseRelocateSceneSegmentCommand,
   parseSceneOverrideListProjection,
   parseSceneOverrideProjection,
   type CreateSceneOverrideCommand,
   type ListSceneOverridesCommand,
+  type RelocateSceneSegmentCommand,
   type SceneOverrideListProjection,
   type SceneOverrideProjection,
 } from "../application/structure/scene-override-contract";
@@ -1594,6 +1596,7 @@ export type LocalWorkspaceRuntime =
     listEventBlocks(value: unknown): Promise<EventBlockListProjection>;
     listEventRail(value: unknown): Promise<EventRailProjection>;
     createSceneOverride(value: unknown): Promise<SceneOverrideProjection>;
+    relocateSceneSegment(value: unknown): Promise<SceneProjectionList>;
     listSceneOverrides(value: unknown): Promise<SceneOverrideListProjection>;
     listSceneProjection(value: unknown): Promise<SceneProjectionList>;
     updateSceneRuleSet(value: unknown): Promise<SceneProjectionList>;
@@ -4835,6 +4838,20 @@ class DefaultLocalWorkspaceRuntime
     const execution = this.#createPending.then(async () => {
       await this.#savePending;
       return this.#createSceneOverrideSerially(command);
+    });
+    this.#createPending = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    return execution;
+  }
+
+  relocateSceneSegment(value: unknown): Promise<SceneProjectionList> {
+    this.#assertOpen();
+    const command = parseRelocateSceneSegmentCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#relocateSceneSegmentSerially(command);
     });
     this.#createPending = execution.then(
       () => undefined,
@@ -14306,6 +14323,215 @@ class DefaultLocalWorkspaceRuntime
       throw new Error(`Stored SceneOverride is missing: ${sceneOverrideId}`);
     }
     return created;
+  }
+
+  async #relocateSceneSegmentSerially(
+    command: RelocateSceneSegmentCommand,
+  ): Promise<SceneProjectionList> {
+    const target = this.#documentTargets.get(command.documentId);
+    if (target === undefined || target.workId !== command.workId) {
+      throw new Error(
+        `Work/document boundary violation: ${command.workId}/${command.documentId}`,
+      );
+    }
+    if (
+      command.to > target.text.length ||
+      target.text.slice(command.from, command.to) !== command.exactQuote
+    ) {
+      throw new Error("Relocated Scene range does not match the current manuscript");
+    }
+    const catalog = createCatalogFromStoredRows(
+      readStoredDocumentRows(this.#database),
+    );
+    const work = catalog.getWork(command.workId);
+    if (work === null) {
+      throw new Error(`Unknown Work: ${command.workId}`);
+    }
+    const settingsRows = this.#database
+      .prepare(WORK_SCENE_RULE_REVISION_SQL)
+      .all(command.workId);
+    const settingsRow = settingsRows[0];
+    if (settingsRows.length !== 1 || settingsRow === undefined) {
+      throw new Error(`Work scene settings are missing: ${command.workId}`);
+    }
+    const baseRuleSetRevision = readRequiredInteger(
+      settingsRow,
+      "baseRuleSetRevision",
+      "Work scene settings",
+    );
+    const retiredOverrideRows = new Map<
+      EntityId<"SceneOverride">,
+      number
+    >();
+    const previousBoundaryAnchorIds = [
+      ...(command.previousFrom > 0 ? [command.startAnchorId] : []),
+      ...(command.previousTo < target.text.length && command.endAnchorId !== null
+        ? [command.endAnchorId]
+        : []),
+    ];
+    for (const anchorId of previousBoundaryAnchorIds) {
+      const rows = this.#database.prepare(`
+        SELECT
+          scene_override.id AS "sceneOverrideId",
+          scene_override.revision AS "revision"
+        FROM scene_overrides AS scene_override
+        JOIN scene_override_anchors AS boundary
+          ON boundary.work_id = scene_override.work_id
+          AND boundary.document_id = scene_override.document_id
+          AND boundary.scene_override_id = scene_override.id
+        WHERE
+          scene_override.work_id = ?
+          AND scene_override.document_id = ?
+          AND boundary.anchor_id = ?
+          AND scene_override.retired_at IS NULL
+      `).all(command.workId, command.documentId, anchorId);
+      for (const [index, row] of rows.entries()) {
+        const label = `Relocated Scene override rows[${index}]`;
+        retiredOverrideRows.set(
+          entityId<"SceneOverride">(
+            readRequiredString(row, "sceneOverrideId", label),
+          ),
+          readRequiredInteger(row, "revision", label),
+        );
+      }
+    }
+    const createdAt = new Date().toISOString();
+    const boundaryRecords: Poc3LedgerRecord[] = [];
+    const boundaryOffsets = [...new Set([command.from, command.to])]
+      .filter((offset) => offset > 0 && offset < target.text.length)
+      .sort((left, right) => left - right);
+    for (const offset of boundaryOffsets) {
+      const sceneOverrideId = entityId<"SceneOverride">(randomUUID());
+      const boundaryAnchor = createAnchorForKnownRevisionContent({
+        meta: {
+          id: entityId<"Anchor">(randomUUID()),
+          schemaVersion: LOCAL_WORKSPACE_LEDGER_SCHEMA_VERSION,
+          revision: 1,
+          createdAt,
+          updatedAt: createdAt,
+        },
+        documentId: command.documentId,
+        documentRevisionId: target.currentRevisionId,
+        content: target.text,
+        startOffset: offset,
+        endOffset: offset,
+        policy: this.#options.defaults.anchorPolicy,
+        commandRef: sceneOverrideId,
+        actorRef: work.studioId,
+        describeEvidence: createNodeCryptoAnchorEvidenceDescriptor(
+          this.#options.defaults.anchorEvidenceChecksumAlgorithm,
+        ),
+      });
+      boundaryRecords.push(
+        createAnchorLedgerRecord(command.workId, boundaryAnchor),
+        {
+          kind: "sceneOverride",
+          ...createRecordMeta(createdAt),
+          id: sceneOverrideId,
+          workId: command.workId,
+          documentId: command.documentId,
+          operation: "add",
+          anchorIds: [boundaryAnchor.meta.id],
+          baseRuleSetRevision,
+        },
+      );
+    }
+    const sceneId = command.sceneId ?? entityId<"Scene">(randomUUID());
+    if (command.sceneId !== null) {
+      const identityRows = this.#database.prepare(`
+        SELECT id
+        FROM scene_identities
+        WHERE work_id = ? AND id = ? AND retired_at IS NULL
+      `).all(command.workId, command.sceneId);
+      if (identityRows.length !== 1) {
+        throw new Error(`Active Scene identity is missing: ${command.sceneId}`);
+      }
+    }
+    const retiredSegmentIds = this.#database
+      .prepare(SCENE_EPISODE_SEGMENT_ROWS_SQL)
+      .all(command.workId)
+      .flatMap((row, index) => {
+        const label = `Relocated Scene segment rows[${index}]`;
+        const rowSceneId = readRequiredString(row, "sceneId", label);
+        const rowDocumentId = readRequiredString(row, "documentId", label);
+        if (rowSceneId !== sceneId || rowDocumentId !== command.documentId) {
+          return [];
+        }
+        return [entityId<"EpisodeSceneSegment">(
+          readRequiredString(row, "segmentId", label),
+        )];
+      });
+    const segmentId = entityId<"EpisodeSceneSegment">(randomUUID());
+    const segmentAnchor = createAnchorForKnownRevisionContent({
+      meta: {
+        id: entityId<"Anchor">(randomUUID()),
+        schemaVersion: LOCAL_WORKSPACE_LEDGER_SCHEMA_VERSION,
+        revision: 1,
+        createdAt,
+        updatedAt: createdAt,
+      },
+      documentId: command.documentId,
+      documentRevisionId: target.currentRevisionId,
+      content: target.text,
+      startOffset: command.from,
+      endOffset: command.to,
+      policy: this.#options.defaults.anchorPolicy,
+      commandRef: segmentId,
+      actorRef: work.studioId,
+      describeEvidence: createNodeCryptoAnchorEvidenceDescriptor(
+        this.#options.defaults.anchorEvidenceChecksumAlgorithm,
+      ),
+    });
+    await this.#ledger.transaction(async (transaction: StorageTransaction) => {
+      for (const [sceneOverrideId, expectedRevision] of retiredOverrideRows) {
+        transaction.write({
+          kind: "sceneOverrideRetirement",
+          id: sceneOverrideId,
+          workId: command.workId,
+          expectedRevision,
+          retiredAt: createdAt,
+        });
+      }
+      for (const boundaryRecord of boundaryRecords) {
+        transaction.write(boundaryRecord);
+      }
+      if (command.sceneId === null) {
+        transaction.write({
+          kind: "sceneIdentity",
+          schemaVersion: 1,
+          revision: 1,
+          createdAt,
+          updatedAt: createdAt,
+          id: sceneId,
+          workId: command.workId,
+        });
+      }
+      for (const retiredSegmentId of retiredSegmentIds) {
+        transaction.write({
+          kind: "sceneEpisodeSegmentRetirement",
+          id: retiredSegmentId,
+          workId: command.workId,
+          retiredAt: createdAt,
+        });
+      }
+      transaction.write(createAnchorLedgerRecord(command.workId, segmentAnchor));
+      transaction.write({
+        kind: "sceneEpisodeSegment",
+        schemaVersion: 1,
+        revision: 1,
+        createdAt,
+        updatedAt: createdAt,
+        id: segmentId,
+        workId: command.workId,
+        sceneId,
+        documentId: command.documentId,
+        anchorId: segmentAnchor.meta.id,
+      });
+    });
+    return this.#listSceneProjectionSerially({
+      schemaVersion: 1,
+      workId: command.workId,
+    });
   }
 
   async #listSceneOverridesSerially(

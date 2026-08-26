@@ -14,6 +14,8 @@ export function pickStructureRuntime(
     listEventBlocks: (command) => runtime.listEventBlocks(command),
     listEventRail: (command) => runtime.listEventRail(command),
     createSceneOverride: (command) => runtime.createSceneOverride(command),
+    relocateSceneSegment: (command) =>
+      runtime.relocateSceneSegment(command),
     listSceneOverrides: (command) => runtime.listSceneOverrides(command),
     listSceneProjection: (command) => runtime.listSceneProjection(command),
     updateSceneRuleSet: (command) => runtime.updateSceneRuleSet(command),

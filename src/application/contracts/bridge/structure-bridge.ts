@@ -29,10 +29,12 @@ import {
 import {
   parseCreateSceneOverrideCommand,
   parseListSceneOverridesCommand,
+  parseRelocateSceneSegmentCommand,
   parseSceneOverrideListProjection,
   parseSceneOverrideProjection,
   type CreateSceneOverrideCommand,
   type ListSceneOverridesCommand,
+  type RelocateSceneSegmentCommand,
   type SceneOverrideListProjection,
   type SceneOverrideProjection,
 } from "../../structure/scene-override-contract";
@@ -109,6 +111,8 @@ export const STRUCTURE_LIST_EVENT_RAIL_CHANNEL =
   "studio:structure:list-event-rail";
 export const STRUCTURE_CREATE_SCENE_OVERRIDE_CHANNEL =
   "studio:structure:create-scene-override";
+export const STRUCTURE_RELOCATE_SCENE_SEGMENT_CHANNEL =
+  "studio:structure:relocate-scene-segment";
 export const STRUCTURE_LIST_SCENE_OVERRIDES_CHANNEL =
   "studio:structure:list-scene-overrides";
 export const STRUCTURE_LIST_SCENE_PROJECTION_CHANNEL =
@@ -148,6 +152,7 @@ export type StructureBridgeChannel =
   | typeof STRUCTURE_LIST_EVENT_BLOCKS_CHANNEL
   | typeof STRUCTURE_LIST_EVENT_RAIL_CHANNEL
   | typeof STRUCTURE_CREATE_SCENE_OVERRIDE_CHANNEL
+  | typeof STRUCTURE_RELOCATE_SCENE_SEGMENT_CHANNEL
   | typeof STRUCTURE_LIST_SCENE_OVERRIDES_CHANNEL
   | typeof STRUCTURE_LIST_SCENE_PROJECTION_CHANNEL
   | typeof STRUCTURE_UPDATE_SCENE_RULE_SET_CHANNEL
@@ -172,6 +177,7 @@ export type StructureBridgePayload =
   | ListEventBlocksCommand
   | ListEventRailCommand
   | CreateSceneOverrideCommand
+  | RelocateSceneSegmentCommand
   | ListSceneOverridesCommand
   | ListSceneProjectionCommand
   | UpdateSceneRuleSetCommand
@@ -213,6 +219,9 @@ export type StructureBridge = Readonly<{
   createSceneOverride: (
     command: CreateSceneOverrideCommand,
   ) => Promise<SceneOverrideProjection>;
+  relocateSceneSegment: (
+    command: RelocateSceneSegmentCommand,
+  ) => Promise<SceneProjectionList>;
   listSceneOverrides: (
     command: ListSceneOverridesCommand,
   ) => Promise<SceneOverrideListProjection>;
@@ -352,6 +361,18 @@ export function createStructureBridge(
         return parseSceneOverrideProjection(value);
       } catch {
         throw new Error("Invalid SceneOverride creation result");
+      }
+    },
+    relocateSceneSegment: async (input) => {
+      const command = parseRelocateSceneSegmentCommand(input);
+      const value = await invoke(
+        STRUCTURE_RELOCATE_SCENE_SEGMENT_CHANNEL,
+        command,
+      );
+      try {
+        return parseSceneProjectionList(value);
+      } catch {
+        throw new Error("Invalid relocated Scene projection");
       }
     },
     listSceneOverrides: async (input) => {
