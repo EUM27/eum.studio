@@ -13964,14 +13964,20 @@ class DefaultLocalWorkspaceRuntime
       if (sourceScene.sceneIdentity === undefined) {
         sceneIdentityRecords.push({
           kind: "sceneIdentity",
-          ...createRecordMeta(createdAt),
+          schemaVersion: 1,
+          revision: 1,
+          createdAt,
+          updatedAt: createdAt,
           id: leftSceneId,
           workId: command.workId,
         });
       }
       sceneIdentityRecords.push({
         kind: "sceneIdentity",
-        ...createRecordMeta(createdAt),
+        schemaVersion: 1,
+        revision: 1,
+        createdAt,
+        updatedAt: createdAt,
         id: rightSceneId,
         workId: command.workId,
       });
@@ -14058,7 +14064,10 @@ class DefaultLocalWorkspaceRuntime
           createAnchorLedgerRecord(command.workId, segmentAnchor),
           {
             kind: "sceneEpisodeSegment",
-            ...createRecordMeta(createdAt),
+            schemaVersion: 1,
+            revision: 1,
+            createdAt,
+            updatedAt: createdAt,
             id: segmentId,
             workId: command.workId,
             sceneId: segmentRange.sceneId,
@@ -14173,7 +14182,10 @@ class DefaultLocalWorkspaceRuntime
               createAnchorLedgerRecord(command.workId, segmentAnchor),
               {
                 kind: "sceneEpisodeSegment",
-                ...createRecordMeta(createdAt),
+                schemaVersion: 1,
+                revision: 1,
+                createdAt,
+                updatedAt: createdAt,
                 id: entityId<"EpisodeSceneSegment">(randomUUID()),
                 workId: command.workId,
                 sceneId: mergedSceneId,
