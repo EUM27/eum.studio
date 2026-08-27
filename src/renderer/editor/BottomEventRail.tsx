@@ -146,8 +146,21 @@ export function BottomEventRail(input: {
   const dropAtEnd =
     draggedEventId !== null &&
     dropIndex === remainingDuringDrag.length;
-  const expanded =
-    expandedOverride ?? (events.length > 0 || sceneGroups.length > 0);
+  const activeDocumentHasStructure =
+    input.activeDocumentId !== null &&
+    (
+      events.some(
+        (event) =>
+          event.primaryLocation?.documentId === input.activeDocumentId,
+      ) ||
+      scenes.some(
+        (scene) =>
+          scene.documentId === input.activeDocumentId &&
+          scene.range !== null &&
+          scene.range.end > scene.range.start,
+      )
+    );
+  const expanded = expandedOverride ?? activeDocumentHasStructure;
   const currentEventId = useMemo(() => {
     if (input.activeDocumentId === null || input.cursorOffset === null) {
       return null;
