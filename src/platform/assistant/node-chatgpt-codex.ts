@@ -38,6 +38,24 @@ import {
   type SceneDraftContext,
   type SceneDraftModelPayload,
 } from "../../application/structure/scene-draft-contract";
+import {
+  parseCanonReviewModelPayload,
+  type CanonReviewConnectorInput,
+  type CanonReviewExecution,
+} from "../../application/canon/canon-review-model-output";
+import { CANON_REVIEW_PROMPT_VERSION } from "../../application/canon/canon-review-contract";
+import {
+  parseContinuityReviewModelPayload,
+  type ContinuityReviewConnectorInput,
+  type ContinuityReviewExecution,
+} from "../../application/continuity/continuity-review-model-output";
+import { CONTINUITY_REVIEW_PROMPT_VERSION } from "../../application/continuity/continuity-review-contract";
+import {
+  NARRATIVE_DIGEST_PROMPT_VERSION,
+  parseNarrativeDigestConnectorExecution,
+  type NarrativeDigestConnectorExecution,
+  type NarrativeDigestConnectorInput,
+} from "../../application/continuity/narrative-digest-contract";
 import type {
   ChatGptOAuthConnectionStore,
   ChatGptOAuthTokens,
@@ -234,6 +252,279 @@ const CHARACTER_EXTRACTION_INSTRUCTIONS = [
   "Each evidence quote must occur exactly once inside its referenced paragraph.",
   "Return JSON matching the provided schema, with no markdown or explanation.",
 ].join("\n");
+
+const CANON_REVIEW_SCHEMA = Object.freeze({
+  type: "object",
+  additionalProperties: false,
+  required: ["proposals"],
+  properties: {
+    proposals: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "targetKind",
+          "targetHint",
+          "operationHint",
+          "assertionBasis",
+          "reason",
+          "fields",
+          "evidence",
+        ],
+        properties: {
+          targetKind: {
+            type: "string",
+            enum: ["character", "character-relation", "lore-entry"],
+          },
+          targetHint: { type: "string", minLength: 1 },
+          operationHint: {
+            type: "string",
+            enum: ["create", "update", "unresolved"],
+          },
+          assertionBasis: {
+            type: "string",
+            enum: ["explicit-evidence", "model-inference"],
+          },
+          reason: { type: "string", minLength: 1 },
+          fields: {
+            type: "array",
+            minItems: 1,
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["field", "value"],
+              properties: {
+                field: {
+                  type: "string",
+                  enum: [
+                    "name",
+                    "aliases",
+                    "role",
+                    "summary",
+                    "appearance",
+                    "personality",
+                    "speech",
+                    "goal",
+                    "conflict",
+                    "note",
+                    "fromCharacterId",
+                    "toCharacterId",
+                    "kind",
+                    "description",
+                    "title",
+                    "content",
+                    "category",
+                    "enabled",
+                  ],
+                },
+                value: {
+                  anyOf: [
+                    { type: "string" },
+                    { type: "boolean" },
+                    { type: "array", items: { type: "string", minLength: 1 } },
+                  ],
+                },
+              },
+            },
+          },
+          evidence: {
+            type: "array",
+            minItems: 1,
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["paragraphId", "quote"],
+              properties: {
+                paragraphId: { type: "string", minLength: 1 },
+                quote: { type: "string", minLength: 1 },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+});
+
+const CANON_REVIEW_INSTRUCTIONS = [
+  "Review only the supplied manuscript paragraphs for persistent canonical changes.",
+  "Every result is a review candidate; never claim that a canonical record or manuscript was changed.",
+  "Return only the requested target kinds and never propose deletion or retirement.",
+  "Mark a proposal explicit-evidence only when its lasting field value is directly stated by an exact quote.",
+  "Mark suppositions, lies, dreams, plans, and uncertain interpretation as model-inference.",
+  "For update proposals, return only fields whose changed values are supported by the supplied paragraphs.",
+  "For create proposals, return every field required by that target kind without inventing a value.",
+  "Use targetHint for local matching; choose unresolved when the target is ambiguous.",
+  "For relation endpoints, use only character IDs present in characterReferences.",
+  "Do not invent an entity ID, relation, fact, or field outside the supplied input.",
+  "Every proposal must cite one or more verbatim quotes that occur exactly once in the referenced paragraph.",
+  "Return fields as an array of unique field/value objects and JSON matching the provided schema.",
+].join("\n");
+
+function parseCanonReviewWirePayload(value: unknown) {
+  const input = record(value, "Canon review response");
+  if (
+    Object.keys(input).length !== 1 ||
+    !Array.isArray(input.proposals)
+  ) {
+    throw new Error("Canon review response fields do not match the schema");
+  }
+  return parseCanonReviewModelPayload({
+    proposals: input.proposals.map((entry, proposalIndex) => {
+      const proposal = record(entry, `Canon review proposal[${proposalIndex}]`);
+      const fields = proposal.fields;
+      if (!Array.isArray(fields) || fields.length === 0) {
+        throw new Error(`Canon review proposal[${proposalIndex}].fields must be non-empty`);
+      }
+      const fieldEntries = fields.map((fieldEntry, fieldIndex) => {
+        const field = record(
+          fieldEntry,
+          `Canon review proposal[${proposalIndex}].fields[${fieldIndex}]`,
+        );
+        if (
+          Object.keys(field).length !== 2 ||
+          typeof field.field !== "string" ||
+          !("value" in field)
+        ) {
+          throw new Error(
+            `Canon review proposal[${proposalIndex}].fields[${fieldIndex}] is invalid`,
+          );
+        }
+        return [field.field, field.value] as const;
+      });
+      if (new Set(fieldEntries.map(([field]) => field)).size !== fieldEntries.length) {
+        throw new Error(`Canon review proposal[${proposalIndex}] has duplicate fields`);
+      }
+      return {
+        ...proposal,
+        fields: Object.fromEntries(fieldEntries),
+      };
+    }),
+  });
+}
+
+const CONTINUITY_REVIEW_SCHEMA = Object.freeze({
+  type: "object",
+  additionalProperties: false,
+  required: ["proposals"],
+  properties: {
+    proposals: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "assertionBasis",
+          "kind",
+          "title",
+          "note",
+          "subjectRefs",
+          "reason",
+          "evidence",
+        ],
+        properties: {
+          assertionBasis: {
+            type: "string",
+            enum: ["explicit-evidence", "model-inference"],
+          },
+          kind: {
+            type: "string",
+            enum: [
+              "promise",
+              "open-question",
+              "temporary-state",
+              "inventory",
+              "location",
+              "injury",
+              "relationship-state",
+              "constraint",
+              "other",
+            ],
+          },
+          title: { type: "string", minLength: 1 },
+          note: { type: "string" },
+          subjectRefs: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["kind", "id"],
+              properties: {
+                kind: {
+                  type: "string",
+                  enum: [
+                    "character",
+                    "character-relation",
+                    "lore-entry",
+                    "event-block",
+                    "plot-thread",
+                    "foreshadow-line",
+                    "scene",
+                  ],
+                },
+                id: { type: "string", minLength: 1 },
+              },
+            },
+          },
+          reason: { type: "string", minLength: 1 },
+          evidence: {
+            type: "array",
+            minItems: 1,
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["paragraphId", "quote"],
+              properties: {
+                paragraphId: { type: "string", minLength: 1 },
+                quote: { type: "string", minLength: 1 },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+});
+
+const CONTINUITY_REVIEW_INSTRUCTIONS = [
+  "Review only the supplied manuscript paragraphs for unresolved continuity that should persist into later writing.",
+  "Every result is an unapproved review candidate; never claim that a Continuity thread, canonical record, or manuscript was changed.",
+  "Do not duplicate a planned Plot thread, Foreshadow line, or long-term Character goal as a Continuity proposal.",
+  "Use only subject entity kind and ID pairs present in subjectReferences; an empty subjectRefs array is valid.",
+  "Mark direct promises, questions, temporary states, inventory, locations, injuries, relationship states, and constraints as explicit-evidence only when directly stated.",
+  "Mark uncertain interpretations as model-inference and do not turn them into facts.",
+  "Never merge a proposal with an existing item, invent an entity ID, or propose deletion or retirement.",
+  "Every proposal must cite one or more verbatim quotes that occur exactly once in the referenced paragraph.",
+  "Return JSON matching the provided schema, with no markdown or explanation.",
+].join("\n");
+
+const NARRATIVE_DIGEST_SCHEMA = Object.freeze({
+  type: "object",
+  additionalProperties: false,
+  required: ["text"],
+  properties: {
+    text: { type: "string", minLength: 1 },
+  },
+});
+
+const NARRATIVE_DIGEST_INSTRUCTIONS = [
+  "Summarize only the supplied selected manuscript documents and canonical sources.",
+  "Respect the supplied work, document, scene, character, or relationship scope exactly.",
+  "For a scene scope, summarize only the exact supplied scene excerpt and use canonical sources only to connect established concepts and facts.",
+  "Treat canonical sources as context, and do not invent facts, entity IDs, events, motives, or outcomes absent from the input.",
+  "Do not claim to modify the manuscript or canonical records; this output is a derived snapshot.",
+  "Return concise Korean prose in the text field unless the supplied manuscript is clearly written in another language.",
+  "Return JSON matching the provided schema, with no markdown or explanation.",
+].join("\n");
+
+function parseNarrativeDigestWirePayload(value: unknown): Readonly<{ text: string }> {
+  const payload = record(value,"ChatGPT NarrativeDigest response");
+  if (Object.keys(payload).length !== 1 || typeof payload.text !== "string" || payload.text.trim().length === 0) {
+    throw new Error("ChatGPT NarrativeDigest response fields do not match the schema");
+  }
+  return Object.freeze({ text: payload.text.trim() });
+}
 
 const CHARACTER_GENERATION_SCHEMA = Object.freeze({
   type: "object",
@@ -503,6 +794,13 @@ export function createNodeChatGptCodexClient(input: {
     }>;
     settings: readonly AssistantSettingReviewSource[];
   }>): Promise<AssistantExternalSettingReviewPayload>;
+  reviewCanon(input: CanonReviewConnectorInput): Promise<CanonReviewExecution>;
+  reviewContinuity(
+    input: ContinuityReviewConnectorInput,
+  ): Promise<ContinuityReviewExecution>;
+  generateNarrativeDigest(
+    input: NarrativeDigestConnectorInput,
+  ): Promise<NarrativeDigestConnectorExecution>;
   extractCharacters(
     paragraphs: readonly CharacterExtractionParagraph[],
   ): Promise<ChatGptCharacterExtractionExecution>;
@@ -738,6 +1036,85 @@ export function createNodeChatGptCodexClient(input: {
           errorLabel: "ChatGPT setting review",
         }),
       );
+    },
+
+    async reviewCanon(
+      reviewInput: CanonReviewConnectorInput,
+    ): Promise<CanonReviewExecution> {
+      const payload = parseCanonReviewWirePayload(
+        await requestStructuredAssistantPayload({
+          formatName: "eum_canon_review",
+          schema: CANON_REVIEW_SCHEMA,
+          instructions: CANON_REVIEW_INSTRUCTIONS,
+          payload: Object.freeze({
+            requestedTargetKinds: reviewInput.requestedTargetKinds,
+            paragraphs: reviewInput.paragraphs.map((paragraph) => ({
+              id: paragraph.paragraphId,
+              text: paragraph.text,
+            })),
+            characterReferences: reviewInput.characterReferences,
+          }),
+          errorLabel: "ChatGPT canon review",
+        }),
+      );
+      return Object.freeze({
+        providerId: input.profile.providerId,
+        modelId: input.profile.upstream.model,
+        promptVersion: CANON_REVIEW_PROMPT_VERSION,
+        payload,
+      });
+    },
+
+    async reviewContinuity(
+      reviewInput: ContinuityReviewConnectorInput,
+    ): Promise<ContinuityReviewExecution> {
+      const payload = parseContinuityReviewModelPayload(
+        await requestStructuredAssistantPayload({
+          formatName: "eum_continuity_review",
+          schema: CONTINUITY_REVIEW_SCHEMA,
+          instructions: CONTINUITY_REVIEW_INSTRUCTIONS,
+          payload: Object.freeze({
+            paragraphs: reviewInput.paragraphs.map((paragraph) => ({
+              id: paragraph.paragraphId,
+              text: paragraph.text,
+            })),
+            subjectReferences: reviewInput.subjectReferences,
+          }),
+          errorLabel: "ChatGPT Continuity review",
+        }),
+      );
+      return Object.freeze({
+        providerId: input.profile.providerId,
+        modelId: input.profile.upstream.model,
+        promptVersion: CONTINUITY_REVIEW_PROMPT_VERSION,
+        payload,
+      });
+    },
+
+    async generateNarrativeDigest(
+      digestInput: NarrativeDigestConnectorInput,
+    ): Promise<NarrativeDigestConnectorExecution> {
+      const payload = parseNarrativeDigestWirePayload(
+        await requestStructuredAssistantPayload({
+          formatName: "eum_narrative_digest",
+          schema: NARRATIVE_DIGEST_SCHEMA,
+          instructions: NARRATIVE_DIGEST_INSTRUCTIONS,
+          payload: Object.freeze({
+            scope: digestInput.scope,
+            sourceManifest: digestInput.sourceManifest,
+            documents: digestInput.documents,
+            sceneSource: digestInput.sceneSource,
+            canonicalSources: digestInput.canonicalSources,
+          }),
+          errorLabel: "ChatGPT NarrativeDigest",
+        }),
+      );
+      return parseNarrativeDigestConnectorExecution({
+        providerId: input.profile.providerId,
+        modelId: input.profile.upstream.model,
+        promptVersion: NARRATIVE_DIGEST_PROMPT_VERSION,
+        text: payload.text,
+      });
     },
 
     async extractCharacters(

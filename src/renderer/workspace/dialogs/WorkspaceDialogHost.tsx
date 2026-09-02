@@ -4,6 +4,7 @@ import type { EntityId } from "../../../domain/writing";
 import { DailyGoalDialog } from "../../activity/DailyGoalDialog";
 import { PomodoroDialog } from "../../activity/PomodoroDialog";
 import type { useActivityController } from "../../features/activity/useActivityController";
+import type { useManuscriptAnnotationsController } from "../../features/annotations/useManuscriptAnnotationsController";
 import type { useEditorToolsController } from "../../features/editor-tools/useEditorToolsController";
 import type {
   EventWorkspaceState,
@@ -24,6 +25,7 @@ export type WorkspaceDialogHostProps = Readonly<{
   activeDocument: ManuscriptDocumentSource | null;
   activeWorkId: EntityId<"Work"> | null;
   activity: ReturnType<typeof useActivityController>;
+  annotations: ReturnType<typeof useManuscriptAnnotationsController>;
   editorTools: ReturnType<typeof useEditorToolsController>;
   eventController: ReturnType<typeof useEventWorkspaceController>;
   eventState: EventWorkspaceState;
@@ -55,7 +57,9 @@ export function WorkspaceDialogHost(input: WorkspaceDialogHostProps) {
       {version.workSnapshotComparison !== null && (
         <WorkSnapshotComparisonDialog
           onClose={version.closeWorkSnapshotComparison}
+          onToggleScene={version.toggleWorkSnapshotSceneSelection}
           projection={version.workSnapshotComparison}
+          scenePlan={version.workSnapshotScenePlan}
         />
       )}
       {version.documentRevisionPreview !== null && (
@@ -150,8 +154,14 @@ export function WorkspaceDialogHost(input: WorkspaceDialogHostProps) {
         )}
       {input.readingLayout.continuousReadingDialogState.status === "ready" && (
         <ContinuousReadingDialog
+          annotations={input.annotations.annotations}
+          annotationBusy={input.annotations.annotationActionState !== "idle"}
+          annotationError={input.annotations.annotationActionError}
+          onCreateAnnotation={input.annotations.createAnnotation}
           onClose={input.readingLayout.closeContinuousReading}
           onProgress={input.readingLayout.persistContinuousReadingLocation}
+          onRetireAnnotation={input.annotations.retireAnnotation}
+          onUpdateAnnotation={input.annotations.updateAnnotation}
           session={input.readingLayout.continuousReadingDialogState.session}
         />
       )}

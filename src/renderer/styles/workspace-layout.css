@@ -52,6 +52,35 @@
   background: #188b70;
 }
 
+.studio-app-shell .automatic-scene-analysis-status {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  min-height: 24px;
+  padding: 2px 12px;
+  border-top: 1px solid var(--eum-line);
+  color: var(--eum-text-muted);
+  background: var(--eum-panel);
+  font-size: 11px;
+}
+
+.studio-app-shell .automatic-scene-analysis-status-text {
+  margin: 0;
+  color: var(--eum-text);
+}
+
+.studio-app-shell .automatic-scene-analysis-status button {
+  padding: 2px 7px;
+  border: 1px solid var(--eum-accent-border);
+  border-radius: 6px;
+  color: var(--eum-accent-strong);
+  background: var(--eum-accent-soft);
+  font: inherit;
+  cursor: pointer;
+}
+
 .studio-app-shell .workspace-body,
 .studio-app-shell .workspace-body-shared-left-rail {
   --workspace-layout-mode: wide;
@@ -630,6 +659,42 @@
   gap: 4px;
 }
 
+.scene-canon-context {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.65rem;
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.7rem;
+}
+
+.scene-canon-context > header,
+.scene-canon-context-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.scene-canon-context h5,
+.scene-canon-context p,
+.scene-canon-context ul {
+  margin: 0;
+}
+
+.scene-canon-context code {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+
+.scene-canon-lineage-review {
+  border-left: 3px solid var(--status-warning, #b7791f);
+  display: grid;
+  gap: 0.35rem;
+  padding-left: 0.65rem;
+}
+
 .studio-app-shell .workspace-rail-right .scene-list-items {
   display: grid;
   gap: 8px;
@@ -835,7 +900,7 @@
 }
 
 .studio-app-shell .formatting-toolbar-row-secondary {
-  border-top: 1px solid #eeeeee;
+  border-top: 1px solid var(--eum-line);
 }
 
 .studio-app-shell .formatting-tools-popover-layer {
@@ -930,7 +995,7 @@
   justify-content: center;
   border: 0;
   border-radius: 5px;
-  color: #444444;
+  color: var(--eum-control-text);
   background: transparent;
 }
 
@@ -943,11 +1008,11 @@
 .studio-app-shell .formatting-toolbar-group button:hover:not(:disabled),
 .studio-app-shell .formatting-toolbar-more:hover:not(:disabled),
 .studio-app-shell .toolbar-color-picker:hover {
-  background: #eeeeee;
+  background: var(--eum-accent-soft);
 }
 
 .studio-app-shell .formatting-toolbar-group button[aria-pressed="true"] {
-  color: var(--eum-accent-strong);
+  color: var(--eum-accent-text);
   background: var(--eum-accent-soft);
 }
 

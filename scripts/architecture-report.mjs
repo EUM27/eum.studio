@@ -20,7 +20,7 @@ const targets = [
   "tests/e2e/structure-features.spec.ts",
   "tests/e2e/schedule-assistant.spec.ts",
   "tests/e2e/persistence-editor.spec.ts",
-  "tests/e2e/focus-music-theme.spec.ts",
+  "tests/e2e/manuscript-focus-music-theme.spec.ts",
   "tests/e2e/publishing-lore.spec.ts",
   "tests/e2e/events-plots-scenes.spec.ts",
 ];

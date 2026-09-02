@@ -17,8 +17,8 @@ The first Worker moves only `listWork`, `getPomodoro`, `getRecordsGoals`, and `g
 ## Critical invariants
 
 - Session start/stop persists first, then bridge command, then immediately updates `activeWritingSessionRef` before React projection.
-- Input resumes only paused Work Pomodoro, records durable change, then serially reconciles document-owned session. Blur in focus mode persists only; otherwise it stops the matching session or persists.
-- Focus mode never claims an existing manual session. It records only the ID it starts, stops a late start after an enter/exit race, and clears/stops only that exact owned ID.
+- Input resumes only paused Work Pomodoro, records durable change, then serially reconciles document-owned session. Blur in manuscript focus persists only; otherwise it stops the matching session or persists.
+- Manuscript focus never claims an existing manual session. It records only the ID it starts, stops a late start after an enter/exit race, and clears/stops only that exact owned ID.
 - Pomodoro start partial success is not rolled back by later activity/music refresh failure.
 - Close order remains all-document flushForClose, reading, layout, focus transition, exact owned session stop, resume capture. Manual sessions are not closed. Any rejection keeps the window open.
 - Restored running Pomodoro is paused/restore; first input resumes paused Work only, not break.

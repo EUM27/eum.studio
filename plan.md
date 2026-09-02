@@ -8,11 +8,143 @@
 
 현재 storage 결정: [POC-3 SQLite·blob·backup 결정](docs/poc-3-storage-decisions.md)
 
-마지막 갱신: 2026-08-25
+마지막 갱신: 2026-09-02
 
 ## 현재 Gate
 
-`리팩토링 Gate R9-2 — fresh 전체 검증과 최종 감사 완료`
+`출판사별 투고 정보 입력 양식 — 기본 템플릿·출판사별 사본·작품별 작성값 구현·검증 완료`
+
+### 2026-09-02 출판사별 투고 정보 입력 양식
+
+- [x] 첨부된 바로나글 양식은 한 출판사의 사례로만 해석하고 범용 양식으로 고정하지 않았다. 기본 템플릿의 시작 필드는 사용자가 직접 예로 든 작가 정보 `필명`·`이메일`·`출간 이력`과 작품 정보 `작품명`·`로그라인`뿐이며 section·field ID는 런타임에서 생성한다.
+- [x] 하나의 편집 가능한 기본 템플릿과 출판사별 독립 사본을 추가했다. 기본 템플릿을 출판사 양식으로 복제한 뒤 섹션·필드를 추가·삭제·위아래 이동하고, 필드 종류·필수 여부·도움말·placeholder·선택지를 출판사마다 따로 관리한다.
+- [x] schema 25에 `publishing_form_templates`와 `publishing_form_responses` 원장을 추가했다. 활성 기본 템플릿 하나, 출판사별 템플릿 하나, 작품×출판사별 작성값 하나를 제약으로 보장하고 template revision·소유 Work·raw JSON·시각을 보존한다. 24→25 migration definition checksum은 `79cb1d4c1c5a9a7de65088bd66474b7f6e46396df224074b8532447b46442346`이다.
+- [x] application parser, SQLite ledger, desktop runtime·IPC, typed preload bridge, renderer controller를 실제 production 경로로 연결했다. 출판사 편집 대화상자의 `투고 양식` 탭에서 템플릿을 관리하고, 작품을 선택해 동적 입력값을 저장·복원하며 템플릿이 바뀐 기존 작성값에는 revision 차이를 표시한다.
+- [x] focused 계약·migration·bridge·controller·UI 7개 파일 30개, runtime 영속성·재시작 1개, 전체 Vitest 328개 파일·1,185개 통과·기존 1개 skip, lint, 네 TypeScript project와 Electron/preload/renderer production build, architecture check/report가 모두 통과했다.
+- [x] 별도 임시 user-data·workspace를 쓰는 production Electron E2E에서 작품·출판사 생성, 기본 템플릿 편집, select/필수 필드 설정, 출판사 사본 생성·독립 수정, 작품별 답변 저장, bridge readback, 앱 종료·재실행 뒤 복원을 한 흐름으로 확인했다. Windows/D: 검증 환경의 기존 GPU sandbox `-1073741515` 제약은 다른 production E2E와 같은 test-only sandbox 해제로 분리했으며 제품 기본 sandbox 정책은 유지했다. 결과는 1개 통과, 46.9초다.
+- 검증 참고: POC-3 전용 ledger fixture audit에서 이번 두 테이블 정의는 fixture와 일치했다. 해당 전용 명령 전체에는 이번 기능 이전부터 fixture에 누락된 장면 분석 테이블 3개가 있어 10개 통과·1개 실패하며, 범위를 넓혀 기존 fixture를 임의 수정하지 않았다.
+- 범위 경계: HWP 생성·본문 분할·글꼴·크기·줄간격·여백은 이번 Gate에 포함하지 않았다.
+
+이전 현재 Gate: `회차 연속 이동 안정화 — source·standalone 후보 검증 완료, 기본 설치 대기`
+
+### 2026-09-01 회차 연속 이동 안정화
+
+- [x] 실행 중 기본 설치본과 실사용 원장을 읽기 전용으로 확인했다. DB `quick_check`는 `ok`였고, 회차를 연속 이동한 구간에는 같은 1초 안에 2~4개 ResumeCheckpoint가 여러 회차에 겹쳐 기록됐다. 자동 장면 분석 설정·실행 행은 0건이어서 원인에서 제외했다.
+- [x] 일반 회차 선택을 한 번에 한 작업만 실행하는 latest-pending lane으로 직렬화했다. 실행 중 추가 선택은 중간 요청을 누적하지 않고 마지막 대기 작업 하나로 합친다.
+- [x] 같은 작품의 명시적 회차 전환은 이미 검증·적재된 `documentProfile`과 durable target을 재사용한다. main runtime은 전환마다 모든 활성 원고 blob을 다시 materialize/checksum 검증하지 않으며 작품 전환과 ResumeCheckpoint 기반 열기 경로는 기존 reload 계약을 유지한다.
+- [x] renderer는 실제 durable queue의 최신 DocumentRevision과 selection이 같은 ResumeCheckpoint를 즉시 재사용한다. 성공 projection을 ref에 바로 보존해 React 재렌더 전 같은 체크포인트를 다시 쓰지 않는다.
+- [x] focused 단위·통합은 activation lane, ResumeCheckpoint cache, persistence/session, 전체 local workspace runtime 5개 파일·127개가 통과했다. main runtime은 120회 전환에서 적재된 documents 배열 identity와 최종 회차를 보존했다.
+- [x] fresh `npm run check`가 lint, 네 TypeScript project, Vitest 324개 파일·1,174개 통과·기존 1개 skip, Electron/preload/renderer production build를 통과했다.
+- [x] production Electron에서 기존 저장-before-switch, 문서별 state/scroll, 회차 트리 재시작, 한글 IME 전환 보류·복귀 취소 5개 흐름이 통과했다. 신규 장시간 회귀는 48회 연속 회차 전환 동안 체크포인트 증가가 전환 수를 넘지 않고, 뒤이어 두 회차에 각각 입력·durable 저장·왕복 복원되는지 2분에 통과했다.
+- [x] standalone 후보 `out/eum-studio-win-x64-episode-switch-stability-candidate`를 778 files·376,411,886 bytes로 생성했다. `file://`, packaged main, typed bridge, renderer 강제 종료 복구와 두 번째 인스턴스 exit 0이 통과했다. desktop main SHA-256은 `c0ce6ea10e1417c309280ec889025949172b0a44a600f9796c42721b96875e3e`다.
+- [ ] 기본 `out/eum-studio-win-x64` 설치본은 사용자 작업을 보호하기 위해 실행 중 교체·종료하지 않았다. 정상 종료가 확인되면 현재 package를 복구 가능하게 보존하고 후보를 기본 경로에 원자 승격한 뒤 실제 사용자 창에서 회차 연속 이동을 확인한다.
+
+이전 현재 Gate: `별빛 명칭 정리·외부 제품 흔적 제거·기본 standalone 설치 완료`
+
+### 2026-08-31 별빛 명칭과 외부 흔적 정리
+
+- [x] 저장소의 기존 명칭 217건을 이음 스튜디오의 `별빛`으로 교체했다. 화면·오류·메뉴·장면 연결·Markdown 내보내기 이름과 관련 테스트가 같은 용어를 사용하며 내부 bridge·DB schema·migration ID는 변경하지 않았다.
+- [x] 요청되지 않았던 외부 출처 검사 스크립트·npm 명령·기록 문서와 canon 관련 계획·상태·검증 참조를 제거했다. 별도의 denylist나 대체 통제는 추가하지 않았다.
+- [x] 현재 소스 1,148개 텍스트 파일, Electron bundle 682개, renderer bundle 3개, 기본 설치본과 후보 설치본 각 706개에서 사용자 지정 외부 명칭·변형·분할 표기·파일명과 이전 명칭이 0건이다.
+- [x] fresh `npm run check`는 lint·네 TypeScript project·전체 Vitest 322개 파일·1,172개 통과·기존 1개 skip·실패 0과 production build를 통과했다. 관련 production Electron 9개 파일은 별빛 변경 검토·Markdown 내보내기·연속성·인물 지식·문맥·이야기 흐름·장면 연결·기준점 비교·재시작을 모두 통과했다.
+- [x] 새 기본 standalone은 778 files·376,408,229 bytes이며 `file://`, typed bridge, renderer 강제 종료 복구와 두 번째 실행 exit 0을 통과했다.
+- [x] 사용자 명시 승인 후 예전 standalone 백업 2개와 renderer 백업 1개, 합계 약 0.704 GiB를 영구 삭제했다. 현재 기본 설치본과 검증 후보만 보존했다.
+
+### 2026-08-31 연속성 레이더 A·B
+
+- [x] A — 기존 `ContinuityThread`, PlotThread·ForeshadowLine·Character.goal projection과 Anchor integrity만 읽는 결정론적 레이더를 연속성 작업면의 첫 층으로 추가했다. 열린 항목·확인 필요·원문 연결·해결됨·연결 원본·AI 검토 대기를 집계하고, 근거 없음·재확인·끊김·연결을 구분하며 유효한 Anchor만 `원문 열기`에 연결한다. 별도 원장을 만들거나 원고·별빛을 수정하지 않는다.
+- [x] B — 기존 exact-selection `continuity.review` 경로를 `B · 선택형 AI / AI 정밀 분석`으로 명확히 분리했다. 원고 선택→우클릭 `연속성 점검`→1회 권한→Candidate→사용자 승인 계약, 중복 확인과 승인 전 원본 불변은 그대로 유지한다.
+- fresh source 증거: 변경 파일 ESLint, 네 TypeScript project, 연속성 application/runtime/bridge/renderer 24개 파일 74개, 전체 Vitest 322개 파일·1,172개 통과·기존 1개 skip·실패 0, production Electron/preload/renderer build, architecture check/report이 통과했다.
+- fresh Electron 증거: 별도 임시 작업실의 1280×800에서 수동 exact evidence, 통합 플롯·복선·인물 목표, A 레이더·회차 연결·원문 이동, B Candidate 승인, 완전 재시작 보존 1개 흐름이 통과했다. 실제 후보 화면 캡처는 `C:\Users\limoj\Documents\Codex\2026-08-30\new-chat\outputs\eum-studio-continuity-radar.png`다.
+- standalone 후보는 `out/eum-studio-win-x64-continuity-radar-candidate`의 778 files·376,408,229 bytes이며 기본 설치본과 executable·desktop main·preload SHA-256이 일치한다. 후보와 기본 설치본 모두 `file://`, typed bridge, 빈 작업실 bootstrap, renderer 강제 종료 복구, 두 번째 실행 exit 0을 통과했다.
+- [x] 실행 중 앱을 강제 종료하지 않고 기본 `out/eum-studio-win-x64`의 renderer만 후보와 byte-identical하게 설치했다. 이전 renderer와 manifest는 `out/renderer-backups/continuity-radar-before-20260831T0015`에 보존했다. 기본 package manifest의 renderer index SHA-256은 `c3f8e572f78928fae1f8e48353b82f7662c64fc4295a64bd2c7c42eb00e43408`이다.
+- [ ] 설치 전부터 살아 있던 실제 main PID 25136의 renderer는 메모리에 이전 bundle을 들고 있을 수 있다. 사용자 작업을 보호하기 위해 강제 종료·reload하지 않았다. 정상 종료 뒤 기본 실행 파일을 다시 열어 실제 사용자 창에서 `연속성 레이더`와 `AI 정밀 분석`을 확인해야 한다.
+
+### 2026-08-30 자동 분석 단계 복구·standalone 창 생명주기
+
+- [x] schema 24 `scene_analysis_runs` 원장을 추가했다. stable Scene source fingerprint마다 불변 NarrativeDigest와 별빛 검토 단계를 연결하고 `pending / candidate / no-change / login-required / permission-required / context-rejected / failed`, Candidate ID, 시도 횟수와 오류를 revision으로 보존한다.
+- [x] 자동 경로를 renderer의 수동 Canon 검토 controller에서 분리해 main/application runtime의 `runAutomaticSceneAnalysis` command로 수렴했다. 기능 OFF면 두 connector를 모두 호출하지 않고, 요약 완료 뒤 별빛 실패 시 다음 실행은 기존 요약을 재사용해 별빛만 재시도하며, Candidate 또는 무변경 완료 뒤에는 두 connector를 다시 호출하지 않는다.
+- [x] 편집기 아래에 자동 분석 상태와 실패 후 `다시 시도`를 표시하고, 이야기 흐름 장면 카드에 장면 전환·분할·회차 전환과 별빛 후보/무변경/대기/실패 상태를 연결했다. 별빛은 계속 Candidate 승인 전 변경되지 않는다.
+- [x] desktop startup promise의 예외를 native 오류와 clean quit로 회수하고, packaged app single-instance activation과 renderer `render-process-gone` reload를 추가했다. `ready-to-show`를 놓친 경우에도 renderer load 완료 뒤 창을 표시한다. 정상 close handshake와 미확정 원고 저장 계약은 변경하지 않았다.
+- [x] App의 회차 이동·startup recovery가 하나의 `loadRuntimeProjection` callback을 공유하도록 수렴해 `RuntimeBootstrapController.test.ts`의 오래된 lexical 호출 수 실패를 기대값 완화 없이 해소했다.
+- fresh source 증거: lint·네 TypeScript project·production build·architecture check/report 통과. 전체 Vitest 321개 파일·1,171개 통과·기존 1개 skip이며 제외 파일과 실패가 없다. schema 24 계약·migration·OFF gate·별빛 실패→별빛-only 재시도→완료 dedupe·재실행 원장 검증이 포함된다.
+- fresh production Electron 증거: 자동 장면 분석, 기존 이야기 흐름, 수동 Scene Canon, renderer process kill 복구 4개와 pending 원고 graceful close 1개가 통과했다. 자동 분석은 장면 요약 2개·단계 원장 2개·별빛 Candidate 1개, schema 24·FK 위반 0을 확인했다.
+- 실제 사용자 DB의 읽기 전용 사본 migration은 schema 23→24 receipt, 작품 4개·회차 53개 보존, FK 위반 0으로 통과했고 임시 사본을 제거했다. 설치 직전 SQLite backup API로 `workspace-v1/codex-backups/workspace-before-schema24-20260830T182655.sqlite3` 106,889,216 bytes·SHA-256 `946E0A835C26559164C379AEE21A33E4BF7D7F3E0421D481C78E6C7A5FF4F7D9` 복구 사본을 만들었다.
+- 새 standalone은 778 files·376,397,660 bytes로 생성했다. executable SHA-256은 `12b61e817329db7db8e74d99a42e552e1a1f68db7ba3d4c2d4fb6441a3b07d26`, packaged bootstrap SHA-256은 `ea82d83faaf39145efa8b68c5ff26c6d210e32728dff298baa5269ae8a0cf1e8`; `file://`, packaged main, typed preload, 빈 작업실 bootstrap, renderer kill 뒤 새 PID 복구, 두 번째 실행 exit 0, 종료 뒤 해당 패키지 process 0건을 확인했다.
+- [x] 사용자 명시 승인 후 창·renderer 없이 남은 구버전 main PID 15212를 종료해 자식 포함 process 0을 확인하고, 최종 후보를 `out/eum-studio-win-x64`로 원자 교체했다. 직전 package는 `out/eum-studio-win-x64-previous-20260830T1840`에 보존했다. 실제 `C:\Users\limoj\OneDrive\바탕 화면\이음 스튜디오.lnk`는 새 기본 실행 파일과 working directory를 가리킨다. process 0에서 바로가기를 한 번만 실행해 PID 23380의 `이음 스튜디오` 창 표시를 확인했다. 일반 권한 조회에서 같은 권한 상승 GUI의 window handle이 0으로 가려지는 진단 차이를 분리했고, 동일 GUI 권한의 30초 관찰에서는 계속 표시됐다. 정상 닫기 요청은 1초 안에 package process 0건으로 끝났다. 실제 사용자 DB는 schema/user_version 24, 23→24 receipt, 작품 4개·회차 53개·WritingSession 824개, FK 위반 0, quick check `ok`다.
+
+### 2026-08-30 조건부 자동 장면 분석·별빛 연결
+
+- [x] 작품별 자동 분석 스위치를 schema 23의 독립 설정 원장에 추가했다. 기본값은 OFF이며 사용자가 ON으로 저장할 때 `narrative.digest`와 `canon.review`의 Work 지속·Scene 범위 로컬 읽기/외부 전송 권한을 연결한다. OFF이거나 GPT OAuth가 끊겼으면 원고 저장·장면 이동·분할은 그대로 진행하고 모델 호출과 Candidate 저장은 하지 않는다.
+- [x] 불변 `NarrativeDigest`에 stable Scene scope와 exact source 원장을 추가했다. `sceneId`, Document·DocumentRevision, UTF-16 from/to, 본문 hash, 사용 별빛 revision과 trigger를 보존하고, trigger를 제외한 source fingerprint가 같으면 `unchanged`로 재사용해 중복 모델 호출을 막는다.
+- [x] 장면 전환은 나가는 장면, 회차 전환은 나가는 회차의 활성 장면, 장면 분할은 분할 뒤 양쪽 exact 장면을 직렬 background queue로 처리한다. 아직 stable ID가 없는 새 장면은 `sceneKey`를 저장 ID로 쓰지 않고 임시 탐색에만 사용하며 `finalizeSceneCanonCheck`로 stable ID를 만든 뒤 저장한다.
+- [x] 자동 별빛 대상은 사용자가 지정한 별빛(`lore-entry`)만이다. 모델 결과는 기존 Canon 필드 Candidate로 저장되며 사용자 승인 전 `LoreEntry` 원본을 변경하지 않는다. 이야기 흐름 화면은 내부 ID 대신 회차 표시명과 exact 장면 범위를 보여준다.
+- [x] schema 22→23 migration은 기존 불변 digest·document source 행을 새 제약으로 복사 검증하고 장면 source·작품 설정 테이블을 추가한다. 이전 21→22 migration은 별도 v22 schema 정의로 봉인해 기존 checksum을 유지했고, 새 definition checksum은 `05ed93aeb71fba328b6bb13bbbb03583e12c7700951cc9a000b874e40e701bcd`다.
+- 오류 루프에서 기능 스위치 ON·분할 장면 2개·Work 권한 2개인데 요청 0건인 상태를 분리했고, 비동기 분할 이벤트가 이전 OFF callback을 잡던 stale closure를 최신 `useLayoutEffect` ref 갱신으로 수정했다.
+- fresh 증거: 관련 계약·migration·runtime·renderer 12개 파일 28개 검증과 자동 trigger 집중 5개 파일 13개 검증 통과, 전체 local workspace runtime 103개 통과, 기존 unrelated `RuntimeBootstrapController.test.ts` 한 파일을 제외한 전체 Vitest 319개 파일·1,160개 통과·1개 skip, lint·네 TypeScript project·production build·architecture 통과. production Electron 한 worker에서 자동 장면 분석, 기존 NarrativeDigest 재실행, 기존 수동 Scene Canon·split lineage 3개가 모두 통과했다.
+- standalone Windows package를 새 staging에서 완성한 뒤 `out/eum-studio-win-x64`에 원자 교체했다. 어제부터 창 없이 기존 package를 잠그던 exact PID 17360·20412만 종료했고 사용자 파일은 삭제하지 않았다. 최종 package는 774 files·376,300,966 bytes이며 executable SHA-256 `12b61e817329db7db8e74d99a42e552e1a1f68db7ba3d4c2d4fb6441a3b07d26`; `file://` renderer, `app.isPackaged=true`, typed bridge, 빈 작업실 bootstrap과 종료 뒤 package process 0건을 확인했다.
+- 기존 알려진 전체-suite 항목: `RuntimeBootstrapController.test.ts`의 App loader 호출 기대 1 대 현재 2는 이번 기능 밖이며 테스트나 제품 동작을 약화해 숨기지 않았다.
+
+### 2026-08-29 운영 시작·검토 화면 복구
+
+- [x] 바탕화면 바로가기의 실제 실행 경로를 `scripts/start-eum-studio.ps1`로 확인하고, 창 없이 남은 Electron main을 정상 실행으로 오인하던 경로를 제거했다. 런처는 source/config가 bundle보다 새로우면 production build를 수행하고, Win32 visible window가 만들어진 뒤에만 성공하며, 기존 창은 같은 PID로 재활성화한다.
+- [x] stale production bundle이 새 `narrative.digest` capability를 모르는 시작 실패와 context planner migration 정의 checksum 불일치를 현재 source에서 수정했다.
+- [x] `검토` 진입 시 은퇴한 Document를 가리키는 과거 WritingSession이 현재 문서 목록에 없다는 이유로 기록 projection 전체를 throw하던 원인을 수정했다. 원장 DB의 원래 `document_id`는 보존하고, 현재 열 수 없는 회차 링크만 nullable projection으로 정규화한다.
+- fresh 증거: context planner migration 2개와 activity/전체 local workspace runtime 묶음 102개 통과, 네 TypeScript project·Electron/preload/renderer production build 통과. 실제 사용자 DB에서 실패 session의 Document가 같은 Work 소유이며 `retired_at`만 설정된 것을 확인했고, 수정 bundle의 실제 사용자 데이터 검증은 renderer error 0건·`검토 작업면` visible·252개 WritingSession 보존으로 통과했다. stale-bundle launcher build도 exit 0으로 완료됐고, 실제 Win32 visible `이음 스튜디오` 창을 확인했다. 바로가기를 다시 실행하면 430ms 안에 exit 0으로 끝나며 main PID를 교체하지 않는다.
+
+### 2026-08-29 어두운 테마 대비 보정
+
+- [x] 사용자 제공 포커스D·노르딕 화면을 실제 기준으로 고정하고, production Electron에서 어두운 7개 테마의 상단바·서식 툴바·활성 회차·활성 작업면 계산 색을 측정했다. 서식 툴바의 고정 `#444444`는 `1.03–1.79:1`, 상단바의 고정 `#727272`는 `2.09–3.62:1`, 일부 활성 항목의 `accentHover` 글자색은 `1.35–3.74:1`에 불과했다.
+- [x] 14개 원본 팔레트 값과 본문·선택 강조는 유지하고, 공통 `control text`와 dark-only `accent text` 의미 토큰을 분리했다. 상단바·서식 도구·활성 회차·활성 작업면만 의미 토큰을 사용하며 hover·구분선도 현재 테마 표면 토큰을 따른다.
+- fresh 증거: 테마 단위 3개, 신규 dark contrast production Electron 1개, 기존 노르딕 전체 작업면 dark surface 1개, 신규 E2E ESLint, 네 TypeScript project와 Electron/preload/renderer production build가 통과했다. 어두운 7개 테마의 네 핵심 표면은 모두 `5.03:1` 이상이며, 포커스D 서식 툴바 `6.51:1`·상단바 `6.01:1`, 노르딕 서식 툴바·상단바 `7.45:1`이다. 실제 사용자 preference `focus-dark-theme`를 유지한 새 bundle을 정상 종료·재실행했고 Win32 visible `이음 스튜디오` 창을 확인했다.
+
+### 2026-08-29 작품 별빛·연속성 독립 구현 Goal
+
+- [x] Gate 0 — 사용자 지정 설계 원문 1,688줄·53,225 bytes의 SHA-256 `343577C44367C4E38A61913822A13400B5DAA028BE2EA76123F7BBF6A31F3FC5`를 승인 기능 설계 manifest에 등록했다. 기존 승인 manifest 11개 checksum도 모두 일치한다.
+- [x] Gate 0 — schema 16 stable `sceneId`·lineage와 schema 17 Scene trash가 현재 source에 존재함을 확인했다. Gate 1 exact Document selection은 scene 선행 조건과 독립이고, 장면별 연속성·지식·문맥·digest는 후속 Gate까지 비활성화한다.
+- [x] Gate 1 — Character·CharacterRelation·LoreEntry create/update Candidate, exact evidence, strict model payload, no-op·duplicate 제거.
+- [x] Gate 1 — 필드별 before/after 편집·선택 승인·거절, unresolved target 명시 선택, inferred 직접 승인 차단.
+- [x] Gate 1 — source/target expectedRevision, 한 SQLite transaction의 별빛·Anchor·Candidate·receipt 적용, typed bridge와 production Electron 재실행 복원.
+- Gate 1 fresh 증거: 별빛 migration·ledger·local runtime 96개, renderer와 원고 진입 집중 검증 103개, production Electron 1개, 실제 process-kill 1개, 성능 harness 1개가 통과했다. production Electron은 승인된 인물뿐 아니라 인물 관계 별빛 상세도 완전 재실행 뒤 Anchor 기반 exact 원고 revision·범위를 여는지 확인한다. lint·네 TypeScript project·production build·architecture도 통과했다. 성능 fixture는 제품 제한이나 사용자 기본값이 아니며 최근 산출물은 DB 증가 1,228,800 bytes, 별빛 검색 p95 0.446ms, Candidate 1,000건 projection p95 147.116ms, planner p95 9.116ms를 기록했다. renderer commit 수는 storage/application harness에서 측정하지 않았고, 실제 UI 폐회로와 1280×800 경계는 production Electron에서 별도로 검증했다.
+- 전체 Vitest는 1,033개 통과·1개 skip·1개 실패다. 남은 실패는 시작 시점부터 존재한 `RuntimeBootstrapController.load()` 호출 수 기대 1 대 현행 App 2이며 별빛 경로와 무관하므로 제품 동작이나 기존 테스트를 약화해 숨기지 않았다.
+- GoalBuddy board: `docs/goals/eum-studio-canon-review-gate-1/state.yaml`.
+
+### 2026-08-29 작품 별빛·연속성 Gate 2–8 연속 Goal
+
+- [x] Gate 2 — ContinuityThread CRUD, exact selection 수동 생성, AI Candidate, PlotThread·ForeshadowLine·Character.goal 통합 projection, resolve/dismiss 이력. 실제 Electron 완전 재시작, process-kill 원자성, 1,000행 projection/planner, privacy까지 검증했다.
+- [x] Gate 3 — CharacterKnowledge truth/stance·supersession·POV projection. schema 20, exact evidence, 활성 동일 문장 중복 차단, 명시적 계보, POV 분리, 실제 Electron 2회 재시작과 FK=0까지 검증했다.
+- [x] Gate 4 — entity context policy·결정론적 planner·ContextManifest·활동 탭·required budget 오류. 실제 Canon/Continuity 실행도 plan→receipt→manifest→connector→activity 순서로 연결했다.
+- [x] Gate 5 — work/document/character/relationship digest·source manifest·stale·재생성.
+- [x] Gate 6 — stable Scene identity 기반 장면 점검·연속성·지식 변화·split/merge lineage 계승 검토.
+- [x] Gate 7 — 명명된 WorkSnapshot slot과 장면 단위 read-only 비교/선택 plan. 자동 전체 병합은 제외.
+- [x] Gate 8 — 별빛의 Obsidian 호환 단방향 Markdown export. Markdown import는 제외.
+- Gate 2는 schema 19 원장, 분리된 local service, 좁은 typed bridge, IME-safe exact selection, Canon 3열 작업면, source-badged 통합 projection, Candidate 승인·거절·중복 확인, 재시작·process-kill·성능 증거까지 완료했다.
+- Gate 3은 Judge가 발견한 동일 Work·인물·문장 활성 중복 우회까지 partial unique index와 서비스 오류로 차단한 뒤 완료했다.
+- Gate 4는 별빛별 `required | relevant | withheld`, 결정적 우선순위와 예산 실패, receipt-linked manifest, 민감 본문·prompt·key를 제외한 활동 projection 및 실제 connector 실행 연결까지 완료했다.
+- Gate 5는 명시적 work/document/character/relationship 범위와 planner가 선택한 전체 source revision manifest를 가진 immutable NarrativeDigest, stale text 보존, 새 행 재생성, typed bridge와 전용 UI를 완료했다. schema 22 checksum·실제 runtime·production Electron·500문서/2,400 source 성능 증거는 `docs/verification/canon-continuity-gates-2-8/gate-5-verification.*`에 기록했다.
+- Gate 6은 사용자가 장면 카드에서 명시적으로 실행하는 exact 장면 Canon 점검, Scene을 참조하는 Continuity/CharacterKnowledge projection, split/merge 후 자동 상속 없는 lineage needs-review를 완료했다. 최신 runtime·Electron·성능 증거는 `docs/verification/canon-continuity-gates-2-8/gate-6-verification.*`에 기록했다.
+- Gate 7은 기존 불변 WorkSnapshot의 label을 이름 있는 슬롯으로 투영하고 같은 이름의 이전 행을 이력으로 보존한다. stable Scene의 exact revision/range manifest를 스냅샷에 봉인해 현재 장면과 read-only로 비교하며, 선택 계획은 `canApply: false`, `applyCommand: null`, 자동 병합 금지를 계약과 UI에서 함께 강제한다. 최신 runtime·production Electron·성능 증거는 `docs/verification/canon-continuity-gates-2-8/gate-7-verification.*`에 기록했다.
+- Gate 8은 별빛 9종과 현재 DocumentRevision manifest를 결정적인 Obsidian note·typed wikilink로 투영하고, main process가 새 폴더에 write·sync·readback 검증 후 게시하는 단방향 export adapter를 완료했다. 외부 Markdown 변조 뒤 완전 재실행에서도 별빛이 바뀌지 않고 새 export가 원장 bytes에서 다시 생성되는 것을 확인했다. 최신 runtime·production Electron·성능·역방향 surface 0건 증거는 `docs/verification/canon-continuity-gates-2-8/gate-8-verification.*`에 기록했다.
+- GoalBuddy board: `docs/goals/eum-studio-canon-continuity-gates-2-8/state.yaml`.
+
+### 2026-08-28 장면 편집 정상화 Goal
+
+- [x] P0-1 — 장면 카드가 전달한 Scene을 버리고 다른 화면의 현재 커서에서 분할하던 `현재 위치에서 분할` 진입점을 제거했다. 원고 우클릭 `장면 나누기`가 실제 pointer 위치를 사용하며, 커서를 원고 끝에 둔 상태에서도 구분선 위치 split·사건 소속·완전 재실행 복원을 production Electron에서 확인했다.
+- [x] P0-2 — `CreateSceneOverrideCommand`에 `expectedDocumentRevisionId`를 필수로 추가하고 renderer durable queue revision과 main runtime current target을 직접 비교한다. persist 중 source/selection 변경을 거부하며 CodeMirror context menu와 scene controller가 IME composition 중 구조 명령을 차단한다.
+- P0-1/P0-2 fresh 증거: SceneList 2개, scene contract/runtime 86개, typed bridge 69개 검증, 전체 typecheck·production build, exact split Electron 1개와 IME composition 차단/commit 뒤 split Electron 1개 통과. sandbox 내부의 초기 Electron `Target crashed`는 같은 build를 sandbox 밖에서 실행해 제품 assertion과 분리했다.
+- [x] P0-3 — schema 16에서 `SceneIdentity`·segment·split/merge/delete/restore lineage와 annotation·event override·music queue의 무손실 binding inventory를 도입했다. 신규 메타데이터는 stable `sceneId`에 즉시 원자 연결되고, split/merge 뒤에는 proposed target 검토 상태로 전환되며 사용자가 제안 승인 또는 연결 해제를 할 수 있다. 사건 override의 실제 적용 장면도 historical `sceneKey`가 아니라 current binding의 stable `sceneId`에서 결정한다.
+- [x] P0-4 — schema 17의 Scene trash 원장과 strict preview/delete/list/restore/undo 계약을 구현했다. 첫·마지막 문장, 삭제 UTF-16 길이, 영향 회차와 연결 사건·주석·음악을 확인한 뒤에만 원고·경계·revision·identity·segment·binding·lineage를 한 transaction에서 휴지통으로 이동한다. 즉시 `Ctrl+Z`와 앱 재시작 뒤 별도 휴지통 복원이 동작하며, 삭제 뒤 원고·binding·규칙이 바뀌면 덮어쓰지 않고 복원을 거부한다.
+- P0-3/P0-4 fresh 증거: Scene trash contract/planner/migration/runtime와 bridge/dialog/SceneList 집중 검증 176개 통과, backend 최종 묶음 99개 통과, 전체 lint와 네 TypeScript project 통과, production build 통과. production Electron 한 worker에서 exact split/rebind, IME guard, delete preview→원자 삭제→`Ctrl+Z`→재삭제→완전 재시작→휴지통 복원 3개가 통과했고 최종 build의 삭제/복원 흐름도 1개 재통과했다.
+- 전체 `npm run check`의 Vitest 단계는 985개 통과·2개 실패·1개 skip이다. 실패는 이번 Goal 밖의 시작 시점 dirty CSS import 기대 1개와 기존 `RuntimeBootstrapController.load()` 호출 수 기대 1개이며, 이 때문에 check의 후속 build는 실행되지 않았다. 동일 최종 source의 별도 `npm run build`, architecture check/report, 관련 production Electron 검증은 통과했다.
+- GoalBuddy board: `docs/goals/eum-studio-scene-editing-normalization/state.yaml`.
+
+### 2026-08-25 편집 기능 변경
+
+- 회차 끝 범위를 다음 회차 첫머리로 이동하면서 기존 장면 identity와 양쪽 회차 revision을 함께 기록하는 명령, 같은 회차의 장면 나누기·장면 구분 삭제, 작품·회차 삭제 진입점, 원고 우클릭 잘라내기·복사·붙여넣기, 1회 `Ctrl+A`, 이전 화 흐름의 옅은 시각 구분을 구현했다.
+- 사용자 요청에 따라 이번 변경을 위해 추가한 단위·런타임·Electron E2E 테스트와 기존 테스트에 덧붙인 검증을 제거하고 추가 검증을 중단했다. 따라서 이 변경에는 완료 검증 주장을 남기지 않는다.
+- 회차 삭제에는 `다음부터 회차 삭제 경고 표시하지 않기` preference를 저장하는 checkbox dialog를 적용하고, 작품의 활성 회차를 한 SQLite 트랜잭션에서 모두 retire하는 `회차 전체 삭제` 명령과 문서 레일 진입점을 추가했다.
+- 이후 사용자 요청으로 남은 검증을 다시 실행했다. fresh typecheck·production build·lint·architecture check는 통과했다. Vitest는 957개 통과·1개 실패·1개 skip이며 `RuntimeBootstrapController.test.ts`의 App loader 호출 개수 기대가 1 대 실제 2로 실패했다. production Electron E2E는 95개 통과·28개 실패·1개 skip으로 끝났으므로 전체 통과나 완료를 주장하지 않는다.
+- `여기서부터 다음 화로 보내기`가 구조 경계 없는 단일 장면을 중간에서 나눌 때 identity 계획에서 제외되던 원인을 수정했다. 이동점이 장면 내부라 양쪽 회차에 내용이 남으면 명시적 경계 여부와 무관하게 동일 Scene identity의 source/target segment를 만든다. production Electron 임시 작업실에서 `AAAA BBBBBB`를 중간 이동해 `AAAA ` / `BBBBBB`로 나뉘고 두 segment가 동일 `sceneId`를 공유함을 확인했다. 전체 `npm run build`는 별도 `WorkspaceStatusToolsHost.tsx` optional callback 타입 오류로 막혔지만 Electron·renderer 개별 production bundle은 통과했다.
 
 리팩토링 Gate R1 현재 상태:
 
@@ -139,7 +271,7 @@
 - [x] R4-19 — 별빛–복선 공유 link projection·Lore/Foreshadow 호환 port·link/unlink orchestration을 injected controller로 이동했다.
 - [x] R4-20 — 원고 별빛 cue hover/pin/occurrence-selection state와 명령을 narrow editor/resume/rail port 기반 lore cue controller로 이동했다.
 - [x] R5-22 — 작품 구조 dialog/action/error와 DocumentNavigator 결과 전이를 work-structure state controller로 이동했다.
-- [x] R4-21 — 집중 모드와 작품 UI preference state·변경 명령을 localStorage compatibility port 기반 focus mode controller로 이동했다.
+- [x] R4-21 — 원고 집중 화면과 작품 UI preference state·변경 명령을 제품 소유 manuscript focus controller로 이동했다.
 - [x] R5-23 — Work section·structure/review tab·return location·records clock state와 진입 전이를 workspace navigation controller로 이동했다.
 - [x] R4-22 — 작품 원고 검색 query/result/sequence와 편집·활성화 무효화 전이를 manuscript search controller로 이동했다.
 - [x] R5-24 — rail layout/visibility, inspector tab, event rail mode와 active manuscript position state를 workspace layout controller로 이동했다.
@@ -172,7 +304,7 @@
 - 오른쪽 review inspector의 current/assistant/work/versions 표면과 재진입 button을 typed rail host로 이동했다. 기존 JSX tag·attribute multiset 차이는 0건이고 Work-aware rail toggle, Candidate capture/permission, Lore/조수/버전/구조 명령과 오류 표시 조건을 유지했다. parser·relative import·unused import source 감사는 0건이며 `App.tsx`는 6,248 lines·221,737 bytes이다. project test는 실행하지 않았다.
 - 빈 작품/활성 회차의 왼쪽 document rail, folder tree, manuscript search와 reentry를 typed host로 이동했다. 두 portal 표면의 native JSX tag·attribute multiset 차이는 0건이고 shared-sidebar/visibility, Work-bound document move, title/edit gate, search result와 accessibility 표면을 유지했다. parser·relative import·unused import source 감사는 0건이며 `App.tsx`는 6,030 lines·213,158 bytes이다. project test는 실행하지 않았다.
 - Character와 Plot 전용 workspace surface를 typed feature host로 이동하고 Plot의 Scene tab은 기존 `SceneStructureContent`를 별도 컴포넌트 인스턴스로 조립했다. workspaceSurface/workSection gate, Character/Plot child prop surface, Candidate/inspiration/selection/source actions를 유지했고 parser·relative import·unused import source 감사는 0건이다. `App.tsx`는 5,684 lines·198,249 bytes이며 project test는 실행하지 않았다.
-- focus toolbar, open-document tabs, ManuscriptEditor와 editor open-error 표면을 typed manuscript host로 이동했다. 기존 전체 JSX tag·attribute multiset 차이는 0건이고 focus/forward-write, tab gate, editor props/ref/callback, recovery read-only, layout/lore/scene input과 error 조건을 유지했다. parser·relative import·unused import source 감사는 0건이며 `App.tsx`는 5,493 lines·190,732 bytes이다. project test는 실행하지 않았다.
+- manuscript focus toolbar, open-document tabs, ManuscriptEditor와 editor open-error 표면을 typed manuscript host로 이동했다. 기존 전체 JSX tag·attribute multiset 차이는 0건이고 manuscript-focus/forward-write, tab gate, editor props/ref/callback, recovery read-only, layout/lore/scene input과 error 조건을 유지했다. parser·relative import·unused import source 감사는 0건이며 `App.tsx`는 5,493 lines·190,732 bytes이다. project test는 실행하지 않았다.
 - embedded Work header, fallback manuscript header와 startup recovery preview/issues/apply 표면을 typed host로 이동했다. 기존 header/recovery JSX tag·attribute multiset 차이는 0건이고 completion/title/schedule/navigation gate와 recovery candidate/issue/apply 조건을 유지했다. parser·relative import·unused import source 감사는 0건이며 `App.tsx`는 5,290 lines·183,262 bytes이다. project test는 실행하지 않았다.
 - Scene부터 Fragment까지 exact-source navigation callback 22개를 기존 `DocumentNavigator` port를 소비하는 typed controller로 기계 이동했다. callback 본문, dependency, ownership/revision/range 검사, same/visible/cross-document outcome, hide/reopen/error transition을 바꾸지 않았고 parser·relative import·unused import source 감사는 0건이다. 이 시점 `App.tsx`는 3,666 lines였다.
 - 문서 생성·rename/reorder 설치, WorkspaceCommands composition, controller imperative install, schedule/completed revision, document tab activate/close를 typed document controller로 기계 이동했다. command/portal이 아니라 기존 session/runtime/catalog/persistence callback을 그대로 소비하며 parser·relative import·unused import source 감사는 0건이다. `App.tsx`는 3,303 lines·116,253 bytes이며 project test는 실행하지 않았다.
@@ -224,7 +356,7 @@
 - Workspace layout controller가 wide/narrow rail projection, rail open/toggle, review inspector tab, event rail mode와 active manuscript cursor position을 소유한다. 기존 ResizeObserver와 transaction/activation timing은 App 조정부에 유지하고 raw layout setter는 0건이다. project test·typecheck·lint·build는 실행하지 않았다.
 - Manuscript search controller가 query, Work-scoped result, sequence ref, edit-only result invalidation과 activation/command clear를 소유한다. materialization은 검색 실행 순간의 injected reader에서만 수행되고 App의 search state/ref setter는 0건이다. project test·typecheck·lint·build는 실행하지 않았다.
 - Workspace navigation controller가 Work section, structure/review tab, return location, records clock와 Work-switch reset을 소유한다. Character/Plot 준비 await 뒤 전환, Candidate refresh/capture 병렬 호출, focus exit와 records timestamp 순서를 유지하고 App의 navigation raw setter는 0건이다. project test·typecheck·lint·build는 실행하지 않았다.
-- Focus mode controller가 mode, content width, zoom, current-block highlight, typewriter mode/position과 preference callback을 소유한다. 기존 `eum_focus_typewriter_position_percent` key, 기본값·clamp·callback timing을 유지하고 shortcut의 overlay/forward-writing guard는 App에 그대로 남겼다. App의 focus raw setter는 editor-tools port mapping을 제외하고 0건이며 project test·typecheck·lint·build는 실행하지 않았다.
+- Manuscript focus controller가 활성 상태, 원고 폭, 글자 배율, 현재 문단 강조, 커서 따라가기 위치와 preference callback을 소유한다. 제품 소유 `eum_manuscript_focus_cursor_viewport_percent` key, 기본값·clamp·callback timing을 유지하고 shortcut의 overlay/forward-writing guard는 App에 그대로 남겼다. App의 manuscript-focus raw setter는 editor-tools port mapping을 제외하고 0건이며 project test·typecheck·lint·build는 실행하지 않았다.
 - Work-structure state controller가 dialog open/close, opening gate, 오류와 same/visible/cross-document 결과 전이를 소유한다. 실제 대상 확인·tab policy·resume capture와 범위 열기는 기존 `DocumentNavigator` 경계에 그대로 있고 App의 work-structure raw setter는 0건이다. project test·typecheck·lint·build는 실행하지 않았다.
 - Lore cue controller가 current-document hover/pin, inspector close, exact occurrence selection과 resume capture를 소유한다. App의 cue raw setter는 0건이고 옮긴 한국어 오류 문자열 2개는 이전 원문과 일치한다. project test·typecheck·lint·build는 실행하지 않았다.
 - Lore–Foreshadow link controller가 공유 projection, Lore load/clear/prune port, Foreshadow refresh/prune port와 revision-checked link/unlink 순서를 소유한다. App의 link state setter와 직접 list/link/unlink method 호출은 0건이고 옮긴 한국어 오류 문자열 4개는 이전 원문과 일치한다. project test·typecheck·lint·build는 실행하지 않았다.
@@ -448,7 +580,7 @@ Gate 12 이주 기준:
 - 기존 대응 완료: 작품/회차 CRUD, 자동 durable 저장·불변 revision·backup, 전체 원고 편집, 글꼴·크기·본문 폭·문단 정렬, 오늘/주간 목표, 기간·일별·연속·회차별 집필 기록, TXT·기록 JSON/CSV 내보내기, Pomodoro 작업/휴식·주기·pause/resume·복원.
 - [x] 항상 접근 가능한 접힌 집중 표시와 펼친 세션 피드백, 이번 집필·오늘 완료 세션·평균·최근 기록 표시
 - [x] 실행 중인 Pomodoro 작업 단계의 세션 메모 수정·SQLite 저장·단계 전환과 재실행 보존
-- [x] 원고를 가리지 않는 집중 모드 진입·이탈과 키보드 흐름
+- [x] 원고를 가리지 않는 원고 집중 화면 진입·이탈과 키보드 흐름
 - [x] 목표 글자 수 기반 수정금지 집필과 기존 원고 보호·진행 표시
 - [x] 문장 길이·반복 단어 히트맵과 원고 무변경 검증
 - [x] 상위 어휘·문장 길이·반복 밀도 분석을 현재 원고 파생 화면에 연결하고 최근 기록은 기존 WritingSession 기록 화면으로 유지

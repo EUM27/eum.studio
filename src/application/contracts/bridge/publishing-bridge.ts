@@ -164,6 +164,26 @@ import {
   type PublishingMailScheduleProjection,
   type SavePublishingMailScheduleCommand,
 } from "../../publishing/publishing-mail-schedule-contract";
+import {
+  parseCreatePublishingFormTemplateCommand,
+  parseListPublishingFormResponsesCommand,
+  parseListPublishingFormTemplatesCommand,
+  parsePublishingFormResponseListProjection,
+  parsePublishingFormResponseProjection,
+  parsePublishingFormTemplateListProjection,
+  parsePublishingFormTemplateProjection,
+  parseSavePublishingFormResponseCommand,
+  parseUpdatePublishingFormTemplateCommand,
+  type CreatePublishingFormTemplateCommand,
+  type ListPublishingFormResponsesCommand,
+  type ListPublishingFormTemplatesCommand,
+  type PublishingFormResponseListProjection,
+  type PublishingFormResponseProjection,
+  type PublishingFormTemplateListProjection,
+  type PublishingFormTemplateProjection,
+  type SavePublishingFormResponseCommand,
+  type UpdatePublishingFormTemplateCommand,
+} from "../../publishing/publishing-form-contract";
 export const PUBLISHING_PARTNER_CREATE_CHANNEL =
   "studio:publishing-partners:create";
 export const PUBLISHING_PARTNER_LIST_CHANNEL =
@@ -242,6 +262,16 @@ export const PUBLISHING_MAIL_SCHEDULE_STATUS_CHANNEL =
   "studio:publishing-mail-schedule:status";
 export const PUBLISHING_MAIL_SCHEDULE_SAVE_CHANNEL =
   "studio:publishing-mail-schedule:save";
+export const PUBLISHING_FORM_TEMPLATE_CREATE_CHANNEL =
+  "studio:publishing-forms:templates:create";
+export const PUBLISHING_FORM_TEMPLATE_LIST_CHANNEL =
+  "studio:publishing-forms:templates:list";
+export const PUBLISHING_FORM_TEMPLATE_UPDATE_CHANNEL =
+  "studio:publishing-forms:templates:update";
+export const PUBLISHING_FORM_RESPONSE_LIST_CHANNEL =
+  "studio:publishing-forms:responses:list";
+export const PUBLISHING_FORM_RESPONSE_SAVE_CHANNEL =
+  "studio:publishing-forms:responses:save";
 
 export type PublishingBridgeChannel =
   typeof PUBLISHING_PARTNER_CREATE_CHANNEL
@@ -282,12 +312,22 @@ export type PublishingBridgeChannel =
   | typeof PUBLISHING_MAIL_CONNECTION_SYNC_CHANNEL
   | typeof PUBLISHING_MAIL_CONNECTION_DISCONNECT_CHANNEL
   | typeof PUBLISHING_MAIL_SCHEDULE_STATUS_CHANNEL
-  | typeof PUBLISHING_MAIL_SCHEDULE_SAVE_CHANNEL;
+  | typeof PUBLISHING_MAIL_SCHEDULE_SAVE_CHANNEL
+  | typeof PUBLISHING_FORM_TEMPLATE_CREATE_CHANNEL
+  | typeof PUBLISHING_FORM_TEMPLATE_LIST_CHANNEL
+  | typeof PUBLISHING_FORM_TEMPLATE_UPDATE_CHANNEL
+  | typeof PUBLISHING_FORM_RESPONSE_LIST_CHANNEL
+  | typeof PUBLISHING_FORM_RESPONSE_SAVE_CHANNEL;
 
 export type PublishingBridgePayload =
   | CreatePublishingPartnerCommand
   | ListPublishingPartnersCommand
-  | UpdatePublishingPartnerCommand;
+  | UpdatePublishingPartnerCommand
+  | CreatePublishingFormTemplateCommand
+  | ListPublishingFormTemplatesCommand
+  | UpdatePublishingFormTemplateCommand
+  | ListPublishingFormResponsesCommand
+  | SavePublishingFormResponseCommand;
 
 export type PublishingBridge = Readonly<{
   publishingPartners: {
@@ -311,6 +351,25 @@ export type PublishingBridge = Readonly<{
     update: (
       command: UpdatePublishingSubmissionCommand,
     ) => Promise<PublishingSubmissionProjection>;
+  };
+  publishingFormTemplates: {
+    create: (
+      command: CreatePublishingFormTemplateCommand,
+    ) => Promise<PublishingFormTemplateProjection>;
+    list: (
+      command: ListPublishingFormTemplatesCommand,
+    ) => Promise<PublishingFormTemplateListProjection>;
+    update: (
+      command: UpdatePublishingFormTemplateCommand,
+    ) => Promise<PublishingFormTemplateProjection>;
+  };
+  publishingFormResponses: {
+    list: (
+      command: ListPublishingFormResponsesCommand,
+    ) => Promise<PublishingFormResponseListProjection>;
+    save: (
+      command: SavePublishingFormResponseCommand,
+    ) => Promise<PublishingFormResponseProjection>;
   };
   publishingContracts: {
     create: (
@@ -501,6 +560,70 @@ export function createPublishingBridge(
           return parsePublishingSubmissionProjection(value);
         } catch {
           throw new Error("Invalid publishing submission update result");
+        }
+      },
+    },
+    publishingFormTemplates: {
+      create: async (input) => {
+        const command = parseCreatePublishingFormTemplateCommand(input);
+        const value = await invoke(
+          PUBLISHING_FORM_TEMPLATE_CREATE_CHANNEL,
+          command,
+        );
+        try {
+          return parsePublishingFormTemplateProjection(value);
+        } catch {
+          throw new Error("Invalid publishing form template creation result");
+        }
+      },
+      list: async (input) => {
+        const command = parseListPublishingFormTemplatesCommand(input);
+        const value = await invoke(
+          PUBLISHING_FORM_TEMPLATE_LIST_CHANNEL,
+          command,
+        );
+        try {
+          return parsePublishingFormTemplateListProjection(value);
+        } catch {
+          throw new Error("Invalid publishing form template list");
+        }
+      },
+      update: async (input) => {
+        const command = parseUpdatePublishingFormTemplateCommand(input);
+        const value = await invoke(
+          PUBLISHING_FORM_TEMPLATE_UPDATE_CHANNEL,
+          command,
+        );
+        try {
+          return parsePublishingFormTemplateProjection(value);
+        } catch {
+          throw new Error("Invalid publishing form template update result");
+        }
+      },
+    },
+    publishingFormResponses: {
+      list: async (input) => {
+        const command = parseListPublishingFormResponsesCommand(input);
+        const value = await invoke(
+          PUBLISHING_FORM_RESPONSE_LIST_CHANNEL,
+          command,
+        );
+        try {
+          return parsePublishingFormResponseListProjection(value);
+        } catch {
+          throw new Error("Invalid publishing form response list");
+        }
+      },
+      save: async (input) => {
+        const command = parseSavePublishingFormResponseCommand(input);
+        const value = await invoke(
+          PUBLISHING_FORM_RESPONSE_SAVE_CHANNEL,
+          command,
+        );
+        try {
+          return parsePublishingFormResponseProjection(value);
+        } catch {
+          throw new Error("Invalid publishing form response save result");
         }
       },
     },

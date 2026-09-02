@@ -20,6 +20,12 @@ import type {
   EpisodeRangeMoveStoreReceipt,
   UndoEpisodeRangeMoveInput,
 } from "../../application/editor/move-range-to-episode";
+import type {
+  CommitSceneDeletionInput,
+  RestoreSceneDeletionInput,
+  SceneTrashStore,
+  SceneTrashStoreReceipt,
+} from "../../application/structure/scene-trash-contract";
 import {
   BlobContentMismatchError,
 } from "../../application/storage/blob-store";
@@ -47,6 +53,13 @@ import type {
 import {
   entityId,
 } from "../../domain/writing";
+import { CANON_REVIEW_SCHEMA_SQL } from "./canon-review-schema";
+import { CHARACTER_KNOWLEDGE_SCHEMA_SQL } from "./character-knowledge-schema";
+import { CONTEXT_PLANNER_SCHEMA_SQL } from "./context-planner-schema";
+import { NARRATIVE_DIGEST_SCHEMA_SQL } from "./narrative-digest-schema";
+import { PUBLISHING_FORM_SCHEMA_SQL } from "./publishing-form-schema";
+import { SCENE_ANALYSIS_SCHEMA_SQL } from "./scene-analysis-schema";
+import { CONTINUITY_SCHEMA_SQL } from "./continuity-schema";
 import type {
   Anchor,
   AnchorMatchedEvidence,
@@ -377,7 +390,8 @@ CREATE TABLE IF NOT EXISTS assistant_context_permission_grants (
   conversation_id TEXT,
   capability TEXT NOT NULL
     CHECK (capability IN (
-      'vocabulary-lookup', 'lore-review', 'character.extract', 'scene.extract'
+      'vocabulary-lookup', 'lore-review', 'character.extract', 'scene.extract',
+      'canon.review', 'continuity.review', 'narrative.digest', 'publishing-operations'
     )),
   destination_id TEXT NOT NULL,
   local_scope TEXT NOT NULL
@@ -409,7 +423,8 @@ CREATE TABLE IF NOT EXISTS assistant_context_receipts (
   conversation_id TEXT NOT NULL,
   capability TEXT NOT NULL
     CHECK (capability IN (
-      'vocabulary-lookup', 'lore-review', 'character.extract', 'scene.extract'
+      'vocabulary-lookup', 'lore-review', 'character.extract', 'scene.extract',
+      'canon.review', 'continuity.review', 'narrative.digest', 'publishing-operations'
     )),
   destination_id TEXT NOT NULL,
   read_ranges_json TEXT NOT NULL,
@@ -1037,6 +1052,50 @@ CREATE INDEX IF NOT EXISTS scene_episode_segments_active_scene_idx
 ON scene_episode_segments (work_id, scene_id, document_id)
 WHERE retired_at IS NULL;
 
+CREATE TABLE IF NOT EXISTS scene_lineage_operations (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  operation TEXT NOT NULL
+    CHECK (operation IN ('split', 'merge', 'move', 'delete', 'restore')),
+  command_ref TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  UNIQUE (work_id, operation, command_ref),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS scene_lineage_members (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  lineage_operation_id TEXT NOT NULL,
+  scene_id TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('parent', 'child')),
+  ordinal INTEGER NOT NULL CHECK (ordinal >= 0),
+  UNIQUE (work_id, id),
+  UNIQUE (work_id, lineage_operation_id, role, ordinal),
+  UNIQUE (work_id, lineage_operation_id, scene_id, role),
+  FOREIGN KEY (work_id, lineage_operation_id)
+    REFERENCES scene_lineage_operations (work_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, scene_id)
+    REFERENCES scene_identities (work_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS scene_lineage_members_scene_idx
+  ON scene_lineage_members (work_id, scene_id, role, created_at);
+
 CREATE TABLE IF NOT EXISTS episode_range_moves (
   id TEXT PRIMARY KEY,
   schema_version INTEGER NOT NULL CHECK (schema_version = 1),
@@ -1219,6 +1278,31 @@ CREATE TABLE IF NOT EXISTS fragments (
     REFERENCES anchors (work_id, document_id, id)
     ON DELETE RESTRICT
 ) STRICT;
+
+CREATE TABLE IF NOT EXISTS manuscript_annotations (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  source_document_id TEXT NOT NULL,
+  source_anchor_id TEXT NOT NULL,
+  body TEXT NOT NULL,
+  tags_json TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id, source_document_id)
+    REFERENCES documents (work_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, source_document_id, source_anchor_id)
+    REFERENCES anchors (work_id, document_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS manuscript_annotations_active_source_idx
+  ON manuscript_annotations (work_id, source_document_id, updated_at)
+  WHERE retired_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS characters (
   id TEXT PRIMARY KEY,
@@ -1461,6 +1545,244 @@ CREATE TABLE IF NOT EXISTS scene_music_queue_candidates (
 
 CREATE INDEX IF NOT EXISTS scene_music_queue_work_scene_status_idx
   ON scene_music_queue_candidates (work_id, scene_key, status, updated_at);
+
+CREATE TABLE IF NOT EXISTS scene_metadata_bindings (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  retired_at TEXT,
+  work_id TEXT NOT NULL,
+  metadata_kind TEXT NOT NULL
+    CHECK (metadata_kind IN ('annotation', 'event-override', 'music-queue')),
+  metadata_id TEXT NOT NULL,
+  source_scene_key TEXT NOT NULL,
+  scene_id TEXT,
+  status TEXT NOT NULL
+    CHECK (status IN ('current', 'needs-review', 'detached')),
+  proposed_scene_id TEXT,
+  lineage_operation_id TEXT,
+  UNIQUE (work_id, id),
+  CHECK (status <> 'current' OR scene_id IS NOT NULL),
+  FOREIGN KEY (work_id)
+    REFERENCES works (id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, scene_id)
+    REFERENCES scene_identities (work_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, proposed_scene_id)
+    REFERENCES scene_identities (work_id, id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, lineage_operation_id)
+    REFERENCES scene_lineage_operations (work_id, id)
+    ON DELETE RESTRICT
+) STRICT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS scene_metadata_bindings_active_source_idx
+  ON scene_metadata_bindings (work_id, metadata_kind, metadata_id)
+  WHERE retired_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS scene_metadata_bindings_scene_status_idx
+  ON scene_metadata_bindings (work_id, scene_id, status, updated_at)
+  WHERE retired_at IS NULL;
+
+CREATE TRIGGER IF NOT EXISTS scene_metadata_bindings_source_insert
+BEFORE INSERT ON scene_metadata_bindings
+WHEN
+  (NEW.metadata_kind = 'annotation' AND NOT EXISTS (
+    SELECT 1 FROM scene_annotations
+    WHERE work_id = NEW.work_id AND id = NEW.metadata_id
+  )) OR
+  (NEW.metadata_kind = 'event-override' AND NOT EXISTS (
+    SELECT 1 FROM scene_event_overrides
+    WHERE work_id = NEW.work_id AND id = NEW.metadata_id
+  )) OR
+  (NEW.metadata_kind = 'music-queue' AND NOT EXISTS (
+    SELECT 1 FROM scene_music_queue_candidates
+    WHERE work_id = NEW.work_id AND id = NEW.metadata_id
+  ))
+BEGIN
+  SELECT RAISE(ABORT, 'Scene metadata binding source is missing');
+END;
+
+CREATE TRIGGER IF NOT EXISTS scene_metadata_bindings_source_update
+BEFORE UPDATE OF work_id, metadata_kind, metadata_id ON scene_metadata_bindings
+WHEN
+  (NEW.metadata_kind = 'annotation' AND NOT EXISTS (
+    SELECT 1 FROM scene_annotations
+    WHERE work_id = NEW.work_id AND id = NEW.metadata_id
+  )) OR
+  (NEW.metadata_kind = 'event-override' AND NOT EXISTS (
+    SELECT 1 FROM scene_event_overrides
+    WHERE work_id = NEW.work_id AND id = NEW.metadata_id
+  )) OR
+  (NEW.metadata_kind = 'music-queue' AND NOT EXISTS (
+    SELECT 1 FROM scene_music_queue_candidates
+    WHERE work_id = NEW.work_id AND id = NEW.metadata_id
+  ))
+BEGIN
+  SELECT RAISE(ABORT, 'Scene metadata binding source is missing');
+END;
+
+CREATE TABLE IF NOT EXISTS scene_trash_entries (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  restored_at TEXT,
+  work_id TEXT NOT NULL,
+  scene_id TEXT NOT NULL,
+  scene_identity_pre_delete_revision INTEGER NOT NULL
+    CHECK (scene_identity_pre_delete_revision > 0),
+  scene_identity_post_delete_revision INTEGER NOT NULL
+    CHECK (scene_identity_post_delete_revision > scene_identity_pre_delete_revision),
+  source_scene_key TEXT NOT NULL,
+  source_rule_set_revision INTEGER NOT NULL CHECK (source_rule_set_revision > 0),
+  preview_fingerprint TEXT NOT NULL,
+  metadata_json TEXT NOT NULL,
+  delete_lineage_operation_id TEXT NOT NULL,
+  restore_lineage_operation_id TEXT,
+  status TEXT NOT NULL CHECK (status IN ('active', 'restored', 'undone')),
+  UNIQUE (work_id, id),
+  FOREIGN KEY (work_id) REFERENCES works (id) ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, scene_id)
+    REFERENCES scene_identities (work_id, id) ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, delete_lineage_operation_id)
+    REFERENCES scene_lineage_operations (work_id, id) ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, restore_lineage_operation_id)
+    REFERENCES scene_lineage_operations (work_id, id) ON DELETE RESTRICT
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS scene_trash_entries_work_status_idx
+  ON scene_trash_entries (work_id, status, created_at, id);
+
+CREATE TABLE IF NOT EXISTS scene_trash_documents (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  work_id TEXT NOT NULL,
+  trash_entry_id TEXT NOT NULL,
+  document_id TEXT NOT NULL,
+  ordinal INTEGER NOT NULL CHECK (ordinal >= 0),
+  before_revision_id TEXT NOT NULL,
+  deleted_revision_id TEXT NOT NULL,
+  restored_revision_id TEXT,
+  scene_key TEXT NOT NULL,
+  scene_from INTEGER NOT NULL CHECK (scene_from >= 0),
+  scene_to INTEGER NOT NULL CHECK (scene_to > scene_from),
+  deletion_from INTEGER NOT NULL CHECK (deletion_from >= 0),
+  deletion_to INTEGER NOT NULL CHECK (deletion_to > deletion_from),
+  deleted_text_hash TEXT NOT NULL,
+  deleted_utf16_length INTEGER NOT NULL CHECK (deleted_utf16_length > 0),
+  first_excerpt TEXT NOT NULL,
+  last_excerpt TEXT NOT NULL,
+  UNIQUE (work_id, id),
+  UNIQUE (work_id, trash_entry_id, ordinal),
+  UNIQUE (work_id, trash_entry_id, document_id),
+  CHECK (deleted_utf16_length = deletion_to - deletion_from),
+  FOREIGN KEY (work_id, trash_entry_id)
+    REFERENCES scene_trash_entries (work_id, id) ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, document_id)
+    REFERENCES documents (work_id, id) ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, document_id, before_revision_id)
+    REFERENCES document_revisions (work_id, document_id, id) ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, document_id, deleted_revision_id)
+    REFERENCES document_revisions (work_id, document_id, id) ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, document_id, restored_revision_id)
+    REFERENCES document_revisions (work_id, document_id, id) ON DELETE RESTRICT
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS scene_trash_documents_document_idx
+  ON scene_trash_documents (work_id, document_id, created_at);
+
+CREATE TABLE IF NOT EXISTS scene_trash_segments (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  work_id TEXT NOT NULL,
+  trash_entry_id TEXT NOT NULL,
+  segment_id TEXT NOT NULL,
+  document_id TEXT NOT NULL,
+  ordinal INTEGER NOT NULL CHECK (ordinal >= 0),
+  pre_delete_revision INTEGER NOT NULL CHECK (pre_delete_revision > 0),
+  post_delete_revision INTEGER NOT NULL CHECK (post_delete_revision > pre_delete_revision),
+  UNIQUE (work_id, id),
+  UNIQUE (work_id, trash_entry_id, ordinal),
+  UNIQUE (work_id, trash_entry_id, segment_id),
+  FOREIGN KEY (work_id, trash_entry_id)
+    REFERENCES scene_trash_entries (work_id, id) ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, segment_id)
+    REFERENCES scene_episode_segments (work_id, id) ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, document_id)
+    REFERENCES documents (work_id, id) ON DELETE RESTRICT
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS scene_trash_segments_entry_idx
+  ON scene_trash_segments (work_id, trash_entry_id, ordinal);
+
+CREATE TABLE IF NOT EXISTS scene_trash_overrides (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  work_id TEXT NOT NULL,
+  trash_entry_id TEXT NOT NULL,
+  scene_override_id TEXT NOT NULL,
+  ordinal INTEGER NOT NULL CHECK (ordinal >= 0),
+  pre_delete_revision INTEGER NOT NULL CHECK (pre_delete_revision > 0),
+  post_delete_revision INTEGER NOT NULL CHECK (post_delete_revision > pre_delete_revision),
+  UNIQUE (work_id, id),
+  UNIQUE (work_id, trash_entry_id, ordinal),
+  UNIQUE (work_id, trash_entry_id, scene_override_id),
+  FOREIGN KEY (work_id, trash_entry_id)
+    REFERENCES scene_trash_entries (work_id, id) ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, scene_override_id)
+    REFERENCES scene_overrides (work_id, id) ON DELETE RESTRICT
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS scene_trash_overrides_entry_idx
+  ON scene_trash_overrides (work_id, trash_entry_id, ordinal);
+
+CREATE TABLE IF NOT EXISTS scene_trash_bindings (
+  id TEXT PRIMARY KEY,
+  schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+  revision INTEGER NOT NULL CHECK (revision > 0),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  work_id TEXT NOT NULL,
+  trash_entry_id TEXT NOT NULL,
+  scene_metadata_binding_id TEXT NOT NULL,
+  ordinal INTEGER NOT NULL CHECK (ordinal >= 0),
+  pre_delete_revision INTEGER NOT NULL CHECK (pre_delete_revision > 0),
+  post_delete_revision INTEGER NOT NULL CHECK (post_delete_revision > pre_delete_revision),
+  scene_id TEXT,
+  status TEXT NOT NULL CHECK (status IN ('current', 'needs-review', 'detached')),
+  proposed_scene_id TEXT,
+  lineage_operation_id TEXT,
+  UNIQUE (work_id, id),
+  UNIQUE (work_id, trash_entry_id, ordinal),
+  UNIQUE (work_id, trash_entry_id, scene_metadata_binding_id),
+  FOREIGN KEY (work_id, trash_entry_id)
+    REFERENCES scene_trash_entries (work_id, id) ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, scene_metadata_binding_id)
+    REFERENCES scene_metadata_bindings (work_id, id) ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, scene_id)
+    REFERENCES scene_identities (work_id, id) ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, proposed_scene_id)
+    REFERENCES scene_identities (work_id, id) ON DELETE RESTRICT,
+  FOREIGN KEY (work_id, lineage_operation_id)
+    REFERENCES scene_lineage_operations (work_id, id) ON DELETE RESTRICT
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS scene_trash_bindings_entry_idx
+  ON scene_trash_bindings (work_id, trash_entry_id, ordinal);
 
 CREATE TABLE IF NOT EXISTS assistant_scene_draft_candidates (
   id TEXT PRIMARY KEY,
@@ -2452,6 +2774,13 @@ BEGIN
     'Blob manifest is immutable'
   );
 END;
+${CANON_REVIEW_SCHEMA_SQL}
+${CONTINUITY_SCHEMA_SQL}
+${CHARACTER_KNOWLEDGE_SCHEMA_SQL}
+${CONTEXT_PLANNER_SCHEMA_SQL}
+${NARRATIVE_DIGEST_SCHEMA_SQL}
+${SCENE_ANALYSIS_SCHEMA_SQL}
+${PUBLISHING_FORM_SCHEMA_SQL}
 `;
 
 const IDENTITY_ROWS_SQL = `
@@ -3584,6 +3913,166 @@ function writeLedgerRecord(
         }
       }
       return;
+    case "sceneLineageOperation":
+      runStatement(
+        database,
+        `
+          INSERT INTO scene_lineage_operations (
+            id, schema_version, revision, created_at, updated_at, retired_at,
+            work_id, operation, command_ref
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.workId,
+          record.operation,
+          record.commandRef,
+        ],
+      );
+      return;
+    case "sceneLineageMember":
+      runStatement(
+        database,
+        `
+          INSERT INTO scene_lineage_members (
+            id, schema_version, revision, created_at, updated_at, retired_at,
+            work_id, lineage_operation_id, scene_id, role, ordinal
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.workId,
+          record.lineageOperationId,
+          record.sceneId,
+          record.role,
+          record.ordinal,
+        ],
+      );
+      return;
+    case "sceneMusicQueueCandidate":
+      runStatement(
+        database,
+        `
+          INSERT INTO scene_music_queue_candidates (
+            id, schema_version, request_id, revision, work_id, scene_key,
+            scene_annotation_id, scene_annotation_revision, provider_id,
+            query_text, status, options_json, selected_option_id, created_at,
+            updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.requestId,
+          record.revision,
+          record.workId,
+          record.sceneKey,
+          record.sceneAnnotationId,
+          record.sceneAnnotationRevision,
+          record.providerId,
+          record.query,
+          record.status,
+          record.optionsJson,
+          nullable(record.selectedOptionId),
+          record.createdAt,
+          record.updatedAt,
+        ],
+      );
+      return;
+    case "sceneMetadataBinding":
+      runStatement(
+        database,
+        `
+          INSERT INTO scene_metadata_bindings (
+            id, schema_version, revision, created_at, updated_at, retired_at,
+            work_id, metadata_kind, metadata_id, source_scene_key, scene_id,
+            status, proposed_scene_id, lineage_operation_id
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.workId,
+          record.metadataKind,
+          record.metadataId,
+          record.sourceSceneKey,
+          nullable(record.sceneId),
+          record.status,
+          nullable(record.proposedSceneId),
+          nullable(record.lineageOperationId),
+        ],
+      );
+      return;
+    case "sceneMetadataBindingUpdate":
+      {
+        const update = database.prepare(`
+          UPDATE scene_metadata_bindings
+          SET
+            revision = revision + 1,
+            updated_at = ?,
+            scene_id = ?,
+            status = ?,
+            proposed_scene_id = ?,
+            lineage_operation_id = ?
+          WHERE
+            id = ?
+            AND work_id = ?
+            AND revision = ?
+            AND retired_at IS NULL
+        `).run(
+          record.updatedAt,
+          record.sceneId,
+          record.status,
+          record.proposedSceneId,
+          record.lineageOperationId,
+          record.id,
+          record.workId,
+          record.expectedRevision,
+        ) as { readonly changes: number | bigint };
+        if (Number(update.changes) !== 1) {
+          throw new Error(`Scene metadata binding revision conflict: ${record.id}`);
+        }
+      }
+      return;
+    case "sceneMetadataBindingRetirement":
+      {
+        const retirement = database.prepare(`
+          UPDATE scene_metadata_bindings
+          SET
+            revision = revision + 1,
+            updated_at = ?,
+            retired_at = ?
+          WHERE
+            id = ?
+            AND work_id = ?
+            AND revision = ?
+            AND retired_at IS NULL
+        `).run(
+          record.retiredAt,
+          record.retiredAt,
+          record.id,
+          record.workId,
+          record.expectedRevision,
+        ) as { readonly changes: number | bigint };
+        if (Number(retirement.changes) !== 1) {
+          throw new Error(`Scene metadata binding revision conflict: ${record.id}`);
+        }
+      }
+      return;
     case "sceneEventOverride":
       runStatement(
         database,
@@ -3883,6 +4372,40 @@ function writeLedgerRecord(
         ],
       );
       return;
+    case "manuscriptAnnotation":
+      runStatement(
+        database,
+        `
+          INSERT INTO manuscript_annotations (
+            id,
+            schema_version,
+            revision,
+            created_at,
+            updated_at,
+            retired_at,
+            work_id,
+            source_document_id,
+            source_anchor_id,
+            body,
+            tags_json
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.workId,
+          record.sourceDocumentId,
+          record.sourceAnchorId,
+          record.body,
+          JSON.stringify(record.tags),
+        ],
+      );
+      return;
     case "character":
       runStatement(
         database,
@@ -4038,6 +4561,8 @@ function writeLedgerRecord(
         SET
           revision = revision + 1,
           updated_at = ?,
+          from_character_id = COALESCE(?, from_character_id),
+          to_character_id = COALESCE(?, to_character_id),
           kind = ?,
           description = ?
         WHERE
@@ -4047,6 +4572,8 @@ function writeLedgerRecord(
           AND retired_at IS NULL
       `).run(
         record.updatedAt,
+        nullable(record.fromCharacterId),
+        nullable(record.toCharacterId),
         record.relationKind,
         record.description,
         record.workId,
@@ -4334,6 +4861,40 @@ function writeLedgerRecord(
         ],
       );
       return;
+    case "loreEntryUpdate": {
+      const result = database.prepare(`
+        UPDATE lore_entries
+        SET
+          schema_version = ?,
+          revision = revision + 1,
+          updated_at = ?,
+          title = ?,
+          content = ?,
+          category = ?,
+          aliases_json = ?,
+          enabled = ?
+        WHERE
+          work_id = ?
+          AND id = ?
+          AND revision = ?
+          AND retired_at IS NULL
+      `).run(
+        record.schemaVersion,
+        record.updatedAt,
+        record.title,
+        record.content,
+        record.category,
+        JSON.stringify(record.aliases),
+        booleanInteger(record.enabled),
+        record.workId,
+        record.id,
+        record.expectedRevision,
+      ) as { readonly changes: number | bigint };
+      if (Number(result.changes) !== 1) {
+        throw new Error(`Lore entry revision conflict: ${record.id}`);
+      }
+      return;
+    }
     case "loreEntryEvidence":
       runStatement(
         database,
@@ -4393,6 +4954,943 @@ function writeLedgerRecord(
           record.changedAt,
         ],
       );
+      return;
+    case "canonReviewCandidate": {
+      if (record.items.length === 0) {
+        throw new Error("Canon review Candidate must contain at least one item");
+      }
+      runStatement(
+        database,
+        `
+          INSERT INTO assistant_canon_review_candidates (
+            id, schema_version, revision, created_at, updated_at, retired_at,
+            request_id, work_id, source_document_id,
+            source_document_revision_id, source_from, source_to, provider_id,
+            model_id, prompt_version, context_receipt_id, status
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.requestId,
+          record.workId,
+          record.sourceDocumentId,
+          record.sourceDocumentRevisionId,
+          record.sourceFrom,
+          record.sourceTo,
+          record.providerId,
+          record.modelId,
+          record.promptVersion,
+          record.contextReceiptId,
+          record.status,
+        ],
+      );
+      for (const item of record.items) {
+        if (item.fieldChanges.length === 0 || item.evidence.length === 0) {
+          throw new Error(`Canon review item is incomplete: ${item.id}`);
+        }
+        runStatement(
+          database,
+          `
+            INSERT INTO assistant_canon_review_items (
+              id, schema_version, work_id, candidate_id, target_kind,
+              operation, target_hint, target_id, matching_target_ids_json,
+              expected_target_revision, assertion_basis, reason, status,
+              applied_target_id, created_at, updated_at
+            ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          [
+            item.id,
+            record.workId,
+            record.id,
+            item.targetKind,
+            item.operation,
+            item.targetHint,
+            item.targetId,
+            JSON.stringify(item.matchingTargetIds),
+            item.expectedTargetRevision,
+            item.assertionBasis,
+            item.reason,
+            item.status,
+            item.appliedTargetId,
+            record.createdAt,
+            record.updatedAt,
+          ],
+        );
+        for (const change of item.fieldChanges) {
+          runStatement(
+            database,
+            `
+              INSERT INTO assistant_canon_review_field_changes (
+                work_id, candidate_id, item_id, field_name, before_json,
+                after_json, selected, order_index
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `,
+            [
+              record.workId,
+              record.id,
+              item.id,
+              change.field,
+              JSON.stringify(change.before),
+              JSON.stringify(change.after),
+              booleanInteger(change.selected),
+              change.orderIndex,
+            ],
+          );
+        }
+        for (const evidence of item.evidence) {
+          runStatement(
+            database,
+            `
+              INSERT INTO assistant_canon_review_evidence (
+                id, schema_version, work_id, candidate_id, item_id,
+                source_document_id, source_document_revision_id, source_from,
+                source_to, exact_text, anchor_id, order_index
+              ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
+            `,
+            [
+              evidence.id,
+              record.workId,
+              record.id,
+              item.id,
+              evidence.sourceDocumentId,
+              evidence.sourceDocumentRevisionId,
+              evidence.sourceFrom,
+              evidence.sourceTo,
+              evidence.exactText,
+              evidence.orderIndex,
+            ],
+          );
+        }
+      }
+      return;
+    }
+    case "canonReviewCandidateUpdate": {
+      if (record.fieldChanges.length === 0) {
+        throw new Error("Canon review Candidate update needs field changes");
+      }
+      const candidateUpdate = database.prepare(`
+        UPDATE assistant_canon_review_candidates
+        SET revision = revision + 1, updated_at = ?
+        WHERE work_id = ? AND id = ? AND revision = ? AND status = 'ready'
+      `).run(
+        record.updatedAt,
+        record.workId,
+        record.id,
+        record.expectedRevision,
+      ) as { readonly changes: number | bigint };
+      if (Number(candidateUpdate.changes) !== 1) {
+        throw new Error(`Canon review Candidate revision conflict: ${record.id}`);
+      }
+      const itemUpdate = database.prepare(`
+        UPDATE assistant_canon_review_items
+        SET
+          operation = ?,
+          target_id = ?,
+          matching_target_ids_json = ?,
+          expected_target_revision = ?,
+          updated_at = ?
+        WHERE
+          work_id = ? AND candidate_id = ? AND id = ? AND
+          target_kind = ? AND status = 'pending'
+      `).run(
+        record.operation,
+        record.targetId,
+        JSON.stringify(record.matchingTargetIds),
+        record.expectedTargetRevision,
+        record.updatedAt,
+        record.workId,
+        record.id,
+        record.itemId,
+        record.targetKind,
+      ) as { readonly changes: number | bigint };
+      if (Number(itemUpdate.changes) !== 1) {
+        throw new Error(`Canon review item changed: ${record.itemId}`);
+      }
+      database.prepare(`
+        DELETE FROM assistant_canon_review_field_changes
+        WHERE work_id = ? AND candidate_id = ? AND item_id = ?
+      `).run(record.workId, record.id, record.itemId);
+      for (const change of record.fieldChanges) {
+        runStatement(
+          database,
+          `
+            INSERT INTO assistant_canon_review_field_changes (
+              work_id, candidate_id, item_id, field_name, before_json,
+              after_json, selected, order_index
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          [
+            record.workId,
+            record.id,
+            record.itemId,
+            change.field,
+            JSON.stringify(change.before),
+            JSON.stringify(change.after),
+            booleanInteger(change.selected),
+            change.orderIndex,
+          ],
+        );
+      }
+      return;
+    }
+    case "canonReviewEvidence": {
+      const update = database.prepare(`
+        UPDATE assistant_canon_review_evidence
+        SET anchor_id = ?
+        WHERE
+          work_id = ? AND candidate_id = ? AND item_id = ? AND id = ? AND
+          anchor_id IS NULL
+      `).run(
+        record.anchorId,
+        record.workId,
+        record.candidateId,
+        record.itemId,
+        record.id,
+      ) as { readonly changes: number | bigint };
+      if (Number(update.changes) !== 1) {
+        throw new Error(`Canon review evidence changed: ${record.id}`);
+      }
+      return;
+    }
+    case "canonReviewItemDecision": {
+      const candidateUpdate = database.prepare(`
+        UPDATE assistant_canon_review_candidates
+        SET revision = revision + 1, status = ?, updated_at = ?
+        WHERE work_id = ? AND id = ? AND revision = ? AND status = 'ready'
+      `).run(
+        record.candidateStatus,
+        record.updatedAt,
+        record.workId,
+        record.id,
+        record.expectedRevision,
+      ) as { readonly changes: number | bigint };
+      if (Number(candidateUpdate.changes) !== 1) {
+        throw new Error(`Canon review Candidate revision conflict: ${record.id}`);
+      }
+      const itemUpdate = database.prepare(`
+        UPDATE assistant_canon_review_items
+        SET status = ?, applied_target_id = ?, updated_at = ?
+        WHERE
+          work_id = ? AND candidate_id = ? AND id = ? AND status = 'pending'
+      `).run(
+        record.itemStatus,
+        record.appliedTargetId,
+        record.updatedAt,
+        record.workId,
+        record.id,
+        record.itemId,
+      ) as { readonly changes: number | bigint };
+      if (Number(itemUpdate.changes) !== 1) {
+        throw new Error(`Canon review item changed: ${record.itemId}`);
+      }
+      runStatement(
+        database,
+        `
+          INSERT INTO assistant_canon_review_decision_receipts (
+            id, schema_version, work_id, candidate_id, item_id, decision,
+            outcome, target_kind, target_id, target_revision_before,
+            target_revision_after, selected_fields_json,
+            source_document_revision_id, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.receipt.id,
+          record.receipt.schemaVersion,
+          record.workId,
+          record.id,
+          record.itemId,
+          record.receipt.decision,
+          record.receipt.outcome,
+          record.receipt.targetKind,
+          record.receipt.targetId,
+          record.receipt.targetRevisionBefore,
+          record.receipt.targetRevisionAfter,
+          JSON.stringify(record.receipt.selectedFields),
+          record.receipt.sourceDocumentRevisionId,
+          record.receipt.createdAt,
+        ],
+      );
+      return;
+    }
+    case "continuityThread": {
+      runStatement(
+        database,
+        `
+          INSERT INTO continuity_threads (
+            id, schema_version, revision, created_at, updated_at, work_id,
+            kind, title, note, status, opened_at, resolved_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          record.workId,
+          record.threadKind,
+          record.title,
+          record.note,
+          record.status,
+          record.openedAt,
+          record.resolvedAt,
+        ],
+      );
+      for (const ref of record.subjectRefs) {
+        runStatement(
+          database,
+          `
+            INSERT INTO continuity_thread_entity_refs (
+              work_id, thread_id, entity_kind, entity_id, order_index
+            ) VALUES (?, ?, ?, ?, ?)
+          `,
+          [record.workId, record.id, ref.entityKind, ref.entityId, ref.orderIndex],
+        );
+      }
+      return;
+    }
+    case "continuityThreadUpdate": {
+      const update = database.prepare(`
+        UPDATE continuity_threads
+        SET
+          revision = revision + 1,
+          updated_at = ?,
+          kind = ?,
+          title = ?,
+          note = ?,
+          status = ?,
+          resolved_at = ?
+        WHERE work_id = ? AND id = ? AND revision = ?
+      `).run(
+        record.updatedAt,
+        record.threadKind,
+        record.title,
+        record.note,
+        record.status,
+        record.resolvedAt,
+        record.workId,
+        record.id,
+        record.expectedRevision,
+      ) as { readonly changes: number | bigint };
+      if (Number(update.changes) !== 1) {
+        throw new Error(`Continuity thread revision conflict: ${record.id}`);
+      }
+      database.prepare(`
+        DELETE FROM continuity_thread_entity_refs
+        WHERE work_id = ? AND thread_id = ?
+      `).run(record.workId, record.id);
+      for (const ref of record.subjectRefs) {
+        runStatement(
+          database,
+          `
+            INSERT INTO continuity_thread_entity_refs (
+              work_id, thread_id, entity_kind, entity_id, order_index
+            ) VALUES (?, ?, ?, ?, ?)
+          `,
+          [record.workId, record.id, ref.entityKind, ref.entityId, ref.orderIndex],
+        );
+      }
+      return;
+    }
+    case "continuityEvidence":
+      runStatement(
+        database,
+        `
+          INSERT INTO continuity_thread_evidence (
+            id, schema_version, work_id, thread_id, phase,
+            source_document_id, source_document_revision_id, source_from,
+            source_to, exact_text, anchor_id, order_index, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.workId,
+          record.threadId,
+          record.phase,
+          record.sourceDocumentId,
+          record.sourceDocumentRevisionId,
+          record.sourceFrom,
+          record.sourceTo,
+          record.exactText,
+          record.anchorId,
+          record.orderIndex,
+          record.createdAt,
+        ],
+      );
+      return;
+    case "continuityTransition":
+      runStatement(
+        database,
+        `
+          INSERT INTO continuity_thread_history (
+            id, schema_version, work_id, thread_id, transition_kind,
+            revision_before, revision_after, resolution_mode, reason,
+            evidence_anchor_ids_json, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.workId,
+          record.threadId,
+          record.transitionKind,
+          record.revisionBefore,
+          record.revisionAfter,
+          record.resolutionMode,
+          record.reason,
+          JSON.stringify(record.evidenceAnchorIds),
+          record.createdAt,
+        ],
+      );
+      return;
+    case "continuityReviewCandidate": {
+      if (record.items.length === 0) {
+        throw new Error("Continuity review Candidate must contain at least one item");
+      }
+      runStatement(
+        database,
+        `
+          INSERT INTO assistant_continuity_review_candidates (
+            id, schema_version, revision, created_at, updated_at, retired_at,
+            request_id, work_id, source_document_id,
+            source_document_revision_id, source_from, source_to, provider_id,
+            model_id, prompt_version, context_receipt_id, status
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          nullable(record.retiredAt),
+          record.requestId,
+          record.workId,
+          record.sourceDocumentId,
+          record.sourceDocumentRevisionId,
+          record.sourceFrom,
+          record.sourceTo,
+          record.providerId,
+          record.modelId,
+          record.promptVersion,
+          record.contextReceiptId,
+          record.status,
+        ],
+      );
+      for (const item of record.items) {
+        if (item.evidence.length === 0) {
+          throw new Error(`Continuity review item has no evidence: ${item.id}`);
+        }
+        runStatement(
+          database,
+          `
+            INSERT INTO assistant_continuity_review_items (
+              id, schema_version, work_id, candidate_id, assertion_basis,
+              thread_kind, title, note, subject_refs_json, reason,
+              potential_duplicate_thread_ids_json, status, applied_thread_id,
+              created_at, updated_at
+            ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          [
+            item.id,
+            record.workId,
+            record.id,
+            item.assertionBasis,
+            item.threadKind,
+            item.title,
+            item.note,
+            JSON.stringify(item.subjectRefs),
+            item.reason,
+            JSON.stringify(item.potentialDuplicateThreadIds),
+            item.status,
+            item.appliedThreadId,
+            record.createdAt,
+            record.updatedAt,
+          ],
+        );
+        for (const evidence of item.evidence) {
+          runStatement(
+            database,
+            `
+              INSERT INTO assistant_continuity_review_evidence (
+                id, schema_version, work_id, candidate_id, item_id,
+                source_document_id, source_document_revision_id, source_from,
+                source_to, exact_text, anchor_id, order_index
+              ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
+            `,
+            [
+              evidence.id,
+              record.workId,
+              record.id,
+              item.id,
+              evidence.sourceDocumentId,
+              evidence.sourceDocumentRevisionId,
+              evidence.sourceFrom,
+              evidence.sourceTo,
+              evidence.exactText,
+              evidence.orderIndex,
+            ],
+          );
+        }
+      }
+      return;
+    }
+    case "continuityReviewCandidateUpdate": {
+      const candidateUpdate = database.prepare(`
+        UPDATE assistant_continuity_review_candidates
+        SET revision = revision + 1, updated_at = ?
+        WHERE work_id = ? AND id = ? AND revision = ? AND status = 'ready'
+      `).run(
+        record.updatedAt,
+        record.workId,
+        record.id,
+        record.expectedRevision,
+      ) as { readonly changes: number | bigint };
+      if (Number(candidateUpdate.changes) !== 1) {
+        throw new Error(`Continuity review Candidate revision conflict: ${record.id}`);
+      }
+      const itemUpdate = database.prepare(`
+        UPDATE assistant_continuity_review_items
+        SET
+          thread_kind = ?, title = ?, note = ?, subject_refs_json = ?,
+          potential_duplicate_thread_ids_json = COALESCE(?, potential_duplicate_thread_ids_json),
+          updated_at = ?
+        WHERE work_id = ? AND candidate_id = ? AND id = ? AND status = 'pending'
+      `).run(
+        record.threadKind,
+        record.title,
+        record.note,
+        JSON.stringify(record.subjectRefs),
+        record.potentialDuplicateThreadIds === undefined
+          ? null
+          : JSON.stringify(record.potentialDuplicateThreadIds),
+        record.updatedAt,
+        record.workId,
+        record.id,
+        record.itemId,
+      ) as { readonly changes: number | bigint };
+      if (Number(itemUpdate.changes) !== 1) {
+        throw new Error(`Continuity review item changed: ${record.itemId}`);
+      }
+      return;
+    }
+    case "continuityReviewCandidateStatus": {
+      const update = database.prepare(`
+        UPDATE assistant_continuity_review_candidates
+        SET revision = revision + 1, status = ?, updated_at = ?
+        WHERE work_id = ? AND id = ? AND revision = ? AND status = 'ready'
+      `).run(
+        record.status,
+        record.updatedAt,
+        record.workId,
+        record.id,
+        record.expectedRevision,
+      ) as { readonly changes: number | bigint };
+      if (Number(update.changes) !== 1) {
+        throw new Error(`Continuity review Candidate revision conflict: ${record.id}`);
+      }
+      return;
+    }
+    case "continuityReviewEvidence": {
+      const update = database.prepare(`
+        UPDATE assistant_continuity_review_evidence
+        SET anchor_id = ?
+        WHERE
+          work_id = ? AND candidate_id = ? AND item_id = ? AND id = ? AND
+          anchor_id IS NULL
+      `).run(
+        record.anchorId,
+        record.workId,
+        record.candidateId,
+        record.itemId,
+        record.id,
+      ) as { readonly changes: number | bigint };
+      if (Number(update.changes) !== 1) {
+        throw new Error(`Continuity review evidence changed: ${record.id}`);
+      }
+      return;
+    }
+    case "continuityReviewItemDecision": {
+      const candidateUpdate = database.prepare(`
+        UPDATE assistant_continuity_review_candidates
+        SET revision = revision + 1, status = ?, updated_at = ?
+        WHERE work_id = ? AND id = ? AND revision = ? AND status = 'ready'
+      `).run(
+        record.candidateStatus,
+        record.updatedAt,
+        record.workId,
+        record.id,
+        record.expectedRevision,
+      ) as { readonly changes: number | bigint };
+      if (Number(candidateUpdate.changes) !== 1) {
+        throw new Error(`Continuity review Candidate revision conflict: ${record.id}`);
+      }
+      const itemUpdate = database.prepare(`
+        UPDATE assistant_continuity_review_items
+        SET status = ?, applied_thread_id = ?, updated_at = ?
+        WHERE work_id = ? AND candidate_id = ? AND id = ? AND status = 'pending'
+      `).run(
+        record.itemStatus,
+        record.appliedThreadId,
+        record.updatedAt,
+        record.workId,
+        record.id,
+        record.itemId,
+      ) as { readonly changes: number | bigint };
+      if (Number(itemUpdate.changes) !== 1) {
+        throw new Error(`Continuity review item changed: ${record.itemId}`);
+      }
+      runStatement(
+        database,
+        `
+          INSERT INTO assistant_continuity_review_decisions (
+            id, schema_version, work_id, candidate_id, item_id, decision,
+            outcome, thread_id, thread_revision_after,
+            source_document_revision_id, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.receipt.id,
+          record.receipt.schemaVersion,
+          record.workId,
+          record.id,
+          record.itemId,
+          record.receipt.decision,
+          record.receipt.outcome,
+          record.receipt.threadId,
+          record.receipt.threadRevisionAfter,
+          record.receipt.sourceDocumentRevisionId,
+          record.receipt.createdAt,
+        ],
+      );
+      return;
+    }
+    case "characterKnowledge": {
+      runStatement(
+        database,
+        `
+          INSERT INTO character_knowledge (
+            id, schema_version, revision, created_at, updated_at, work_id,
+            character_id, statement, stance, truth_status, status,
+            supersedes_knowledge_id, superseded_by_knowledge_id, retired_reason
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          record.workId,
+          record.characterId,
+          record.statement,
+          record.stance,
+          record.truthStatus,
+          record.status,
+          record.supersedesKnowledgeId,
+          record.supersededByKnowledgeId,
+          record.retiredReason,
+        ],
+      );
+      for (const ref of record.aboutRefs) {
+        runStatement(
+          database,
+          `
+            INSERT INTO character_knowledge_entity_refs (
+              work_id, knowledge_id, entity_kind, entity_id, order_index
+            ) VALUES (?, ?, ?, ?, ?)
+          `,
+          [record.workId, record.id, ref.entityKind, ref.entityId, ref.orderIndex],
+        );
+      }
+      return;
+    }
+    case "characterKnowledgeUpdate": {
+      const update = database.prepare(`
+        UPDATE character_knowledge
+        SET revision = revision + 1, updated_at = ?, statement = ?
+        WHERE work_id = ? AND id = ? AND revision = ? AND status = 'active'
+      `).run(
+        record.updatedAt,
+        record.statement,
+        record.workId,
+        record.id,
+        record.expectedRevision,
+      ) as { readonly changes: number | bigint };
+      if (Number(update.changes) !== 1) {
+        throw new Error(`CharacterKnowledge revision conflict: ${record.id}`);
+      }
+      database.prepare(`
+        DELETE FROM character_knowledge_entity_refs
+        WHERE work_id = ? AND knowledge_id = ?
+      `).run(record.workId, record.id);
+      for (const ref of record.aboutRefs) {
+        runStatement(
+          database,
+          `
+            INSERT INTO character_knowledge_entity_refs (
+              work_id, knowledge_id, entity_kind, entity_id, order_index
+            ) VALUES (?, ?, ?, ?, ?)
+          `,
+          [record.workId, record.id, ref.entityKind, ref.entityId, ref.orderIndex],
+        );
+      }
+      return;
+    }
+    case "characterKnowledgeStatus": {
+      if (
+        (record.status === "superseded" &&
+          (record.supersededByKnowledgeId === null || record.retiredReason !== null)) ||
+        (record.status === "retired" &&
+          (record.supersededByKnowledgeId !== null || record.retiredReason === null))
+      ) {
+        throw new Error(`CharacterKnowledge status payload is inconsistent: ${record.id}`);
+      }
+      const update = database.prepare(`
+        UPDATE character_knowledge
+        SET
+          revision = revision + 1,
+          updated_at = ?,
+          status = ?,
+          superseded_by_knowledge_id = ?,
+          retired_reason = ?
+        WHERE work_id = ? AND id = ? AND revision = ? AND status = 'active'
+      `).run(
+        record.updatedAt,
+        record.status,
+        record.supersededByKnowledgeId,
+        record.retiredReason,
+        record.workId,
+        record.id,
+        record.expectedRevision,
+      ) as { readonly changes: number | bigint };
+      if (Number(update.changes) !== 1) {
+        throw new Error(`CharacterKnowledge revision conflict: ${record.id}`);
+      }
+      return;
+    }
+    case "characterKnowledgeEvidence":
+      runStatement(
+        database,
+        `
+          INSERT INTO character_knowledge_evidence (
+            id, schema_version, work_id, knowledge_id, source_document_id,
+            source_document_revision_id, source_from, source_to, exact_text,
+            anchor_id, order_index, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.workId,
+          record.knowledgeId,
+          record.sourceDocumentId,
+          record.sourceDocumentRevisionId,
+          record.sourceFrom,
+          record.sourceTo,
+          record.exactText,
+          record.anchorId,
+          record.orderIndex,
+          record.createdAt,
+        ],
+      );
+      return;
+    case "characterKnowledgeTransition":
+      runStatement(
+        database,
+        `
+          INSERT INTO character_knowledge_history (
+            id, schema_version, work_id, knowledge_id, transition_kind,
+            revision_before, revision_after, successor_knowledge_id, reason,
+            evidence_anchor_ids_json, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.workId,
+          record.knowledgeId,
+          record.transitionKind,
+          record.revisionBefore,
+          record.revisionAfter,
+          record.successorKnowledgeId,
+          record.reason,
+          JSON.stringify(record.evidenceAnchorIds),
+          record.createdAt,
+        ],
+      );
+      return;
+    case "assistantContextPolicy":
+      runStatement(
+        database,
+        `
+          INSERT INTO assistant_entity_context_policies (
+            id, schema_version, revision, created_at, updated_at, work_id,
+            entity_kind, entity_id, mode
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.revision,
+          record.createdAt,
+          record.updatedAt,
+          record.workId,
+          record.entityKind,
+          record.entityId,
+          record.mode,
+        ],
+      );
+      return;
+    case "assistantContextPolicyUpdate": {
+      const update = database.prepare(`
+        UPDATE assistant_entity_context_policies
+        SET revision = revision + 1, mode = ?, updated_at = ?
+        WHERE work_id = ? AND entity_kind = ? AND entity_id = ? AND revision = ?
+      `).run(
+        record.mode,
+        record.updatedAt,
+        record.workId,
+        record.entityKind,
+        record.entityId,
+        record.expectedRevision,
+      ) as { readonly changes: number | bigint };
+      if (Number(update.changes) !== 1) {
+        throw new Error(
+          `Assistant context policy revision conflict: ${record.entityKind}/${record.entityId}`,
+        );
+      }
+      return;
+    }
+    case "assistantContextManifest":
+      runStatement(
+        database,
+        `
+          INSERT INTO assistant_context_manifests (
+            id, schema_version, receipt_id, work_id, entries_json,
+            excluded_json, estimated_token_count, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.receiptId,
+          record.workId,
+          JSON.stringify(record.entries),
+          JSON.stringify(record.excluded),
+          record.estimatedTokenCount,
+          record.createdAt,
+        ],
+      );
+      return;
+    case "assistantContextActivity":
+      runStatement(
+        database,
+        `
+          INSERT INTO assistant_context_activities (
+            id, schema_version, work_id, receipt_id, manifest_id, capability,
+            destination_id, provider_id, model_id, started_at, completed_at,
+            plan_duration_ms, authorize_duration_ms, connector_duration_ms,
+            persist_duration_ms, read_ranges_json, transmitted_ranges_json,
+            read_character_count, transmitted_character_count, candidate_count
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.workId,
+          record.receiptId,
+          record.manifestId,
+          record.capability,
+          record.destinationId,
+          record.providerId,
+          record.modelId,
+          record.startedAt,
+          record.completedAt,
+          record.planDurationMs,
+          record.authorizeDurationMs,
+          record.connectorDurationMs,
+          record.persistDurationMs,
+          JSON.stringify(record.readRanges),
+          JSON.stringify(record.transmittedRanges),
+          record.readCharacterCount,
+          record.transmittedCharacterCount,
+          record.candidateCount,
+        ],
+      );
+      return;
+    case "narrativeDigest":
+      runStatement(
+        database,
+        `
+          INSERT INTO narrative_digests (
+            id,schema_version,work_id,scope_kind,scope_document_id,scope_scene_id,
+            scope_first_character_id,scope_second_character_id,
+            source_manifest_json,source_manifest_hash,text,provider_id,model_id,
+            prompt_version,context_receipt_id,created_at
+          ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        `,
+        [
+          record.id,
+          record.schemaVersion,
+          record.workId,
+          record.scopeKind,
+          record.scopeDocumentId,
+          record.scopeSceneId ?? null,
+          record.scopeFirstCharacterId,
+          record.scopeSecondCharacterId,
+          JSON.stringify(record.sourceManifest),
+          record.sourceManifestHash,
+          record.text,
+          record.providerId,
+          record.modelId,
+          record.promptVersion,
+          record.contextReceiptId,
+          record.createdAt,
+        ],
+      );
+      for (const document of record.documents) {
+        runStatement(
+          database,
+          `INSERT INTO narrative_digest_documents (
+            work_id,digest_id,document_id,document_revision_id,order_index
+          ) VALUES (?,?,?,?,?)`,
+          [
+            record.workId,
+            record.id,
+            document.documentId,
+            document.documentRevisionId,
+            document.orderIndex,
+          ],
+        );
+      }
+      if (record.sceneSource !== undefined && record.sceneSource !== null) {
+        runStatement(
+          database,
+          `INSERT INTO narrative_digest_scene_sources (
+            work_id,digest_id,scene_id,document_id,document_revision_id,
+            from_offset,to_offset,text_hash,source_fingerprint,trigger_kind
+          ) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+          [
+            record.workId,
+            record.id,
+            record.sceneSource.sceneId,
+            record.sceneSource.documentId,
+            record.sceneSource.documentRevisionId,
+            record.sceneSource.from,
+            record.sceneSource.to,
+            record.sceneSource.textHash,
+            record.sceneSource.sourceFingerprint,
+            record.sceneSource.trigger,
+          ],
+        );
+      }
       return;
     case "loreForeshadowLink":
       runStatement(
@@ -7338,6 +8836,672 @@ function createNodeSqliteEpisodeRangeMoveStore(
   });
 }
 
+function clearWorkResumeCheckpointForDocumentSet(
+  database: NodeSqliteDatabase,
+  input: Readonly<{
+    workId: EntityId<"Work">;
+    documentIds: readonly EntityId<"Document">[];
+    updatedAt: string;
+  }>,
+): void {
+  const rows = database.prepare(`
+    SELECT work.resume_checkpoint_id AS "resumeCheckpointId",
+      checkpoint.document_id AS "documentId"
+    FROM works AS work
+    LEFT JOIN resume_checkpoints AS checkpoint
+      ON checkpoint.work_id = work.id
+      AND checkpoint.id = work.resume_checkpoint_id
+    WHERE work.id = ?
+  `).all(input.workId);
+  if (rows.length !== 1) throw new Error(`Unknown Work: ${input.workId}`);
+  const row = rows[0] ?? {};
+  const resumeCheckpointId = readNullableString(
+    row,
+    "resumeCheckpointId",
+    "Scene trash Work checkpoint",
+  );
+  const documentId = readNullableString(
+    row,
+    "documentId",
+    "Scene trash Work checkpoint",
+  );
+  if (
+    resumeCheckpointId === null ||
+    documentId === null ||
+    !input.documentIds.includes(entityId<"Document">(documentId))
+  ) return;
+  const result = database.prepare(`
+    UPDATE works
+    SET resume_checkpoint_id = NULL, revision = revision + 1, updated_at = ?
+    WHERE id = ? AND resume_checkpoint_id = ?
+  `).run(input.updatedAt, input.workId, resumeCheckpointId);
+  if (changedRows(result) !== 1) {
+    throw new Error("Scene trash could not clear the exact ResumeCheckpoint");
+  }
+}
+
+function writeSceneTrashAnchor(
+  database: NodeSqliteDatabase,
+  workId: EntityId<"Work">,
+  anchor: Anchor,
+): void {
+  writeLedgerRecord(database, {
+    kind: "anchor",
+    id: anchor.meta.id,
+    schemaVersion: anchor.meta.schemaVersion,
+    revision: anchor.meta.revision,
+    createdAt: anchor.meta.createdAt,
+    updatedAt: anchor.meta.updatedAt,
+    ...(anchor.meta.retiredAt === undefined
+      ? {}
+      : { retiredAt: anchor.meta.retiredAt }),
+    workId,
+    documentId: anchor.documentId,
+    originRevisionId: anchor.originRevisionId,
+    resolvedRevisionId: anchor.resolvedRevisionId,
+    startOffset: anchor.startOffset,
+    endOffset: anchor.endOffset,
+    exactQuote: anchor.exactQuote,
+    prefixContext: anchor.prefixContext,
+    suffixContext: anchor.suffixContext,
+    quoteHash: anchor.quoteHash,
+    contextHash: anchor.contextHash,
+    ...(anchor.lineageRef === undefined ? {} : { lineageRef: anchor.lineageRef }),
+    status: anchor.status,
+    resolutionEvidenceJson: JSON.stringify(anchor.resolutionEvidence),
+  });
+}
+
+function createNodeSqliteSceneTrashStore(
+  database: NodeSqliteDatabase,
+  assertOpen: () => void,
+  options: NodeSqliteRevisionStoreOptions,
+): SceneTrashStore {
+  const publishAll = (
+    revisions: readonly AppendRevisionInput[],
+  ) => Promise.all(revisions.map((revision) => publishRevisionBlob(revision, options)));
+
+  return Object.freeze({
+    commit: async (
+      input: CommitSceneDeletionInput,
+    ): Promise<SceneTrashStoreReceipt> => {
+      assertOpen();
+      if (input.documents.length === 0) {
+        throw new Error("Scene deletion must advance at least one Document");
+      }
+      const documentIds = input.documents.map((document) => document.documentId);
+      if (new Set(documentIds).size !== documentIds.length) {
+        throw new Error("Scene deletion Documents must be unique");
+      }
+      const createsIdentity = input.identity.expectedRevision === null;
+      const createdIdentityParts = [
+        input.identity.createdAnchor,
+        input.identity.createdSegmentId,
+        input.identity.createdSegmentDocumentId,
+      ];
+      if (
+        createsIdentity !== createdIdentityParts.every((part) => part !== null)
+      ) {
+        throw new Error("Scene deletion identity preparation is incomplete");
+      }
+      if (
+        input.documents.some((document) =>
+          document.deletedRevision.workId !== input.workId ||
+          document.deletedRevision.documentId !== document.documentId ||
+          document.deletedRevision.expectedCurrentRevisionId !==
+            document.beforeRevisionId
+        )
+      ) {
+        throw new Error("Scene deletion revision ownership is invalid");
+      }
+      JSON.parse(input.metadataJson);
+      const published = await publishAll(
+        input.documents.map((document) => document.deletedRevision),
+      );
+      database.exec("BEGIN IMMEDIATE");
+      let transactionActive = true;
+      try {
+        const committedRevisions = input.documents.map((document, index) =>
+          writeRevisionAdvanceInTransaction(
+            database,
+            document.deletedRevision,
+            published[index]!,
+          )
+        );
+        clearWorkResumeCheckpointForDocumentSet(database, {
+          workId: input.workId,
+          documentIds,
+          updatedAt: input.createdAt,
+        });
+
+        if (createsIdentity) {
+          const anchor = input.identity.createdAnchor as Anchor;
+          const segmentId = input.identity.createdSegmentId as EntityId<"EpisodeSceneSegment">;
+          const segmentDocumentId = input.identity
+            .createdSegmentDocumentId as EntityId<"Document">;
+          writeSceneTrashAnchor(database, input.workId, anchor);
+          writeLedgerRecord(database, {
+            kind: "sceneIdentity",
+            id: input.identity.sceneId,
+            schemaVersion: 1,
+            revision: 1,
+            createdAt: input.createdAt,
+            updatedAt: input.createdAt,
+            workId: input.workId,
+          });
+          writeLedgerRecord(database, {
+            kind: "sceneEpisodeSegment",
+            id: segmentId,
+            schemaVersion: 1,
+            revision: 1,
+            createdAt: input.createdAt,
+            updatedAt: input.createdAt,
+            workId: input.workId,
+            sceneId: input.identity.sceneId,
+            documentId: segmentDocumentId,
+            anchorId: anchor.meta.id,
+          });
+          if (!input.segments.some((segment) => segment.segmentId === segmentId)) {
+            throw new Error("Created Scene segment is missing from trash snapshots");
+          }
+        }
+        const identityRows = database.prepare(`
+          SELECT revision, retired_at AS "retiredAt"
+          FROM scene_identities
+          WHERE id = ? AND work_id = ?
+        `).all(input.identity.sceneId, input.workId);
+        if (identityRows.length !== 1) {
+          throw new Error(`Unknown Scene identity: ${input.identity.sceneId}`);
+        }
+        const identityRow = identityRows[0] ?? {};
+        const identityRevision = readNonNegativeSafeInteger(
+          identityRow,
+          "revision",
+          "Scene trash identity",
+        );
+        const expectedIdentityRevision = input.identity.expectedRevision ?? 1;
+        if (
+          identityRevision !== expectedIdentityRevision ||
+          readNullableString(identityRow, "retiredAt", "Scene trash identity") !== null
+        ) {
+          throw new Error(`Scene identity changed before deletion: ${input.identity.sceneId}`);
+        }
+
+        writeLedgerRecord(database, {
+          kind: "sceneLineageOperation",
+          id: input.deleteLineageOperationId,
+          schemaVersion: 1,
+          revision: 1,
+          createdAt: input.createdAt,
+          updatedAt: input.createdAt,
+          workId: input.workId,
+          operation: "delete",
+          commandRef: input.sceneTrashEntryId,
+        });
+        writeLedgerRecord(database, {
+          kind: "sceneLineageMember",
+          id: input.deleteLineageParentMemberId,
+          schemaVersion: 1,
+          revision: 1,
+          createdAt: input.createdAt,
+          updatedAt: input.createdAt,
+          workId: input.workId,
+          lineageOperationId: input.deleteLineageOperationId,
+          sceneId: input.identity.sceneId,
+          role: "parent",
+          ordinal: 0,
+        });
+        runStatement(database, `
+          INSERT INTO scene_trash_entries (
+            id, schema_version, revision, created_at, updated_at, restored_at,
+            work_id, scene_id, scene_identity_pre_delete_revision,
+            scene_identity_post_delete_revision, source_scene_key,
+            source_rule_set_revision, preview_fingerprint, metadata_json,
+            delete_lineage_operation_id, restore_lineage_operation_id, status
+          ) VALUES (?, 1, 1, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'active')
+        `, [
+          input.sceneTrashEntryId,
+          input.createdAt,
+          input.createdAt,
+          input.workId,
+          input.identity.sceneId,
+          expectedIdentityRevision,
+          expectedIdentityRevision + 1,
+          input.sourceSceneKey,
+          input.sceneRuleSetRevision,
+          input.previewFingerprint,
+          input.metadataJson,
+          input.deleteLineageOperationId,
+        ]);
+
+        for (const [index, document] of input.documents.entries()) {
+          const committed = committedRevisions[index]!;
+          runStatement(database, `
+            INSERT INTO scene_trash_documents (
+              id, schema_version, revision, created_at, updated_at, work_id,
+              trash_entry_id, document_id, ordinal, before_revision_id,
+              deleted_revision_id, restored_revision_id, scene_key,
+              scene_from, scene_to, deletion_from, deletion_to,
+              deleted_text_hash, deleted_utf16_length, first_excerpt, last_excerpt
+            ) VALUES (?, 1, 1, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `, [
+            document.sceneTrashDocumentId,
+            input.createdAt,
+            input.createdAt,
+            input.workId,
+            input.sceneTrashEntryId,
+            document.documentId,
+            document.ordinal,
+            document.beforeRevisionId,
+            committed.id,
+            document.sceneKey,
+            document.sceneRange.start,
+            document.sceneRange.end,
+            document.deletionRange.start,
+            document.deletionRange.end,
+            document.deletedTextHash,
+            document.deletedUtf16Length,
+            document.firstExcerpt,
+            document.lastExcerpt,
+          ]);
+        }
+
+        for (const segment of input.segments) {
+          const update = database.prepare(`
+            UPDATE scene_episode_segments
+            SET revision = revision + 1, updated_at = ?, retired_at = ?
+            WHERE id = ? AND work_id = ? AND revision = ? AND retired_at IS NULL
+          `).run(
+            input.createdAt,
+            input.createdAt,
+            segment.segmentId,
+            input.workId,
+            segment.expectedRevision,
+          );
+          if (changedRows(update) !== 1) {
+            throw new Error(`Scene segment changed before deletion: ${segment.segmentId}`);
+          }
+          runStatement(database, `
+            INSERT INTO scene_trash_segments (
+              id, schema_version, revision, created_at, updated_at, work_id,
+              trash_entry_id, segment_id, document_id, ordinal,
+              pre_delete_revision, post_delete_revision
+            ) VALUES (?, 1, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `, [
+            segment.sceneTrashSegmentId,
+            input.createdAt,
+            input.createdAt,
+            input.workId,
+            input.sceneTrashEntryId,
+            segment.segmentId,
+            segment.documentId,
+            segment.ordinal,
+            segment.expectedRevision,
+            segment.expectedRevision + 1,
+          ]);
+        }
+        for (const override of input.overrides) {
+          const update = database.prepare(`
+            UPDATE scene_overrides
+            SET revision = revision + 1, updated_at = ?, retired_at = ?
+            WHERE id = ? AND work_id = ? AND revision = ? AND retired_at IS NULL
+          `).run(
+            input.createdAt,
+            input.createdAt,
+            override.sceneOverrideId,
+            input.workId,
+            override.expectedRevision,
+          );
+          if (changedRows(update) !== 1) {
+            throw new Error(`Scene override changed before deletion: ${override.sceneOverrideId}`);
+          }
+          runStatement(database, `
+            INSERT INTO scene_trash_overrides (
+              id, schema_version, revision, created_at, updated_at, work_id,
+              trash_entry_id, scene_override_id, ordinal,
+              pre_delete_revision, post_delete_revision
+            ) VALUES (?, 1, 1, ?, ?, ?, ?, ?, ?, ?, ?)
+          `, [
+            override.sceneTrashOverrideId,
+            input.createdAt,
+            input.createdAt,
+            input.workId,
+            input.sceneTrashEntryId,
+            override.sceneOverrideId,
+            override.ordinal,
+            override.expectedRevision,
+            override.expectedRevision + 1,
+          ]);
+        }
+        for (const binding of input.bindings) {
+          const update = database.prepare(`
+            UPDATE scene_metadata_bindings
+            SET revision = revision + 1, updated_at = ?, scene_id = NULL,
+              status = 'detached', proposed_scene_id = NULL,
+              lineage_operation_id = ?
+            WHERE id = ? AND work_id = ? AND revision = ? AND retired_at IS NULL
+          `).run(
+            input.createdAt,
+            input.deleteLineageOperationId,
+            binding.sceneMetadataBindingId,
+            input.workId,
+            binding.expectedRevision,
+          );
+          if (changedRows(update) !== 1) {
+            throw new Error(
+              `Scene metadata binding changed before deletion: ${binding.sceneMetadataBindingId}`,
+            );
+          }
+          runStatement(database, `
+            INSERT INTO scene_trash_bindings (
+              id, schema_version, revision, created_at, updated_at, work_id,
+              trash_entry_id, scene_metadata_binding_id, ordinal,
+              pre_delete_revision, post_delete_revision, scene_id, status,
+              proposed_scene_id, lineage_operation_id
+            ) VALUES (?, 1, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `, [
+            binding.sceneTrashBindingId,
+            input.createdAt,
+            input.createdAt,
+            input.workId,
+            input.sceneTrashEntryId,
+            binding.sceneMetadataBindingId,
+            binding.ordinal,
+            binding.expectedRevision,
+            binding.expectedRevision + 1,
+            binding.sceneId,
+            binding.status,
+            binding.proposedSceneId,
+            binding.lineageOperationId,
+          ]);
+        }
+        const identityUpdate = database.prepare(`
+          UPDATE scene_identities
+          SET revision = revision + 1, updated_at = ?, retired_at = ?
+          WHERE id = ? AND work_id = ? AND revision = ? AND retired_at IS NULL
+        `).run(
+          input.createdAt,
+          input.createdAt,
+          input.identity.sceneId,
+          input.workId,
+          expectedIdentityRevision,
+        );
+        if (changedRows(identityUpdate) !== 1) {
+          throw new Error(`Scene identity changed before retirement: ${input.identity.sceneId}`);
+        }
+        await options.beforeDatabaseCommit?.();
+        database.exec("COMMIT");
+        transactionActive = false;
+        return Object.freeze({
+          sceneTrashEntryId: input.sceneTrashEntryId,
+          workId: input.workId,
+          sceneId: input.identity.sceneId,
+          entryRevision: 1,
+          documentRevisions: Object.freeze(committedRevisions.map((revision) =>
+            Object.freeze({
+              documentId: revision.documentId,
+              revisionId: revision.id,
+            })
+          )),
+        });
+      } catch (error) {
+        if (transactionActive) database.exec("ROLLBACK");
+        throw error;
+      }
+    },
+
+    restore: async (
+      input: RestoreSceneDeletionInput,
+    ): Promise<SceneTrashStoreReceipt> => {
+      assertOpen();
+      if (input.documentRevisions.length === 0) {
+        throw new Error("Scene restore must advance at least one Document");
+      }
+      const published = await publishAll(input.documentRevisions);
+      database.exec("BEGIN IMMEDIATE");
+      let transactionActive = true;
+      try {
+        const entryRows = database.prepare(`
+          SELECT revision, scene_id AS "sceneId",
+            scene_identity_post_delete_revision AS "identityRevision", status
+          FROM scene_trash_entries
+          WHERE id = ? AND work_id = ?
+        `).all(input.sceneTrashEntryId, input.workId);
+        if (entryRows.length !== 1) {
+          throw new Error(`Unknown Scene trash entry: ${input.sceneTrashEntryId}`);
+        }
+        const entryRow = entryRows[0] ?? {};
+        if (
+          readNonNegativeSafeInteger(entryRow, "revision", "Scene trash entry") !==
+            input.expectedRevision ||
+          readRequiredString(entryRow, "status", "Scene trash entry") !== "active"
+        ) {
+          throw new Error(`Scene trash entry is not restorable: ${input.sceneTrashEntryId}`);
+        }
+        const snapshotRows = database.prepare(`
+          SELECT document_id AS "documentId",
+            deleted_revision_id AS "deletedRevisionId"
+          FROM scene_trash_documents
+          WHERE work_id = ? AND trash_entry_id = ?
+          ORDER BY ordinal
+        `).all(input.workId, input.sceneTrashEntryId);
+        if (snapshotRows.length !== input.documentRevisions.length) {
+          throw new Error("Scene restore Document set changed");
+        }
+        for (const [index, row] of snapshotRows.entries()) {
+          const revision = input.documentRevisions[index];
+          if (
+            revision === undefined ||
+            revision.documentId !== readRequiredString(
+              row,
+              "documentId",
+              "Scene trash Document",
+            ) ||
+            revision.expectedCurrentRevisionId !== readRequiredString(
+              row,
+              "deletedRevisionId",
+              "Scene trash Document",
+            ) ||
+            revision.workId !== input.workId
+          ) {
+            throw new Error("Scene restore revision ownership changed");
+          }
+        }
+        const committedRevisions = input.documentRevisions.map((revision, index) =>
+          writeRevisionAdvanceInTransaction(database, revision, published[index]!)
+        );
+        clearWorkResumeCheckpointForDocumentSet(database, {
+          workId: input.workId,
+          documentIds: committedRevisions.map((revision) => revision.documentId),
+          updatedAt: input.restoredAt,
+        });
+        const sceneId = entityId<"Scene">(
+          readRequiredString(entryRow, "sceneId", "Scene trash entry"),
+        );
+        const identityRevision = readNonNegativeSafeInteger(
+          entryRow,
+          "identityRevision",
+          "Scene trash entry",
+        );
+        const identityUpdate = database.prepare(`
+          UPDATE scene_identities
+          SET revision = revision + 1, updated_at = ?, retired_at = NULL
+          WHERE id = ? AND work_id = ? AND revision = ? AND retired_at IS NOT NULL
+        `).run(input.restoredAt, sceneId, input.workId, identityRevision);
+        if (changedRows(identityUpdate) !== 1) {
+          throw new Error(`Deleted Scene identity changed before restore: ${sceneId}`);
+        }
+        const segmentRows = database.prepare(`
+          SELECT segment_id AS "segmentId", post_delete_revision AS "revision"
+          FROM scene_trash_segments
+          WHERE work_id = ? AND trash_entry_id = ?
+          ORDER BY ordinal
+        `).all(input.workId, input.sceneTrashEntryId);
+        for (const row of segmentRows) {
+          const segmentId = readRequiredString(row, "segmentId", "Scene trash segment");
+          const revision = readNonNegativeSafeInteger(
+            row,
+            "revision",
+            "Scene trash segment",
+          );
+          const update = database.prepare(`
+            UPDATE scene_episode_segments
+            SET revision = revision + 1, updated_at = ?, retired_at = NULL
+            WHERE id = ? AND work_id = ? AND revision = ? AND retired_at IS NOT NULL
+          `).run(input.restoredAt, segmentId, input.workId, revision);
+          if (changedRows(update) !== 1) {
+            throw new Error(`Deleted Scene segment changed before restore: ${segmentId}`);
+          }
+        }
+        const overrideRows = database.prepare(`
+          SELECT scene_override_id AS "sceneOverrideId",
+            post_delete_revision AS "revision"
+          FROM scene_trash_overrides
+          WHERE work_id = ? AND trash_entry_id = ?
+          ORDER BY ordinal
+        `).all(input.workId, input.sceneTrashEntryId);
+        for (const row of overrideRows) {
+          const overrideId = readRequiredString(
+            row,
+            "sceneOverrideId",
+            "Scene trash override",
+          );
+          const revision = readNonNegativeSafeInteger(
+            row,
+            "revision",
+            "Scene trash override",
+          );
+          const update = database.prepare(`
+            UPDATE scene_overrides
+            SET revision = revision + 1, updated_at = ?, retired_at = NULL
+            WHERE id = ? AND work_id = ? AND revision = ? AND retired_at IS NOT NULL
+          `).run(input.restoredAt, overrideId, input.workId, revision);
+          if (changedRows(update) !== 1) {
+            throw new Error(`Deleted Scene override changed before restore: ${overrideId}`);
+          }
+        }
+        const bindingRows = database.prepare(`
+          SELECT scene_metadata_binding_id AS "bindingId",
+            post_delete_revision AS "revision", scene_id AS "sceneId", status,
+            proposed_scene_id AS "proposedSceneId",
+            lineage_operation_id AS "lineageOperationId"
+          FROM scene_trash_bindings
+          WHERE work_id = ? AND trash_entry_id = ?
+          ORDER BY ordinal
+        `).all(input.workId, input.sceneTrashEntryId);
+        for (const row of bindingRows) {
+          const bindingId = readRequiredString(row, "bindingId", "Scene trash binding");
+          const revision = readNonNegativeSafeInteger(
+            row,
+            "revision",
+            "Scene trash binding",
+          );
+          const update = database.prepare(`
+            UPDATE scene_metadata_bindings
+            SET revision = revision + 1, updated_at = ?, scene_id = ?, status = ?,
+              proposed_scene_id = ?, lineage_operation_id = ?
+            WHERE id = ? AND work_id = ? AND revision = ? AND retired_at IS NULL
+          `).run(
+            input.restoredAt,
+            readNullableString(row, "sceneId", "Scene trash binding"),
+            readRequiredString(row, "status", "Scene trash binding"),
+            readNullableString(row, "proposedSceneId", "Scene trash binding"),
+            readNullableString(row, "lineageOperationId", "Scene trash binding"),
+            bindingId,
+            input.workId,
+            revision,
+          );
+          if (changedRows(update) !== 1) {
+            throw new Error(`Deleted Scene binding changed before restore: ${bindingId}`);
+          }
+        }
+        writeLedgerRecord(database, {
+          kind: "sceneLineageOperation",
+          id: input.restoreLineageOperationId,
+          schemaVersion: 1,
+          revision: 1,
+          createdAt: input.restoredAt,
+          updatedAt: input.restoredAt,
+          workId: input.workId,
+          operation: "restore",
+          commandRef: input.sceneTrashEntryId,
+        });
+        for (const [memberId, role] of [
+          [input.restoreLineageParentMemberId, "parent"],
+          [input.restoreLineageChildMemberId, "child"],
+        ] as const) {
+          writeLedgerRecord(database, {
+            kind: "sceneLineageMember",
+            id: memberId,
+            schemaVersion: 1,
+            revision: 1,
+            createdAt: input.restoredAt,
+            updatedAt: input.restoredAt,
+            workId: input.workId,
+            lineageOperationId: input.restoreLineageOperationId,
+            sceneId,
+            role,
+            ordinal: 0,
+          });
+        }
+        for (const [index, revision] of committedRevisions.entries()) {
+          const update = database.prepare(`
+            UPDATE scene_trash_documents
+            SET revision = revision + 1, updated_at = ?, restored_revision_id = ?
+            WHERE work_id = ? AND trash_entry_id = ? AND document_id = ?
+              AND deleted_revision_id = ? AND restored_revision_id IS NULL
+          `).run(
+            input.restoredAt,
+            revision.id,
+            input.workId,
+            input.sceneTrashEntryId,
+            revision.documentId,
+            input.documentRevisions[index]!.expectedCurrentRevisionId,
+          );
+          if (changedRows(update) !== 1) {
+            throw new Error(`Scene trash Document changed before restore: ${revision.documentId}`);
+          }
+        }
+        const entryUpdate = database.prepare(`
+          UPDATE scene_trash_entries
+          SET revision = revision + 1, updated_at = ?, restored_at = ?,
+            restore_lineage_operation_id = ?, status = ?
+          WHERE id = ? AND work_id = ? AND revision = ? AND status = 'active'
+        `).run(
+          input.restoredAt,
+          input.restoredAt,
+          input.restoreLineageOperationId,
+          input.status,
+          input.sceneTrashEntryId,
+          input.workId,
+          input.expectedRevision,
+        );
+        if (changedRows(entryUpdate) !== 1) {
+          throw new Error(`Scene trash entry changed before restore: ${input.sceneTrashEntryId}`);
+        }
+        await options.beforeDatabaseCommit?.();
+        database.exec("COMMIT");
+        transactionActive = false;
+        return Object.freeze({
+          sceneTrashEntryId: input.sceneTrashEntryId,
+          workId: input.workId,
+          sceneId,
+          entryRevision: input.expectedRevision + 1,
+          documentRevisions: Object.freeze(committedRevisions.map((revision) =>
+            Object.freeze({
+              documentId: revision.documentId,
+              revisionId: revision.id,
+            })
+          )),
+        });
+      } catch (error) {
+        if (transactionActive) database.exec("ROLLBACK");
+        throw error;
+      }
+    },
+  });
+}
+
 function readStringValue(
   row: Readonly<
     Record<string, unknown>
@@ -9129,6 +11293,10 @@ export async function openNodeSqliteLedger(
       options:
         NodeSqliteRevisionStoreOptions,
     ): EpisodeRangeMoveStore;
+    createSceneTrashStore(
+      options:
+        NodeSqliteRevisionStoreOptions,
+    ): SceneTrashStore;
     createResumeCheckpointCaptureTransaction(
       options:
         NodeSqliteResumeCheckpointCaptureOptions,
@@ -9208,6 +11376,17 @@ export async function openNodeSqliteLedger(
       ): EpisodeRangeMoveStore => {
         assertOpen();
         return createNodeSqliteEpisodeRangeMoveStore(
+          database,
+          assertOpen,
+          options,
+        );
+      },
+      createSceneTrashStore: (
+        options:
+          NodeSqliteRevisionStoreOptions,
+      ): SceneTrashStore => {
+        assertOpen();
+        return createNodeSqliteSceneTrashStore(
           database,
           assertOpen,
           options,

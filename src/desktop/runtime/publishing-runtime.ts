@@ -41,6 +41,11 @@ const PUBLISHING_RUNTIME_METHODS = Object.freeze([
   "disconnectPublishingMail",
   "getPublishingMailSchedule",
   "savePublishingMailSchedule",
+  "createPublishingFormTemplate",
+  "listPublishingFormTemplates",
+  "updatePublishingFormTemplate",
+  "listPublishingFormResponses",
+  "savePublishingFormResponse",
 ] satisfies readonly PublishingRuntimeMethod[]);
 
 export function pickPublishingRuntime(

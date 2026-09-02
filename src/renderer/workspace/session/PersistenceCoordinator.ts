@@ -3,7 +3,7 @@ import type { ManuscriptDocumentSource } from "../../../application/editor/manus
 export type SerialPersistenceTask = () => Promise<void>;
 
 export type RegularPersistenceQueuePort = Readonly<{
-  flush: (
+  flushForNavigation: (
     documentId: ManuscriptDocumentSource["documentId"],
   ) => Promise<void>;
 }>;
@@ -31,8 +31,12 @@ export class SerialPersistenceLane {
 export async function persistDocumentRegularly(input: Readonly<{
   queue: RegularPersistenceQueuePort | null;
   document: ManuscriptDocumentSource;
+  waitForCompositionEnd: (
+    document: ManuscriptDocumentSource,
+  ) => Promise<void>;
   captureResume: (document: ManuscriptDocumentSource) => Promise<unknown>;
 }>): Promise<void> {
-  await input.queue?.flush(input.document.documentId);
+  await input.waitForCompositionEnd(input.document);
+  await input.queue?.flushForNavigation(input.document.documentId);
   await input.captureResume(input.document);
 }

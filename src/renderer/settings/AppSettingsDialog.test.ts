@@ -49,6 +49,13 @@ describe("AppSettingsDialog", () => {
           settings: musicProfile.workDefaults,
           updatedAt: "2026-08-13T00:00:00.000Z",
         },
+        sceneAnalysisProjection: {
+          schemaVersion: 1,
+          workId: entityId<"Work">("work-a"),
+          revision: 1,
+          settings: { enabled: true },
+          updatedAt: "2026-08-29T00:00:00.000Z",
+        },
         youtubeConnectionStatus: {
           schemaVersion: 1,
           revision: 2,
@@ -92,6 +99,8 @@ describe("AppSettingsDialog", () => {
     expect(markup).toContain("정밀 선곡");
     expect(markup).toContain("처음부터 재생");
     expect(markup).toContain("매번 묻기");
+    expect(markup).toContain("장면 전환·분할·회차 전환 시 분석 요약과 별빛 후보 저장");
+    expect(markup).toContain("후보 검토함에서 승인하기 전까지 별빛에 적용하지 않습니다");
     expect(markup).not.toContain("백업");
   });
 

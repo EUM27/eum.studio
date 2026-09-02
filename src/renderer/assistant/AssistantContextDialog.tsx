@@ -65,6 +65,9 @@ const CAPABILITY_LABELS: Readonly<Record<AssistantCapability, string>> = {
   "lore-review": "설정 검토",
   "character.extract": "캐릭터 추출",
   "scene.extract": "장면 구분",
+  "canon.review": "별빛 변경 검토",
+  "continuity.review": "열린 연속성 점검",
+  "narrative.digest": "이야기 흐름 요약",
   "publishing-operations": "투고 운영",
 };
 

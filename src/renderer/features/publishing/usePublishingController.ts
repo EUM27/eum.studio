@@ -9,6 +9,13 @@ import type {
   UpdatePublishingSubmissionCommand,
 } from "../../../application/publishing/publishing-submission-contract";
 import type {
+  CreatePublishingFormTemplateCommand,
+  PublishingFormResponseProjection,
+  PublishingFormTemplateProjection,
+  SavePublishingFormResponseCommand,
+  UpdatePublishingFormTemplateCommand,
+} from "../../../application/publishing/publishing-form-contract";
+import type {
   PublishingContractProjection,
   UpdatePublishingContractCommand,
 } from "../../../application/publishing/publishing-contract-contract";
@@ -93,6 +100,12 @@ export function usePublishingController(client: PublishingClient) {
   const [publishingSubmissions, setPublishingSubmissions] = useState<
     readonly PublishingSubmissionProjection[]
   >([]);
+  const [publishingFormTemplates, setPublishingFormTemplates] = useState<
+    readonly PublishingFormTemplateProjection[]
+  >([]);
+  const [publishingFormResponses, setPublishingFormResponses] = useState<
+    readonly PublishingFormResponseProjection[]
+  >([]);
   const [selectedPublishingSubmissionId, setSelectedPublishingSubmissionId] =
     useState<string | null>(null);
   const [publishingContracts, setPublishingContracts] = useState<
@@ -154,6 +167,8 @@ export function usePublishingController(client: PublishingClient) {
       ([
         partnerProjection,
         submissionProjection,
+        formTemplateProjection,
+        formResponseProjection,
         contractProjection,
         publicationProjection,
         settlementProjection,
@@ -166,6 +181,8 @@ export function usePublishingController(client: PublishingClient) {
       ]) => {
         setPublishingPartners(partnerProjection.partners);
         setPublishingSubmissions(submissionProjection.submissions);
+        setPublishingFormTemplates(formTemplateProjection.templates);
+        setPublishingFormResponses(formResponseProjection.responses);
         setPublishingContracts(contractProjection.contracts);
         setPublishingPublications(publicationProjection.publications);
         setPublishingSettlements(settlementProjection.settlements);
@@ -288,6 +305,111 @@ export function usePublishingController(client: PublishingClient) {
         },
         () => {
           setPublishingPartnerError("투고처 변경을 저장하지 못했습니다.");
+          setPublishingPartnerActionState("idle");
+        },
+      );
+    },
+    [client, publishingPartnerActionState],
+  );
+
+  const createPublishingFormTemplate = useCallback(
+    (draft: Omit<CreatePublishingFormTemplateCommand, "schemaVersion">) => {
+      if (!publishingActionIsIdle(publishingPartnerActionState)) return;
+      setPublishingPartnerActionState("creating-form-template");
+      setPublishingPartnerError(null);
+      void client.publishingFormTemplates.create({
+        schemaVersion: 1,
+        ...draft,
+      }).then(
+        (created) => {
+          setPublishingFormTemplates((current) => Object.freeze([
+            created,
+            ...current.filter(
+              (template) => template.templateId !== created.templateId,
+            ),
+          ]));
+          setPublishingPartnerActionState("idle");
+        },
+        (error) => {
+          setPublishingPartnerError(
+            error instanceof Error
+              ? `투고 양식 템플릿을 만들지 못했습니다. ${error.message}`
+              : "투고 양식 템플릿을 만들지 못했습니다.",
+          );
+          setPublishingPartnerActionState("idle");
+        },
+      );
+    },
+    [client, publishingPartnerActionState],
+  );
+
+  const updatePublishingFormTemplate = useCallback(
+    (
+      template: PublishingFormTemplateProjection,
+      changes: Omit<
+        UpdatePublishingFormTemplateCommand,
+        "schemaVersion" | "templateId" | "expectedRevision"
+      >,
+    ) => {
+      if (!publishingActionIsIdle(publishingPartnerActionState)) return;
+      setPublishingPartnerActionState("updating-form-template");
+      setPublishingPartnerError(null);
+      void client.publishingFormTemplates.update({
+        schemaVersion: 1,
+        templateId: template.templateId,
+        expectedRevision: template.revision,
+        ...changes,
+      }).then(
+        (updated) => {
+          setPublishingFormTemplates((current) => Object.freeze(
+            current.map((candidate) =>
+              candidate.templateId === updated.templateId ? updated : candidate),
+          ));
+          setPublishingPartnerActionState("idle");
+        },
+        (error) => {
+          setPublishingPartnerError(
+            error instanceof Error
+              ? `투고 양식 템플릿을 저장하지 못했습니다. ${error.message}`
+              : "투고 양식 템플릿을 저장하지 못했습니다.",
+          );
+          setPublishingPartnerActionState("idle");
+        },
+      );
+    },
+    [client, publishingPartnerActionState],
+  );
+
+  const savePublishingFormResponse = useCallback(
+    (
+      draft: Omit<
+        SavePublishingFormResponseCommand,
+        "schemaVersion" | "expectedRevision"
+      >,
+      current: PublishingFormResponseProjection | null,
+    ) => {
+      if (!publishingActionIsIdle(publishingPartnerActionState)) return;
+      setPublishingPartnerActionState("saving-form-response");
+      setPublishingPartnerError(null);
+      void client.publishingFormResponses.save({
+        schemaVersion: 1,
+        ...draft,
+        expectedRevision: current?.revision ?? null,
+      }).then(
+        (saved) => {
+          setPublishingFormResponses((responses) => Object.freeze([
+            saved,
+            ...responses.filter((response) =>
+              response.responseId !== saved.responseId),
+          ]));
+          setPublishingPartnerActionState("idle");
+        },
+        (error) => {
+          setPublishingPartnerError(
+            error instanceof Error
+              ? `투고 양식 작성값을 저장하지 못했습니다. ${error.message}`
+              : "투고 양식 작성값을 저장하지 못했습니다.",
+          );
           setPublishingPartnerActionState("idle");
         },
       );
@@ -1114,6 +1236,8 @@ export function usePublishingController(client: PublishingClient) {
     publishingPartners,
     selectedPublishingPartnerId,
     publishingSubmissions,
+    publishingFormTemplates,
+    publishingFormResponses,
     selectedPublishingSubmissionId,
     publishingContracts,
     selectedPublishingContractId,
@@ -1136,6 +1260,9 @@ export function usePublishingController(client: PublishingClient) {
     closePublishingPartners,
     createPublishingPartner,
     updatePublishingPartner,
+    createPublishingFormTemplate,
+    updatePublishingFormTemplate,
+    savePublishingFormResponse,
     createPublishingSubmission,
     updatePublishingSubmission,
     createPublishingContract,

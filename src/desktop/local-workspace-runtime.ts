@@ -74,6 +74,12 @@ import {
   type ManuscriptPreflightSettingsProjection,
 } from "../application/editor/manuscript-preflight";
 import {
+  createCanonicalMarkdownExportBundle,
+  parseExportCanonicalMarkdownCommand,
+  type PreparedCanonicalMarkdownExport,
+} from "../application/export/canonical-markdown-export";
+import { projectCanonicalMarkdownExportSource } from "../application/export/canonical-markdown-source";
+import {
   applyChangeBatch,
 } from "../application/persistence/apply-change-batch";
 import {
@@ -128,6 +134,12 @@ import {
   type MaterializedWorkSnapshotDocument,
   type WorkSnapshotComparisonProjection,
 } from "../application/revisions/work-snapshot-comparison";
+import {
+  parsePlanWorkSnapshotSceneSelectionCommand,
+  parseWorkSnapshotSceneSelectionPlan,
+  type PlanWorkSnapshotSceneSelectionCommand,
+  type WorkSnapshotSceneSelectionPlan,
+} from "../application/revisions/work-snapshot-scene-plan";
 import type {
   StorageTransaction,
 } from "../application/storage/storage-service";
@@ -176,6 +188,71 @@ import {
   type ListAssistantContextStateCommand,
   type RevokeAssistantContextPermissionCommand,
 } from "../application/assistant/assistant-context-state";
+import {
+  parseDecideCanonReviewItemCommand,
+  parseListCanonReviewCandidatesCommand,
+  parseResolveCanonReviewItemTargetCommand,
+  parseRunCanonReviewCommand,
+  parseUpdateCanonReviewItemCommand,
+  type CanonReviewCandidate,
+  type CanonReviewCandidateList,
+  type CanonReviewDecisionResult,
+  type CanonReviewResult,
+} from "../application/canon/canon-review-contract";
+import type {
+  CanonReviewConnectorInput,
+  CanonReviewExecution,
+} from "../application/canon/canon-review-model-output";
+import {
+  parseDecideContinuityReviewItemCommand,
+  parseListContinuityReviewCandidatesCommand,
+  parseRunContinuityReviewCommand,
+  parseUpdateContinuityReviewItemCommand,
+  type ContinuityReviewCandidate,
+  type ContinuityReviewCandidateList,
+  type ContinuityReviewDecisionResult,
+  type ContinuityReviewResult,
+} from "../application/continuity/continuity-review-contract";
+import type {
+  ContinuityReviewConnectorInput,
+  ContinuityReviewExecution,
+} from "../application/continuity/continuity-review-model-output";
+import {
+  parseCreateCharacterKnowledgeCommand,
+  parseListCharacterKnowledgeCommand,
+  parseProjectPovKnowledgeCommand,
+  parseRetireCharacterKnowledgeCommand,
+  parseSupersedeCharacterKnowledgeCommand,
+  parseUpdateCharacterKnowledgeCommand,
+  type CharacterKnowledgeListProjection,
+  type CharacterKnowledgeProjection,
+  type PovKnowledgeContextProjection,
+} from "../application/continuity/character-knowledge-contract";
+import {
+  parseListAssistantEntityContextPoliciesCommand,
+  parseSaveAssistantEntityContextPolicyCommand,
+  type AssistantEntityContextPolicyList,
+  type AssistantEntityContextPolicyProjection,
+} from "../application/continuity/assistant-context-policy";
+import {
+  parseListAssistantContextActivitiesCommand,
+  parseListAssistantContextManifestsCommand,
+  type AssistantContextActivityList,
+  type AssistantContextManifestList,
+  type AssistantContextPlanProjection,
+} from "../application/continuity/assistant-context-manifest";
+import {
+  parsePlanAssistantContextInput,
+} from "../application/continuity/context-planner";
+import {
+  parseCreateContinuityThreadCommand,
+  parseDismissContinuityThreadCommand,
+  parseListContinuityThreadsCommand,
+  parseResolveContinuityThreadCommand,
+  parseUpdateContinuityThreadCommand,
+  type ContinuityOverviewProjection,
+  type ContinuityThreadProjection,
+} from "../application/continuity/continuity-thread-contract";
 import {
   parseAssistantDestinationProfile,
   type AssistantDestinationProfile,
@@ -335,6 +412,14 @@ import {
   type SaveAppSettingsCommand,
 } from "../application/settings/app-settings";
 import {
+  createDefaultWorkSceneAnalysisSettingsProjection,
+  parseGetWorkSceneAnalysisSettingsCommand,
+  parseSaveWorkSceneAnalysisSettingsCommand,
+  parseWorkSceneAnalysisSettingsProjection,
+  type SaveWorkSceneAnalysisSettingsCommand,
+  type WorkSceneAnalysisSettingsProjection,
+} from "../application/settings/work-scene-analysis-settings";
+import {
   createDefaultWorkMusicSettingsProjection,
   parseGetWorkMusicSettingsCommand,
   parseSaveWorkMusicSettingsCommand,
@@ -425,11 +510,19 @@ import {
   type ListSceneProjectionCommand,
   type SceneEpisodeSegmentProjection,
   type SceneEventOverrideProjection,
+  type SceneProjection,
   type SceneProjectionList,
   type SceneRuleSetProjection,
   type SetSceneEventOverrideCommand,
   type UpdateSceneRuleSetCommand,
 } from "../application/structure/scene-projection";
+import {
+  parseFinalizeSceneCanonCheckCommand,
+  parseSceneCanonCheckProjection,
+  parseListSceneCanonContextsCommand,
+  type SceneCanonCheckProjection,
+  type SceneCanonContextListProjection,
+} from "../application/structure/scene-canon-context";
 import {
   SCENE_EXTRACTION_PROMPT_VERSION,
   createSceneExtractionParagraphs,
@@ -488,6 +581,38 @@ import {
   type SceneAnnotationProjection,
 } from "../application/structure/scene-annotation-contract";
 import {
+  parseRebindSceneMetadataCommand,
+  parseSceneMetadataBindingProjection,
+  type RebindSceneMetadataCommand,
+  type SceneMetadataBindingProjection,
+} from "../application/structure/scene-metadata-binding-contract";
+import {
+  parseDeleteSceneCommand,
+  parseListSceneTrashCommand,
+  parsePrepareSceneDeletionCommand,
+  parseRestoreSceneTrashCommand,
+  parseSceneDeletionPreview,
+  parseSceneDeletionReceipt,
+  parseSceneTrashEntryProjection,
+  parseSceneTrashListProjection,
+  parseUndoSceneDeletionCommand,
+  type DeleteSceneCommand,
+  type ListSceneTrashCommand,
+  type PrepareSceneDeletionCommand,
+  type RestoreSceneTrashCommand,
+  type SceneDeletionMetadataPreview,
+  type SceneDeletionPreview,
+  type SceneDeletionReceipt,
+  type SceneTrashEntryProjection,
+  type SceneTrashListProjection,
+  type SceneTrashStore,
+  type UndoSceneDeletionCommand,
+} from "../application/structure/scene-trash-contract";
+import {
+  deleteManuscriptEditorStateRange,
+  planSceneDeletion,
+} from "../application/structure/scene-deletion-plan";
+import {
   parseCaptureFragmentCommand,
   parseFragmentListProjection,
   parseFragmentProjection,
@@ -505,6 +630,20 @@ import {
   type RetireFragmentCommand,
   type UpdateFragmentCommand,
 } from "../application/fragments/fragment-contract";
+import {
+  parseCreateManuscriptAnnotationCommand,
+  parseListManuscriptAnnotationsCommand,
+  parseManuscriptAnnotationListProjection,
+  parseManuscriptAnnotationProjection,
+  parseRetireManuscriptAnnotationCommand,
+  parseUpdateManuscriptAnnotationCommand,
+  type CreateManuscriptAnnotationCommand,
+  type ListManuscriptAnnotationsCommand,
+  type ManuscriptAnnotationListProjection,
+  type ManuscriptAnnotationProjection,
+  type RetireManuscriptAnnotationCommand,
+  type UpdateManuscriptAnnotationCommand,
+} from "../application/review/manuscript-annotation-contract";
 import {
   parseAddCharacterEvidenceCommand,
   parseCharacterListProjection,
@@ -650,6 +789,25 @@ import {
   type SubmissionPackageProjection,
   type UpdatePublishingSubmissionCommand,
 } from "../application/publishing/publishing-submission-contract";
+import {
+  parseCreatePublishingFormTemplateCommand,
+  parseListPublishingFormResponsesCommand,
+  parseListPublishingFormTemplatesCommand,
+  parsePublishingFormResponseListProjection,
+  parsePublishingFormResponseProjection,
+  parsePublishingFormTemplateListProjection,
+  parsePublishingFormTemplateProjection,
+  parseSavePublishingFormResponseCommand,
+  parseUpdatePublishingFormTemplateCommand,
+  type CreatePublishingFormTemplateCommand,
+  type ListPublishingFormResponsesCommand,
+  type PublishingFormResponseListProjection,
+  type PublishingFormResponseProjection,
+  type PublishingFormTemplateListProjection,
+  type PublishingFormTemplateProjection,
+  type SavePublishingFormResponseCommand,
+  type UpdatePublishingFormTemplateCommand,
+} from "../application/publishing/publishing-form-contract";
 import {
   parseCreatePublishingContractCommand,
   parseListPublishingContractsCommand,
@@ -995,6 +1153,79 @@ import {
 import {
   migrateLocalWorkspaceEpisodeRangeMovesIfNeeded,
 } from "./local-workspace-episode-range-move-migration";
+import {
+  migrateLocalWorkspaceSceneMetadataIfNeeded,
+} from "./local-workspace-scene-metadata-migration";
+import {
+  migrateLocalWorkspaceSceneTrashIfNeeded,
+} from "./local-workspace-scene-trash-migration";
+import {
+  migrateLocalWorkspaceCanonReviewIfNeeded,
+} from "./local-workspace-canon-migration";
+import {
+  migrateLocalWorkspaceContinuityIfNeeded,
+} from "./local-workspace-continuity-migration";
+import {
+  migrateLocalWorkspaceCharacterKnowledgeIfNeeded,
+} from "./local-workspace-character-knowledge-migration";
+import {
+  migrateLocalWorkspaceContextPlannerIfNeeded,
+} from "./local-workspace-context-planner-migration";
+import {
+  migrateLocalWorkspaceNarrativeDigestIfNeeded,
+} from "./local-workspace-narrative-digest-migration";
+import {
+  migrateLocalWorkspaceSceneAnalysisIfNeeded,
+} from "./local-workspace-scene-analysis-migration";
+import {
+  migrateLocalWorkspaceSceneAnalysisRunsIfNeeded,
+} from "./local-workspace-scene-analysis-run-migration";
+import {
+  migrateLocalWorkspacePublishingFormsIfNeeded,
+} from "./local-workspace-publishing-form-migration";
+import {
+  createLocalCanonService,
+  type LocalCanonService,
+} from "./canon/local-canon-runtime";
+import {
+  createLocalContinuityService,
+  type LocalContinuityService,
+} from "./continuity/local-continuity-runtime";
+import {
+  createLocalCharacterKnowledgeService,
+  type LocalCharacterKnowledgeService,
+} from "./continuity/local-character-knowledge-runtime";
+import {
+  createLocalContextPlanner,
+  type LocalContextPlanner,
+} from "./continuity/local-context-planner";
+import {
+  createLocalNarrativeDigestService,
+  type LocalNarrativeDigestService,
+  type NarrativeDigestConnector,
+} from "./continuity/local-narrative-digest-runtime";
+import { listLocalSceneCanonContexts } from "./continuity/local-scene-canon-context";
+import {
+  parseGenerateNarrativeDigestCommand,
+  parseGenerateSceneNarrativeDigestCommand,
+  parseListNarrativeDigestsCommand,
+  parseRegenerateNarrativeDigestCommand,
+  type NarrativeDigestListProjection,
+  type NarrativeDigestProjection,
+  type NarrativeDigestResult,
+} from "../application/continuity/narrative-digest-contract";
+import {
+  parseAutomaticSceneAnalysisResult,
+  parseListSceneAnalysisRunsCommand,
+  parseRunAutomaticSceneAnalysisCommand,
+  parseSceneAnalysisRunListProjection,
+  parseSceneAnalysisRunProjection,
+  type AutomaticSceneAnalysisResult,
+  type RunAutomaticSceneAnalysisCommand,
+  type SceneAnalysisLoreStatus,
+  type SceneAnalysisRunListProjection,
+  type SceneAnalysisRunProjection,
+} from "../application/continuity/scene-analysis-run-contract";
 
 type NodeSqliteStatement = {
   all(
@@ -1159,6 +1390,33 @@ type StoredSceneEventOverrideRow = {
   readonly operation: SceneEventOverrideProjection["operation"];
   readonly createdAt: string;
   readonly updatedAt: string;
+  readonly binding: StoredSceneMetadataBindingRow;
+};
+
+type StoredSceneMetadataSourceRow = {
+  readonly metadataKind: "annotation" | "event-override" | "music-queue";
+  readonly metadataId: string;
+  readonly workId: EntityId<"Work">;
+  readonly sourceSceneKey: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly retiredAt: string | null;
+};
+
+type StoredSceneMetadataBindingRow = {
+  readonly bindingId: string;
+  readonly revision: number;
+  readonly workId: EntityId<"Work">;
+  readonly metadataKind: StoredSceneMetadataSourceRow["metadataKind"];
+  readonly metadataId: string;
+  readonly sourceSceneKey: string;
+  readonly sceneId: EntityId<"Scene"> | null;
+  readonly status: "current" | "needs-review" | "detached";
+  readonly proposedSceneId: EntityId<"Scene"> | null;
+  readonly lineageOperationId: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly retiredAt: string | null;
 };
 
 type StoredFragmentRow = {
@@ -1172,6 +1430,21 @@ type StoredFragmentRow = {
   readonly title: string;
   readonly pinned: boolean;
   readonly useCount: number;
+  readonly exactText: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly retiredAt: string | null;
+};
+
+type StoredManuscriptAnnotationRow = {
+  readonly annotationId: EntityId<"ManuscriptAnnotation">;
+  readonly revision: number;
+  readonly workId: EntityId<"Work">;
+  readonly sourceDocumentId: EntityId<"Document">;
+  readonly sourceDocumentRevisionId: EntityId<"DocumentRevision">;
+  readonly sourceAnchorId: EntityId<"Anchor">;
+  readonly body: string;
+  readonly tags: readonly string[];
   readonly exactText: string;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -1323,6 +1596,18 @@ type StoredPublishingPartnerRow = {
   readonly updatedAt: string;
   readonly retiredAt: string | null;
 };
+
+type StoredPublishingFormTemplateRow = Omit<
+  PublishingFormTemplateProjection,
+  "schemaVersion"
+> & {
+  readonly retiredAt: string | null;
+};
+
+type StoredPublishingFormResponseRow = Omit<
+  PublishingFormResponseProjection,
+  "schemaVersion"
+>;
 
 type StoredPublishingSubmissionRow = Omit<
   PublishingSubmissionProjection,
@@ -1599,13 +1884,33 @@ export type LocalWorkspaceRuntime =
     relocateSceneSegment(value: unknown): Promise<SceneProjectionList>;
     listSceneOverrides(value: unknown): Promise<SceneOverrideListProjection>;
     listSceneProjection(value: unknown): Promise<SceneProjectionList>;
+    listSceneCanonContexts(value: unknown): Promise<SceneCanonContextListProjection>;
+    finalizeSceneCanonCheck(value: unknown): Promise<SceneCanonCheckProjection>;
     updateSceneRuleSet(value: unknown): Promise<SceneProjectionList>;
-    setSceneEventOverride(value: unknown): Promise<SceneProjectionList>;
+  setSceneEventOverride(value: unknown): Promise<SceneProjectionList>;
+  rebindSceneMetadata(value: unknown): Promise<SceneMetadataBindingProjection>;
+  prepareSceneDeletion(value: unknown): Promise<SceneDeletionPreview>;
+  deleteScene(value: unknown): Promise<SceneDeletionReceipt>;
+  listSceneTrash(value: unknown): Promise<SceneTrashListProjection>;
+  restoreSceneTrash(value: unknown): Promise<SceneDeletionReceipt>;
+  undoSceneDeletion(value: unknown): Promise<SceneDeletionReceipt>;
     captureFragment(value: unknown): Promise<FragmentProjection>;
     listFragments(value: unknown): Promise<FragmentListProjection>;
     updateFragment(value: unknown): Promise<FragmentProjection>;
     recordFragmentUse(value: unknown): Promise<FragmentProjection>;
     retireFragment(value: unknown): Promise<FragmentProjection>;
+    createManuscriptAnnotation(
+      value: unknown,
+    ): Promise<ManuscriptAnnotationProjection>;
+    listManuscriptAnnotations(
+      value: unknown,
+    ): Promise<ManuscriptAnnotationListProjection>;
+    updateManuscriptAnnotation(
+      value: unknown,
+    ): Promise<ManuscriptAnnotationProjection>;
+    retireManuscriptAnnotation(
+      value: unknown,
+    ): Promise<ManuscriptAnnotationProjection>;
     createCharacter(value: unknown): Promise<CharacterProjection>;
     listCharacters(value: unknown): Promise<CharacterListProjection>;
     updateCharacter(value: unknown): Promise<CharacterProjection>;
@@ -1632,6 +1937,11 @@ export type LocalWorkspaceRuntime =
     createPublishingPartner(value: unknown): Promise<PublishingPartnerProjection>;
     listPublishingPartners(value: unknown): Promise<PublishingPartnerListProjection>;
     updatePublishingPartner(value: unknown): Promise<PublishingPartnerProjection>;
+    createPublishingFormTemplate(value: unknown): Promise<PublishingFormTemplateProjection>;
+    listPublishingFormTemplates(value: unknown): Promise<PublishingFormTemplateListProjection>;
+    updatePublishingFormTemplate(value: unknown): Promise<PublishingFormTemplateProjection>;
+    listPublishingFormResponses(value: unknown): Promise<PublishingFormResponseListProjection>;
+    savePublishingFormResponse(value: unknown): Promise<PublishingFormResponseProjection>;
     createPublishingSubmission(value: unknown): Promise<PublishingSubmissionProjection>;
     listPublishingSubmissions(value: unknown): Promise<PublishingSubmissionListProjection>;
     updatePublishingSubmission(value: unknown): Promise<PublishingSubmissionProjection>;
@@ -1747,6 +2057,12 @@ export type LocalWorkspaceRuntime =
     ): Promise<WorkManuscriptLayoutSettingsProjection>;
     getWorkMusicSettings(value: unknown): Promise<WorkMusicSettingsProjection>;
     saveWorkMusicSettings(value: unknown): Promise<WorkMusicSettingsProjection>;
+    getWorkSceneAnalysisSettings(
+      value: unknown,
+    ): Promise<WorkSceneAnalysisSettingsProjection>;
+    saveWorkSceneAnalysisSettings(
+      value: unknown,
+    ): Promise<WorkSceneAnalysisSettingsProjection>;
     getWorkInspirationSettings(
       value: unknown,
     ): Promise<WorkInspirationSettingsProjection>;
@@ -1777,6 +2093,43 @@ export type LocalWorkspaceRuntime =
     runAssistantExternalSettingReview(
       value: unknown,
     ): Promise<AssistantExternalSettingReviewResult>;
+    runCanonReview(value: unknown): Promise<CanonReviewResult>;
+    listCanonReviewCandidates(
+      value: unknown,
+    ): Promise<CanonReviewCandidateList>;
+    updateCanonReviewItem(value: unknown): Promise<CanonReviewCandidate>;
+    resolveCanonReviewItemTarget(value: unknown): Promise<CanonReviewCandidate>;
+    decideCanonReviewItem(value: unknown): Promise<CanonReviewDecisionResult>;
+    createContinuityThread(value: unknown): Promise<ContinuityThreadProjection>;
+    updateContinuityThread(value: unknown): Promise<ContinuityThreadProjection>;
+    listContinuityThreads(value: unknown): Promise<ContinuityOverviewProjection>;
+    resolveContinuityThread(value: unknown): Promise<ContinuityThreadProjection>;
+    dismissContinuityThread(value: unknown): Promise<ContinuityThreadProjection>;
+    runContinuityReview(value: unknown): Promise<ContinuityReviewResult>;
+    listContinuityReviewCandidates(
+      value: unknown,
+    ): Promise<ContinuityReviewCandidateList>;
+    updateContinuityReviewItem(value: unknown): Promise<ContinuityReviewCandidate>;
+    decideContinuityReviewItem(
+      value: unknown,
+    ): Promise<ContinuityReviewDecisionResult>;
+    createCharacterKnowledge(value: unknown): Promise<CharacterKnowledgeProjection>;
+    updateCharacterKnowledge(value: unknown): Promise<CharacterKnowledgeProjection>;
+    supersedeCharacterKnowledge(value: unknown): Promise<CharacterKnowledgeProjection>;
+    retireCharacterKnowledge(value: unknown): Promise<CharacterKnowledgeProjection>;
+    listCharacterKnowledge(value: unknown): Promise<CharacterKnowledgeListProjection>;
+    projectPovCharacterKnowledge(value: unknown): Promise<PovKnowledgeContextProjection>;
+    listAssistantEntityContextPolicies(value: unknown): Promise<AssistantEntityContextPolicyList>;
+    saveAssistantEntityContextPolicy(value: unknown): Promise<AssistantEntityContextPolicyProjection>;
+    planAssistantContext(value: unknown): Promise<AssistantContextPlanProjection>;
+    listAssistantContextManifests(value: unknown): Promise<AssistantContextManifestList>;
+    listAssistantContextActivities(value: unknown): Promise<AssistantContextActivityList>;
+    generateNarrativeDigest(value: unknown): Promise<NarrativeDigestResult>;
+    generateSceneNarrativeDigest(value: unknown): Promise<NarrativeDigestResult>;
+    runAutomaticSceneAnalysis(value: unknown): Promise<AutomaticSceneAnalysisResult>;
+    listSceneAnalysisRuns(value: unknown): Promise<SceneAnalysisRunListProjection>;
+    listNarrativeDigests(value: unknown): Promise<NarrativeDigestListProjection>;
+    regenerateNarrativeDigest(value: unknown): Promise<NarrativeDigestResult>;
     runCharacterExtraction(value: unknown): Promise<CharacterExtractionResult>;
     listCharacterExtractionCandidates(
       value: unknown,
@@ -1836,6 +2189,7 @@ export type LocalWorkspaceRuntime =
     createWorkSnapshot(value: unknown): Promise<WorkSnapshotProjection>;
     listWorkSnapshots(value: unknown): Promise<WorkSnapshotListProjection>;
     compareWorkSnapshot(value: unknown): Promise<WorkSnapshotComparisonProjection>;
+    planWorkSnapshotSceneSelection(value: unknown): Promise<WorkSnapshotSceneSelectionPlan>;
     getManuscriptPreflightSettings(
       value: unknown,
     ): Promise<ManuscriptPreflightSettingsProjection>;
@@ -1845,6 +2199,9 @@ export type LocalWorkspaceRuntime =
     prepareManuscriptTextExport(
       value: unknown,
     ): Promise<ExportManuscriptTextCommand>;
+    prepareCanonicalMarkdownExport(
+      value: unknown,
+    ): Promise<PreparedCanonicalMarkdownExport>;
     getBackupStatus(): Promise<LocalWorkspaceBackupStatusProjection>;
     createBackupBundle(finalBundleRoot: string): Promise<LocalWorkspaceBackupSummary>;
     restoreBackupBundle(
@@ -1964,6 +2321,21 @@ export type LocalWorkspaceRuntimeOptions = {
     receipt: AssistantConnectorExecutionReceipt;
     payload: unknown;
   }>>;
+  readonly canonReview?: Readonly<{
+    destinationId: string;
+    contextTokenBudget: number;
+    isConnected: () => boolean;
+    execute: (input: CanonReviewConnectorInput) => Promise<CanonReviewExecution>;
+  }>;
+  readonly continuityReview?: Readonly<{
+    destinationId: string;
+    contextTokenBudget: number;
+    isConnected: () => boolean;
+    execute: (
+      input: ContinuityReviewConnectorInput,
+    ) => Promise<ContinuityReviewExecution>;
+  }>;
+  readonly narrativeDigest?: NarrativeDigestConnector;
   readonly characterExtraction?: Readonly<{
     destinationId: string;
     isConnected: () => boolean;
@@ -2031,7 +2403,7 @@ export type LocalWorkspaceRuntimeOptions = {
   readonly backupProfile: LocalWorkspaceBackupProfile;
 };
 
-export const LOCAL_WORKSPACE_LEDGER_SCHEMA_VERSION = 15;
+export const LOCAL_WORKSPACE_LEDGER_SCHEMA_VERSION = 25;
 export const LOCAL_WORKSPACE_LEDGER_CHECKSUM_IDENTITY =
   "eum-studio-ledger-sha256-v1";
 export const LOCAL_WORKSPACE_MANUSCRIPT_CODEC_IDENTITY =
@@ -2252,8 +2624,22 @@ SELECT
   seo.event_block_id AS "eventBlockId",
   seo.operation AS "operation",
   seo.created_at AS "createdAt",
-  seo.updated_at AS "updatedAt"
+  seo.updated_at AS "updatedAt",
+  binding.id AS "bindingId",
+  binding.revision AS "bindingRevision",
+  binding.source_scene_key AS "bindingSourceSceneKey",
+  binding.scene_id AS "bindingSceneId",
+  binding.status AS "bindingStatus",
+  binding.proposed_scene_id AS "bindingProposedSceneId",
+  binding.lineage_operation_id AS "bindingLineageOperationId",
+  binding.created_at AS "bindingCreatedAt",
+  binding.updated_at AS "bindingUpdatedAt"
 FROM scene_event_overrides AS seo
+JOIN scene_metadata_bindings AS binding
+  ON binding.work_id = seo.work_id
+  AND binding.metadata_kind = 'event-override'
+  AND binding.metadata_id = seo.id
+  AND binding.retired_at IS NULL
 WHERE seo.work_id = ? AND seo.retired_at IS NULL
 ORDER BY seo.created_at ASC, seo.id ASC
 `;
@@ -2279,6 +2665,62 @@ WHERE
   segment.work_id = ?
   AND segment.retired_at IS NULL
 ORDER BY segment.created_at, segment.id
+`;
+
+const SCENE_METADATA_SOURCE_ROWS_SQL = `
+SELECT
+  'annotation' AS "metadataKind",
+  annotation.id AS "metadataId",
+  annotation.work_id AS "workId",
+  annotation.scene_key AS "sourceSceneKey",
+  annotation.created_at AS "createdAt",
+  annotation.updated_at AS "updatedAt",
+  NULL AS "retiredAt"
+FROM scene_annotations AS annotation
+WHERE annotation.work_id = ?
+UNION ALL
+SELECT
+  'event-override',
+  event_override.id,
+  event_override.work_id,
+  event_override.scene_key,
+  event_override.created_at,
+  event_override.updated_at,
+  event_override.retired_at
+FROM scene_event_overrides AS event_override
+WHERE event_override.work_id = ?
+UNION ALL
+SELECT
+  'music-queue',
+  music_queue.id,
+  music_queue.work_id,
+  music_queue.scene_key,
+  music_queue.created_at,
+  music_queue.updated_at,
+  NULL
+FROM scene_music_queue_candidates AS music_queue
+WHERE music_queue.work_id = ?
+ORDER BY "metadataKind", "createdAt", "metadataId"
+`;
+
+const SCENE_METADATA_BINDING_ROWS_SQL = `
+SELECT
+  binding.id AS "bindingId",
+  binding.revision AS "revision",
+  binding.work_id AS "workId",
+  binding.metadata_kind AS "metadataKind",
+  binding.metadata_id AS "metadataId",
+  binding.source_scene_key AS "sourceSceneKey",
+  binding.scene_id AS "sceneId",
+  binding.status AS "status",
+  binding.proposed_scene_id AS "proposedSceneId",
+  binding.lineage_operation_id AS "lineageOperationId",
+  binding.created_at AS "createdAt",
+  binding.updated_at AS "updatedAt",
+  binding.retired_at AS "retiredAt"
+FROM scene_metadata_bindings AS binding
+WHERE binding.work_id = ?
+ORDER BY binding.created_at, binding.id
 `;
 
 const ACTIVE_FRAGMENT_ROWS_SQL = `
@@ -2328,6 +2770,51 @@ JOIN anchors AS a
   AND a.document_id = f.source_document_id
   AND a.id = f.source_anchor_id
 WHERE f.work_id = ? AND f.id = ?
+`;
+
+const ACTIVE_MANUSCRIPT_ANNOTATION_ROWS_SQL = `
+SELECT
+  annotation.id AS "annotationId",
+  annotation.revision AS "revision",
+  annotation.work_id AS "workId",
+  annotation.source_document_id AS "sourceDocumentId",
+  anchor.origin_revision_id AS "sourceDocumentRevisionId",
+  annotation.source_anchor_id AS "sourceAnchorId",
+  annotation.body AS "body",
+  annotation.tags_json AS "tagsJson",
+  anchor.exact_quote AS "exactText",
+  annotation.created_at AS "createdAt",
+  annotation.updated_at AS "updatedAt",
+  annotation.retired_at AS "retiredAt"
+FROM manuscript_annotations AS annotation
+JOIN anchors AS anchor
+  ON anchor.work_id = annotation.work_id
+  AND anchor.document_id = annotation.source_document_id
+  AND anchor.id = annotation.source_anchor_id
+WHERE annotation.work_id = ? AND annotation.retired_at IS NULL
+ORDER BY annotation.updated_at DESC, annotation.id ASC
+`;
+
+const MANUSCRIPT_ANNOTATION_ROW_BY_ID_SQL = `
+SELECT
+  annotation.id AS "annotationId",
+  annotation.revision AS "revision",
+  annotation.work_id AS "workId",
+  annotation.source_document_id AS "sourceDocumentId",
+  anchor.origin_revision_id AS "sourceDocumentRevisionId",
+  annotation.source_anchor_id AS "sourceAnchorId",
+  annotation.body AS "body",
+  annotation.tags_json AS "tagsJson",
+  anchor.exact_quote AS "exactText",
+  annotation.created_at AS "createdAt",
+  annotation.updated_at AS "updatedAt",
+  annotation.retired_at AS "retiredAt"
+FROM manuscript_annotations AS annotation
+JOIN anchors AS anchor
+  ON anchor.work_id = annotation.work_id
+  AND anchor.document_id = annotation.source_document_id
+  AND anchor.id = annotation.source_anchor_id
+WHERE annotation.work_id = ? AND annotation.id = ?
 `;
 
 const ACTIVE_CHARACTER_ROWS_SQL = `
@@ -2551,62 +3038,90 @@ ${SCENE_DRAFT_CANDIDATE_ROWS_SQL.replace(
 
 const SCENE_ANNOTATION_ROWS_SQL = `
 SELECT
-  id AS "sceneAnnotationId",
-  revision AS "revision",
-  work_id AS "workId",
-  scene_key AS "sceneKey",
-  document_id AS "documentId",
-  document_revision_id AS "documentRevisionId",
-  source_candidate_id AS "sourceCandidateId",
-  source_scene_item_id AS "sourceSceneItemId",
-  title AS "title",
-  summary AS "summary",
-  pov_character_id AS "povCharacterId",
-  location AS "location",
-  time AS "time",
-  character_ids_json AS "characterIdsJson",
-  goal AS "goal",
-  conflict AS "conflict",
-  outcome AS "outcome",
-  created_at AS "createdAt",
-  updated_at AS "updatedAt"
-FROM scene_annotations
-WHERE work_id = ?
-ORDER BY updated_at DESC, id ASC
+  annotation.id AS "sceneAnnotationId",
+  annotation.revision AS "revision",
+  annotation.work_id AS "workId",
+  annotation.scene_key AS "sceneKey",
+  annotation.document_id AS "documentId",
+  annotation.document_revision_id AS "documentRevisionId",
+  annotation.source_candidate_id AS "sourceCandidateId",
+  annotation.source_scene_item_id AS "sourceSceneItemId",
+  annotation.title AS "title",
+  annotation.summary AS "summary",
+  annotation.pov_character_id AS "povCharacterId",
+  annotation.location AS "location",
+  annotation.time AS "time",
+  annotation.character_ids_json AS "characterIdsJson",
+  annotation.goal AS "goal",
+  annotation.conflict AS "conflict",
+  annotation.outcome AS "outcome",
+  annotation.created_at AS "createdAt",
+  annotation.updated_at AS "updatedAt",
+  binding.id AS "bindingId",
+  binding.revision AS "bindingRevision",
+  binding.source_scene_key AS "bindingSourceSceneKey",
+  binding.scene_id AS "bindingSceneId",
+  binding.status AS "bindingStatus",
+  binding.proposed_scene_id AS "bindingProposedSceneId",
+  binding.lineage_operation_id AS "bindingLineageOperationId",
+  binding.created_at AS "bindingCreatedAt",
+  binding.updated_at AS "bindingUpdatedAt"
+FROM scene_annotations AS annotation
+JOIN scene_metadata_bindings AS binding
+  ON binding.work_id = annotation.work_id
+  AND binding.metadata_kind = 'annotation'
+  AND binding.metadata_id = annotation.id
+  AND binding.retired_at IS NULL
+WHERE annotation.work_id = ?
+ORDER BY annotation.updated_at DESC, annotation.id ASC
 `;
 
 const SCENE_ANNOTATION_BY_KEY_SQL = `
 ${SCENE_ANNOTATION_ROWS_SQL.replace(
-  "WHERE work_id = ?",
-  "WHERE work_id = ? AND scene_key = ?",
+  "WHERE annotation.work_id = ?",
+  "WHERE annotation.work_id = ? AND annotation.scene_key = ?",
 )}
 `;
 
 const SCENE_MUSIC_QUEUE_CANDIDATE_ROWS_SQL = `
 SELECT
-  id AS "candidateId",
-  request_id AS "requestId",
-  revision AS "revision",
-  work_id AS "workId",
-  scene_key AS "sceneKey",
-  scene_annotation_id AS "sceneAnnotationId",
-  scene_annotation_revision AS "sceneAnnotationRevision",
-  provider_id AS "providerId",
-  query_text AS "query",
-  status AS "status",
-  options_json AS "optionsJson",
-  selected_option_id AS "selectedOptionId",
-  created_at AS "createdAt",
-  updated_at AS "updatedAt"
-FROM scene_music_queue_candidates
-WHERE work_id = ?
-ORDER BY updated_at DESC, id DESC
+  candidate.id AS "candidateId",
+  candidate.request_id AS "requestId",
+  candidate.revision AS "revision",
+  candidate.work_id AS "workId",
+  candidate.scene_key AS "sceneKey",
+  candidate.scene_annotation_id AS "sceneAnnotationId",
+  candidate.scene_annotation_revision AS "sceneAnnotationRevision",
+  candidate.provider_id AS "providerId",
+  candidate.query_text AS "query",
+  candidate.status AS "status",
+  candidate.options_json AS "optionsJson",
+  candidate.selected_option_id AS "selectedOptionId",
+  candidate.created_at AS "createdAt",
+  candidate.updated_at AS "updatedAt",
+  binding.id AS "bindingId",
+  binding.revision AS "bindingRevision",
+  binding.source_scene_key AS "bindingSourceSceneKey",
+  binding.scene_id AS "bindingSceneId",
+  binding.status AS "bindingStatus",
+  binding.proposed_scene_id AS "bindingProposedSceneId",
+  binding.lineage_operation_id AS "bindingLineageOperationId",
+  binding.created_at AS "bindingCreatedAt",
+  binding.updated_at AS "bindingUpdatedAt"
+FROM scene_music_queue_candidates AS candidate
+JOIN scene_metadata_bindings AS binding
+  ON binding.work_id = candidate.work_id
+  AND binding.metadata_kind = 'music-queue'
+  AND binding.metadata_id = candidate.id
+  AND binding.retired_at IS NULL
+WHERE candidate.work_id = ?
+ORDER BY candidate.updated_at DESC, candidate.id DESC
 `;
 
 const SCENE_MUSIC_QUEUE_CANDIDATE_BY_ID_SQL = `
 ${SCENE_MUSIC_QUEUE_CANDIDATE_ROWS_SQL.replace(
-  "WHERE work_id = ?",
-  "WHERE work_id = ? AND id = ?",
+  "WHERE candidate.work_id = ?",
+  "WHERE candidate.work_id = ? AND candidate.id = ?",
 )}
 `;
 
@@ -2788,6 +3303,58 @@ SELECT
   retired_at AS "retiredAt"
 FROM publishing_partners
 WHERE id = ?
+`;
+
+const PUBLISHING_FORM_TEMPLATE_SELECT_SQL = `
+SELECT
+  id AS "templateId",
+  revision AS "revision",
+  scope AS "scope",
+  partner_id AS "partnerId",
+  source_template_id AS "sourceTemplateId",
+  name AS "name",
+  description AS "description",
+  sections_json AS "sectionsJson",
+  created_at AS "createdAt",
+  updated_at AS "updatedAt",
+  retired_at AS "retiredAt"
+FROM publishing_form_templates
+`;
+
+const ACTIVE_PUBLISHING_FORM_TEMPLATE_ROWS_SQL = `
+${PUBLISHING_FORM_TEMPLATE_SELECT_SQL}
+WHERE retired_at IS NULL
+ORDER BY CASE scope WHEN 'base' THEN 0 ELSE 1 END, updated_at DESC, id ASC
+`;
+
+const PUBLISHING_FORM_TEMPLATE_ROW_BY_ID_SQL = `
+${PUBLISHING_FORM_TEMPLATE_SELECT_SQL}
+WHERE id = ?
+`;
+
+const PUBLISHING_FORM_RESPONSE_SELECT_SQL = `
+SELECT
+  id AS "responseId",
+  revision AS "revision",
+  work_id AS "workId",
+  partner_id AS "partnerId",
+  template_id AS "templateId",
+  template_revision AS "templateRevision",
+  answers_json AS "answersJson",
+  created_at AS "createdAt",
+  updated_at AS "updatedAt"
+FROM publishing_form_responses
+`;
+
+const PUBLISHING_FORM_RESPONSE_ROWS_SQL = `
+${PUBLISHING_FORM_RESPONSE_SELECT_SQL}
+WHERE (? IS NULL OR work_id = ?)
+ORDER BY updated_at DESC, id ASC
+`;
+
+const PUBLISHING_FORM_RESPONSE_ROW_BY_WORK_PARTNER_SQL = `
+${PUBLISHING_FORM_RESPONSE_SELECT_SQL}
+WHERE work_id = ? AND partner_id = ?
 `;
 
 const PUBLISHING_SUBMISSION_SELECT_SQL = `
@@ -4037,6 +4604,12 @@ class DefaultLocalWorkspaceRuntime
   >;
   readonly #revisionStore: RevisionStore;
   readonly #episodeRangeMoveStore: EpisodeRangeMoveStore;
+  readonly #sceneTrashStore: SceneTrashStore;
+  readonly #canonService: LocalCanonService;
+  readonly #continuityService: LocalContinuityService;
+  readonly #characterKnowledgeService: LocalCharacterKnowledgeService;
+  readonly #contextPlanner: LocalContextPlanner;
+  readonly #narrativeDigestService: LocalNarrativeDigestService;
   readonly #blobStore: Awaited<
     ReturnType<typeof createNodeImmutableBlobStore>
   >;
@@ -4063,6 +4636,7 @@ class DefaultLocalWorkspaceRuntime
   #resumeProjection: ManuscriptResumeCheckpointProjection;
   #savePending: Promise<void> = Promise.resolve();
   #createPending: Promise<void> = Promise.resolve();
+  #sceneAnalysisPending: Promise<void> = Promise.resolve();
   #closed = false;
 
   constructor(input: {
@@ -4072,6 +4646,7 @@ class DefaultLocalWorkspaceRuntime
     >;
     readonly revisionStore: RevisionStore;
     readonly episodeRangeMoveStore: EpisodeRangeMoveStore;
+    readonly sceneTrashStore: SceneTrashStore;
     readonly blobStore: Awaited<
       ReturnType<typeof createNodeImmutableBlobStore>
     >;
@@ -4088,6 +4663,7 @@ class DefaultLocalWorkspaceRuntime
     this.#ledger = input.ledger;
     this.#revisionStore = input.revisionStore;
     this.#episodeRangeMoveStore = input.episodeRangeMoveStore;
+    this.#sceneTrashStore = input.sceneTrashStore;
     this.#blobStore = input.blobStore;
     this.#blobProfile = input.blobProfile;
     this.#backupService = input.backupService;
@@ -4097,6 +4673,196 @@ class DefaultLocalWorkspaceRuntime
     this.#resumeProjection = input.resumeProjection;
     for (const target of input.documentTargets) {
       this.#documentTargets.set(target.documentId, target);
+    }
+    this.#canonService = createLocalCanonService({
+      database: this.#database,
+      ledger: this.#ledger,
+      schemaVersion: LOCAL_WORKSPACE_LEDGER_SCHEMA_VERSION,
+      anchorPolicy: this.#options.defaults.anchorPolicy,
+      describeAnchorEvidence: createNodeCryptoAnchorEvidenceDescriptor(
+        this.#options.defaults.anchorEvidenceChecksumAlgorithm,
+      ),
+      getDocument: (documentId) => {
+        const target = this.#documentTargets.get(documentId);
+        return target === undefined
+          ? undefined
+          : Object.freeze({
+              workId: target.workId,
+              documentId: target.documentId,
+              currentRevisionId: target.currentRevisionId,
+              text: target.text,
+            });
+      },
+      authorizeContext: (request) =>
+        this.#authorizeAssistantContextAccessSerially(request),
+      ...(this.#options.canonReview === undefined
+        ? {}
+        : { connector: this.#options.canonReview }),
+    });
+    this.#continuityService = createLocalContinuityService({
+      database: this.#database,
+      ledger: this.#ledger,
+      schemaVersion: LOCAL_WORKSPACE_LEDGER_SCHEMA_VERSION,
+      anchorPolicy: this.#options.defaults.anchorPolicy,
+      describeAnchorEvidence: createNodeCryptoAnchorEvidenceDescriptor(
+        this.#options.defaults.anchorEvidenceChecksumAlgorithm,
+      ),
+      getDocument: (documentId) => {
+        const target = this.#documentTargets.get(documentId);
+        return target === undefined
+          ? undefined
+          : Object.freeze({
+              workId: target.workId,
+              documentId: target.documentId,
+              currentRevisionId: target.currentRevisionId,
+              text: target.text,
+            });
+      },
+      authorizeContext: (request) =>
+        this.#authorizeAssistantContextAccessSerially(request),
+      resolveEvidenceAnchor: async (request) => {
+        const target = this.#documentTargets.get(request.documentId);
+        if (target === undefined) {
+          return Object.freeze({
+            documentRevisionId: request.sourceDocumentRevisionId,
+            integrity: "broken" as const,
+            range: null,
+          });
+        }
+        if (target.workId !== request.workId) {
+          throw new Error(
+            `Continuity Anchor document is outside Work: ${request.anchorId}`,
+          );
+        }
+        const resolver = new ResolveAnchor({
+          catalog: createCatalogFromStoredRows(
+            readStoredDocumentRows(this.#database),
+          ),
+          revisionStore: this.#revisionStore,
+          reader: this.#ledger,
+          describeEvidence: createNodeCryptoAnchorEvidenceDescriptor(
+            this.#options.defaults.anchorEvidenceChecksumAlgorithm,
+          ),
+        });
+        const resolution = await resolver.execute({
+          workId: request.workId,
+          anchorId: request.anchorId,
+          targetRevisionId: target.currentRevisionId,
+        });
+        return Object.freeze({
+          documentRevisionId: target.currentRevisionId,
+          integrity: resolution.status === "resolved"
+            ? "resolved" as const
+            : resolution.status === "needsReview"
+              ? "needsReview" as const
+              : "broken" as const,
+          range: resolution.status === "resolved"
+            ? Object.freeze({
+                from: resolution.range.startOffset,
+                to: resolution.range.endOffset,
+              })
+            : null,
+        });
+      },
+      ...(this.#options.continuityReview === undefined
+        ? {}
+        : { connector: this.#options.continuityReview }),
+    });
+    this.#characterKnowledgeService = createLocalCharacterKnowledgeService({
+      database: this.#database,
+      ledger: this.#ledger,
+      schemaVersion: LOCAL_WORKSPACE_LEDGER_SCHEMA_VERSION,
+      anchorPolicy: this.#options.defaults.anchorPolicy,
+      describeAnchorEvidence: createNodeCryptoAnchorEvidenceDescriptor(
+        this.#options.defaults.anchorEvidenceChecksumAlgorithm,
+      ),
+      getDocument: (documentId) => {
+        const target = this.#documentTargets.get(documentId);
+        return target === undefined
+          ? undefined
+          : Object.freeze({
+              workId: target.workId,
+              documentId: target.documentId,
+              currentRevisionId: target.currentRevisionId,
+              text: target.text,
+            });
+      },
+      resolveEvidenceAnchor: async (request) => {
+        const target = this.#documentTargets.get(request.documentId);
+        if (target === undefined) {
+          return Object.freeze({
+            documentRevisionId: request.sourceDocumentRevisionId,
+            integrity: "broken" as const,
+            range: null,
+          });
+        }
+        if (target.workId !== request.workId) {
+          throw new Error(
+            `CharacterKnowledge Anchor document is outside Work: ${request.anchorId}`,
+          );
+        }
+        const resolver = new ResolveAnchor({
+          catalog: createCatalogFromStoredRows(
+            readStoredDocumentRows(this.#database),
+          ),
+          revisionStore: this.#revisionStore,
+          reader: this.#ledger,
+          describeEvidence: createNodeCryptoAnchorEvidenceDescriptor(
+            this.#options.defaults.anchorEvidenceChecksumAlgorithm,
+          ),
+        });
+        const resolution = await resolver.execute({
+          workId: request.workId,
+          anchorId: request.anchorId,
+          targetRevisionId: target.currentRevisionId,
+        });
+        return Object.freeze({
+          documentRevisionId: target.currentRevisionId,
+          integrity: resolution.status === "resolved"
+            ? "resolved" as const
+            : resolution.status === "needsReview"
+              ? "needsReview" as const
+              : "broken" as const,
+          range: resolution.status === "resolved"
+            ? Object.freeze({
+                from: resolution.range.startOffset,
+                to: resolution.range.endOffset,
+              })
+            : null,
+        });
+      },
+    });
+    this.#contextPlanner = createLocalContextPlanner({
+      database: this.#database,
+      ledger: this.#ledger,
+    });
+    this.#narrativeDigestService = createLocalNarrativeDigestService({
+      database: this.#database,
+      ledger: this.#ledger,
+      contextPlanner: this.#contextPlanner,
+      getDocument: (documentId) => {
+        const target = this.#documentTargets.get(documentId);
+        return target === undefined
+          ? undefined
+          : Object.freeze({
+              workId: target.workId,
+              documentId: target.documentId,
+              currentRevisionId: target.currentRevisionId,
+              text: target.text,
+            });
+      },
+      authorizeContext: (request) =>
+        this.#authorizeAssistantContextAccessSerially(request),
+      ...(this.#options.narrativeDigest === undefined
+        ? {}
+        : { connector: this.#options.narrativeDigest }),
+    });
+  }
+
+  async initializeSceneMetadataBindings(): Promise<void> {
+    this.#assertOpen();
+    for (const work of this.#catalog.works) {
+      await this.#reconcileSceneMetadataBindingsSerially(work.workId);
     }
   }
 
@@ -4504,6 +5270,10 @@ class DefaultLocalWorkspaceRuntime
     const command = parseActivateWorkspaceLocationCommand(value);
     const execution = this.#createPending.then(async () => {
       await this.#savePending;
+      const loadedActivation = this.#activateLoadedDocument(command);
+      if (loadedActivation !== null) {
+        return loadedActivation;
+      }
       await this.#reload(command);
       return this.#catalog;
     });
@@ -4512,6 +5282,47 @@ class DefaultLocalWorkspaceRuntime
       () => undefined,
     );
     return execution;
+  }
+
+  #activateLoadedDocument(
+    command: ActivateWorkspaceLocationCommand,
+  ): WorkspaceCatalogProjection | null {
+    if (
+      command.documentId === null ||
+      command.workId !== this.#catalog.activeWorkId
+    ) {
+      return null;
+    }
+    const work = this.#catalog.works.find(
+      (candidate) => candidate.workId === command.workId,
+    );
+    const catalogDocument = work?.documents.find(
+      (document) => document.documentId === command.documentId,
+    );
+    const loadedDocument = this.#documentProfile.documents.find(
+      (document) =>
+        document.workId === command.workId &&
+        document.documentId === command.documentId,
+    );
+    if (
+      work === undefined ||
+      catalogDocument === undefined ||
+      loadedDocument === undefined
+    ) {
+      throw new Error(
+        `Work/document boundary violation: ${command.workId}/${command.documentId}`,
+      );
+    }
+    this.#catalog = parseWorkspaceCatalogProjection({
+      ...this.#catalog,
+      activeWorkId: command.workId,
+      activeDocumentId: command.documentId,
+    });
+    this.#documentProfile = Object.freeze({
+      ...this.#documentProfile,
+      initialDocumentId: command.documentId,
+    });
+    return this.#catalog;
   }
 
   renameWork(value: unknown): Promise<WorkspaceCatalogProjection> {
@@ -4876,6 +5687,34 @@ class DefaultLocalWorkspaceRuntime
     );
   }
 
+  listSceneCanonContexts(value: unknown): Promise<SceneCanonContextListProjection> {
+    this.#assertOpen();
+    const command=parseListSceneCanonContextsCommand(value);
+    return Promise.all([this.#createPending,this.#savePending]).then(() =>
+      listLocalSceneCanonContexts(this.#database,command)
+    );
+  }
+
+  finalizeSceneCanonCheck(value:unknown):Promise<SceneCanonCheckProjection>{
+    this.#assertOpen();const command=parseFinalizeSceneCanonCheckCommand(value);
+    const execution=this.#createPending.then(async()=>{
+      await this.#savePending;
+      let projection=await this.#listSceneProjectionSerially({schemaVersion:1,workId:command.workId});
+      let scene=projection.scenes.find((candidate)=>candidate.sceneKey===command.sceneKey&&candidate.documentId===command.documentId);
+      if(scene===undefined||scene.range===null||scene.integrity!=="resolved"||scene.documentRevisionId!==command.documentRevisionId||scene.range.start!==command.from||scene.range.end!==command.to)throw new Error("Scene Canon check source changed");
+      if(scene.sceneIdentity===undefined){
+        const prepared=this.#prepareSceneIdentityRecords(scene,`scene-canon-check:${randomUUID()}`,new Date().toISOString());
+        await this.#ledger.transaction(async(transaction)=>{for(const record of prepared.records)transaction.write(record);});
+        projection=await this.#listSceneProjectionSerially({schemaVersion:1,workId:command.workId});
+        scene=projection.scenes.find((candidate)=>candidate.sceneKey===command.sceneKey&&candidate.documentId===command.documentId);
+      }
+      const sceneId=scene?.sceneIdentity?.sceneId;
+      if(scene===undefined||sceneId===undefined)throw new Error("Stable Scene identity was not finalized");
+      return parseSceneCanonCheckProjection({schemaVersion:1,workId:command.workId,sceneId,sceneKey:scene.sceneKey,sourceRange:{documentId:scene.documentId,documentRevisionId:scene.documentRevisionId,from:command.from,to:command.to}});
+    });
+    this.#createPending=execution.then(()=>undefined,()=>undefined);return execution;
+  }
+
   updateSceneRuleSet(value: unknown): Promise<SceneProjectionList> {
     this.#assertOpen();
     const command = parseUpdateSceneRuleSetCommand(value);
@@ -4896,6 +5735,78 @@ class DefaultLocalWorkspaceRuntime
     const execution = this.#createPending.then(async () => {
       await this.#savePending;
       return this.#setSceneEventOverrideSerially(command);
+    });
+    this.#createPending = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    return execution;
+  }
+
+  rebindSceneMetadata(value: unknown): Promise<SceneMetadataBindingProjection> {
+    this.#assertOpen();
+    const command = parseRebindSceneMetadataCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#rebindSceneMetadataSerially(command);
+    });
+    this.#createPending = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    return execution;
+  }
+
+  prepareSceneDeletion(value: unknown): Promise<SceneDeletionPreview> {
+    this.#assertOpen();
+    const command = parsePrepareSceneDeletionCommand(value);
+    return Promise.all([this.#createPending, this.#savePending]).then(() =>
+      this.#prepareSceneDeletionSerially(command),
+    );
+  }
+
+  deleteScene(value: unknown): Promise<SceneDeletionReceipt> {
+    this.#assertOpen();
+    const command = parseDeleteSceneCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#deleteSceneSerially(command);
+    });
+    this.#createPending = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    return execution;
+  }
+
+  listSceneTrash(value: unknown): Promise<SceneTrashListProjection> {
+    this.#assertOpen();
+    const command = parseListSceneTrashCommand(value);
+    return Promise.all([this.#createPending, this.#savePending]).then(() =>
+      this.#listSceneTrashSerially(command),
+    );
+  }
+
+  restoreSceneTrash(value: unknown): Promise<SceneDeletionReceipt> {
+    this.#assertOpen();
+    const command = parseRestoreSceneTrashCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#restoreSceneTrashSerially(command, "restored");
+    });
+    this.#createPending = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    return execution;
+  }
+
+  undoSceneDeletion(value: unknown): Promise<SceneDeletionReceipt> {
+    this.#assertOpen();
+    const command = parseUndoSceneDeletionCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#restoreSceneTrashSerially(command, "undone");
     });
     this.#createPending = execution.then(
       () => undefined,
@@ -4960,6 +5871,64 @@ class DefaultLocalWorkspaceRuntime
     const execution = this.#createPending.then(async () => {
       await this.#savePending;
       return this.#retireFragmentSerially(command);
+    });
+    this.#createPending = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    return execution;
+  }
+
+  createManuscriptAnnotation(
+    value: unknown,
+  ): Promise<ManuscriptAnnotationProjection> {
+    this.#assertOpen();
+    const command = parseCreateManuscriptAnnotationCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#createManuscriptAnnotationSerially(command);
+    });
+    this.#createPending = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    return execution;
+  }
+
+  listManuscriptAnnotations(
+    value: unknown,
+  ): Promise<ManuscriptAnnotationListProjection> {
+    this.#assertOpen();
+    const command = parseListManuscriptAnnotationsCommand(value);
+    return Promise.all([this.#createPending, this.#savePending]).then(() =>
+      this.#listManuscriptAnnotationsSerially(command)
+    );
+  }
+
+  updateManuscriptAnnotation(
+    value: unknown,
+  ): Promise<ManuscriptAnnotationProjection> {
+    this.#assertOpen();
+    const command = parseUpdateManuscriptAnnotationCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#updateManuscriptAnnotationSerially(command);
+    });
+    this.#createPending = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    return execution;
+  }
+
+  retireManuscriptAnnotation(
+    value: unknown,
+  ): Promise<ManuscriptAnnotationProjection> {
+    this.#assertOpen();
+    const command = parseRetireManuscriptAnnotationCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#retireManuscriptAnnotationSerially(command);
     });
     this.#createPending = execution.then(
       () => undefined,
@@ -5237,6 +6206,65 @@ class DefaultLocalWorkspaceRuntime
       () => undefined,
       () => undefined,
     );
+    return execution;
+  }
+
+  createPublishingFormTemplate(
+    value: unknown,
+  ): Promise<PublishingFormTemplateProjection> {
+    this.#assertOpen();
+    const command = parseCreatePublishingFormTemplateCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#createPublishingFormTemplateSerially(command);
+    });
+    this.#createPending = execution.then(() => undefined, () => undefined);
+    return execution;
+  }
+
+  listPublishingFormTemplates(
+    value: unknown,
+  ): Promise<PublishingFormTemplateListProjection> {
+    this.#assertOpen();
+    parseListPublishingFormTemplatesCommand(value);
+    return Promise.all([this.#createPending, this.#savePending]).then(() =>
+      this.#listPublishingFormTemplatesSerially(),
+    );
+  }
+
+  updatePublishingFormTemplate(
+    value: unknown,
+  ): Promise<PublishingFormTemplateProjection> {
+    this.#assertOpen();
+    const command = parseUpdatePublishingFormTemplateCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#updatePublishingFormTemplateSerially(command);
+    });
+    this.#createPending = execution.then(() => undefined, () => undefined);
+    return execution;
+  }
+
+  listPublishingFormResponses(
+    value: unknown,
+  ): Promise<PublishingFormResponseListProjection> {
+    this.#assertOpen();
+    const command = parseListPublishingFormResponsesCommand(value);
+    return Promise.all([this.#createPending, this.#savePending]).then(() =>
+      this.#listPublishingFormResponsesSerially(command),
+    );
+  }
+
+  savePublishingFormResponse(
+    value: unknown,
+  ): Promise<PublishingFormResponseProjection> {
+    this.#assertOpen();
+    const command = parseSavePublishingFormResponseCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#savePublishingFormResponseSerially(command);
+    });
+    this.#createPending = execution.then(() => undefined, () => undefined);
     return execution;
   }
 
@@ -6111,6 +7139,13 @@ class DefaultLocalWorkspaceRuntime
     );
   }
 
+  planWorkSnapshotSceneSelection(value:unknown):Promise<WorkSnapshotSceneSelectionPlan>{
+    this.#assertOpen();const command=parsePlanWorkSnapshotSceneSelectionCommand(value);
+    return Promise.all([this.#createPending,this.#savePending]).then(()=>
+      this.#planWorkSnapshotSceneSelectionSerially(command)
+    );
+  }
+
   getWorkRecordsGoals(value: unknown): Promise<WorkRecordsGoalsProjection> {
     this.#assertOpen();
     const command = parseGetWorkRecordsGoalsCommand(value);
@@ -6323,6 +7358,32 @@ class DefaultLocalWorkspaceRuntime
     return execution;
   }
 
+  getWorkSceneAnalysisSettings(
+    value: unknown,
+  ): Promise<WorkSceneAnalysisSettingsProjection> {
+    this.#assertOpen();
+    const command = parseGetWorkSceneAnalysisSettingsCommand(value);
+    return Promise.all([this.#createPending, this.#savePending]).then(() =>
+      this.#getWorkSceneAnalysisSettingsSerially(command.workId),
+    );
+  }
+
+  saveWorkSceneAnalysisSettings(
+    value: unknown,
+  ): Promise<WorkSceneAnalysisSettingsProjection> {
+    this.#assertOpen();
+    const command = parseSaveWorkSceneAnalysisSettingsCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#saveWorkSceneAnalysisSettingsSerially(command);
+    });
+    this.#createPending = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    return execution;
+  }
+
   getWorkInspirationSettings(
     value: unknown,
   ): Promise<WorkInspirationSettingsProjection> {
@@ -6479,6 +7540,634 @@ class DefaultLocalWorkspaceRuntime
       () => undefined,
       () => undefined,
     );
+    return execution;
+  }
+
+  runCanonReview(value: unknown): Promise<CanonReviewResult> {
+    this.#assertOpen();
+    const command = parseRunCanonReviewCommand(value);
+    const preparation = this.#createPending.then(async () => {
+      await this.#savePending;
+      const connector = this.#options.canonReview;
+      if (connector === undefined || !connector.isConnected()) {
+        return Object.freeze({
+          prepared: this.#canonService.prepareReview(command),
+          context: null,
+        });
+      }
+      const startedAt = new Date().toISOString();
+      const planStarted = Date.now();
+      const plan = this.#contextPlanner.plan({
+        schemaVersion: 1,
+        workId: command.workId,
+        capability: "canon.review",
+        sourceRange: command.sourceRange,
+        sceneId: null,
+        povCharacterId: null,
+        userQuery: "",
+        tokenBudget: connector.contextTokenBudget,
+      });
+      const planDurationMs = Date.now() - planStarted;
+      if (plan.status === "required-context-over-budget") {
+        throw new Error(
+          `required-context-over-budget: ${plan.requiredTokenCount}/${plan.tokenBudget}`,
+        );
+      }
+      const authorizeStarted = Date.now();
+      const prepared = this.#canonService.prepareReview(command);
+      const authorizeDurationMs = Date.now() - authorizeStarted;
+      if ("result" in prepared) return Object.freeze({ prepared, context: null });
+      const manifestStarted = Date.now();
+      const manifest = await this.#contextPlanner.recordManifest({
+        workId: command.workId,
+        receiptId: prepared.contextReceiptId,
+        plan,
+      });
+      return Object.freeze({
+        prepared,
+        context: Object.freeze({
+          manifest,
+          startedAt,
+          planDurationMs,
+          authorizeDurationMs,
+          manifestPersistDurationMs: Date.now() - manifestStarted,
+        }),
+      });
+    });
+    this.#createPending = preparation.then(
+      () => undefined,
+      () => undefined,
+    );
+    return preparation.then(async ({ prepared, context }) => {
+      if ("result" in prepared) return prepared.result;
+      const connectorStarted = Date.now();
+      const executed = await prepared.execute();
+      const connectorDurationMs = Date.now() - connectorStarted;
+      const recording = this.#createPending.then(async () => {
+        await this.#savePending;
+        const persistStarted = Date.now();
+        const result = await this.#canonService.recordReview(prepared, executed);
+        const candidatePersistDurationMs = Date.now() - persistStarted;
+        if (context !== null) {
+          await this.#contextPlanner.recordActivity({
+            workId: command.workId,
+            receiptId: prepared.contextReceiptId,
+            manifestId: context.manifest.manifestId,
+            providerId: executed.providerId,
+            modelId: executed.modelId,
+            startedAt: context.startedAt,
+            completedAt: new Date().toISOString(),
+            stageDurationsMs: {
+              plan: context.planDurationMs,
+              authorize: context.authorizeDurationMs,
+              connector: connectorDurationMs,
+              persist: context.manifestPersistDurationMs + candidatePersistDurationMs,
+            },
+            candidateCount: result.status === "candidate"
+              ? result.candidate.items.length
+              : 0,
+          });
+        }
+        return result;
+      });
+      this.#createPending = recording.then(
+        () => undefined,
+        () => undefined,
+      );
+      return recording;
+    });
+  }
+
+  listCanonReviewCandidates(
+    value: unknown,
+  ): Promise<CanonReviewCandidateList> {
+    this.#assertOpen();
+    const command = parseListCanonReviewCandidatesCommand(value);
+    return Promise.all([this.#createPending, this.#savePending]).then(() =>
+      this.#canonService.list(command)
+    );
+  }
+
+  updateCanonReviewItem(value: unknown): Promise<CanonReviewCandidate> {
+    this.#assertOpen();
+    const command = parseUpdateCanonReviewItemCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#canonService.updateItem(command);
+    });
+    this.#createPending = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    return execution;
+  }
+
+  resolveCanonReviewItemTarget(value: unknown): Promise<CanonReviewCandidate> {
+    this.#assertOpen();
+    const command = parseResolveCanonReviewItemTargetCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#canonService.resolveTarget(command);
+    });
+    this.#createPending = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    return execution;
+  }
+
+  decideCanonReviewItem(value: unknown): Promise<CanonReviewDecisionResult> {
+    this.#assertOpen();
+    const command = parseDecideCanonReviewItemCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#canonService.decide(command);
+    });
+    this.#createPending = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    return execution;
+  }
+
+  createContinuityThread(value: unknown): Promise<ContinuityThreadProjection> {
+    this.#assertOpen();
+    const command = parseCreateContinuityThreadCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#continuityService.create(command);
+    });
+    this.#createPending = execution.then(() => undefined, () => undefined);
+    return execution;
+  }
+
+  updateContinuityThread(value: unknown): Promise<ContinuityThreadProjection> {
+    this.#assertOpen();
+    const command = parseUpdateContinuityThreadCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#continuityService.update(command);
+    });
+    this.#createPending = execution.then(() => undefined, () => undefined);
+    return execution;
+  }
+
+  listContinuityThreads(value: unknown): Promise<ContinuityOverviewProjection> {
+    this.#assertOpen();
+    const command = parseListContinuityThreadsCommand(value);
+    return Promise.all([this.#createPending, this.#savePending]).then(() =>
+      this.#continuityService.list(command)
+    );
+  }
+
+  resolveContinuityThread(value: unknown): Promise<ContinuityThreadProjection> {
+    this.#assertOpen();
+    const command = parseResolveContinuityThreadCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#continuityService.resolve(command);
+    });
+    this.#createPending = execution.then(() => undefined, () => undefined);
+    return execution;
+  }
+
+  dismissContinuityThread(value: unknown): Promise<ContinuityThreadProjection> {
+    this.#assertOpen();
+    const command = parseDismissContinuityThreadCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#continuityService.dismiss(command);
+    });
+    this.#createPending = execution.then(() => undefined, () => undefined);
+    return execution;
+  }
+
+  runContinuityReview(value: unknown): Promise<ContinuityReviewResult> {
+    this.#assertOpen();
+    const command = parseRunContinuityReviewCommand(value);
+    const preparation = this.#createPending.then(async () => {
+      await this.#savePending;
+      const connector = this.#options.continuityReview;
+      if (connector === undefined || !connector.isConnected()) {
+        return Object.freeze({
+          prepared: this.#continuityService.prepareReview(command),
+          context: null,
+        });
+      }
+      const startedAt = new Date().toISOString();
+      const planStarted = Date.now();
+      const plan = this.#contextPlanner.plan({
+        schemaVersion: 1,
+        workId: command.workId,
+        capability: "continuity.review",
+        sourceRange: command.sourceRange,
+        sceneId: null,
+        povCharacterId: null,
+        userQuery: "",
+        tokenBudget: connector.contextTokenBudget,
+      });
+      const planDurationMs = Date.now() - planStarted;
+      if (plan.status === "required-context-over-budget") {
+        throw new Error(
+          `required-context-over-budget: ${plan.requiredTokenCount}/${plan.tokenBudget}`,
+        );
+      }
+      const authorizeStarted = Date.now();
+      const prepared = this.#continuityService.prepareReview(command);
+      const authorizeDurationMs = Date.now() - authorizeStarted;
+      if ("result" in prepared) return Object.freeze({ prepared, context: null });
+      const manifestStarted = Date.now();
+      const manifest = await this.#contextPlanner.recordManifest({
+        workId: command.workId,
+        receiptId: prepared.contextReceiptId,
+        plan,
+      });
+      return Object.freeze({
+        prepared,
+        context: Object.freeze({
+          manifest,
+          startedAt,
+          planDurationMs,
+          authorizeDurationMs,
+          manifestPersistDurationMs: Date.now() - manifestStarted,
+        }),
+      });
+    });
+    this.#createPending = preparation.then(() => undefined, () => undefined);
+    return preparation.then(async ({ prepared, context }) => {
+      if ("result" in prepared) return prepared.result;
+      const connectorStarted = Date.now();
+      const executed = await prepared.execute();
+      const connectorDurationMs = Date.now() - connectorStarted;
+      const recording = this.#createPending.then(async () => {
+        await this.#savePending;
+        const persistStarted = Date.now();
+        const result = await this.#continuityService.recordReview(prepared, executed);
+        const candidatePersistDurationMs = Date.now() - persistStarted;
+        if (context !== null) {
+          await this.#contextPlanner.recordActivity({
+            workId: command.workId,
+            receiptId: prepared.contextReceiptId,
+            manifestId: context.manifest.manifestId,
+            providerId: executed.providerId,
+            modelId: executed.modelId,
+            startedAt: context.startedAt,
+            completedAt: new Date().toISOString(),
+            stageDurationsMs: {
+              plan: context.planDurationMs,
+              authorize: context.authorizeDurationMs,
+              connector: connectorDurationMs,
+              persist: context.manifestPersistDurationMs + candidatePersistDurationMs,
+            },
+            candidateCount: result.status === "candidate"
+              ? result.candidate.items.length
+              : 0,
+          });
+        }
+        return result;
+      });
+      this.#createPending = recording.then(() => undefined, () => undefined);
+      return recording;
+    });
+  }
+
+  listContinuityReviewCandidates(
+    value: unknown,
+  ): Promise<ContinuityReviewCandidateList> {
+    this.#assertOpen();
+    const command = parseListContinuityReviewCandidatesCommand(value);
+    return Promise.all([this.#createPending, this.#savePending]).then(() =>
+      this.#continuityService.listCandidates(command)
+    );
+  }
+
+  updateContinuityReviewItem(value: unknown): Promise<ContinuityReviewCandidate> {
+    this.#assertOpen();
+    const command = parseUpdateContinuityReviewItemCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#continuityService.updateItem(command);
+    });
+    this.#createPending = execution.then(() => undefined, () => undefined);
+    return execution;
+  }
+
+  decideContinuityReviewItem(
+    value: unknown,
+  ): Promise<ContinuityReviewDecisionResult> {
+    this.#assertOpen();
+    const command = parseDecideContinuityReviewItemCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#continuityService.decide(command);
+    });
+    this.#createPending = execution.then(() => undefined, () => undefined);
+    return execution;
+  }
+
+  createCharacterKnowledge(value: unknown): Promise<CharacterKnowledgeProjection> {
+    this.#assertOpen();
+    const command = parseCreateCharacterKnowledgeCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#characterKnowledgeService.create(command);
+    });
+    this.#createPending = execution.then(() => undefined, () => undefined);
+    return execution;
+  }
+
+  updateCharacterKnowledge(value: unknown): Promise<CharacterKnowledgeProjection> {
+    this.#assertOpen();
+    const command = parseUpdateCharacterKnowledgeCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#characterKnowledgeService.update(command);
+    });
+    this.#createPending = execution.then(() => undefined, () => undefined);
+    return execution;
+  }
+
+  supersedeCharacterKnowledge(value: unknown): Promise<CharacterKnowledgeProjection> {
+    this.#assertOpen();
+    const command = parseSupersedeCharacterKnowledgeCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#characterKnowledgeService.supersede(command);
+    });
+    this.#createPending = execution.then(() => undefined, () => undefined);
+    return execution;
+  }
+
+  retireCharacterKnowledge(value: unknown): Promise<CharacterKnowledgeProjection> {
+    this.#assertOpen();
+    const command = parseRetireCharacterKnowledgeCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#characterKnowledgeService.retire(command);
+    });
+    this.#createPending = execution.then(() => undefined, () => undefined);
+    return execution;
+  }
+
+  listCharacterKnowledge(value: unknown): Promise<CharacterKnowledgeListProjection> {
+    this.#assertOpen();
+    const command = parseListCharacterKnowledgeCommand(value);
+    return Promise.all([this.#createPending, this.#savePending]).then(() =>
+      this.#characterKnowledgeService.list(command)
+    );
+  }
+
+  projectPovCharacterKnowledge(value: unknown): Promise<PovKnowledgeContextProjection> {
+    this.#assertOpen();
+    const command = parseProjectPovKnowledgeCommand(value);
+    return Promise.all([this.#createPending, this.#savePending]).then(() =>
+      this.#characterKnowledgeService.projectPov(command)
+    );
+  }
+
+  listAssistantEntityContextPolicies(
+    value: unknown,
+  ): Promise<AssistantEntityContextPolicyList> {
+    this.#assertOpen();
+    const command = parseListAssistantEntityContextPoliciesCommand(value);
+    return Promise.all([this.#createPending, this.#savePending]).then(() =>
+      this.#contextPlanner.listPolicies(command)
+    );
+  }
+
+  saveAssistantEntityContextPolicy(
+    value: unknown,
+  ): Promise<AssistantEntityContextPolicyProjection> {
+    this.#assertOpen();
+    const command = parseSaveAssistantEntityContextPolicyCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#contextPlanner.savePolicy(command);
+    });
+    this.#createPending = execution.then(() => undefined, () => undefined);
+    return execution;
+  }
+
+  planAssistantContext(value: unknown): Promise<AssistantContextPlanProjection> {
+    this.#assertOpen();
+    const command = parsePlanAssistantContextInput(value);
+    return Promise.all([this.#createPending, this.#savePending]).then(() =>
+      this.#contextPlanner.plan(command)
+    );
+  }
+
+  listAssistantContextManifests(value: unknown): Promise<AssistantContextManifestList> {
+    this.#assertOpen();
+    const command = parseListAssistantContextManifestsCommand(value);
+    return Promise.all([this.#createPending, this.#savePending]).then(() =>
+      this.#contextPlanner.listManifests(command)
+    );
+  }
+
+  listAssistantContextActivities(value: unknown): Promise<AssistantContextActivityList> {
+    this.#assertOpen();
+    const command = parseListAssistantContextActivitiesCommand(value);
+    return Promise.all([this.#createPending, this.#savePending]).then(() =>
+      this.#contextPlanner.listActivities(command)
+    );
+  }
+
+  generateNarrativeDigest(value: unknown): Promise<NarrativeDigestResult> {
+    this.#assertOpen();
+    const command = parseGenerateNarrativeDigestCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#narrativeDigestService.generate(command);
+    });
+    this.#createPending = execution.then(() => undefined,() => undefined);
+    return execution;
+  }
+
+  generateSceneNarrativeDigest(value: unknown): Promise<NarrativeDigestResult> {
+    this.#assertOpen();
+    const command = parseGenerateSceneNarrativeDigestCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#narrativeDigestService.generateScene(command);
+    });
+    this.#createPending = execution.then(() => undefined,() => undefined);
+    return execution;
+  }
+
+  runAutomaticSceneAnalysis(
+    value: unknown,
+  ): Promise<AutomaticSceneAnalysisResult> {
+    this.#assertOpen();
+    const command = parseRunAutomaticSceneAnalysisCommand(value);
+    const execution = this.#sceneAnalysisPending.then(() =>
+      this.#runAutomaticSceneAnalysisSerially(command)
+    );
+    this.#sceneAnalysisPending = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    return execution;
+  }
+
+  async #runAutomaticSceneAnalysisSerially(
+    command: RunAutomaticSceneAnalysisCommand,
+  ): Promise<AutomaticSceneAnalysisResult> {
+    await Promise.all([this.#createPending, this.#savePending]);
+    if (!this.#getWorkSceneAnalysisSettingsSerially(command.workId).settings.enabled) {
+      return parseAutomaticSceneAnalysisResult({
+        schemaVersion: 1,
+        status: "disabled",
+      });
+    }
+    const digestResult = await this.generateSceneNarrativeDigest({
+      schemaVersion: 1,
+      requestId: command.digestRequestId,
+      workId: command.workId,
+      conversationId: command.conversationId,
+      sceneId: command.sceneId,
+      sourceRange: command.sourceRange,
+      trigger: command.trigger,
+    });
+    if (digestResult.status === "login-required") {
+      return parseAutomaticSceneAnalysisResult(digestResult);
+    }
+    if (digestResult.status === "permission-required") {
+      return parseAutomaticSceneAnalysisResult(digestResult);
+    }
+    if (digestResult.status === "context-rejected") {
+      return parseAutomaticSceneAnalysisResult(digestResult);
+    }
+    const digest = digestResult.digest;
+    const ensureRun = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#ensureSceneAnalysisRunSerially(digest);
+    });
+    this.#createPending = ensureRun.then(() => undefined, () => undefined);
+    let run = await ensureRun;
+    if (run.loreStatus === "candidate" || run.loreStatus === "no-change") {
+      return parseAutomaticSceneAnalysisResult({
+        schemaVersion: 1,
+        status: "unchanged",
+        digest,
+        run,
+      });
+    }
+    const recordLoreStatus = (
+      status: SceneAnalysisLoreStatus,
+      candidateId: EntityId<"CanonReviewCandidate"> | null,
+      lastError: string | null,
+    ) => {
+      const recording = this.#createPending.then(async () => {
+        await this.#savePending;
+        return this.#recordSceneAnalysisLoreStatusSerially(
+          run,
+          status,
+          candidateId,
+          lastError,
+        );
+      });
+      this.#createPending = recording.then(() => undefined, () => undefined);
+      return recording;
+    };
+    let canonResult: CanonReviewResult;
+    try {
+      canonResult = await this.runCanonReview({
+        schemaVersion: 1,
+        requestId: command.canonRequestId,
+        workId: command.workId,
+        conversationId: command.conversationId,
+        sourceRange: command.sourceRange,
+        requestedTargetKinds: ["lore-entry"],
+      });
+    } catch (reason) {
+      const message = reason instanceof Error && reason.message.trim().length > 0
+        ? reason.message
+        : "별빛 검토 실행에 실패했습니다.";
+      run = await recordLoreStatus("failed", null, message);
+      return parseAutomaticSceneAnalysisResult({
+        schemaVersion: 1,
+        status: "lore-failed",
+        digest,
+        run,
+      });
+    }
+    if (canonResult.status === "candidate") {
+      run = await recordLoreStatus(
+        "candidate",
+        canonResult.candidate.candidateId,
+        null,
+      );
+      return parseAutomaticSceneAnalysisResult({
+        schemaVersion: 1,
+        status: "completed",
+        digest,
+        run,
+      });
+    }
+    if (canonResult.status === "no-change") {
+      run = await recordLoreStatus("no-change", null, null);
+      return parseAutomaticSceneAnalysisResult({
+        schemaVersion: 1,
+        status: "completed",
+        digest,
+        run,
+      });
+    }
+    if (canonResult.status === "login-required") {
+      run = await recordLoreStatus("login-required", null, null);
+      return parseAutomaticSceneAnalysisResult({
+        schemaVersion: 1,
+        status: "lore-login-required",
+        digest,
+        run,
+      });
+    }
+    if (canonResult.status === "permission-required") {
+      run = await recordLoreStatus("permission-required", null, null);
+      return parseAutomaticSceneAnalysisResult({
+        schemaVersion: 1,
+        status: "lore-permission-required",
+        missing: canonResult.missing,
+        destinationId: canonResult.destinationId,
+        digest,
+        run,
+      });
+    }
+    run = await recordLoreStatus("context-rejected", null, null);
+    return parseAutomaticSceneAnalysisResult({
+      schemaVersion: 1,
+      status: "lore-context-rejected",
+      reason: canonResult.reason,
+      documentId: canonResult.documentId,
+      digest,
+      run,
+    });
+  }
+
+  listSceneAnalysisRuns(value: unknown): Promise<SceneAnalysisRunListProjection> {
+    this.#assertOpen();
+    const command = parseListSceneAnalysisRunsCommand(value);
+    return Promise.all([this.#createPending, this.#savePending]).then(() =>
+      this.#listSceneAnalysisRunsSerially(command.workId)
+    );
+  }
+
+  listNarrativeDigests(value: unknown): Promise<NarrativeDigestListProjection> {
+    this.#assertOpen();
+    const command = parseListNarrativeDigestsCommand(value);
+    return Promise.all([this.#createPending,this.#savePending]).then(() =>
+      this.#narrativeDigestService.list(command)
+    );
+  }
+
+  regenerateNarrativeDigest(value: unknown): Promise<NarrativeDigestResult> {
+    this.#assertOpen();
+    const command = parseRegenerateNarrativeDigestCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      return this.#narrativeDigestService.regenerate(command);
+    });
+    this.#createPending = execution.then(() => undefined,() => undefined);
     return execution;
   }
 
@@ -6835,6 +8524,79 @@ class DefaultLocalWorkspaceRuntime
     });
   }
 
+  prepareCanonicalMarkdownExport(
+    value: unknown,
+  ): Promise<PreparedCanonicalMarkdownExport> {
+    this.#assertOpen();
+    const command = parseExportCanonicalMarkdownCommand(value);
+    const execution = this.#createPending.then(async () => {
+      await this.#savePending;
+      const work = this.getWorkspaceCatalog().works.find(
+        (candidate) => candidate.workId === command.workId,
+      );
+      if (work === undefined) throw new Error(`Unknown Work: ${command.workId}`);
+      const listCommand = { schemaVersion: 1 as const, workId: command.workId };
+      const [
+        characters,
+        relations,
+        lore,
+        loreForeshadow,
+        events,
+        plots,
+        plotEvents,
+        foreshadow,
+        foreshadowPoints,
+        sceneProjection,
+        sceneAnnotations,
+        continuity,
+        knowledge,
+      ] = await Promise.all([
+        this.#listCharactersSerially(listCommand),
+        this.#listCharacterRelationsSerially(listCommand),
+        this.#listLoreEntriesSerially(listCommand),
+        this.#listLoreForeshadowLinksSerially(listCommand),
+        this.#listEventBlocksSerially(listCommand),
+        this.#listPlotThreadsSerially(listCommand),
+        this.#listPlotEventLinksSerially(listCommand),
+        this.#listForeshadowLinesSerially(listCommand),
+        this.#listForeshadowPointsSerially(listCommand),
+        this.#listSceneProjectionSerially(listCommand),
+        this.#listSceneAnnotationsSerially(listCommand),
+        this.#continuityService.list({ ...listCommand, status: "all" }),
+        this.#characterKnowledgeService.list({
+          ...listCommand,
+          characterId: null,
+          status: "all",
+        }),
+      ]);
+      return createCanonicalMarkdownExportBundle(
+        projectCanonicalMarkdownExportSource({
+          work,
+          documents: work.documents,
+          characters: characters.characters,
+          characterRelations: relations.relations,
+          loreEntries: lore.entries,
+          loreForeshadowLinks: loreForeshadow.links,
+          eventBlocks: events.eventBlocks,
+          eventSources: events.eventSources,
+          plotThreads: plots.plots,
+          plotEventLinks: plotEvents.links,
+          foreshadowLines: foreshadow.lines,
+          foreshadowPoints: foreshadowPoints.points,
+          scenes: sceneProjection.scenes,
+          sceneAnnotations: sceneAnnotations.annotations,
+          continuityThreads: continuity.threads,
+          characterKnowledge: knowledge.entries,
+        }),
+        (canonical) => createHash(LOCAL_WORKSPACE_CONTENT_HASH_ALGORITHM)
+          .update(canonical, "utf8")
+          .digest("hex"),
+      );
+    });
+    this.#createPending = execution.then(() => undefined, () => undefined);
+    return execution;
+  }
+
   getBackupStatus(): Promise<LocalWorkspaceBackupStatusProjection> {
     this.#assertOpen();
     return Promise.all([this.#createPending, this.#savePending]).then(() =>
@@ -7185,6 +8947,232 @@ class DefaultLocalWorkspaceRuntime
       throw new Error(`Work music settings changed before save: ${command.workId}`);
     }
     return this.#getWorkMusicSettingsSerially(command.workId);
+  }
+
+  #getWorkSceneAnalysisSettingsSerially(
+    workId: EntityId<"Work">,
+  ): WorkSceneAnalysisSettingsProjection {
+    if (!this.#catalog.works.some((work) => work.workId === workId)) {
+      throw new Error(`Unknown Work: ${workId}`);
+    }
+    const rows = this.#database.prepare(`
+      SELECT revision,enabled,updated_at AS "updatedAt"
+      FROM work_scene_analysis_settings
+      WHERE work_id=?
+    `).all(workId);
+    if (rows.length === 0) {
+      return createDefaultWorkSceneAnalysisSettingsProjection(workId);
+    }
+    if (rows.length !== 1) {
+      throw new Error(`Work scene analysis settings identity is ambiguous: ${workId}`);
+    }
+    const row = rows[0] ?? {};
+    const enabled = readRequiredInteger(
+      row,
+      "enabled",
+      "Work scene analysis settings row",
+    );
+    if (enabled !== 0 && enabled !== 1) {
+      throw new Error("Work scene analysis settings enabled flag is invalid");
+    }
+    return parseWorkSceneAnalysisSettingsProjection({
+      schemaVersion: 1,
+      workId,
+      revision: readRequiredInteger(
+        row,
+        "revision",
+        "Work scene analysis settings row",
+      ),
+      settings: { enabled: enabled === 1 },
+      updatedAt: readRequiredString(
+        row,
+        "updatedAt",
+        "Work scene analysis settings row",
+      ),
+    });
+  }
+
+  #saveWorkSceneAnalysisSettingsSerially(
+    command: SaveWorkSceneAnalysisSettingsCommand,
+  ): WorkSceneAnalysisSettingsProjection {
+    const current = this.#getWorkSceneAnalysisSettingsSerially(command.workId);
+    if (current.revision !== command.expectedRevision) {
+      throw new Error(
+        `Work scene analysis settings revision conflict: expected ${command.expectedRevision}, current ${current.revision}`,
+      );
+    }
+    const nextRevision = current.revision + 1;
+    const updatedAt = new Date().toISOString();
+    const updated = this.#database.prepare(`
+      INSERT INTO work_scene_analysis_settings (
+        work_id,schema_version,revision,enabled,updated_at
+      ) VALUES (?,1,?,?,?)
+      ON CONFLICT(work_id) DO UPDATE SET
+        revision=excluded.revision,
+        enabled=excluded.enabled,
+        updated_at=excluded.updated_at
+      WHERE work_scene_analysis_settings.revision=?
+    `).run(
+      command.workId,
+      nextRevision,
+      command.settings.enabled ? 1 : 0,
+      updatedAt,
+      command.expectedRevision,
+    );
+    if (Number(updated.changes) !== 1) {
+      throw new Error(
+        `Work scene analysis settings changed before save: ${command.workId}`,
+      );
+    }
+    return this.#getWorkSceneAnalysisSettingsSerially(command.workId);
+  }
+
+  #projectSceneAnalysisRunRow(
+    row: Readonly<Record<string, unknown>>,
+  ): SceneAnalysisRunProjection {
+    return parseSceneAnalysisRunProjection({
+      schemaVersion: 1,
+      runId: readRequiredString(row, "runId", "Scene analysis run row"),
+      revision: readRequiredInteger(row, "revision", "Scene analysis run row"),
+      workId: readRequiredString(row, "workId", "Scene analysis run row"),
+      sceneId: readRequiredString(row, "sceneId", "Scene analysis run row"),
+      digestId: readRequiredString(row, "digestId", "Scene analysis run row"),
+      sourceFingerprint: readRequiredString(
+        row,
+        "sourceFingerprint",
+        "Scene analysis run row",
+      ),
+      trigger: readRequiredString(row, "trigger", "Scene analysis run row"),
+      loreStatus: readRequiredString(
+        row,
+        "loreStatus",
+        "Scene analysis run row",
+      ),
+      canonCandidateId: row.canonCandidateId ?? null,
+      attemptCount: readRequiredInteger(
+        row,
+        "attemptCount",
+        "Scene analysis run row",
+      ),
+      lastError: row.lastError ?? null,
+      createdAt: readRequiredString(row, "createdAt", "Scene analysis run row"),
+      updatedAt: readRequiredString(row, "updatedAt", "Scene analysis run row"),
+    });
+  }
+
+  #listSceneAnalysisRunsSerially(
+    workId: EntityId<"Work">,
+  ): SceneAnalysisRunListProjection {
+    if (!this.#catalog.works.some((work) => work.workId === workId)) {
+      throw new Error(`Unknown Work: ${workId}`);
+    }
+    const runs = this.#database.prepare(`
+      SELECT
+        id AS "runId",
+        revision,
+        work_id AS "workId",
+        scene_id AS "sceneId",
+        digest_id AS "digestId",
+        source_fingerprint AS "sourceFingerprint",
+        trigger_kind AS "trigger",
+        lore_status AS "loreStatus",
+        canon_candidate_id AS "canonCandidateId",
+        attempt_count AS "attemptCount",
+        last_error AS "lastError",
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
+      FROM scene_analysis_runs
+      WHERE work_id=?
+      ORDER BY updated_at DESC,id DESC
+    `).all(workId).map((row) => this.#projectSceneAnalysisRunRow(row));
+    return parseSceneAnalysisRunListProjection({
+      schemaVersion: 1,
+      workId,
+      runs,
+    });
+  }
+
+  #ensureSceneAnalysisRunSerially(
+    digest: NarrativeDigestProjection,
+  ): SceneAnalysisRunProjection {
+    const sceneSource = digest.sceneSource;
+    if (digest.scope.kind !== "scene" || sceneSource === null) {
+      throw new Error("Automatic Scene analysis requires a Scene NarrativeDigest");
+    }
+    const existing = this.#listSceneAnalysisRunsSerially(digest.workId).runs.find(
+      (run) => run.sourceFingerprint === digest.sourceManifestHash,
+    );
+    if (existing !== undefined) {
+      if (
+        existing.sceneId !== sceneSource.sceneId ||
+        existing.digestId !== digest.digestId
+      ) {
+        throw new Error("Scene analysis run source identity is inconsistent");
+      }
+      return existing;
+    }
+    const runId = entityId<"SceneAnalysisRun">(randomUUID());
+    const createdAt = new Date().toISOString();
+    this.#database.prepare(`
+      INSERT INTO scene_analysis_runs (
+        id,schema_version,revision,work_id,scene_id,digest_id,
+        source_fingerprint,trigger_kind,lore_status,canon_candidate_id,
+        attempt_count,last_error,created_at,updated_at
+      ) VALUES (?,1,1,?,?,?,?,?,'pending',NULL,0,NULL,?,?)
+    `).run(
+      runId,
+      digest.workId,
+      sceneSource.sceneId,
+      digest.digestId,
+      digest.sourceManifestHash,
+      sceneSource.trigger,
+      createdAt,
+      createdAt,
+    );
+    const created = this.#listSceneAnalysisRunsSerially(digest.workId).runs.find(
+      (run) => run.runId === runId,
+    );
+    if (created === undefined) {
+      throw new Error(`Created Scene analysis run disappeared: ${runId}`);
+    }
+    return created;
+  }
+
+  #recordSceneAnalysisLoreStatusSerially(
+    current: SceneAnalysisRunProjection,
+    status: SceneAnalysisLoreStatus,
+    canonCandidateId: EntityId<"CanonReviewCandidate"> | null,
+    lastError: string | null,
+  ): SceneAnalysisRunProjection {
+    const updatedAt = new Date().toISOString();
+    const updated = this.#database.prepare(`
+      UPDATE scene_analysis_runs
+      SET revision=revision+1,
+        lore_status=?,
+        canon_candidate_id=?,
+        attempt_count=attempt_count+1,
+        last_error=?,
+        updated_at=?
+      WHERE work_id=? AND id=? AND revision=?
+    `).run(
+      status,
+      canonCandidateId,
+      lastError,
+      updatedAt,
+      current.workId,
+      current.runId,
+      current.revision,
+    );
+    if (Number(updated.changes) !== 1) {
+      throw new Error(`Scene analysis run changed before update: ${current.runId}`);
+    }
+    const projection = this.#listSceneAnalysisRunsSerially(current.workId).runs.find(
+      (run) => run.runId === current.runId,
+    );
+    if (projection === undefined) {
+      throw new Error(`Updated Scene analysis run disappeared: ${current.runId}`);
+    }
+    return projection;
   }
 
   #getWorkInspirationSettingsSerially(
@@ -9967,6 +11955,9 @@ class DefaultLocalWorkspaceRuntime
     const annotationDecision = command.decision;
     let sceneAnnotationId: EntityId<"SceneAnnotation"> | null = null;
     let existingAnnotation: StoredSceneAnnotationRow | null = null;
+    let boundSceneId: EntityId<"Scene"> | null = null;
+    let identityRecords: readonly Poc3LedgerRecord[] = Object.freeze([]);
+    let existingBinding: StoredSceneMetadataBindingRow | null = null;
     if (annotationDecision.kind === "accept") {
       const sceneProjection = await this.#listSceneProjectionSerially({
         schemaVersion: 1,
@@ -10024,6 +12015,18 @@ class DefaultLocalWorkspaceRuntime
       }
       sceneAnnotationId = existingAnnotation?.sceneAnnotationId ??
         entityId<"SceneAnnotation">(randomUUID());
+      const preparedIdentity = this.#prepareSceneIdentityRecords(
+        matchingScene,
+        sceneAnnotationId,
+        changedAt,
+      );
+      boundSceneId = preparedIdentity.sceneId;
+      identityRecords = preparedIdentity.records;
+      existingBinding = this.#readActiveSceneMetadataBinding(
+        command.workId,
+        "annotation",
+        sceneAnnotationId,
+      );
     }
     const nextScenes = Object.freeze(candidate.scenes.map((scene) =>
       scene.sceneItemId === sceneItem.sceneItemId
@@ -10042,9 +12045,11 @@ class DefaultLocalWorkspaceRuntime
         ? "ready" as const
         : "completed" as const;
     await this.#ledger.transaction(async (transaction: StorageTransaction) => {
+      for (const record of identityRecords) transaction.write(record);
       if (
         annotationDecision.kind === "accept" &&
-        sceneAnnotationId !== null
+        sceneAnnotationId !== null &&
+        boundSceneId !== null
       ) {
         const annotationFields = {
           documentId: sceneItem.range.documentId,
@@ -10081,6 +12086,34 @@ class DefaultLocalWorkspaceRuntime
             expectedRevision: existingAnnotation.revision,
             updatedAt: changedAt,
             ...annotationFields,
+          });
+        }
+        if (existingBinding === null) {
+          transaction.write({
+            kind: "sceneMetadataBinding",
+            id: `scene-binding:annotation:${command.workId}:${sceneAnnotationId}`,
+            schemaVersion: 1,
+            revision: 1,
+            createdAt: changedAt,
+            updatedAt: changedAt,
+            workId: command.workId,
+            metadataKind: "annotation",
+            metadataId: sceneAnnotationId,
+            sourceSceneKey: annotationDecision.sceneKey,
+            sceneId: boundSceneId,
+            status: "current",
+          });
+        } else {
+          transaction.write({
+            kind: "sceneMetadataBindingUpdate",
+            id: existingBinding.bindingId,
+            workId: command.workId,
+            expectedRevision: existingBinding.revision,
+            updatedAt: changedAt,
+            sceneId: boundSceneId,
+            status: "current",
+            proposedSceneId: null,
+            lineageOperationId: null,
           });
         }
       }
@@ -10672,13 +12705,44 @@ class DefaultLocalWorkspaceRuntime
         currentAnnotation.revision === prepared.sceneAnnotation.revision
         ? "current" as const
         : "stale" as const;
+    const annotationBinding = this.#readActiveSceneMetadataBinding(
+      prepared.command.workId,
+      "annotation",
+      prepared.sceneAnnotation.sceneAnnotationId,
+    );
+    if (
+      annotationBinding === null ||
+      annotationBinding.status !== "current" ||
+      annotationBinding.sceneId === null ||
+      annotationBinding.sourceSceneKey !== prepared.command.sceneKey
+    ) {
+      throw new Error("Current Scene annotation identity is unavailable");
+    }
+    const annotationSceneId = annotationBinding.sceneId;
     const createdAt = new Date().toISOString();
+    const candidateId = entityId<"SceneMusicQueueCandidate">(randomUUID());
+    const bindingId = `scene-binding:music-queue:${prepared.command.workId}:${candidateId}`;
     const candidate = parseSceneMusicQueueCandidate({
       schemaVersion: 1,
-      candidateId: randomUUID(),
+      candidateId,
       revision: 1,
       workId: prepared.command.workId,
       sceneKey: prepared.command.sceneKey,
+      binding: {
+        schemaVersion: 1,
+        sceneMetadataBindingId: bindingId,
+        revision: 1,
+        workId: prepared.command.workId,
+        metadataKind: "music-queue",
+        metadataId: candidateId,
+        sourceSceneKey: prepared.command.sceneKey,
+        sceneId: annotationSceneId,
+        status: "current",
+        proposedSceneId: null,
+        lineageOperationId: null,
+        createdAt,
+        updatedAt: createdAt,
+      },
       sceneAnnotationId: prepared.sceneAnnotation.sceneAnnotationId,
       sceneAnnotationRevision: prepared.sceneAnnotation.revision,
       providerId: connector.providerId,
@@ -10690,26 +12754,39 @@ class DefaultLocalWorkspaceRuntime
       createdAt,
       updatedAt: createdAt,
     });
-    this.#database.prepare(`
-      INSERT INTO scene_music_queue_candidates (
-        id, schema_version, request_id, revision, work_id, scene_key,
-        scene_annotation_id, scene_annotation_revision, provider_id,
-        query_text, status, options_json, selected_option_id, created_at,
-        updated_at
-      ) VALUES (?, 1, ?, 1, ?, ?, ?, ?, ?, ?, 'ready', ?, NULL, ?, ?)
-    `).run(
-      candidate.candidateId,
-      prepared.command.requestId,
-      candidate.workId,
-      candidate.sceneKey,
-      candidate.sceneAnnotationId,
-      candidate.sceneAnnotationRevision,
-      candidate.providerId,
-      candidate.query,
-      JSON.stringify(candidate.options),
-      candidate.createdAt,
-      candidate.updatedAt,
-    );
+    await this.#ledger.transaction(async (transaction: StorageTransaction) => {
+      transaction.write({
+        kind: "sceneMusicQueueCandidate",
+        id: candidate.candidateId,
+        schemaVersion: 1,
+        requestId: prepared.command.requestId,
+        revision: candidate.revision,
+        createdAt: candidate.createdAt,
+        updatedAt: candidate.updatedAt,
+        workId: candidate.workId,
+        sceneKey: candidate.sceneKey,
+        sceneAnnotationId: candidate.sceneAnnotationId,
+        sceneAnnotationRevision: candidate.sceneAnnotationRevision,
+        providerId: candidate.providerId,
+        query: candidate.query,
+        status: candidate.status,
+        optionsJson: JSON.stringify(candidate.options),
+      });
+      transaction.write({
+        kind: "sceneMetadataBinding",
+        id: bindingId,
+        schemaVersion: 1,
+        revision: 1,
+        createdAt: candidate.createdAt,
+        updatedAt: candidate.updatedAt,
+        workId: candidate.workId,
+        metadataKind: "music-queue",
+        metadataId: candidate.candidateId,
+        sourceSceneKey: candidate.sceneKey,
+        sceneId: annotationSceneId,
+        status: "current",
+      });
+    });
     return parseSceneMusicQueueSearchResult({
       schemaVersion: 1,
       status: "candidate",
@@ -12445,12 +14522,16 @@ class DefaultLocalWorkspaceRuntime
           revision: readRequiredInteger(row, "revision", label),
         };
       });
-    const structureRevisionRefsJson = JSON.stringify(structureRevisionRefs);
+    const sceneProjection=await this.#listSceneProjectionSerially({schemaVersion:1,workId:command.workId});
+    const sceneSegmentsById=new Map<string,Record<string,unknown>>();
+    for(const scene of sceneProjection.scenes){for(const segment of scene.sceneIdentity?.segments??[]){if(segment.range===null||segment.integrity!=="resolved")continue;sceneSegmentsById.set(segment.segmentId,{entityKind:"SceneSnapshotSegment",entityId:segment.segmentId,revision:1,sceneId:segment.sceneId,documentId:segment.documentId,documentRevisionId:segment.documentRevisionId,documentTitle:segment.documentTitle,documentIndex:segment.documentIndex,from:segment.range.start,to:segment.range.end});}}
+    const structureSnapshotEntries=[...structureRevisionRefs,{entityKind:"SceneSnapshotManifest",entityId:command.workId,revision:1},...[...sceneSegmentsById.values()].sort((a,b)=>String(a.entityId).localeCompare(String(b.entityId)))];
+    const structureRevisionRefsJson = JSON.stringify(structureSnapshotEntries);
     const manifest = JSON.stringify({
       schemaVersion: 1,
       workId: command.workId,
       documentRevisions,
-      structureRevisionRefs,
+      structureRevisionRefs:structureSnapshotEntries,
     });
     const manifestHash = createHash(
       LOCAL_WORKSPACE_CONTENT_HASH_ALGORITHM,
@@ -12649,6 +14730,34 @@ class DefaultLocalWorkspaceRuntime
       snapshotDocuments,
       currentDocuments,
     });
+  }
+
+  async #planWorkSnapshotSceneSelectionSerially(
+    command:PlanWorkSnapshotSceneSelectionCommand,
+  ):Promise<WorkSnapshotSceneSelectionPlan>{
+    if(!this.#catalog.works.some((work)=>work.workId===command.workId))throw new Error(`Unknown Work: ${command.workId}`);
+    const rows=this.#database.prepare(`SELECT label,structure_revision_refs_json AS "structureJson" FROM work_snapshots WHERE work_id=? AND id=?`).all(command.workId,command.workSnapshotId);
+    if(rows.length!==1)throw new Error(`Unknown WorkSnapshot for Work: ${command.workSnapshotId}/${command.workId}`);
+    const row=rows[0]!,slotName=readRequiredString(row,"label","WorkSnapshot Scene plan");
+    const structureJson=readRequiredString(row,"structureJson","WorkSnapshot Scene plan");
+    let entries:unknown;try{entries=JSON.parse(structureJson);}catch{throw new Error("WorkSnapshot structure manifest is invalid JSON");}
+    if(!Array.isArray(entries))throw new Error("WorkSnapshot structure manifest must be an array");
+    const records=entries.filter((entry):entry is Record<string,unknown>=>typeof entry==="object"&&entry!==null&&!Array.isArray(entry));
+    const snapshotSceneMetadataAvailable=records.some((entry)=>entry.entityKind==="SceneSnapshotManifest");
+    type StoredSegment=Readonly<{sceneId:EntityId<"Scene">;documentId:EntityId<"Document">;documentRevisionId:EntityId<"DocumentRevision">;documentTitle:string;from:number;to:number}>;
+    const snapshotSegments:StoredSegment[]=records.filter((entry)=>entry.entityKind==="SceneSnapshotSegment").map((entry,index)=>{const label=`WorkSnapshot Scene segment[${index}]`;const from=readRequiredInteger(entry,"from",label),to=readRequiredInteger(entry,"to",label);if(from<0||to<from)throw new Error(`${label} range is invalid`);return Object.freeze({sceneId:entityId<"Scene">(readRequiredString(entry,"sceneId",label)),documentId:entityId<"Document">(readRequiredString(entry,"documentId",label)),documentRevisionId:entityId<"DocumentRevision">(readRequiredString(entry,"documentRevisionId",label)),documentTitle:readRequiredString(entry,"documentTitle",label),from,to});});
+    const currentProjection=await this.#listSceneProjectionSerially({schemaVersion:1,workId:command.workId});
+    const currentBySegment=new Map<string,StoredSegment>();
+    for(const scene of currentProjection.scenes){for(const segment of scene.sceneIdentity?.segments??[]){if(segment.range===null||segment.integrity!=="resolved")continue;currentBySegment.set(segment.segmentId,Object.freeze({sceneId:segment.sceneId,documentId:segment.documentId,documentRevisionId:segment.documentRevisionId,documentTitle:segment.documentTitle,from:segment.range.start,to:segment.range.end}));}}
+    const currentSegments=[...currentBySegment.values()];
+    const materialized=new Map<string,string>();
+    const projectSegments=async(segments:readonly StoredSegment[])=>Promise.all([...segments].sort((a,b)=>String(a.documentId).localeCompare(String(b.documentId))||a.from-b.from).map(async(segment)=>{let text=materialized.get(segment.documentRevisionId);if(text===undefined){const revision=await this.#revisionStore.getRevision(segment.documentRevisionId);if(revision===null||revision.documentId!==segment.documentId)throw new Error(`WorkSnapshot Scene revision is outside Document: ${segment.documentRevisionId}`);text=await this.#revisionStore.materialize(segment.documentRevisionId);materialized.set(segment.documentRevisionId,text);}if(segment.to>text.length)throw new Error(`WorkSnapshot Scene range is outside revision: ${segment.sceneId}`);return{documentId:segment.documentId,documentRevisionId:segment.documentRevisionId,documentTitle:segment.documentTitle,range:{from:segment.from,to:segment.to},excerpt:text.slice(segment.from,segment.to)};}));
+    const snapshotByScene=new Map<EntityId<"Scene">,StoredSegment[]>(),currentByScene=new Map<EntityId<"Scene">,StoredSegment[]>();
+    for(const segment of snapshotSegments){const group=snapshotByScene.get(segment.sceneId)??[];group.push(segment);snapshotByScene.set(segment.sceneId,group);}for(const segment of currentSegments){const group=currentByScene.get(segment.sceneId)??[];group.push(segment);currentByScene.set(segment.sceneId,group);}
+    const sceneIds=[...new Set([...snapshotByScene.keys(),...currentByScene.keys()])].sort((a,b)=>String(a).localeCompare(String(b)));
+    const selected=new Set(command.selectedSceneIds);for(const sceneId of selected){if(!sceneIds.includes(sceneId))throw new Error(`Selected WorkSnapshot Scene is unavailable: ${sceneId}`);}
+    const scenes=[];for(const sceneId of sceneIds){const previous=snapshotByScene.get(sceneId)??[],current=currentByScene.get(sceneId)??[];const fingerprint=(segments:readonly StoredSegment[])=>JSON.stringify([...segments].sort((a,b)=>String(a.documentId).localeCompare(String(b.documentId))||a.from-b.from).map((segment)=>[segment.documentId,segment.documentRevisionId,segment.from,segment.to]));const status=!snapshotSceneMetadataAvailable?"snapshot-structure-unavailable" as const:previous.length===0?"added-after-snapshot" as const:current.length===0?"removed-after-snapshot" as const:fingerprint(previous)===fingerprint(current)?"unchanged" as const:"changed" as const;if(status==="snapshot-structure-unavailable"&&selected.has(sceneId))throw new Error(`Selected WorkSnapshot Scene has no snapshot structure metadata: ${sceneId}`);scenes.push({sceneId,status,selected:selected.has(sceneId),snapshotSegments:await projectSegments(previous),currentSegments:await projectSegments(current)});}
+    return parseWorkSnapshotSceneSelectionPlan({schemaVersion:1,workId:command.workId,workSnapshotId:command.workSnapshotId,slotName,mode:"read-only-selection-plan",automaticMergeAllowed:false,canApply:false,applyCommand:null,snapshotSceneMetadataAvailable,scenes});
   }
 
   async #startWritingSessionSerially(
@@ -12866,9 +14975,15 @@ class DefaultLocalWorkspaceRuntime
   async #listWorkActivitySerially(
     command: ListWorkActivityCommand,
   ): Promise<WorkActivityProjection> {
-    if (!this.#catalog.works.some((work) => work.workId === command.workId)) {
+    const work = this.#catalog.works.find(
+      (candidate) => candidate.workId === command.workId,
+    );
+    if (work === undefined) {
       throw new Error(`Unknown Work: ${command.workId}`);
     }
+    const availableDocumentIds = new Set(
+      work.documents.map((document) => document.documentId),
+    );
     const sessionRows = readStoredWritingSessionRows(
       this.#database,
       command.workId,
@@ -12913,7 +15028,11 @@ class DefaultLocalWorkspaceRuntime
           schemaVersion: 1,
           sessionId: session.sessionId,
           workId: session.workId,
-          documentId: session.documentId,
+          documentId:
+            session.documentId !== null &&
+            availableDocumentIds.has(session.documentId)
+              ? session.documentId
+              : null,
           state: session.state,
           startedAt: session.startedAt,
           endedAt: session.endedAt,
@@ -13904,6 +16023,11 @@ class DefaultLocalWorkspaceRuntime
         `Work/document boundary violation: ${command.workId}/${command.documentId}`,
       );
     }
+    if (target.currentRevisionId !== command.expectedDocumentRevisionId) {
+      throw new Error(
+        `SceneOverride document revision conflict: ${command.documentId}`,
+      );
+    }
     const from = Math.min(command.selection.anchor, command.selection.head);
     const to = Math.max(command.selection.anchor, command.selection.head);
     if (to > target.text.length) {
@@ -13960,6 +16084,94 @@ class DefaultLocalWorkspaceRuntime
       actorRef: work.studioId,
     });
     const sceneIdentityRecords: Poc3LedgerRecord[] = [];
+    const createSceneLineage = (
+      operation: "split" | "merge",
+      parentSceneIds: readonly EntityId<"Scene">[],
+      childSceneIds: readonly EntityId<"Scene">[],
+    ): string => {
+      const lineageOperationId = randomUUID();
+      const uniqueParents = [...new Set(parentSceneIds)];
+      const uniqueChildren = [...new Set(childSceneIds)];
+      sceneIdentityRecords.push({
+        kind: "sceneLineageOperation",
+        id: lineageOperationId,
+        schemaVersion: 1,
+        revision: 1,
+        createdAt,
+        updatedAt: createdAt,
+        workId: command.workId,
+        operation,
+        commandRef: sceneOverrideId,
+      });
+      for (const [ordinal, sceneId] of uniqueParents.entries()) {
+        sceneIdentityRecords.push({
+          kind: "sceneLineageMember",
+          id: randomUUID(),
+          schemaVersion: 1,
+          revision: 1,
+          createdAt,
+          updatedAt: createdAt,
+          workId: command.workId,
+          lineageOperationId,
+          sceneId,
+          role: "parent",
+          ordinal,
+        });
+      }
+      for (const [ordinal, sceneId] of uniqueChildren.entries()) {
+        sceneIdentityRecords.push({
+          kind: "sceneLineageMember",
+          id: randomUUID(),
+          schemaVersion: 1,
+          revision: 1,
+          createdAt,
+          updatedAt: createdAt,
+          workId: command.workId,
+          lineageOperationId,
+          sceneId,
+          role: "child",
+          ordinal,
+        });
+      }
+      return lineageOperationId;
+    };
+    const markSceneMetadataForReview = (
+      parentSceneIds: readonly EntityId<"Scene">[],
+      proposedSceneId: EntityId<"Scene">,
+      lineageOperationId: string,
+    ): void => {
+      const sceneIds = [...new Set(parentSceneIds)];
+      if (sceneIds.length === 0) return;
+      const placeholders = sceneIds.map(() => "?").join(", ");
+      const rows = this.#database.prepare(`
+        SELECT
+          id AS "bindingId",
+          revision,
+          scene_id AS "sceneId"
+        FROM scene_metadata_bindings
+        WHERE
+          work_id = ?
+          AND retired_at IS NULL
+          AND status <> 'detached'
+          AND scene_id IN (${placeholders})
+        ORDER BY created_at, id
+      `).all(command.workId, ...sceneIds);
+      for (const [index, row] of rows.entries()) {
+        const label = `Scene metadata review rows[${index}]`;
+        const sceneId = readRequiredString(row, "sceneId", label);
+        sceneIdentityRecords.push({
+          kind: "sceneMetadataBindingUpdate",
+          id: readRequiredString(row, "bindingId", label),
+          workId: command.workId,
+          expectedRevision: readRequiredInteger(row, "revision", label),
+          updatedAt: createdAt,
+          sceneId,
+          status: "needs-review",
+          proposedSceneId,
+          lineageOperationId,
+        });
+      }
+    };
     if (command.operation === "split") {
       const sceneProjection = await this.#listSceneProjectionSerially({
         schemaVersion: 1,
@@ -14093,6 +16305,16 @@ class DefaultLocalWorkspaceRuntime
           },
         );
       }
+      const lineageOperationId = createSceneLineage(
+        "split",
+        [leftSceneId],
+        [leftSceneId, rightSceneId],
+      );
+      markSceneMetadataForReview(
+        [leftSceneId],
+        leftSceneId,
+        lineageOperationId,
+      );
     } else if (command.operation === "merge") {
       const sceneProjection = await this.#listSceneProjectionSerially({
         schemaVersion: 1,
@@ -14106,7 +16328,7 @@ class DefaultLocalWorkspaceRuntime
             scene.range !== null &&
             scene.range.end === from,
         );
-      let rightScene = sceneProjection.scenes.find(
+      const rightScene = sceneProjection.scenes.find(
         (scene) =>
           scene.documentId === command.documentId &&
           scene.range !== null &&
@@ -14138,12 +16360,25 @@ class DefaultLocalWorkspaceRuntime
         (leftScene.documentId === rightScene.documentId ||
           leftScene.documentIndex + 1 === rightScene.documentIndex)
       ) {
-        const mergedSceneId = leftScene.sceneIdentity?.sceneId ??
-          rightScene.sceneIdentity?.sceneId ??
+        const leftSceneId = leftScene.sceneIdentity?.sceneId ??
           entityId<"Scene">(randomUUID());
+        const rightSceneId = rightScene.sceneIdentity?.sceneId ??
+          entityId<"Scene">(randomUUID());
+        const mergedSceneId = leftSceneId;
+        if (leftScene.sceneIdentity === undefined) {
+          sceneIdentityRecords.push({
+            kind: "sceneIdentity",
+            schemaVersion: 1,
+            revision: 1,
+            createdAt,
+            updatedAt: createdAt,
+            id: leftSceneId,
+            workId: command.workId,
+          });
+        }
         if (
-          leftScene.sceneIdentity === undefined &&
-          rightScene.sceneIdentity === undefined
+          rightScene.sceneIdentity === undefined &&
+          rightSceneId !== leftSceneId
         ) {
           sceneIdentityRecords.push({
             kind: "sceneIdentity",
@@ -14151,7 +16386,7 @@ class DefaultLocalWorkspaceRuntime
             revision: 1,
             createdAt,
             updatedAt: createdAt,
-            id: mergedSceneId,
+            id: rightSceneId,
             workId: command.workId,
           });
         }
@@ -14257,8 +16492,7 @@ class DefaultLocalWorkspaceRuntime
             );
           }
         }
-        const rightSceneId = rightScene.sceneIdentity?.sceneId;
-        if (rightSceneId !== undefined && rightSceneId !== mergedSceneId) {
+        if (rightSceneId !== mergedSceneId) {
           sceneIdentityRecords.push({
             kind: "sceneIdentityRetirement",
             id: rightSceneId,
@@ -14266,6 +16500,19 @@ class DefaultLocalWorkspaceRuntime
             retiredAt: createdAt,
           });
         }
+        const parentSceneIds = rightSceneId === leftSceneId
+          ? [leftSceneId]
+          : [leftSceneId, rightSceneId];
+        const lineageOperationId = createSceneLineage(
+          "merge",
+          parentSceneIds,
+          [mergedSceneId],
+        );
+        markSceneMetadataForReview(
+          parentSceneIds,
+          mergedSceneId,
+          lineageOperationId,
+        );
       }
     } else if (command.operation === "delete") {
       const sceneProjection = await this.#listSceneProjectionSerially({
@@ -14279,10 +16526,28 @@ class DefaultLocalWorkspaceRuntime
           scene.range.end === to,
       );
       if (sourceScene?.sceneIdentity !== undefined) {
-        for (const segment of sourceScene.sceneIdentity.segments) {
+        const activeSegmentRows = this.#database.prepare(`
+          SELECT id AS "segmentId"
+          FROM scene_episode_segments
+          WHERE
+            work_id = ?
+            AND scene_id = ?
+            AND retired_at IS NULL
+          ORDER BY created_at, id
+        `).all(
+          command.workId,
+          sourceScene.sceneIdentity.sceneId,
+        );
+        for (const [index, row] of activeSegmentRows.entries()) {
           sceneIdentityRecords.push({
             kind: "sceneEpisodeSegmentRetirement",
-            id: segment.segmentId,
+            id: entityId<"EpisodeSceneSegment">(
+              readRequiredString(
+                row,
+                "segmentId",
+                `Scene deletion segment rows[${index}]`,
+              ),
+            ),
             workId: command.workId,
             retiredAt: createdAt,
           });
@@ -14660,7 +16925,378 @@ class DefaultLocalWorkspaceRuntime
       parseSceneEventOverrideProjection({
         schemaVersion: 1,
         ...row,
+        binding: this.#projectSceneMetadataBinding(row.binding),
       })));
+  }
+
+  #readActiveSceneMetadataBinding(
+    workId: EntityId<"Work">,
+    metadataKind: StoredSceneMetadataSourceRow["metadataKind"],
+    metadataId: string,
+  ): StoredSceneMetadataBindingRow | null {
+    const rows = this.#database.prepare(`
+      SELECT
+        id AS "bindingId",
+        revision,
+        work_id AS "workId",
+        metadata_kind AS "metadataKind",
+        metadata_id AS "metadataId",
+        source_scene_key AS "sourceSceneKey",
+        scene_id AS "sceneId",
+        status,
+        proposed_scene_id AS "proposedSceneId",
+        lineage_operation_id AS "lineageOperationId",
+        created_at AS "createdAt",
+        updated_at AS "updatedAt",
+        retired_at AS "retiredAt"
+      FROM scene_metadata_bindings
+      WHERE
+        work_id = ?
+        AND metadata_kind = ?
+        AND metadata_id = ?
+        AND retired_at IS NULL
+    `).all(workId, metadataKind, metadataId);
+    if (rows.length === 0) return null;
+    if (rows.length !== 1) {
+      throw new Error(`Scene metadata binding lookup is ambiguous: ${metadataId}`);
+    }
+    const row = rows[0] ?? {};
+    const label = "Scene metadata binding lookup";
+    const status = readRequiredString(row, "status", label);
+    if (
+      status !== "current" &&
+      status !== "needs-review" &&
+      status !== "detached"
+    ) {
+      throw new Error(`${label}.status is invalid`);
+    }
+    const sceneId = readNullableString(row, "sceneId", label);
+    const proposedSceneId = readNullableString(row, "proposedSceneId", label);
+    return Object.freeze({
+      bindingId: readRequiredString(row, "bindingId", label),
+      revision: readRequiredInteger(row, "revision", label),
+      workId: entityId<"Work">(readRequiredString(row, "workId", label)),
+      metadataKind,
+      metadataId: readRequiredString(row, "metadataId", label),
+      sourceSceneKey: readRequiredString(row, "sourceSceneKey", label),
+      sceneId: sceneId === null ? null : entityId<"Scene">(sceneId),
+      status,
+      proposedSceneId: proposedSceneId === null
+        ? null
+        : entityId<"Scene">(proposedSceneId),
+      lineageOperationId: readNullableString(row, "lineageOperationId", label),
+      createdAt: readRequiredString(row, "createdAt", label),
+      updatedAt: readRequiredString(row, "updatedAt", label),
+      retiredAt: null,
+    });
+  }
+
+  #projectSceneMetadataBinding(
+    binding: StoredSceneMetadataBindingRow,
+  ): SceneMetadataBindingProjection {
+    return parseSceneMetadataBindingProjection({
+      schemaVersion: 1,
+      sceneMetadataBindingId: binding.bindingId,
+      revision: binding.revision,
+      workId: binding.workId,
+      metadataKind: binding.metadataKind,
+      metadataId: binding.metadataId,
+      sourceSceneKey: binding.sourceSceneKey,
+      sceneId: binding.sceneId,
+      status: binding.status === "needs-review" ? "needsReview" : binding.status,
+      proposedSceneId: binding.proposedSceneId,
+      lineageOperationId: binding.lineageOperationId,
+      createdAt: binding.createdAt,
+      updatedAt: binding.updatedAt,
+    });
+  }
+
+  #prepareSceneIdentityRecords(
+    scene: SceneProjection,
+    commandRef: string,
+    createdAt: string,
+  ): Readonly<{
+    sceneId: EntityId<"Scene">;
+    records: readonly Poc3LedgerRecord[];
+  }> {
+    if (scene.sceneIdentity !== undefined) {
+      return Object.freeze({
+        sceneId: scene.sceneIdentity.sceneId,
+        records: Object.freeze([]),
+      });
+    }
+    if (scene.integrity !== "resolved" || scene.range === null) {
+      throw new Error(`Scene identity target is unresolved: ${scene.sceneKey}`);
+    }
+    const target = this.#documentTargets.get(scene.documentId);
+    if (
+      target === undefined ||
+      target.workId !== scene.workId ||
+      target.currentRevisionId !== scene.documentRevisionId ||
+      scene.range.end > target.text.length
+    ) {
+      throw new Error(`Scene identity target changed: ${scene.sceneKey}`);
+    }
+    const writingWork = createCatalogFromStoredRows(
+      readStoredDocumentRows(this.#database),
+    ).getWork(scene.workId);
+    if (writingWork === null) {
+      throw new Error(`Unknown Work: ${scene.workId}`);
+    }
+    const sceneId = entityId<"Scene">(randomUUID());
+    const anchor = createAnchorForKnownRevisionContent({
+      meta: {
+        id: entityId<"Anchor">(randomUUID()),
+        schemaVersion: LOCAL_WORKSPACE_LEDGER_SCHEMA_VERSION,
+        revision: 1,
+        createdAt,
+        updatedAt: createdAt,
+      },
+      documentId: scene.documentId,
+      documentRevisionId: target.currentRevisionId,
+      content: target.text,
+      startOffset: scene.range.start,
+      endOffset: scene.range.end,
+      policy: this.#options.defaults.anchorPolicy,
+      commandRef,
+      actorRef: writingWork.studioId,
+      describeEvidence: createNodeCryptoAnchorEvidenceDescriptor(
+        this.#options.defaults.anchorEvidenceChecksumAlgorithm,
+      ),
+    });
+    return Object.freeze({
+      sceneId,
+      records: Object.freeze([
+        Object.freeze({
+          kind: "sceneIdentity" as const,
+          schemaVersion: 1,
+          revision: 1,
+          createdAt,
+          updatedAt: createdAt,
+          id: sceneId,
+          workId: scene.workId,
+        }),
+        createAnchorLedgerRecord(scene.workId, anchor),
+        Object.freeze({
+          kind: "sceneEpisodeSegment" as const,
+          schemaVersion: 1,
+          revision: 1,
+          createdAt,
+          updatedAt: createdAt,
+          id: entityId<"EpisodeSceneSegment">(randomUUID()),
+          workId: scene.workId,
+          sceneId,
+          documentId: scene.documentId,
+          anchorId: anchor.meta.id,
+        }),
+      ]),
+    });
+  }
+
+  async #reconcileSceneMetadataBindingsSerially(
+    workId: EntityId<"Work">,
+  ): Promise<void> {
+    const sourceRows = this.#database.prepare(SCENE_METADATA_SOURCE_ROWS_SQL)
+      .all(workId, workId, workId)
+      .map((row, index): StoredSceneMetadataSourceRow => {
+        const label = `Scene metadata source rows[${index}]`;
+        const metadataKind = readRequiredString(row, "metadataKind", label);
+        if (
+          metadataKind !== "annotation" &&
+          metadataKind !== "event-override" &&
+          metadataKind !== "music-queue"
+        ) {
+          throw new Error(`${label}.metadataKind is invalid`);
+        }
+        return Object.freeze({
+          metadataKind,
+          metadataId: readRequiredString(row, "metadataId", label),
+          workId: entityId<"Work">(readRequiredString(row, "workId", label)),
+          sourceSceneKey: readRequiredString(row, "sourceSceneKey", label),
+          createdAt: readRequiredString(row, "createdAt", label),
+          updatedAt: readRequiredString(row, "updatedAt", label),
+          retiredAt: readNullableString(row, "retiredAt", label),
+        });
+      });
+    if (sourceRows.length === 0) return;
+
+    const bindingRows = this.#database.prepare(SCENE_METADATA_BINDING_ROWS_SQL)
+      .all(workId)
+      .map((row, index): StoredSceneMetadataBindingRow => {
+        const label = `Scene metadata binding rows[${index}]`;
+        const metadataKind = readRequiredString(row, "metadataKind", label);
+        if (
+          metadataKind !== "annotation" &&
+          metadataKind !== "event-override" &&
+          metadataKind !== "music-queue"
+        ) {
+          throw new Error(`${label}.metadataKind is invalid`);
+        }
+        const status = readRequiredString(row, "status", label);
+        if (
+          status !== "current" &&
+          status !== "needs-review" &&
+          status !== "detached"
+        ) {
+          throw new Error(`${label}.status is invalid`);
+        }
+        const sceneId = readNullableString(row, "sceneId", label);
+        const proposedSceneId = readNullableString(row, "proposedSceneId", label);
+        return Object.freeze({
+          bindingId: readRequiredString(row, "bindingId", label),
+          revision: readRequiredInteger(row, "revision", label),
+          workId: entityId<"Work">(readRequiredString(row, "workId", label)),
+          metadataKind,
+          metadataId: readRequiredString(row, "metadataId", label),
+          sourceSceneKey: readRequiredString(row, "sourceSceneKey", label),
+          sceneId: sceneId === null ? null : entityId<"Scene">(sceneId),
+          status,
+          proposedSceneId: proposedSceneId === null
+            ? null
+            : entityId<"Scene">(proposedSceneId),
+          lineageOperationId: readNullableString(
+            row,
+            "lineageOperationId",
+            label,
+          ),
+          createdAt: readRequiredString(row, "createdAt", label),
+          updatedAt: readRequiredString(row, "updatedAt", label),
+          retiredAt: readNullableString(row, "retiredAt", label),
+        });
+      });
+    const sourceKey = (
+      metadataKind: StoredSceneMetadataSourceRow["metadataKind"],
+      metadataId: string,
+    ) => `${metadataKind}\u0000${metadataId}`;
+    const bindingBySource = new Map(
+      bindingRows.map((binding) => [
+        sourceKey(binding.metadataKind, binding.metadataId),
+        binding,
+      ] as const),
+    );
+    const projection = await this.#listSceneProjectionSerially({
+      schemaVersion: 1,
+      workId,
+    });
+    const scenesByKey = new Map<string, SceneProjection[]>();
+    for (const scene of projection.scenes) {
+      if (scene.integrity !== "resolved" || scene.range === null) continue;
+      const matching = scenesByKey.get(scene.sceneKey) ?? [];
+      matching.push(scene);
+      scenesByKey.set(scene.sceneKey, matching);
+    }
+
+    const now = new Date().toISOString();
+    const records: Poc3LedgerRecord[] = [];
+    const preparedSceneIds = new Map<string, EntityId<"Scene">>();
+    const ensureSceneId = (
+      scene: SceneProjection,
+      commandRef: string,
+    ): EntityId<"Scene"> => {
+      const prepared = preparedSceneIds.get(scene.sceneKey);
+      if (prepared !== undefined) return prepared;
+      const preparedIdentity = this.#prepareSceneIdentityRecords(
+        scene,
+        commandRef,
+        now,
+      );
+      records.push(...preparedIdentity.records);
+      preparedSceneIds.set(scene.sceneKey, preparedIdentity.sceneId);
+      return preparedIdentity.sceneId;
+    };
+
+    for (const source of sourceRows) {
+      const key = sourceKey(source.metadataKind, source.metadataId);
+      const existing = bindingBySource.get(key);
+      if (existing !== undefined && existing.sourceSceneKey !== source.sourceSceneKey) {
+        continue;
+      }
+      if (source.retiredAt !== null) {
+        if (existing === undefined) {
+          records.push({
+            kind: "sceneMetadataBinding",
+            id: `scene-binding:${source.metadataKind}:${workId}:${source.metadataId}`,
+            schemaVersion: 1,
+            revision: 1,
+            createdAt: source.createdAt,
+            updatedAt: source.updatedAt,
+            retiredAt: source.retiredAt,
+            workId,
+            metadataKind: source.metadataKind,
+            metadataId: source.metadataId,
+            sourceSceneKey: source.sourceSceneKey,
+            status: "detached",
+          });
+        }
+        continue;
+      }
+      if (
+        (existing !== undefined && existing.retiredAt !== null) ||
+        existing?.status === "current" ||
+        existing?.status === "detached" ||
+        (existing?.status === "needs-review" &&
+          (existing.sceneId !== null || existing.proposedSceneId !== null))
+      ) {
+        continue;
+      }
+      const matchingScenes = scenesByKey.get(source.sourceSceneKey) ?? [];
+      const matchingScene = matchingScenes.length === 1
+        ? matchingScenes[0]
+        : undefined;
+      if (matchingScene === undefined) {
+        if (existing === undefined) {
+          records.push({
+            kind: "sceneMetadataBinding",
+            id: `scene-binding:${source.metadataKind}:${workId}:${source.metadataId}`,
+            schemaVersion: 1,
+            revision: 1,
+            createdAt: source.createdAt,
+            updatedAt: source.updatedAt,
+            workId,
+            metadataKind: source.metadataKind,
+            metadataId: source.metadataId,
+            sourceSceneKey: source.sourceSceneKey,
+            status: "needs-review",
+          });
+        }
+        continue;
+      }
+      const bindingId = existing?.bindingId ??
+        `scene-binding:${source.metadataKind}:${workId}:${source.metadataId}`;
+      const sceneId = ensureSceneId(matchingScene, bindingId);
+      if (existing === undefined) {
+        records.push({
+          kind: "sceneMetadataBinding",
+          id: bindingId,
+          schemaVersion: 1,
+          revision: 1,
+          createdAt: source.createdAt,
+          updatedAt: now,
+          workId,
+          metadataKind: source.metadataKind,
+          metadataId: source.metadataId,
+          sourceSceneKey: source.sourceSceneKey,
+          sceneId,
+          status: "current",
+        });
+      } else {
+        records.push({
+          kind: "sceneMetadataBindingUpdate",
+          id: existing.bindingId,
+          workId,
+          expectedRevision: existing.revision,
+          updatedAt: now,
+          sceneId,
+          status: "current",
+          proposedSceneId: null,
+          lineageOperationId: null,
+        });
+      }
+    }
+    if (records.length === 0) return;
+    await this.#ledger.transaction(async (transaction: StorageTransaction) => {
+      for (const record of records) transaction.write(record);
+    });
   }
 
   async #listSceneProjectionSerially(
@@ -14825,7 +17461,13 @@ class DefaultLocalWorkspaceRuntime
       schemaVersion: 1,
       workId: command.workId,
     });
-    if (!projection.scenes.some((scene) => scene.sceneKey === command.sceneKey)) {
+    const targetScene = projection.scenes.find(
+      (scene) =>
+        scene.sceneKey === command.sceneKey &&
+        scene.integrity === "resolved" &&
+        scene.range !== null,
+    );
+    if (targetScene === undefined) {
       throw new Error(`Unknown SceneProjection: ${command.sceneKey}`);
     }
     const eventBlock = readStoredEventBlockRowById(
@@ -14855,7 +17497,27 @@ class DefaultLocalWorkspaceRuntime
     if (current === undefined && command.operation === null) return projection;
 
     const changedAt = new Date().toISOString();
+    const currentBinding = current === undefined
+      ? null
+      : this.#readActiveSceneMetadataBinding(
+          command.workId,
+          "event-override",
+          current.sceneEventOverrideId,
+        );
+    const nextOverrideId = command.operation === null
+      ? null
+      : entityId<"SceneEventOverride">(randomUUID());
+    const preparedIdentity = nextOverrideId === null
+      ? null
+      : this.#prepareSceneIdentityRecords(
+          targetScene,
+          nextOverrideId,
+          changedAt,
+        );
     await this.#ledger.transaction(async (transaction: StorageTransaction) => {
+      for (const record of preparedIdentity?.records ?? []) {
+        transaction.write(record);
+      }
       if (current !== undefined) {
         transaction.write({
           kind: "sceneEventOverrideRetirement",
@@ -14864,22 +17526,929 @@ class DefaultLocalWorkspaceRuntime
           expectedRevision: current.revision,
           retiredAt: changedAt,
         });
+        if (currentBinding !== null) {
+          transaction.write({
+            kind: "sceneMetadataBindingRetirement",
+            id: currentBinding.bindingId,
+            workId: command.workId,
+            expectedRevision: currentBinding.revision,
+            retiredAt: changedAt,
+          });
+        }
       }
-      if (command.operation !== null) {
+      if (
+        command.operation !== null &&
+        nextOverrideId !== null &&
+        preparedIdentity !== null
+      ) {
         transaction.write({
           kind: "sceneEventOverride",
           ...createRecordMeta(changedAt),
-          id: entityId<"SceneEventOverride">(randomUUID()),
+          id: nextOverrideId,
           workId: command.workId,
           sceneKey: command.sceneKey,
           eventBlockId: command.eventBlockId,
           operation: command.operation,
+        });
+        transaction.write({
+          kind: "sceneMetadataBinding",
+          id: `scene-binding:event-override:${command.workId}:${nextOverrideId}`,
+          schemaVersion: 1,
+          revision: 1,
+          createdAt: changedAt,
+          updatedAt: changedAt,
+          workId: command.workId,
+          metadataKind: "event-override",
+          metadataId: nextOverrideId,
+          sourceSceneKey: command.sceneKey,
+          sceneId: preparedIdentity.sceneId,
+          status: "current",
         });
       }
     });
     return this.#listSceneProjectionSerially({
       schemaVersion: 1,
       workId: command.workId,
+    });
+  }
+
+  async #rebindSceneMetadataSerially(
+    command: RebindSceneMetadataCommand,
+  ): Promise<SceneMetadataBindingProjection> {
+    const rows = this.#database.prepare(`
+      SELECT
+        id AS "bindingId", revision, work_id AS "workId",
+        metadata_kind AS "metadataKind", metadata_id AS "metadataId",
+        source_scene_key AS "sourceSceneKey", scene_id AS "sceneId", status,
+        proposed_scene_id AS "proposedSceneId",
+        lineage_operation_id AS "lineageOperationId",
+        created_at AS "createdAt", updated_at AS "updatedAt",
+        retired_at AS "retiredAt"
+      FROM scene_metadata_bindings
+      WHERE work_id = ? AND id = ? AND retired_at IS NULL
+    `).all(command.workId, command.sceneMetadataBindingId);
+    if (rows.length !== 1) {
+      throw new Error(
+        `Unknown Scene metadata binding: ${command.sceneMetadataBindingId}`,
+      );
+    }
+    const row = rows[0] ?? {};
+    const label = "Scene metadata rebind target";
+    const metadataKind = readRequiredString(row, "metadataKind", label);
+    if (
+      metadataKind !== "annotation" &&
+      metadataKind !== "event-override" &&
+      metadataKind !== "music-queue"
+    ) {
+      throw new Error(`${label}.metadataKind is invalid`);
+    }
+    const status = readRequiredString(row, "status", label);
+    if (
+      status !== "current" &&
+      status !== "needs-review" &&
+      status !== "detached"
+    ) {
+      throw new Error(`${label}.status is invalid`);
+    }
+    const revision = readRequiredInteger(row, "revision", label);
+    if (revision !== command.expectedBindingRevision) {
+      throw new Error(
+        `Scene metadata binding revision conflict: ${command.sceneMetadataBindingId}`,
+      );
+    }
+    let targetSceneId: EntityId<"Scene"> | null = null;
+    if (command.targetSceneId !== null) {
+      const projection = await this.#listSceneProjectionSerially({
+        schemaVersion: 1,
+        workId: command.workId,
+      });
+      const matches = projection.scenes.filter(
+        (scene) =>
+          scene.integrity === "resolved" &&
+          scene.range !== null &&
+          scene.sceneIdentity?.sceneId === command.targetSceneId,
+      );
+      if (matches.length !== 1) {
+        throw new Error(`Scene metadata target is unavailable: ${command.targetSceneId}`);
+      }
+      targetSceneId = command.targetSceneId;
+    }
+    const updatedAt = new Date().toISOString();
+    await this.#ledger.transaction(async (transaction: StorageTransaction) => {
+      transaction.write({
+        kind: "sceneMetadataBindingUpdate",
+        id: command.sceneMetadataBindingId,
+        workId: command.workId,
+        expectedRevision: revision,
+        updatedAt,
+        sceneId: targetSceneId,
+        status: targetSceneId === null ? "detached" : "current",
+        proposedSceneId: null,
+        lineageOperationId: null,
+      });
+    });
+    const updated = this.#readActiveSceneMetadataBinding(
+      command.workId,
+      metadataKind,
+      readRequiredString(row, "metadataId", label),
+    );
+    if (updated === null) {
+      throw new Error(`Updated Scene metadata binding is missing: ${command.sceneMetadataBindingId}`);
+    }
+    return this.#projectSceneMetadataBinding(updated);
+  }
+
+  async #prepareSceneDeletionState(
+    command: PrepareSceneDeletionCommand,
+  ) {
+    const work = this.#catalog.works.find(
+      (candidate) => candidate.workId === command.workId,
+    );
+    if (work === undefined) throw new Error(`Unknown Work: ${command.workId}`);
+    const projection = await this.#listSceneProjectionSerially({
+      schemaVersion: 1,
+      workId: command.workId,
+    });
+    const plan = planSceneDeletion({
+      target: command.target,
+      scenes: projection.scenes,
+      documents: work.documents.map((document) => {
+        const target = this.#documentTargets.get(document.documentId);
+        if (target === undefined || target.workId !== command.workId) {
+          throw new Error(`Scene deletion Document is unavailable: ${document.documentId}`);
+        }
+        return Object.freeze({
+          documentId: document.documentId,
+          documentTitle: document.title,
+          documentRevisionId: target.currentRevisionId,
+          text: target.text,
+        });
+      }),
+    });
+    const targetSceneIds = new Set(
+      plan.targetScenes.flatMap((scene) =>
+        scene.sceneIdentity === undefined ? [] : [scene.sceneIdentity.sceneId]
+      ),
+    );
+    const targetSceneKeys = new Set(plan.targetScenes.map((scene) => scene.sceneKey));
+    const annotations = this.#listSceneAnnotationsSerially({
+      schemaVersion: 1,
+      workId: command.workId,
+    }).annotations.filter((annotation) =>
+      annotation.binding.status === "current" &&
+      (
+        (annotation.binding.sceneId !== null &&
+          targetSceneIds.has(annotation.binding.sceneId)) ||
+        (command.target.sceneId === null && targetSceneKeys.has(annotation.sceneKey))
+      )
+    );
+    const music = (await this.#listSceneMusicQueueCandidatesSerially({
+      schemaVersion: 1,
+      workId: command.workId,
+    })).candidates.filter((candidate) =>
+      candidate.binding.status === "current" &&
+      (
+        (candidate.binding.sceneId !== null &&
+          targetSceneIds.has(candidate.binding.sceneId)) ||
+        (command.target.sceneId === null && targetSceneKeys.has(candidate.sceneKey))
+      )
+    );
+    const eventMetadata = plan.targetScenes.flatMap((scene) => [
+      ...scene.events.map((event) => Object.freeze({
+        kind: "event" as const,
+        metadataId: event.eventBlockId,
+        label: event.title,
+      })),
+      ...scene.excludedEvents.map((event) => Object.freeze({
+        kind: "event" as const,
+        metadataId: event.eventBlockId,
+        label: event.title,
+      })),
+    ]);
+    const metadataById = new Map<string, SceneDeletionMetadataPreview>();
+    for (const item of [
+      ...eventMetadata,
+      ...annotations.map((annotation) => Object.freeze({
+        kind: "annotation" as const,
+        metadataId: annotation.sceneAnnotationId,
+        label: annotation.title,
+      })),
+      ...music.map((candidate) => Object.freeze({
+        kind: "music-queue" as const,
+        metadataId: candidate.candidateId,
+        label: candidate.query,
+      })),
+    ]) {
+      metadataById.set(`${item.kind}:${item.metadataId}`, item);
+    }
+    const metadata = Object.freeze([...metadataById.values()].sort(
+      (left, right) =>
+        left.kind.localeCompare(right.kind) ||
+        left.metadataId.localeCompare(right.metadataId),
+    ));
+    const identityRows = command.target.sceneId === null
+      ? []
+      : this.#database.prepare(`
+          SELECT revision FROM scene_identities
+          WHERE id = ? AND work_id = ? AND retired_at IS NULL
+        `).all(command.target.sceneId, command.workId);
+    if (command.target.sceneId !== null && identityRows.length !== 1) {
+      throw new Error(`Scene deletion identity is unavailable: ${command.target.sceneId}`);
+    }
+    const segmentRows = command.target.sceneId === null
+      ? []
+      : this.#database.prepare(`
+          SELECT id AS "segmentId", revision, document_id AS "documentId"
+          FROM scene_episode_segments
+          WHERE work_id = ? AND scene_id = ? AND retired_at IS NULL
+          ORDER BY created_at, id
+        `).all(command.workId, command.target.sceneId);
+    const overrideById = new Map<string, Record<string, unknown>>();
+    for (const document of plan.documents) {
+      if (document.removedBoundaryAnchorId === null) continue;
+      for (const row of this.#database.prepare(`
+        SELECT scene_override.id, scene_override.revision,
+          (SELECT COUNT(*) FROM scene_override_anchors AS all_boundary
+            WHERE all_boundary.work_id = scene_override.work_id
+              AND all_boundary.document_id = scene_override.document_id
+              AND all_boundary.scene_override_id = scene_override.id)
+            AS "boundaryCount"
+        FROM scene_overrides AS scene_override
+        JOIN scene_override_anchors AS boundary
+          ON boundary.work_id = scene_override.work_id
+          AND boundary.document_id = scene_override.document_id
+          AND boundary.scene_override_id = scene_override.id
+        WHERE scene_override.work_id = ?
+          AND scene_override.document_id = ?
+          AND boundary.anchor_id = ?
+          AND scene_override.retired_at IS NULL
+      `).all(
+        command.workId,
+        document.documentId,
+        document.removedBoundaryAnchorId,
+      )) {
+        const overrideId = readRequiredString(row, "id", "Scene deletion override");
+        if (readRequiredInteger(row, "boundaryCount", "Scene deletion override") !== 1) {
+          throw new Error(`Scene deletion boundary override is shared: ${overrideId}`);
+        }
+        overrideById.set(overrideId, row);
+      }
+    }
+    const overrideRows = [...overrideById.values()].sort((left, right) =>
+      readRequiredString(left, "id", "Scene deletion override").localeCompare(
+        readRequiredString(right, "id", "Scene deletion override"),
+      )
+    );
+    const bindingRows = command.target.sceneId === null
+      ? []
+      : this.#database.prepare(`
+          SELECT id, revision, scene_id AS "sceneId", status,
+            proposed_scene_id AS "proposedSceneId",
+            lineage_operation_id AS "lineageOperationId"
+          FROM scene_metadata_bindings
+          WHERE work_id = ? AND retired_at IS NULL
+            AND (scene_id = ? OR proposed_scene_id = ?)
+          ORDER BY created_at, id
+        `).all(
+          command.workId,
+          command.target.sceneId,
+          command.target.sceneId,
+        );
+    const previewDocuments = plan.documents.map((document) => ({
+      documentId: document.documentId,
+      documentTitle: document.documentTitle,
+      expectedDocumentRevisionId: document.expectedDocumentRevisionId,
+      sceneKey: document.sceneKey,
+      sceneRange: document.sceneRange,
+      deletionRange: document.deletionRange,
+      removedBoundaryAnchorId: document.removedBoundaryAnchorId,
+      sceneContentUtf16Length:
+        document.sceneRange.end - document.sceneRange.start,
+      deletedUtf16Length:
+        document.deletionRange.end - document.deletionRange.start,
+      firstExcerpt: document.firstExcerpt,
+      lastExcerpt: document.lastExcerpt,
+    }));
+    const fingerprintInput = JSON.stringify({
+      workId: command.workId,
+      target: command.target,
+      sceneRuleSetRevision: projection.ruleSet.revision,
+      documents: plan.documents.map((document) => ({
+        ...previewDocuments.find(
+          (candidate) => candidate.documentId === document.documentId,
+        ),
+        deletedTextHash: createHash(LOCAL_WORKSPACE_CONTENT_HASH_ALGORITHM)
+          .update(document.deletedText, "utf8")
+          .digest("hex"),
+      })),
+      metadata,
+      identity: identityRows.map((row) => ({
+        revision: readRequiredInteger(row, "revision", "Scene deletion identity"),
+      })),
+      segments: segmentRows.map((row, index) => ({
+        id: readRequiredString(row, "segmentId", `Scene deletion segment[${index}]`),
+        revision: readRequiredInteger(row, "revision", `Scene deletion segment[${index}]`),
+        documentId: readRequiredString(
+          row,
+          "documentId",
+          `Scene deletion segment[${index}]`,
+        ),
+      })),
+      overrides: overrideRows.map((row, index) => ({
+        id: readRequiredString(row, "id", `Scene deletion override[${index}]`),
+        revision: readRequiredInteger(
+          row,
+          "revision",
+          `Scene deletion override[${index}]`,
+        ),
+      })),
+      bindings: bindingRows.map((row, index) => ({
+        id: readRequiredString(row, "id", `Scene deletion binding[${index}]`),
+        revision: readRequiredInteger(
+          row,
+          "revision",
+          `Scene deletion binding[${index}]`,
+        ),
+      })),
+    });
+    const preview = parseSceneDeletionPreview({
+      schemaVersion: 1,
+      previewFingerprint:
+        `sha256:${createHash(LOCAL_WORKSPACE_CONTENT_HASH_ALGORITHM)
+          .update(fingerprintInput, "utf8")
+          .digest("hex")}`,
+      workId: command.workId,
+      target: command.target,
+      sceneRuleSetRevision: projection.ruleSet.revision,
+      documents: previewDocuments,
+      metadata,
+    });
+    return Object.freeze({
+      preview,
+      plan,
+      identityRows,
+      segmentRows,
+      overrideRows,
+      bindingRows,
+    });
+  }
+
+  async #prepareSceneDeletionSerially(
+    command: PrepareSceneDeletionCommand,
+  ): Promise<SceneDeletionPreview> {
+    return (await this.#prepareSceneDeletionState(command)).preview;
+  }
+
+  async #deleteSceneSerially(
+    command: DeleteSceneCommand,
+  ): Promise<SceneDeletionReceipt> {
+    const prepared = await this.#prepareSceneDeletionState({
+      schemaVersion: 1,
+      workId: command.preview.workId,
+      target: command.preview.target,
+    });
+    if (JSON.stringify(prepared.preview) !== JSON.stringify(command.preview)) {
+      throw new Error("Scene deletion preview changed before confirmation");
+    }
+    const work = this.#catalog.works.find(
+      (candidate) => candidate.workId === command.preview.workId,
+    );
+    if (work === undefined) throw new Error(`Unknown Work: ${command.preview.workId}`);
+    const writingWork = createCatalogFromStoredRows(
+      readStoredDocumentRows(this.#database),
+    ).getWork(command.preview.workId);
+    if (writingWork === null) {
+      throw new Error(`Unknown writing Work: ${command.preview.workId}`);
+    }
+    const createdAt = new Date().toISOString();
+    const sceneTrashEntryId = entityId<"SceneTrashEntry">(randomUUID());
+    const sceneId = command.preview.target.sceneId ?? entityId<"Scene">(randomUUID());
+    const identityRows = prepared.identityRows;
+    const createsIdentity = command.preview.target.sceneId === null;
+    let createdAnchor: Anchor | null = null;
+    let createdSegmentId: EntityId<"EpisodeSceneSegment"> | null = null;
+    let createdSegmentDocumentId: EntityId<"Document"> | null = null;
+    if (createsIdentity) {
+      const first = prepared.plan.documents[0]!;
+      const target = this.#documentTargets.get(first.documentId)!;
+      createdSegmentId = entityId<"EpisodeSceneSegment">(randomUUID());
+      createdSegmentDocumentId = first.documentId;
+      createdAnchor = createAnchorForKnownRevisionContent({
+        meta: {
+          id: entityId<"Anchor">(randomUUID()),
+          schemaVersion: LOCAL_WORKSPACE_LEDGER_SCHEMA_VERSION,
+          revision: 1,
+          createdAt,
+          updatedAt: createdAt,
+        },
+        documentId: first.documentId,
+        documentRevisionId: target.currentRevisionId,
+        content: target.text,
+        startOffset: first.sceneRange.start,
+        endOffset: first.sceneRange.end,
+        policy: this.#options.defaults.anchorPolicy,
+        commandRef: sceneTrashEntryId,
+        actorRef: writingWork.studioId,
+        describeEvidence: createNodeCryptoAnchorEvidenceDescriptor(
+          this.#options.defaults.anchorEvidenceChecksumAlgorithm,
+        ),
+      });
+    }
+    const segmentRows = createsIdentity
+      ? [{
+          segmentId: createdSegmentId,
+          revision: 1,
+          documentId: createdSegmentDocumentId,
+        }]
+      : prepared.segmentRows;
+    const segmentDocumentIds = new Set(segmentRows.map((row, index) =>
+      readRequiredString(row, "documentId", `Scene deletion segment[${index}]`)
+    ));
+    if (
+      segmentDocumentIds.size !== segmentRows.length ||
+      prepared.plan.documents.some(
+        (document) => !segmentDocumentIds.has(document.documentId),
+      )
+    ) {
+      throw new Error("Scene deletion segment set is ambiguous");
+    }
+    const orderedSegmentRows = [...segmentRows].sort((left, right) => {
+      const leftDocumentId = readRequiredString(
+        left,
+        "documentId",
+        "Scene deletion segment",
+      );
+      const rightDocumentId = readRequiredString(
+        right,
+        "documentId",
+        "Scene deletion segment",
+      );
+      const leftDocumentIndex = prepared.plan.documents.findIndex(
+        (document) => document.documentId === leftDocumentId,
+      );
+      const rightDocumentIndex = prepared.plan.documents.findIndex(
+        (document) => document.documentId === rightDocumentId,
+      );
+      return (
+        (leftDocumentIndex < 0 ? Number.MAX_SAFE_INTEGER : leftDocumentIndex) -
+          (rightDocumentIndex < 0 ? Number.MAX_SAFE_INTEGER : rightDocumentIndex) ||
+        leftDocumentId.localeCompare(rightDocumentId)
+      );
+    });
+    const documentRecords = prepared.plan.documents.map((document, ordinal) => {
+      const target = this.#documentTargets.get(document.documentId);
+      if (
+        target === undefined ||
+        target.workId !== command.preview.workId ||
+        target.currentRevisionId !== document.expectedDocumentRevisionId
+      ) {
+        throw new Error(`Scene deletion revision conflict: ${document.documentId}`);
+      }
+      const editorState = this.#readEditorStateForRevision(
+        command.preview.workId,
+        document.documentId,
+        target.currentRevisionId,
+        target.text.length,
+      );
+      const nextEditorState = deleteManuscriptEditorStateRange({
+        text: target.text,
+        state: editorState,
+        range: document.deletionRange,
+      });
+      return Object.freeze({
+        sceneTrashDocumentId: entityId<"SceneTrashDocument">(randomUUID()),
+        documentId: document.documentId,
+        ordinal,
+        beforeRevisionId: target.currentRevisionId,
+        deletedRevision: Object.freeze({
+          revisionId: entityId<"DocumentRevision">(randomUUID()),
+          workId: command.preview.workId,
+          documentId: document.documentId,
+          expectedCurrentRevisionId: target.currentRevisionId,
+          content: document.nextText,
+          editorStateJson: serializeManuscriptEditorDocumentState(nextEditorState),
+          cause: JSON.stringify({
+            kind: "delete-scene",
+            sceneTrashEntryId,
+            sceneId,
+          }),
+          createdAt,
+          durableAt: createdAt,
+        }),
+        sceneKey: document.sceneKey,
+        sceneRange: document.sceneRange,
+        deletionRange: document.deletionRange,
+        deletedTextHash: createHash(LOCAL_WORKSPACE_CONTENT_HASH_ALGORITHM)
+          .update(document.deletedText, "utf8")
+          .digest("hex"),
+        deletedUtf16Length:
+          document.deletionRange.end - document.deletionRange.start,
+        firstExcerpt: document.firstExcerpt,
+        lastExcerpt: document.lastExcerpt,
+      });
+    });
+    const committed = await this.#sceneTrashStore.commit({
+      sceneTrashEntryId,
+      workId: command.preview.workId,
+      identity: Object.freeze({
+        sceneId,
+        expectedRevision: createsIdentity
+          ? null
+          : readRequiredInteger(identityRows[0] ?? {}, "revision", "Scene identity"),
+        createdAnchor,
+        createdSegmentId,
+        createdSegmentDocumentId,
+      }),
+      sourceSceneKey: command.preview.target.sceneKey,
+      sceneRuleSetRevision: command.preview.sceneRuleSetRevision,
+      previewFingerprint: command.preview.previewFingerprint,
+      metadataJson: JSON.stringify(command.preview.metadata),
+      deleteLineageOperationId:
+        entityId<"SceneLineageOperation">(randomUUID()),
+      deleteLineageParentMemberId:
+        entityId<"SceneLineageMember">(randomUUID()),
+      documents: documentRecords,
+      segments: orderedSegmentRows.map((row, ordinal) => Object.freeze({
+        sceneTrashSegmentId: entityId<"SceneTrashSegment">(randomUUID()),
+        segmentId: entityId<"EpisodeSceneSegment">(
+          readRequiredString(row, "segmentId", `Scene deletion segment[${ordinal}]`),
+        ),
+        expectedRevision: readRequiredInteger(
+          row,
+          "revision",
+          `Scene deletion segment[${ordinal}]`,
+        ),
+        documentId: entityId<"Document">(
+          readRequiredString(row, "documentId", `Scene deletion segment[${ordinal}]`),
+        ),
+        ordinal,
+      })),
+      overrides: prepared.overrideRows.map((row, ordinal) => Object.freeze({
+        sceneTrashOverrideId: entityId<"SceneTrashOverride">(randomUUID()),
+        sceneOverrideId: entityId<"SceneOverride">(
+          readRequiredString(row, "id", `Scene deletion override[${ordinal}]`),
+        ),
+        expectedRevision: readRequiredInteger(
+          row,
+          "revision",
+          `Scene deletion override[${ordinal}]`,
+        ),
+        ordinal,
+      })),
+      bindings: prepared.bindingRows.map((row, ordinal) => {
+        const status = readRequiredString(row, "status", `Scene deletion binding[${ordinal}]`);
+        if (
+          status !== "current" &&
+          status !== "needs-review" &&
+          status !== "detached"
+        ) throw new Error(`Scene deletion binding[${ordinal}].status is invalid`);
+        return Object.freeze({
+          sceneTrashBindingId: entityId<"SceneTrashBinding">(randomUUID()),
+          sceneMetadataBindingId: entityId<"SceneMetadataBinding">(
+            readRequiredString(row, "id", `Scene deletion binding[${ordinal}]`),
+          ),
+          expectedRevision: readRequiredInteger(
+            row,
+            "revision",
+            `Scene deletion binding[${ordinal}]`,
+          ),
+          ordinal,
+          sceneId: readNullableIdentity<"Scene">(
+            row,
+            "sceneId",
+            `Scene deletion binding[${ordinal}]`,
+          ),
+          status,
+          proposedSceneId: readNullableIdentity<"Scene">(
+            row,
+            "proposedSceneId",
+            `Scene deletion binding[${ordinal}]`,
+          ),
+          lineageOperationId: readNullableIdentity<"SceneLineageOperation">(
+            row,
+            "lineageOperationId",
+            `Scene deletion binding[${ordinal}]`,
+          ),
+        });
+      }),
+      createdAt,
+    });
+    for (const document of documentRecords) {
+      const target = this.#documentTargets.get(document.documentId)!;
+      this.#installMovedDocumentTarget(
+        target,
+        document.deletedRevision.revisionId,
+        document.deletedRevision.content,
+      );
+    }
+    await this.#reload({
+      schemaVersion: 1,
+      workId: command.preview.workId,
+      documentId: documentRecords[0]!.documentId,
+    });
+    const entries = await this.#listSceneTrashSerially({
+      schemaVersion: 1,
+      workId: command.preview.workId,
+    });
+    const entry = entries.entries.find(
+      (candidate) => candidate.sceneTrashEntryId === sceneTrashEntryId,
+    );
+    if (entry === undefined) throw new Error(`Stored Scene trash is missing: ${sceneTrashEntryId}`);
+    return parseSceneDeletionReceipt({
+      schemaVersion: 1,
+      status: "deleted",
+      entry,
+      documentRevisions: committed.documentRevisions,
+    });
+  }
+
+  async #listSceneTrashSerially(
+    command: ListSceneTrashCommand,
+  ): Promise<SceneTrashListProjection> {
+    const work = this.#catalog.works.find(
+      (candidate) => candidate.workId === command.workId,
+    );
+    if (work === undefined) throw new Error(`Unknown Work: ${command.workId}`);
+    const ruleRevision = readStoredSceneRuleSetRow(
+      this.#database,
+      command.workId,
+    ).revision;
+    const entryRows = this.#database.prepare(`
+      SELECT id, revision, scene_id AS "sceneId", source_scene_key AS "sourceSceneKey",
+        source_rule_set_revision AS "sceneRuleSetRevision", metadata_json AS "metadataJson",
+        status, created_at AS "deletedAt", restored_at AS "restoredAt",
+        scene_identity_post_delete_revision AS "identityRevision"
+      FROM scene_trash_entries
+      WHERE work_id = ?
+      ORDER BY CASE status WHEN 'active' THEN 0 ELSE 1 END, created_at DESC, id
+    `).all(command.workId);
+    const entries: SceneTrashEntryProjection[] = [];
+    for (const [entryIndex, row] of entryRows.entries()) {
+      const label = `Scene trash entry[${entryIndex}]`;
+      const entryId = entityId<"SceneTrashEntry">(
+        readRequiredString(row, "id", label),
+      );
+      const sceneId = entityId<"Scene">(readRequiredString(row, "sceneId", label));
+      const status = readRequiredString(row, "status", label);
+      if (status !== "active" && status !== "restored" && status !== "undone") {
+        throw new Error(`${label}.status is invalid`);
+      }
+      const documentRows = this.#database.prepare(`
+        SELECT trash.id AS "sceneTrashDocumentId", trash.document_id AS "documentId",
+          document.title AS "documentTitle", trash.ordinal,
+          trash.before_revision_id AS "beforeRevisionId",
+          trash.deleted_revision_id AS "deletedRevisionId",
+          trash.restored_revision_id AS "restoredRevisionId",
+          trash.scene_from AS "sceneFrom", trash.scene_to AS "sceneTo",
+          trash.deletion_from AS "deletionFrom", trash.deletion_to AS "deletionTo",
+          trash.deleted_utf16_length AS "deletedUtf16Length",
+          trash.first_excerpt AS "firstExcerpt", trash.last_excerpt AS "lastExcerpt"
+        FROM scene_trash_documents AS trash
+        JOIN documents AS document
+          ON document.work_id = trash.work_id AND document.id = trash.document_id
+        WHERE trash.work_id = ? AND trash.trash_entry_id = ?
+        ORDER BY trash.ordinal
+      `).all(command.workId, entryId);
+      let conflictReason: string | null = status === "active"
+        ? null
+        : "이미 복원된 장면입니다.";
+      const sourceRuleRevision = readRequiredInteger(
+        row,
+        "sceneRuleSetRevision",
+        label,
+      );
+      if (conflictReason === null && sourceRuleRevision !== ruleRevision) {
+        conflictReason = "장면 규칙이 삭제 후 변경되었습니다.";
+      }
+      if (conflictReason === null) {
+        for (const [index, documentRow] of documentRows.entries()) {
+          const documentId = entityId<"Document">(
+            readRequiredString(documentRow, "documentId", `${label}.documents[${index}]`),
+          );
+          if (
+            this.#documentTargets.get(documentId)?.currentRevisionId !==
+              readRequiredString(
+                documentRow,
+                "deletedRevisionId",
+                `${label}.documents[${index}]`,
+              )
+          ) {
+            conflictReason = "삭제 후 회차 원고가 변경되었습니다.";
+            break;
+          }
+        }
+      }
+      if (conflictReason === null) {
+        const identityRows = this.#database.prepare(`
+          SELECT COUNT(*) AS count FROM scene_identities
+          WHERE work_id = ? AND id = ? AND revision = ? AND retired_at IS NOT NULL
+        `).all(
+          command.workId,
+          sceneId,
+          readRequiredInteger(row, "identityRevision", label),
+        );
+        if (readRequiredInteger(identityRows[0] ?? {}, "count", label) !== 1) {
+          conflictReason = "삭제된 장면 identity가 변경되었습니다.";
+        }
+      }
+      if (conflictReason === null) {
+        const mismatchRows = this.#database.prepare(`
+          SELECT
+            (SELECT COUNT(*) FROM scene_trash_bindings AS snapshot
+              LEFT JOIN scene_metadata_bindings AS binding
+                ON binding.work_id = snapshot.work_id
+                AND binding.id = snapshot.scene_metadata_binding_id
+              WHERE snapshot.work_id = ? AND snapshot.trash_entry_id = ?
+                AND (binding.id IS NULL OR binding.revision <> snapshot.post_delete_revision
+                  OR binding.retired_at IS NOT NULL)) AS bindingMismatch,
+            (SELECT COUNT(*) FROM scene_trash_segments AS snapshot
+              LEFT JOIN scene_episode_segments AS segment
+                ON segment.work_id = snapshot.work_id AND segment.id = snapshot.segment_id
+              WHERE snapshot.work_id = ? AND snapshot.trash_entry_id = ?
+                AND (segment.id IS NULL OR segment.revision <> snapshot.post_delete_revision
+                  OR segment.retired_at IS NULL)) AS segmentMismatch,
+            (SELECT COUNT(*) FROM scene_trash_overrides AS snapshot
+              LEFT JOIN scene_overrides AS override
+                ON override.work_id = snapshot.work_id
+                AND override.id = snapshot.scene_override_id
+              WHERE snapshot.work_id = ? AND snapshot.trash_entry_id = ?
+                AND (override.id IS NULL OR override.revision <> snapshot.post_delete_revision
+                  OR override.retired_at IS NULL)) AS overrideMismatch
+        `).all(
+          command.workId,
+          entryId,
+          command.workId,
+          entryId,
+          command.workId,
+          entryId,
+        );
+        const mismatch = mismatchRows[0] ?? {};
+        if (
+          readRequiredInteger(mismatch, "bindingMismatch", label) > 0 ||
+          readRequiredInteger(mismatch, "segmentMismatch", label) > 0 ||
+          readRequiredInteger(mismatch, "overrideMismatch", label) > 0
+        ) {
+          conflictReason = "삭제된 장면 연결 정보가 변경되었습니다.";
+        }
+      }
+      entries.push(parseSceneTrashEntryProjection({
+        schemaVersion: 1,
+        sceneTrashEntryId: entryId,
+        revision: readRequiredInteger(row, "revision", label),
+        workId: command.workId,
+        sceneId,
+        sourceSceneKey: readRequiredString(row, "sourceSceneKey", label),
+        sceneRuleSetRevision: sourceRuleRevision,
+        status,
+        documents: documentRows.map((documentRow, index) => {
+          const documentLabel = `${label}.documents[${index}]`;
+          return {
+            sceneTrashDocumentId: readRequiredString(
+              documentRow,
+              "sceneTrashDocumentId",
+              documentLabel,
+            ),
+            documentId: readRequiredString(documentRow, "documentId", documentLabel),
+            documentTitle: readRequiredString(
+              documentRow,
+              "documentTitle",
+              documentLabel,
+            ),
+            ordinal: readRequiredInteger(documentRow, "ordinal", documentLabel),
+            beforeRevisionId: readRequiredString(
+              documentRow,
+              "beforeRevisionId",
+              documentLabel,
+            ),
+            deletedRevisionId: readRequiredString(
+              documentRow,
+              "deletedRevisionId",
+              documentLabel,
+            ),
+            restoredRevisionId: readNullableString(
+              documentRow,
+              "restoredRevisionId",
+              documentLabel,
+            ),
+            sceneRange: {
+              start: readRequiredInteger(documentRow, "sceneFrom", documentLabel),
+              end: readRequiredInteger(documentRow, "sceneTo", documentLabel),
+            },
+            deletionRange: {
+              start: readRequiredInteger(documentRow, "deletionFrom", documentLabel),
+              end: readRequiredInteger(documentRow, "deletionTo", documentLabel),
+            },
+            deletedUtf16Length: readRequiredInteger(
+              documentRow,
+              "deletedUtf16Length",
+              documentLabel,
+            ),
+            firstExcerpt: readRequiredString(documentRow, "firstExcerpt", documentLabel),
+            lastExcerpt: readRequiredString(documentRow, "lastExcerpt", documentLabel),
+          };
+        }),
+        metadata: JSON.parse(readRequiredString(row, "metadataJson", label)),
+        canRestore: conflictReason === null,
+        conflictReason,
+        deletedAt: readRequiredString(row, "deletedAt", label),
+        restoredAt: readNullableString(row, "restoredAt", label),
+      }));
+    }
+    return parseSceneTrashListProjection({
+      schemaVersion: 1,
+      workId: command.workId,
+      entries,
+    });
+  }
+
+  async #restoreSceneTrashSerially(
+    command: RestoreSceneTrashCommand | UndoSceneDeletionCommand,
+    status: "restored" | "undone",
+  ): Promise<SceneDeletionReceipt> {
+    const currentList = await this.#listSceneTrashSerially({
+      schemaVersion: 1,
+      workId: command.workId,
+    });
+    const entry = currentList.entries.find(
+      (candidate) => candidate.sceneTrashEntryId === command.sceneTrashEntryId,
+    );
+    if (
+      entry === undefined ||
+      entry.revision !== command.expectedRevision ||
+      !entry.canRestore
+    ) {
+      throw new Error(
+        entry?.conflictReason ?? `Scene trash entry is not restorable: ${command.sceneTrashEntryId}`,
+      );
+    }
+    const restoredAt = new Date().toISOString();
+    const contents = await Promise.all(entry.documents.map(async (document) => ({
+      document,
+      text: await this.#revisionStore.materialize(document.beforeRevisionId),
+      editorStateJson: readRevisionEditorStateJson(this.#database, {
+        revisionId: document.beforeRevisionId,
+        workId: command.workId,
+        documentId: document.documentId,
+      }),
+    })));
+    const revisions = contents.map(({ document, text, editorStateJson }) => ({
+      revisionId: entityId<"DocumentRevision">(randomUUID()),
+      workId: command.workId,
+      documentId: document.documentId,
+      expectedCurrentRevisionId: document.deletedRevisionId,
+      content: text,
+      ...(editorStateJson === undefined ? {} : { editorStateJson }),
+      cause: JSON.stringify({
+        kind: status === "undone" ? "undo-delete-scene" : "restore-scene-trash",
+        sceneTrashEntryId: command.sceneTrashEntryId,
+      }),
+      createdAt: restoredAt,
+      durableAt: restoredAt,
+    }));
+    const committed = await this.#sceneTrashStore.restore({
+      sceneTrashEntryId: command.sceneTrashEntryId,
+      workId: command.workId,
+      expectedRevision: command.expectedRevision,
+      status,
+      restoreLineageOperationId:
+        entityId<"SceneLineageOperation">(randomUUID()),
+      restoreLineageParentMemberId:
+        entityId<"SceneLineageMember">(randomUUID()),
+      restoreLineageChildMemberId:
+        entityId<"SceneLineageMember">(randomUUID()),
+      documentRevisions: revisions,
+      restoredAt,
+    });
+    for (const { document, text } of contents) {
+      const target = this.#documentTargets.get(document.documentId);
+      const revision = committed.documentRevisions.find(
+        (candidate) => candidate.documentId === document.documentId,
+      );
+      if (target === undefined || revision === undefined) {
+        throw new Error(`Restored Scene Document is unavailable: ${document.documentId}`);
+      }
+      this.#installMovedDocumentTarget(target, revision.revisionId, text);
+    }
+    await this.#reload({
+      schemaVersion: 1,
+      workId: command.workId,
+      documentId: entry.documents[0]!.documentId,
+    });
+    const restoredList = await this.#listSceneTrashSerially({
+      schemaVersion: 1,
+      workId: command.workId,
+    });
+    const restoredEntry = restoredList.entries.find(
+      (candidate) => candidate.sceneTrashEntryId === command.sceneTrashEntryId,
+    );
+    if (restoredEntry === undefined) {
+      throw new Error(`Restored Scene trash entry is missing: ${command.sceneTrashEntryId}`);
+    }
+    return parseSceneDeletionReceipt({
+      schemaVersion: 1,
+      status,
+      entry: restoredEntry,
+      documentRevisions: committed.documentRevisions,
     });
   }
 
@@ -15208,6 +18777,264 @@ class DefaultLocalWorkspaceRuntime
     const [projection] = await this.#projectFragmentRows([stored]);
     if (projection === undefined) {
       throw new Error(`Retired fragment could not be projected: ${command.fragmentId}`);
+    }
+    return projection;
+  }
+
+  async #projectManuscriptAnnotationRows(
+    rows: readonly StoredManuscriptAnnotationRow[],
+  ): Promise<readonly ManuscriptAnnotationProjection[]> {
+    const catalog = createCatalogFromStoredRows(
+      readStoredDocumentRows(this.#database),
+    );
+    const resolver = new ResolveAnchor({
+      catalog,
+      revisionStore: this.#revisionStore,
+      reader: this.#ledger,
+      describeEvidence: createNodeCryptoAnchorEvidenceDescriptor(
+        this.#options.defaults.anchorEvidenceChecksumAlgorithm,
+      ),
+    });
+    return Promise.all(rows.map(async (row) => {
+      const target = this.#documentTargets.get(row.sourceDocumentId);
+      if (target === undefined || target.workId !== row.workId) {
+        return parseManuscriptAnnotationProjection({
+          schemaVersion: 1,
+          ...row,
+          integrity: "broken",
+          range: null,
+        });
+      }
+      const resolution = await resolver.execute({
+        workId: row.workId,
+        anchorId: row.sourceAnchorId,
+        targetRevisionId: target.currentRevisionId,
+      });
+      const integrity = resolution.status === "resolved"
+        ? "resolved"
+        : resolution.status === "needsReview"
+          ? "needsReview"
+          : "broken";
+      return parseManuscriptAnnotationProjection({
+        schemaVersion: 1,
+        ...row,
+        integrity,
+        range: resolution.status === "resolved"
+          ? {
+              from: resolution.range.startOffset,
+              to: resolution.range.endOffset,
+            }
+          : null,
+      });
+    }));
+  }
+
+  async #createManuscriptAnnotationSerially(
+    command: CreateManuscriptAnnotationCommand,
+  ): Promise<ManuscriptAnnotationProjection> {
+    const target = this.#documentTargets.get(command.documentId);
+    if (target === undefined || target.workId !== command.workId) {
+      throw new Error(
+        `Work/document boundary violation: ${command.workId}/${command.documentId}`,
+      );
+    }
+    const from = Math.min(command.selection.anchor, command.selection.head);
+    const to = Math.max(command.selection.anchor, command.selection.head);
+    if (to > target.text.length) {
+      throw new Error("Annotation selection is outside the current manuscript");
+    }
+    if (target.text.slice(from, to) !== command.exactText) {
+      throw new Error(
+        "Annotation selected text does not match the current durable revision",
+      );
+    }
+    const catalog = createCatalogFromStoredRows(
+      readStoredDocumentRows(this.#database),
+    );
+    const work = catalog.getWork(command.workId);
+    if (work === null) {
+      throw new Error(`Unknown Work: ${command.workId}`);
+    }
+    const createdAt = new Date().toISOString();
+    const annotationId = entityId<"ManuscriptAnnotation">(randomUUID());
+    const anchorId = entityId<"Anchor">(randomUUID());
+    const anchor = await new CreateAnchor({
+      catalog,
+      revisionStore: this.#revisionStore,
+      describeEvidence: createNodeCryptoAnchorEvidenceDescriptor(
+        this.#options.defaults.anchorEvidenceChecksumAlgorithm,
+      ),
+    }).execute({
+      meta: {
+        id: anchorId,
+        schemaVersion: LOCAL_WORKSPACE_LEDGER_SCHEMA_VERSION,
+        revision: 1,
+        createdAt,
+        updatedAt: createdAt,
+      },
+      workId: command.workId,
+      documentId: command.documentId,
+      documentRevisionId: target.currentRevisionId,
+      startOffset: from,
+      endOffset: to,
+      policy: this.#options.defaults.anchorPolicy,
+      commandRef: annotationId,
+      actorRef: work.studioId,
+    });
+    await this.#ledger.transaction(async (transaction: StorageTransaction) => {
+      transaction.write(createAnchorLedgerRecord(command.workId, anchor));
+      transaction.write({
+        kind: "manuscriptAnnotation",
+        ...createRecordMeta(createdAt),
+        id: annotationId,
+        workId: command.workId,
+        sourceDocumentId: command.documentId,
+        sourceAnchorId: anchorId,
+        body: command.body,
+        tags: command.tags,
+      });
+    });
+    const stored = readStoredManuscriptAnnotationRowById(
+      this.#database,
+      command.workId,
+      annotationId,
+    );
+    if (stored === null) {
+      throw new Error(`Stored annotation is missing: ${annotationId}`);
+    }
+    const [projection] = await this.#projectManuscriptAnnotationRows([stored]);
+    if (projection === undefined) {
+      throw new Error(`Stored annotation could not be projected: ${annotationId}`);
+    }
+    return projection;
+  }
+
+  async #listManuscriptAnnotationsSerially(
+    command: ListManuscriptAnnotationsCommand,
+  ): Promise<ManuscriptAnnotationListProjection> {
+    if (!this.#catalog.works.some((work) => work.workId === command.workId)) {
+      throw new Error(`Unknown Work: ${command.workId}`);
+    }
+    const annotations = await this.#projectManuscriptAnnotationRows(
+      readStoredManuscriptAnnotationRows(this.#database, command.workId),
+    );
+    return parseManuscriptAnnotationListProjection({
+      schemaVersion: 1,
+      workId: command.workId,
+      annotations,
+    });
+  }
+
+  async #updateManuscriptAnnotationSerially(
+    command: UpdateManuscriptAnnotationCommand,
+  ): Promise<ManuscriptAnnotationProjection> {
+    const current = readStoredManuscriptAnnotationRowById(
+      this.#database,
+      command.workId,
+      command.annotationId,
+    );
+    if (current === null) {
+      throw new Error(
+        `Work/annotation boundary violation: ${command.workId}/${command.annotationId}`,
+      );
+    }
+    if (current.retiredAt !== null) {
+      throw new Error(`Annotation is retired: ${command.annotationId}`);
+    }
+    if (current.revision !== command.expectedRevision) {
+      throw new Error(`Annotation revision conflict: ${command.annotationId}`);
+    }
+    const updatedAt = new Date().toISOString();
+    const result = this.#database.prepare(`
+      UPDATE manuscript_annotations
+      SET
+        revision = revision + 1,
+        updated_at = ?,
+        body = ?,
+        tags_json = ?
+      WHERE
+        work_id = ?
+        AND id = ?
+        AND revision = ?
+        AND retired_at IS NULL
+    `).run(
+      updatedAt,
+      command.changes.body ?? current.body,
+      JSON.stringify(command.changes.tags ?? current.tags),
+      command.workId,
+      command.annotationId,
+      command.expectedRevision,
+    );
+    if (Number(result.changes) !== 1) {
+      throw new Error(`Annotation revision conflict: ${command.annotationId}`);
+    }
+    const stored = readStoredManuscriptAnnotationRowById(
+      this.#database,
+      command.workId,
+      command.annotationId,
+    );
+    if (stored === null) {
+      throw new Error(`Updated annotation is missing: ${command.annotationId}`);
+    }
+    const [projection] = await this.#projectManuscriptAnnotationRows([stored]);
+    if (projection === undefined) {
+      throw new Error(`Updated annotation could not be projected: ${command.annotationId}`);
+    }
+    return projection;
+  }
+
+  async #retireManuscriptAnnotationSerially(
+    command: RetireManuscriptAnnotationCommand,
+  ): Promise<ManuscriptAnnotationProjection> {
+    const current = readStoredManuscriptAnnotationRowById(
+      this.#database,
+      command.workId,
+      command.annotationId,
+    );
+    if (current === null) {
+      throw new Error(
+        `Work/annotation boundary violation: ${command.workId}/${command.annotationId}`,
+      );
+    }
+    if (current.retiredAt !== null) {
+      throw new Error(`Annotation is already retired: ${command.annotationId}`);
+    }
+    if (current.revision !== command.expectedRevision) {
+      throw new Error(`Annotation revision conflict: ${command.annotationId}`);
+    }
+    const retiredAt = new Date().toISOString();
+    const result = this.#database.prepare(`
+      UPDATE manuscript_annotations
+      SET
+        revision = revision + 1,
+        updated_at = ?,
+        retired_at = ?
+      WHERE
+        work_id = ?
+        AND id = ?
+        AND revision = ?
+        AND retired_at IS NULL
+    `).run(
+      retiredAt,
+      retiredAt,
+      command.workId,
+      command.annotationId,
+      command.expectedRevision,
+    );
+    if (Number(result.changes) !== 1) {
+      throw new Error(`Annotation revision conflict: ${command.annotationId}`);
+    }
+    const stored = readStoredManuscriptAnnotationRowById(
+      this.#database,
+      command.workId,
+      command.annotationId,
+    );
+    if (stored === null) {
+      throw new Error(`Retired annotation is missing: ${command.annotationId}`);
+    }
+    const [projection] = await this.#projectManuscriptAnnotationRows([stored]);
+    if (projection === undefined) {
+      throw new Error(`Retired annotation could not be projected: ${command.annotationId}`);
     }
     return projection;
   }
@@ -15634,6 +19461,27 @@ class DefaultLocalWorkspaceRuntime
     if (current.revision !== command.expectedRevision) {
       throw new Error(`Character relation revision conflict: ${command.relationId}`);
     }
+    const fromCharacterId = command.changes.fromCharacterId ??
+      current.fromCharacterId;
+    const toCharacterId = command.changes.toCharacterId ?? current.toCharacterId;
+    const fromCharacter = readStoredCharacterRowById(
+      this.#database,
+      command.workId,
+      fromCharacterId,
+    );
+    const toCharacter = readStoredCharacterRowById(
+      this.#database,
+      command.workId,
+      toCharacterId,
+    );
+    if (
+      fromCharacter === null || fromCharacter.retiredAt !== null ||
+      toCharacter === null || toCharacter.retiredAt !== null
+    ) {
+      throw new Error(
+        `Work/character relation boundary violation: ${command.workId}`,
+      );
+    }
     const updatedAt = new Date().toISOString();
     await this.#ledger.transaction(async (transaction: StorageTransaction) => {
       transaction.write({
@@ -15642,6 +19490,8 @@ class DefaultLocalWorkspaceRuntime
         workId: command.workId,
         expectedRevision: command.expectedRevision,
         updatedAt,
+        fromCharacterId,
+        toCharacterId,
         relationKind: command.changes.kind ?? current.kind,
         description: command.changes.description ?? current.description,
       });
@@ -16929,6 +20779,256 @@ class DefaultLocalWorkspaceRuntime
       throw new Error(`Updated publishing partner is missing: ${command.partnerId}`);
     }
     return projectStoredPublishingPartnerRow(stored);
+  }
+
+  #createPublishingFormTemplateSerially(
+    command: CreatePublishingFormTemplateCommand,
+  ): PublishingFormTemplateProjection {
+    if (command.scope === "base") {
+      const existingBase = readStoredPublishingFormTemplateRows(this.#database)
+        .find((template) => template.scope === "base");
+      if (existingBase !== undefined) {
+        throw new Error("A base publishing form template already exists");
+      }
+    } else {
+      if (command.partnerId === null) {
+        throw new Error("Partner publishing form template requires a partner");
+      }
+      const partner = readStoredPublishingPartnerRowById(
+        this.#database,
+        command.partnerId,
+      );
+      if (partner === null || partner.retiredAt !== null) {
+        throw new Error(`Unknown publishing partner: ${command.partnerId}`);
+      }
+      const existingPartnerTemplate = readStoredPublishingFormTemplateRows(
+        this.#database,
+      ).find((template) => template.partnerId === command.partnerId);
+      if (existingPartnerTemplate !== undefined) {
+        throw new Error(
+          `Publishing partner already has a form template: ${command.partnerId}`,
+        );
+      }
+      if (command.sourceTemplateId !== null) {
+        const source = readStoredPublishingFormTemplateRowById(
+          this.#database,
+          command.sourceTemplateId,
+        );
+        if (source === null || source.retiredAt !== null || source.scope !== "base") {
+          throw new Error(
+            `Publishing form source is not an active base template: ${command.sourceTemplateId}`,
+          );
+        }
+      }
+    }
+    const templateId = entityId<"PublishingFormTemplate">(randomUUID());
+    const createdAt = new Date().toISOString();
+    this.#database.prepare(`
+      INSERT INTO publishing_form_templates (
+        id,schema_version,revision,created_at,updated_at,retired_at,
+        scope,partner_id,source_template_id,name,description,sections_json
+      ) VALUES (?,1,1,?,?,NULL,?,?,?,?,?,?)
+    `).run(
+      templateId,
+      createdAt,
+      createdAt,
+      command.scope,
+      command.partnerId,
+      command.sourceTemplateId,
+      command.name,
+      command.description,
+      JSON.stringify(command.sections),
+    );
+    const stored = readStoredPublishingFormTemplateRowById(
+      this.#database,
+      templateId,
+    );
+    if (stored === null) {
+      throw new Error(`Stored publishing form template is missing: ${templateId}`);
+    }
+    return projectStoredPublishingFormTemplateRow(stored);
+  }
+
+  #listPublishingFormTemplatesSerially(): PublishingFormTemplateListProjection {
+    return parsePublishingFormTemplateListProjection({
+      schemaVersion: 1,
+      templates: readStoredPublishingFormTemplateRows(this.#database).map(
+        projectStoredPublishingFormTemplateRow,
+      ),
+    });
+  }
+
+  #updatePublishingFormTemplateSerially(
+    command: UpdatePublishingFormTemplateCommand,
+  ): PublishingFormTemplateProjection {
+    const current = readStoredPublishingFormTemplateRowById(
+      this.#database,
+      command.templateId,
+    );
+    if (current === null || current.retiredAt !== null) {
+      throw new Error(`Unknown publishing form template: ${command.templateId}`);
+    }
+    if (current.revision !== command.expectedRevision) {
+      throw new Error(
+        `Publishing form template revision conflict: ${command.templateId}`,
+      );
+    }
+    const updatedAt = new Date().toISOString();
+    const result = this.#database.prepare(`
+      UPDATE publishing_form_templates
+      SET revision=revision+1,updated_at=?,name=?,description=?,sections_json=?
+      WHERE id=? AND revision=? AND retired_at IS NULL
+    `).run(
+      updatedAt,
+      command.name,
+      command.description,
+      JSON.stringify(command.sections),
+      command.templateId,
+      command.expectedRevision,
+    );
+    if (Number((result as { changes?: unknown }).changes) !== 1) {
+      throw new Error(
+        `Publishing form template revision conflict: ${command.templateId}`,
+      );
+    }
+    const stored = readStoredPublishingFormTemplateRowById(
+      this.#database,
+      command.templateId,
+    );
+    if (stored === null) {
+      throw new Error(
+        `Updated publishing form template is missing: ${command.templateId}`,
+      );
+    }
+    return projectStoredPublishingFormTemplateRow(stored);
+  }
+
+  #listPublishingFormResponsesSerially(
+    command: ListPublishingFormResponsesCommand,
+  ): PublishingFormResponseListProjection {
+    if (
+      command.workId !== null &&
+      !this.#catalog.works.some((work) => work.workId === command.workId)
+    ) {
+      throw new Error(`Unknown Work: ${command.workId}`);
+    }
+    return parsePublishingFormResponseListProjection({
+      schemaVersion: 1,
+      responses: readStoredPublishingFormResponseRows(
+        this.#database,
+        command.workId,
+      ).map(projectStoredPublishingFormResponseRow),
+    });
+  }
+
+  #savePublishingFormResponseSerially(
+    command: SavePublishingFormResponseCommand,
+  ): PublishingFormResponseProjection {
+    if (!this.#catalog.works.some((work) => work.workId === command.workId)) {
+      throw new Error(`Unknown Work: ${command.workId}`);
+    }
+    const partner = readStoredPublishingPartnerRowById(
+      this.#database,
+      command.partnerId,
+    );
+    if (partner === null || partner.retiredAt !== null) {
+      throw new Error(`Unknown publishing partner: ${command.partnerId}`);
+    }
+    const template = readStoredPublishingFormTemplateRowById(
+      this.#database,
+      command.templateId,
+    );
+    if (
+      template === null ||
+      template.retiredAt !== null ||
+      template.scope !== "partner" ||
+      template.partnerId !== command.partnerId
+    ) {
+      throw new Error(
+        `Publishing form template is outside the partner boundary: ${command.templateId}`,
+      );
+    }
+    if (template.revision !== command.expectedTemplateRevision) {
+      throw new Error(
+        `Publishing form template revision conflict: ${command.templateId}`,
+      );
+    }
+    const fieldIds = new Set(
+      template.sections.flatMap((section) =>
+        section.fields.map((field) => field.fieldId)),
+    );
+    const unknownAnswer = command.answers.find(
+      (answer) => !fieldIds.has(answer.fieldId),
+    );
+    if (unknownAnswer !== undefined) {
+      throw new Error(
+        `Publishing form answer references an unknown field: ${unknownAnswer.fieldId}`,
+      );
+    }
+    const current = readStoredPublishingFormResponseRowByWorkPartner(
+      this.#database,
+      command.workId,
+      command.partnerId,
+    );
+    const updatedAt = new Date().toISOString();
+    if (current === null) {
+      if (command.expectedRevision !== null) {
+        throw new Error(
+          `Publishing form response revision conflict: ${command.workId}/${command.partnerId}`,
+        );
+      }
+      const responseId = entityId<"PublishingFormResponse">(randomUUID());
+      this.#database.prepare(`
+        INSERT INTO publishing_form_responses (
+          id,schema_version,revision,created_at,updated_at,
+          work_id,partner_id,template_id,template_revision,answers_json
+        ) VALUES (?,1,1,?,?,?,?,?,?,?)
+      `).run(
+        responseId,
+        updatedAt,
+        updatedAt,
+        command.workId,
+        command.partnerId,
+        command.templateId,
+        command.expectedTemplateRevision,
+        JSON.stringify(command.answers),
+      );
+    } else {
+      if (command.expectedRevision !== current.revision) {
+        throw new Error(
+          `Publishing form response revision conflict: ${command.workId}/${command.partnerId}`,
+        );
+      }
+      const result = this.#database.prepare(`
+        UPDATE publishing_form_responses
+        SET revision=revision+1,updated_at=?,template_id=?,template_revision=?,answers_json=?
+        WHERE work_id=? AND partner_id=? AND revision=?
+      `).run(
+        updatedAt,
+        command.templateId,
+        command.expectedTemplateRevision,
+        JSON.stringify(command.answers),
+        command.workId,
+        command.partnerId,
+        command.expectedRevision,
+      );
+      if (Number((result as { changes?: unknown }).changes) !== 1) {
+        throw new Error(
+          `Publishing form response revision conflict: ${command.workId}/${command.partnerId}`,
+        );
+      }
+    }
+    const stored = readStoredPublishingFormResponseRowByWorkPartner(
+      this.#database,
+      command.workId,
+      command.partnerId,
+    );
+    if (stored === null) {
+      throw new Error(
+        `Stored publishing form response is missing: ${command.workId}/${command.partnerId}`,
+      );
+    }
+    return projectStoredPublishingFormResponseRow(stored);
   }
 
   async #createPublishingSubmissionSerially(
@@ -22439,6 +26539,77 @@ function readStoredFragmentRowById(
   return parseStoredFragmentRow(rows[0] ?? {}, "Fragment lookup");
 }
 
+function parseStoredManuscriptAnnotationRow(
+  row: Record<string, unknown>,
+  label: string,
+): StoredManuscriptAnnotationRow {
+  const revision = readRequiredInteger(row, "revision", label);
+  if (revision < 1) {
+    throw new Error(`${label}.revision must be at least 1`);
+  }
+  return Object.freeze({
+    annotationId: entityId<"ManuscriptAnnotation">(
+      readRequiredString(row, "annotationId", label),
+    ),
+    revision,
+    workId: entityId<"Work">(
+      readRequiredString(row, "workId", label),
+    ),
+    sourceDocumentId: entityId<"Document">(
+      readRequiredString(row, "sourceDocumentId", label),
+    ),
+    sourceDocumentRevisionId: entityId<"DocumentRevision">(
+      readRequiredString(row, "sourceDocumentRevisionId", label),
+    ),
+    sourceAnchorId: entityId<"Anchor">(
+      readRequiredString(row, "sourceAnchorId", label),
+    ),
+    body: readString(row, "body", label),
+    tags: parseStoredStringArray(
+      readRequiredString(row, "tagsJson", label),
+      `${label}.tagsJson`,
+    ),
+    exactText: readRequiredString(row, "exactText", label),
+    createdAt: readRequiredString(row, "createdAt", label),
+    updatedAt: readRequiredString(row, "updatedAt", label),
+    retiredAt: readNullableString(row, "retiredAt", label),
+  });
+}
+
+function readStoredManuscriptAnnotationRows(
+  database: NodeSqliteDatabase,
+  workId: EntityId<"Work">,
+): readonly StoredManuscriptAnnotationRow[] {
+  return Object.freeze(
+    database.prepare(ACTIVE_MANUSCRIPT_ANNOTATION_ROWS_SQL).all(workId)
+      .map((row, index) => parseStoredManuscriptAnnotationRow(
+        row,
+        `Manuscript annotation rows[${index}]`,
+      )),
+  );
+}
+
+function readStoredManuscriptAnnotationRowById(
+  database: NodeSqliteDatabase,
+  workId: EntityId<"Work">,
+  annotationId: EntityId<"ManuscriptAnnotation">,
+): StoredManuscriptAnnotationRow | null {
+  const rows = database.prepare(MANUSCRIPT_ANNOTATION_ROW_BY_ID_SQL).all(
+    workId,
+    annotationId,
+  );
+  if (rows.length === 0) return null;
+  if (rows.length !== 1) {
+    throw new Error(
+      `Manuscript annotation lookup returned duplicate rows: ${annotationId}`,
+    );
+  }
+  return parseStoredManuscriptAnnotationRow(
+    rows[0] ?? {},
+    "Manuscript annotation lookup",
+  );
+}
+
 function parseStoredCharacterRow(
   row: Record<string, unknown>,
   label: string,
@@ -22914,16 +27085,68 @@ function readStoredSceneDraftCandidateRowById(
   );
 }
 
+function parseJoinedSceneMetadataBinding(
+  row: Record<string, unknown>,
+  label: string,
+  metadataKind: StoredSceneMetadataSourceRow["metadataKind"],
+  metadataId: string,
+  workId: string,
+  sourceSceneKey: string,
+): SceneMetadataBindingProjection {
+  const status = readRequiredString(row, "bindingStatus", label);
+  if (
+    status !== "current" &&
+    status !== "needs-review" &&
+    status !== "detached"
+  ) {
+    throw new Error(`${label}.bindingStatus is invalid`);
+  }
+  return parseSceneMetadataBindingProjection({
+    schemaVersion: 1,
+    sceneMetadataBindingId: readRequiredString(row, "bindingId", label),
+    revision: readRequiredInteger(row, "bindingRevision", label),
+    workId,
+    metadataKind,
+    metadataId,
+    sourceSceneKey,
+    sceneId: readNullableString(row, "bindingSceneId", label),
+    status: status === "needs-review" ? "needsReview" : status,
+    proposedSceneId: readNullableString(
+      row,
+      "bindingProposedSceneId",
+      label,
+    ),
+    lineageOperationId: readNullableString(
+      row,
+      "bindingLineageOperationId",
+      label,
+    ),
+    createdAt: readRequiredString(row, "bindingCreatedAt", label),
+    updatedAt: readRequiredString(row, "bindingUpdatedAt", label),
+  });
+}
+
 function parseStoredSceneAnnotationRow(
   row: Record<string, unknown>,
   label: string,
 ): StoredSceneAnnotationRow {
+  const sceneAnnotationId = readRequiredString(row, "sceneAnnotationId", label);
+  const workId = readRequiredString(row, "workId", label);
+  const sceneKey = readRequiredString(row, "sceneKey", label);
   return parseSceneAnnotationProjection({
     schemaVersion: 1,
-    sceneAnnotationId: readRequiredString(row, "sceneAnnotationId", label),
+    sceneAnnotationId,
     revision: readRequiredInteger(row, "revision", label),
-    workId: readRequiredString(row, "workId", label),
-    sceneKey: readRequiredString(row, "sceneKey", label),
+    workId,
+    sceneKey,
+    binding: parseJoinedSceneMetadataBinding(
+      row,
+      label,
+      "annotation",
+      sceneAnnotationId,
+      workId,
+      sceneKey,
+    ),
     documentId: readRequiredString(row, "documentId", label),
     documentRevisionId: readRequiredString(row, "documentRevisionId", label),
     sourceCandidateId: readRequiredString(row, "sourceCandidateId", label),
@@ -22980,12 +27203,23 @@ function parseStoredSceneMusicQueueCandidateRow(
   row: Record<string, unknown>,
   label: string,
 ): StoredSceneMusicQueueCandidateRow {
+  const candidateId = readRequiredString(row, "candidateId", label);
+  const workId = readRequiredString(row, "workId", label);
+  const sceneKey = readRequiredString(row, "sceneKey", label);
   return parseSceneMusicQueueCandidate({
     schemaVersion: 1,
-    candidateId: readRequiredString(row, "candidateId", label),
+    candidateId,
     revision: readRequiredInteger(row, "revision", label),
-    workId: readRequiredString(row, "workId", label),
-    sceneKey: readRequiredString(row, "sceneKey", label),
+    workId,
+    sceneKey,
+    binding: parseJoinedSceneMetadataBinding(
+      row,
+      label,
+      "music-queue",
+      candidateId,
+      workId,
+      sceneKey,
+    ),
     sceneAnnotationId: readRequiredString(row, "sceneAnnotationId", label),
     sceneAnnotationRevision: readRequiredInteger(
       row,
@@ -23479,6 +27713,178 @@ function readStoredPublishingPartnerRowById(
   return parseStoredPublishingPartnerRow(
     rows[0] ?? {},
     "Publishing partner lookup",
+  );
+}
+
+function parsePublishingFormJson(value: string, label: string): unknown {
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    throw new Error(`${label} must be valid JSON`);
+  }
+}
+
+function parseStoredPublishingFormTemplateRow(
+  row: Record<string, unknown>,
+  label: string,
+): StoredPublishingFormTemplateRow {
+  const projection = parsePublishingFormTemplateProjection({
+    schemaVersion: 1,
+    templateId: readRequiredString(row, "templateId", label),
+    revision: readRequiredInteger(row, "revision", label),
+    scope: readRequiredString(row, "scope", label),
+    partnerId: readNullableString(row, "partnerId", label),
+    sourceTemplateId: readNullableString(row, "sourceTemplateId", label),
+    name: readRequiredString(row, "name", label),
+    description: readString(row, "description", label),
+    sections: parsePublishingFormJson(
+      readRequiredString(row, "sectionsJson", label),
+      `${label}.sectionsJson`,
+    ),
+    createdAt: readRequiredString(row, "createdAt", label),
+    updatedAt: readRequiredString(row, "updatedAt", label),
+  });
+  return Object.freeze({
+    templateId: projection.templateId,
+    revision: projection.revision,
+    scope: projection.scope,
+    partnerId: projection.partnerId,
+    sourceTemplateId: projection.sourceTemplateId,
+    name: projection.name,
+    description: projection.description,
+    sections: projection.sections,
+    createdAt: projection.createdAt,
+    updatedAt: projection.updatedAt,
+    retiredAt: readNullableString(row, "retiredAt", label),
+  });
+}
+
+function projectStoredPublishingFormTemplateRow(
+  row: StoredPublishingFormTemplateRow,
+): PublishingFormTemplateProjection {
+  return parsePublishingFormTemplateProjection({
+    schemaVersion: 1,
+    templateId: row.templateId,
+    revision: row.revision,
+    scope: row.scope,
+    partnerId: row.partnerId,
+    sourceTemplateId: row.sourceTemplateId,
+    name: row.name,
+    description: row.description,
+    sections: row.sections,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  });
+}
+
+function readStoredPublishingFormTemplateRows(
+  database: NodeSqliteDatabase,
+): readonly StoredPublishingFormTemplateRow[] {
+  return Object.freeze(
+    database.prepare(ACTIVE_PUBLISHING_FORM_TEMPLATE_ROWS_SQL).all()
+      .map((row, index) => parseStoredPublishingFormTemplateRow(
+        row,
+        `Publishing form template rows[${index}]`,
+      )),
+  );
+}
+
+function readStoredPublishingFormTemplateRowById(
+  database: NodeSqliteDatabase,
+  templateId: EntityId<"PublishingFormTemplate">,
+): StoredPublishingFormTemplateRow | null {
+  const rows = database.prepare(PUBLISHING_FORM_TEMPLATE_ROW_BY_ID_SQL).all(
+    templateId,
+  );
+  if (rows.length === 0) return null;
+  if (rows.length !== 1) {
+    throw new Error(`Publishing form template lookup returned duplicate rows: ${templateId}`);
+  }
+  return parseStoredPublishingFormTemplateRow(
+    rows[0] ?? {},
+    "Publishing form template lookup",
+  );
+}
+
+function parseStoredPublishingFormResponseRow(
+  row: Record<string, unknown>,
+  label: string,
+): StoredPublishingFormResponseRow {
+  const projection = parsePublishingFormResponseProjection({
+    schemaVersion: 1,
+    responseId: readRequiredString(row, "responseId", label),
+    revision: readRequiredInteger(row, "revision", label),
+    workId: readRequiredString(row, "workId", label),
+    partnerId: readRequiredString(row, "partnerId", label),
+    templateId: readRequiredString(row, "templateId", label),
+    templateRevision: readRequiredInteger(row, "templateRevision", label),
+    answers: parsePublishingFormJson(
+      readRequiredString(row, "answersJson", label),
+      `${label}.answersJson`,
+    ),
+    createdAt: readRequiredString(row, "createdAt", label),
+    updatedAt: readRequiredString(row, "updatedAt", label),
+  });
+  return Object.freeze({
+    responseId: projection.responseId,
+    revision: projection.revision,
+    workId: projection.workId,
+    partnerId: projection.partnerId,
+    templateId: projection.templateId,
+    templateRevision: projection.templateRevision,
+    answers: projection.answers,
+    createdAt: projection.createdAt,
+    updatedAt: projection.updatedAt,
+  });
+}
+
+function projectStoredPublishingFormResponseRow(
+  row: StoredPublishingFormResponseRow,
+): PublishingFormResponseProjection {
+  return parsePublishingFormResponseProjection({
+    schemaVersion: 1,
+    responseId: row.responseId,
+    revision: row.revision,
+    workId: row.workId,
+    partnerId: row.partnerId,
+    templateId: row.templateId,
+    templateRevision: row.templateRevision,
+    answers: row.answers,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  });
+}
+
+function readStoredPublishingFormResponseRows(
+  database: NodeSqliteDatabase,
+  workId: EntityId<"Work"> | null,
+): readonly StoredPublishingFormResponseRow[] {
+  return Object.freeze(
+    database.prepare(PUBLISHING_FORM_RESPONSE_ROWS_SQL).all(workId, workId)
+      .map((row, index) => parseStoredPublishingFormResponseRow(
+        row,
+        `Publishing form response rows[${index}]`,
+      )),
+  );
+}
+
+function readStoredPublishingFormResponseRowByWorkPartner(
+  database: NodeSqliteDatabase,
+  workId: EntityId<"Work">,
+  partnerId: EntityId<"PublishingPartner">,
+): StoredPublishingFormResponseRow | null {
+  const rows = database
+    .prepare(PUBLISHING_FORM_RESPONSE_ROW_BY_WORK_PARTNER_SQL)
+    .all(workId, partnerId);
+  if (rows.length === 0) return null;
+  if (rows.length !== 1) {
+    throw new Error(
+      `Publishing form response lookup returned duplicate rows: ${workId}/${partnerId}`,
+    );
+  }
+  return parseStoredPublishingFormResponseRow(
+    rows[0] ?? {},
+    "Publishing form response lookup",
   );
 }
 
@@ -24976,14 +29382,30 @@ function readStoredSceneEventOverrideRows(
         if (operation !== "include" && operation !== "exclude") {
           throw new Error(`${label}.operation is invalid`);
         }
+        const bindingStatus = readRequiredString(row, "bindingStatus", label);
+        if (
+          bindingStatus !== "current" &&
+          bindingStatus !== "needs-review" &&
+          bindingStatus !== "detached"
+        ) {
+          throw new Error(`${label}.bindingStatus is invalid`);
+        }
+        const bindingSceneId = readNullableString(row, "bindingSceneId", label);
+        const bindingProposedSceneId = readNullableString(
+          row,
+          "bindingProposedSceneId",
+          label,
+        );
+        const sceneEventOverrideId = entityId<"SceneEventOverride">(
+          readRequiredString(row, "sceneEventOverrideId", label),
+        );
+        const rowWorkId = entityId<"Work">(
+          readRequiredString(row, "workId", label),
+        );
         return Object.freeze({
-          sceneEventOverrideId: entityId<"SceneEventOverride">(
-            readRequiredString(row, "sceneEventOverrideId", label),
-          ),
+          sceneEventOverrideId,
           revision: readRequiredInteger(row, "revision", label),
-          workId: entityId<"Work">(
-            readRequiredString(row, "workId", label),
-          ),
+          workId: rowWorkId,
           sceneKey: readRequiredString(row, "sceneKey", label),
           eventBlockId: entityId<"EventBlock">(
             readRequiredString(row, "eventBlockId", label),
@@ -24991,6 +29413,33 @@ function readStoredSceneEventOverrideRows(
           operation,
           createdAt: readRequiredString(row, "createdAt", label),
           updatedAt: readRequiredString(row, "updatedAt", label),
+          binding: Object.freeze({
+            bindingId: readRequiredString(row, "bindingId", label),
+            revision: readRequiredInteger(row, "bindingRevision", label),
+            workId: rowWorkId,
+            metadataKind: "event-override" as const,
+            metadataId: sceneEventOverrideId,
+            sourceSceneKey: readRequiredString(
+              row,
+              "bindingSourceSceneKey",
+              label,
+            ),
+            sceneId: bindingSceneId === null
+              ? null
+              : entityId<"Scene">(bindingSceneId),
+            status: bindingStatus,
+            proposedSceneId: bindingProposedSceneId === null
+              ? null
+              : entityId<"Scene">(bindingProposedSceneId),
+            lineageOperationId: readNullableString(
+              row,
+              "bindingLineageOperationId",
+              label,
+            ),
+            createdAt: readRequiredString(row, "bindingCreatedAt", label),
+            updatedAt: readRequiredString(row, "bindingUpdatedAt", label),
+            retiredAt: null,
+          }),
         });
       }),
   );
@@ -26204,6 +30653,36 @@ export async function openLocalWorkspaceRuntime(
   await migrateLocalWorkspaceEpisodeRangeMovesIfNeeded(
     profiles.ledgerProfile,
   );
+  await migrateLocalWorkspaceSceneMetadataIfNeeded(
+    profiles.ledgerProfile,
+  );
+  await migrateLocalWorkspaceSceneTrashIfNeeded(
+    profiles.ledgerProfile,
+  );
+  await migrateLocalWorkspaceCanonReviewIfNeeded(
+    profiles.ledgerProfile,
+  );
+  await migrateLocalWorkspaceContinuityIfNeeded(
+    profiles.ledgerProfile,
+  );
+  await migrateLocalWorkspaceCharacterKnowledgeIfNeeded(
+    profiles.ledgerProfile,
+  );
+  await migrateLocalWorkspaceContextPlannerIfNeeded(
+    profiles.ledgerProfile,
+  );
+  await migrateLocalWorkspaceNarrativeDigestIfNeeded(
+    profiles.ledgerProfile,
+  );
+  await migrateLocalWorkspaceSceneAnalysisIfNeeded(
+    profiles.ledgerProfile,
+  );
+  await migrateLocalWorkspaceSceneAnalysisRunsIfNeeded(
+    profiles.ledgerProfile,
+  );
+  await migrateLocalWorkspacePublishingFormsIfNeeded(
+    profiles.ledgerProfile,
+  );
   const ledger = await openNodeSqliteLedger(profiles.ledgerProfile);
   const blobStore = await createNodeImmutableBlobStore(
     profiles.blobStoreProfile,
@@ -26251,6 +30730,10 @@ export async function openLocalWorkspaceRuntime(
       blobStore,
       blobProfile,
     });
+    const sceneTrashStore = ledger.createSceneTrashStore({
+      blobStore,
+      blobProfile,
+    });
     const backupService = createLocalWorkspaceBackupService({
       rootDirectoryPath: options.rootDirectoryPath,
       sourceBlobStore: blobStore,
@@ -26263,17 +30746,20 @@ export async function openLocalWorkspaceRuntime(
       ledger.createResumeCheckpointCaptureTransaction({}),
       options.defaults.anchorEvidenceChecksumAlgorithm,
     );
-    return new DefaultLocalWorkspaceRuntime({
+    const runtime = new DefaultLocalWorkspaceRuntime({
       database,
       ledger,
       revisionStore,
       episodeRangeMoveStore,
+      sceneTrashStore,
       blobStore,
       blobProfile,
       backupService,
       options,
       ...loaded,
     });
+    await runtime.initializeSceneMetadataBindings();
+    return runtime;
   } catch (error) {
     database.close();
     ledger.close();

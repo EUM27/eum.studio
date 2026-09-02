@@ -950,7 +950,7 @@ test("uses local inspiration draws and keeps GPT scene work separate", async () 
     });
     await expect(focusPomodoroStatus).toBeVisible();
     await expect(focusPomodoroStatus).toContainText("작업 모드");
-    await page.locator(".focus-mode-toolbar-host").hover();
+    await page.locator(".manuscript-focus-toolbar-host").hover();
     await page.getByRole("button", { name: "집중 화면 종료", exact: true })
       .click();
     await page.waitForTimeout(200);

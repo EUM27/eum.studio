@@ -18,9 +18,19 @@ export function pickStructureRuntime(
       runtime.relocateSceneSegment(command),
     listSceneOverrides: (command) => runtime.listSceneOverrides(command),
     listSceneProjection: (command) => runtime.listSceneProjection(command),
+    listSceneCanonContexts: (command) => runtime.listSceneCanonContexts(command),
+    finalizeSceneCanonCheck: (command) => runtime.finalizeSceneCanonCheck(command),
     updateSceneRuleSet: (command) => runtime.updateSceneRuleSet(command),
     setSceneEventOverride: (command) =>
       runtime.setSceneEventOverride(command),
+    rebindSceneMetadata: (command) =>
+      runtime.rebindSceneMetadata(command),
+    prepareSceneDeletion: (command) =>
+      runtime.prepareSceneDeletion(command),
+    deleteScene: (command) => runtime.deleteScene(command),
+    listSceneTrash: (command) => runtime.listSceneTrash(command),
+    restoreSceneTrash: (command) => runtime.restoreSceneTrash(command),
+    undoSceneDeletion: (command) => runtime.undoSceneDeletion(command),
     runSceneExtraction: (command) => runtime.runSceneExtraction(command),
     listSceneExtractionCandidates: (command) =>
       runtime.listSceneExtractionCandidates(command),

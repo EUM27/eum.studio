@@ -7,6 +7,11 @@ import {
   PUBLISHING_CONTRACT_LIST_CHANNEL,
   PUBLISHING_CONTRACT_UPDATE_CHANNEL,
   PUBLISHING_EVIDENCE_SET_LINKS_CHANNEL,
+  PUBLISHING_FORM_RESPONSE_LIST_CHANNEL,
+  PUBLISHING_FORM_RESPONSE_SAVE_CHANNEL,
+  PUBLISHING_FORM_TEMPLATE_CREATE_CHANNEL,
+  PUBLISHING_FORM_TEMPLATE_LIST_CHANNEL,
+  PUBLISHING_FORM_TEMPLATE_UPDATE_CHANNEL,
   PUBLISHING_MAIL_CANDIDATE_LINK_CHANNEL,
   PUBLISHING_MAIL_CANDIDATE_LIST_CHANNEL,
   PUBLISHING_MAIL_CANDIDATE_REVIEW_CHANNEL,
@@ -112,6 +117,13 @@ import {
   parseGetPublishingMailScheduleCommand,
   parseSavePublishingMailScheduleCommand,
 } from "../../application/publishing/publishing-mail-schedule-contract";
+import {
+  parseCreatePublishingFormTemplateCommand,
+  parseListPublishingFormResponsesCommand,
+  parseListPublishingFormTemplatesCommand,
+  parseSavePublishingFormResponseCommand,
+  parseUpdatePublishingFormTemplateCommand,
+} from "../../application/publishing/publishing-form-contract";
 
 export type PublishingRuntimeMethod =
   | "createPublishingPartner"
@@ -150,7 +162,12 @@ export type PublishingRuntimeMethod =
   | "syncPublishingMail"
   | "disconnectPublishingMail"
   | "getPublishingMailSchedule"
-  | "savePublishingMailSchedule";
+  | "savePublishingMailSchedule"
+  | "createPublishingFormTemplate"
+  | "listPublishingFormTemplates"
+  | "updatePublishingFormTemplate"
+  | "listPublishingFormResponses"
+  | "savePublishingFormResponse";
 
 type PublishingRuntimeHandler = (command: unknown) => unknown;
 
@@ -207,6 +224,16 @@ export function registerPublishingIpc(input: Readonly<{
     parseListPublishingSubmissionsCommand, "listPublishingSubmissions");
   handle(PUBLISHING_SUBMISSION_UPDATE_CHANNEL,
     parseUpdatePublishingSubmissionCommand, "updatePublishingSubmission");
+  handle(PUBLISHING_FORM_TEMPLATE_CREATE_CHANNEL,
+    parseCreatePublishingFormTemplateCommand, "createPublishingFormTemplate");
+  handle(PUBLISHING_FORM_TEMPLATE_LIST_CHANNEL,
+    parseListPublishingFormTemplatesCommand, "listPublishingFormTemplates");
+  handle(PUBLISHING_FORM_TEMPLATE_UPDATE_CHANNEL,
+    parseUpdatePublishingFormTemplateCommand, "updatePublishingFormTemplate");
+  handle(PUBLISHING_FORM_RESPONSE_LIST_CHANNEL,
+    parseListPublishingFormResponsesCommand, "listPublishingFormResponses");
+  handle(PUBLISHING_FORM_RESPONSE_SAVE_CHANNEL,
+    parseSavePublishingFormResponseCommand, "savePublishingFormResponse");
   handle(PUBLISHING_CONTRACT_CREATE_CHANNEL, parseCreatePublishingContractCommand,
     "createPublishingContract");
   handle(PUBLISHING_CONTRACT_LIST_CHANNEL, parseListPublishingContractsCommand,

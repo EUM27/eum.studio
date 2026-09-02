@@ -114,6 +114,29 @@ const DEFAULT_TIMER_PORT: CharactersTimerPort = Object.freeze({
   cancel: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
 });
 
+export async function loadCanonicalCharacterRecords(input: Readonly<{
+  activeWorkId: EntityId<"Work">;
+  client: Pick<CharactersClient, "list" | "listRelations">;
+}>): Promise<Readonly<{
+  characters: readonly CharacterProjection[];
+  relations: readonly CharacterRelationProjection[];
+}>> {
+  const [characterProjection, relationProjection] = await Promise.all([
+    input.client.list({
+      schemaVersion: 1,
+      workId: input.activeWorkId,
+    }),
+    input.client.listRelations({
+      schemaVersion: 1,
+      workId: input.activeWorkId,
+    }),
+  ]);
+  return Object.freeze({
+    characters: characterProjection.characters,
+    relations: relationProjection.relations,
+  });
+}
+
 export function startCharactersWorkLoad(input: Readonly<{
   activeWorkId: EntityId<"Work"> | null;
   assistantClient: CharactersAssistantClient;

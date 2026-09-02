@@ -401,6 +401,48 @@ describe("ManuscriptDurableSaveQueue", () => {
     expect(queue.getState(document.documentId)).toBe("saved");
   });
 
+  it("rejects navigation instead of retaining an unbounded IME wait", async () => {
+    const document = createDocument();
+    const saveGate = deferred<SaveReceipt>();
+    const saveChangeBatch = vi.fn(
+      (batch: ChangeBatch) => saveGate.promise.then((receipt) => ({
+        ...receipt,
+        workId: batch.workId,
+        documentId: batch.documentId,
+        baseRevisionId: batch.baseRevisionId,
+        batchId: batch.batchId,
+        sequence: batch.sequence,
+      })),
+    );
+    const { queue } = createQueue({
+      documents: [document],
+      saveChangeBatch,
+    });
+    const edit = appendTransaction(randomUUID());
+    queue.record(document.documentId, edit.transaction, {
+      composing: true,
+      editorStateJson: randomUUID(),
+    });
+
+    await expect(
+      queue.flushForNavigation(document.documentId),
+    ).rejects.toThrow(ManuscriptDurableSaveQueueError);
+    expect(saveChangeBatch).not.toHaveBeenCalled();
+
+    const compositionFlush = queue.compositionEnd(document.documentId);
+    expect(compositionFlush).not.toBeNull();
+    await Promise.resolve();
+    expect(saveChangeBatch).toHaveBeenCalledOnce();
+
+    const batch = saveChangeBatch.mock.calls[0]![0];
+    saveGate.resolve(receiptFor(batch));
+    await expect(compositionFlush).resolves.toBeUndefined();
+    await expect(
+      queue.flushForNavigation(document.documentId),
+    ).resolves.toBeUndefined();
+    expect(queue.getState(document.documentId)).toBe("saved");
+  });
+
   it("rejects a close flush while IME still owns pending composed text", async () => {
     const document = createDocument();
     const saveChangeBatch = vi.fn(

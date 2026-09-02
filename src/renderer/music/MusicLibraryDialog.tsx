@@ -60,22 +60,23 @@ export function MusicLibraryDialog(input: {
   readonly onPlayQueueTrack: (index: number) => void;
   readonly onPlayTrack: (track: MusicTrackProjection) => void;
   readonly onRegisterLocalMedia: (mode: LocalMediaStorageMode) => void;
+  readonly onRemoveLocalMedia: (track: LocalMediaTrackProjection) => void;
   readonly onRemoveFromQueue: (track: MusicTrackProjection) => void;
   readonly onSearch: (query: string) => void;
   readonly onToggleFavorite: (track: MusicTrackProjection) => void;
   readonly queue: readonly MusicTrackProjection[];
   readonly queueSaving: boolean;
   readonly registeringMode: LocalMediaStorageMode | null;
+  readonly removingMediaId: string | null;
   readonly results: readonly YouTubeVideoProjection[];
   readonly searching: boolean;
 }) {
   const [activeTab, setActiveTab] = useState<MusicLibraryTab>("queue");
   const [query, setQuery] = useState("");
-  const [registrationMode, setRegistrationMode] =
-    useState<LocalMediaStorageMode>("external-reference");
   const favoriteIds = new Set(input.favorites.map(musicTrackIdentity));
   const queueIds = new Set(input.queue.map(musicTrackIdentity));
-  const busy = input.searching || input.queueSaving || input.registeringMode !== null;
+  const busy = input.searching || input.queueSaving ||
+    input.registeringMode !== null || input.removingMediaId !== null;
   const onBackdropPointerDown = useDialogDismiss({
     disabled: busy,
     onClose: input.onClose,
@@ -170,6 +171,17 @@ export function MusicLibraryDialog(input: {
               </button>
             </>
           )}
+          {mode === "local" && isLocalMediaTrack(track) && (
+            <button
+              aria-label={`${track.title} 등록 삭제`}
+              disabled={busy}
+              onClick={() => input.onRemoveLocalMedia(track)}
+              title="등록 삭제"
+              type="button"
+            >
+              <Trash2 aria-hidden="true" size={13} />
+            </button>
+          )}
           {mode !== "queue" && (
             <button
               aria-label={`${track.title} ${favoriteAction}`}
@@ -259,45 +271,32 @@ export function MusicLibraryDialog(input: {
           </button>
         </nav>
 
-        {activeTab === "local" && (
-          <div className="music-library-register">
-            <fieldset aria-label="미디어 등록 방식">
-              <label title="파일은 원래 위치에서 재생합니다.">
-                <input
-                  aria-label="원본 위치 연결"
-                  checked={registrationMode === "external-reference"}
-                  disabled={busy}
-                  name="local-media-storage-mode"
-                  onChange={() => setRegistrationMode("external-reference")}
-                  type="radio"
-                />
-                <Link2 aria-hidden="true" size={13} />
-                원본 연결
-              </label>
-              <label title="파일을 앱 저장소에 복사합니다.">
-                <input
-                  aria-label="앱에 가져오기"
-                  checked={registrationMode === "managed-copy"}
-                  disabled={busy}
-                  name="local-media-storage-mode"
-                  onChange={() => setRegistrationMode("managed-copy")}
-                  type="radio"
-                />
-                <Upload aria-hidden="true" size={13} />
-                가져오기
-              </label>
-            </fieldset>
-            <button
-              aria-label="미디어 파일 등록"
-              disabled={busy}
-              onClick={() => input.onRegisterLocalMedia(registrationMode)}
-              title="MP3·MP4 등록"
-              type="button"
-            >
-              <Music2 aria-hidden="true" size={14} />
-            </button>
-          </div>
-        )}
+        <div className="music-library-register">
+          <button
+            aria-label="원본 위치 연결"
+            disabled={busy}
+            onClick={() => input.onRegisterLocalMedia("external-reference")}
+            title="파일을 원래 위치에서 재생"
+            type="button"
+          >
+            <Link2 aria-hidden="true" size={13} />
+            {input.registeringMode === "external-reference"
+              ? "연결 중…"
+              : "원본 위치 연결"}
+          </button>
+          <button
+            aria-label="앱에 가져오기"
+            disabled={busy}
+            onClick={() => input.onRegisterLocalMedia("managed-copy")}
+            title="파일을 앱 저장소에 복사"
+            type="button"
+          >
+            <Upload aria-hidden="true" size={13} />
+            {input.registeringMode === "managed-copy"
+              ? "가져오는 중…"
+              : "앱에 가져오기"}
+          </button>
+        </div>
 
         {activeTab === "search" && !input.connected && (
           <div className="music-library-connection" role="status">

@@ -110,8 +110,8 @@ export type SessionFeedbackPanelProps = {
   readonly documents: readonly DocumentLabel[];
   readonly darkMode: boolean;
   readonly focusCycle: FocusCycleProjection | undefined;
-  readonly focusMode: boolean;
-  readonly focusModeAvailable: boolean;
+  readonly manuscriptFocusActive: boolean;
+  readonly manuscriptFocusAvailable: boolean;
   readonly forwardWritingActive: boolean;
   readonly forwardWritingAvailable: boolean;
   readonly nowMs: number;
@@ -125,7 +125,7 @@ export type SessionFeedbackPanelProps = {
   readonly onStopWritingSession: () => void;
   readonly onToggleDarkMode: () => void;
   readonly onToggleForwardWriting: () => void;
-  readonly onToggleFocusMode: () => void;
+  readonly onToggleManuscriptFocus: () => void;
   readonly pomodoro: PomodoroProjection;
 };
 
@@ -282,19 +282,19 @@ export function SessionFeedbackPanel(input: SessionFeedbackPanelProps) {
               <span>종료</span>
             </button>
           )}
-          {input.focusModeAvailable && (
+          {input.manuscriptFocusAvailable && (
             <button
-              aria-label={input.focusMode ? "집중 화면 종료" : "집중 화면 시작"}
+              aria-label={input.manuscriptFocusActive ? "집중 화면 종료" : "집중 화면 시작"}
               className="session-feedback-focus"
-              onClick={input.onToggleFocusMode}
+              onClick={input.onToggleManuscriptFocus}
               title={
-                input.focusMode
+                input.manuscriptFocusActive
                   ? "집중 화면 종료 (Esc)"
                   : "집중 화면 시작 (Ctrl+Shift+Enter)"
               }
               type="button"
             >
-              {input.focusMode ? (
+              {input.manuscriptFocusActive ? (
                 <Minimize2 aria-hidden="true" size={15} />
               ) : (
                 <Maximize2 aria-hidden="true" size={15} />

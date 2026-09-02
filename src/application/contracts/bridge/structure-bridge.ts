@@ -49,6 +49,16 @@ import {
   type UpdateSceneRuleSetCommand,
 } from "../../structure/scene-projection";
 import {
+  parseFinalizeSceneCanonCheckCommand,
+  parseListSceneCanonContextsCommand,
+  parseSceneCanonCheckProjection,
+  parseSceneCanonContextListProjection,
+  type FinalizeSceneCanonCheckCommand,
+  type ListSceneCanonContextsCommand,
+  type SceneCanonCheckProjection,
+  type SceneCanonContextListProjection,
+} from "../../structure/scene-canon-context";
+import {
   parseDecideSceneExtractionAnnotationCommand,
   parseDecideSceneExtractionBoundaryCommand,
   parseListSceneExtractionCandidatesCommand,
@@ -92,6 +102,30 @@ import {
   type ListSceneAnnotationsCommand,
   type SceneAnnotationList,
 } from "../../structure/scene-annotation-contract";
+import {
+  parseRebindSceneMetadataCommand,
+  parseSceneMetadataBindingProjection,
+  type RebindSceneMetadataCommand,
+  type SceneMetadataBindingProjection,
+} from "../../structure/scene-metadata-binding-contract";
+import {
+  parseDeleteSceneCommand,
+  parseListSceneTrashCommand,
+  parsePrepareSceneDeletionCommand,
+  parseRestoreSceneTrashCommand,
+  parseSceneDeletionPreview,
+  parseSceneDeletionReceipt,
+  parseSceneTrashListProjection,
+  parseUndoSceneDeletionCommand,
+  type DeleteSceneCommand,
+  type ListSceneTrashCommand,
+  type PrepareSceneDeletionCommand,
+  type RestoreSceneTrashCommand,
+  type SceneDeletionPreview,
+  type SceneDeletionReceipt,
+  type SceneTrashListProjection,
+  type UndoSceneDeletionCommand,
+} from "../../structure/scene-trash-contract";
 
 export const STRUCTURE_CREATE_EVENT_BLOCK_CHANNEL =
   "studio:structure:create-event-block";
@@ -117,10 +151,26 @@ export const STRUCTURE_LIST_SCENE_OVERRIDES_CHANNEL =
   "studio:structure:list-scene-overrides";
 export const STRUCTURE_LIST_SCENE_PROJECTION_CHANNEL =
   "studio:structure:list-scene-projection";
+export const STRUCTURE_LIST_SCENE_CANON_CONTEXTS_CHANNEL =
+  "studio:structure:list-scene-canon-contexts";
+export const STRUCTURE_FINALIZE_SCENE_CANON_CHECK_CHANNEL =
+  "studio:structure:finalize-scene-canon-check";
 export const STRUCTURE_UPDATE_SCENE_RULE_SET_CHANNEL =
   "studio:structure:update-scene-rule-set";
 export const STRUCTURE_SET_SCENE_EVENT_OVERRIDE_CHANNEL =
   "studio:structure:set-scene-event-override";
+export const STRUCTURE_REBIND_SCENE_METADATA_CHANNEL =
+  "studio:structure:rebind-scene-metadata";
+export const STRUCTURE_PREPARE_SCENE_DELETION_CHANNEL =
+  "studio:structure:prepare-scene-deletion";
+export const STRUCTURE_DELETE_SCENE_CHANNEL =
+  "studio:structure:delete-scene";
+export const STRUCTURE_LIST_SCENE_TRASH_CHANNEL =
+  "studio:structure:list-scene-trash";
+export const STRUCTURE_RESTORE_SCENE_TRASH_CHANNEL =
+  "studio:structure:restore-scene-trash";
+export const STRUCTURE_UNDO_SCENE_DELETION_CHANNEL =
+  "studio:structure:undo-scene-deletion";
 export const STRUCTURE_RUN_SCENE_EXTRACTION_CHANNEL =
   "studio:structure:extract-scenes";
 export const STRUCTURE_LIST_SCENE_EXTRACTION_CANDIDATES_CHANNEL =
@@ -155,8 +205,16 @@ export type StructureBridgeChannel =
   | typeof STRUCTURE_RELOCATE_SCENE_SEGMENT_CHANNEL
   | typeof STRUCTURE_LIST_SCENE_OVERRIDES_CHANNEL
   | typeof STRUCTURE_LIST_SCENE_PROJECTION_CHANNEL
+  | typeof STRUCTURE_LIST_SCENE_CANON_CONTEXTS_CHANNEL
+  | typeof STRUCTURE_FINALIZE_SCENE_CANON_CHECK_CHANNEL
   | typeof STRUCTURE_UPDATE_SCENE_RULE_SET_CHANNEL
   | typeof STRUCTURE_SET_SCENE_EVENT_OVERRIDE_CHANNEL
+  | typeof STRUCTURE_REBIND_SCENE_METADATA_CHANNEL
+  | typeof STRUCTURE_PREPARE_SCENE_DELETION_CHANNEL
+  | typeof STRUCTURE_DELETE_SCENE_CHANNEL
+  | typeof STRUCTURE_LIST_SCENE_TRASH_CHANNEL
+  | typeof STRUCTURE_RESTORE_SCENE_TRASH_CHANNEL
+  | typeof STRUCTURE_UNDO_SCENE_DELETION_CHANNEL
   | typeof STRUCTURE_RUN_SCENE_EXTRACTION_CHANNEL
   | typeof STRUCTURE_LIST_SCENE_EXTRACTION_CANDIDATES_CHANNEL
   | typeof STRUCTURE_DECIDE_SCENE_EXTRACTION_BOUNDARY_CHANNEL
@@ -180,8 +238,16 @@ export type StructureBridgePayload =
   | RelocateSceneSegmentCommand
   | ListSceneOverridesCommand
   | ListSceneProjectionCommand
+  | ListSceneCanonContextsCommand
+  | FinalizeSceneCanonCheckCommand
   | UpdateSceneRuleSetCommand
   | SetSceneEventOverrideCommand
+  | RebindSceneMetadataCommand
+  | PrepareSceneDeletionCommand
+  | DeleteSceneCommand
+  | ListSceneTrashCommand
+  | RestoreSceneTrashCommand
+  | UndoSceneDeletionCommand
   | RunSceneExtractionCommand
   | ListSceneExtractionCandidatesCommand
   | DecideSceneExtractionBoundaryCommand
@@ -228,12 +294,36 @@ export type StructureBridge = Readonly<{
   listSceneProjection: (
     command: ListSceneProjectionCommand,
   ) => Promise<SceneProjectionList>;
+  listSceneCanonContexts: (
+    command: ListSceneCanonContextsCommand,
+  ) => Promise<SceneCanonContextListProjection>;
+  finalizeSceneCanonCheck: (
+    command: FinalizeSceneCanonCheckCommand,
+  ) => Promise<SceneCanonCheckProjection>;
   updateSceneRuleSet: (
     command: UpdateSceneRuleSetCommand,
   ) => Promise<SceneProjectionList>;
   setSceneEventOverride: (
     command: SetSceneEventOverrideCommand,
   ) => Promise<SceneProjectionList>;
+  rebindSceneMetadata: (
+    command: RebindSceneMetadataCommand,
+  ) => Promise<SceneMetadataBindingProjection>;
+  prepareSceneDeletion: (
+    command: PrepareSceneDeletionCommand,
+  ) => Promise<SceneDeletionPreview>;
+  deleteScene: (
+    command: DeleteSceneCommand,
+  ) => Promise<SceneDeletionReceipt>;
+  listSceneTrash: (
+    command: ListSceneTrashCommand,
+  ) => Promise<SceneTrashListProjection>;
+  restoreSceneTrash: (
+    command: RestoreSceneTrashCommand,
+  ) => Promise<SceneDeletionReceipt>;
+  undoSceneDeletion: (
+    command: UndoSceneDeletionCommand,
+  ) => Promise<SceneDeletionReceipt>;
   runSceneExtraction: (
     command: RunSceneExtractionCommand,
   ) => Promise<SceneExtractionResult>;
@@ -396,6 +486,23 @@ export function createStructureBridge(
         throw new Error("Invalid SceneProjection list");
       }
     },
+    listSceneCanonContexts: async (input) => {
+      const command = parseListSceneCanonContextsCommand(input);
+      const value = await invoke(
+        STRUCTURE_LIST_SCENE_CANON_CONTEXTS_CHANNEL,
+        command,
+      );
+      try {
+        return parseSceneCanonContextListProjection(value);
+      } catch {
+        throw new Error("Invalid Scene Canon context list");
+      }
+    },
+    finalizeSceneCanonCheck: async (input) => {
+      const command=parseFinalizeSceneCanonCheckCommand(input);
+      const value=await invoke(STRUCTURE_FINALIZE_SCENE_CANON_CHECK_CHANNEL,command);
+      try{return parseSceneCanonCheckProjection(value);}catch{throw new Error("Invalid Scene Canon check finalization");}
+    },
     updateSceneRuleSet: async (input) => {
       const command = parseUpdateSceneRuleSetCommand(input);
       const value = await invoke(
@@ -418,6 +525,63 @@ export function createStructureBridge(
         return parseSceneProjectionList(value);
       } catch {
         throw new Error("Invalid SceneProjection list");
+      }
+    },
+    rebindSceneMetadata: async (input) => {
+      const command = parseRebindSceneMetadataCommand(input);
+      const value = await invoke(
+        STRUCTURE_REBIND_SCENE_METADATA_CHANNEL,
+        command,
+      );
+      try {
+        return parseSceneMetadataBindingProjection(value);
+      } catch {
+        throw new Error("Invalid Scene metadata binding");
+      }
+    },
+    prepareSceneDeletion: async (input) => {
+      const command = parsePrepareSceneDeletionCommand(input);
+      const value = await invoke(STRUCTURE_PREPARE_SCENE_DELETION_CHANNEL, command);
+      try {
+        return parseSceneDeletionPreview(value);
+      } catch {
+        throw new Error("Invalid Scene deletion preview");
+      }
+    },
+    deleteScene: async (input) => {
+      const command = parseDeleteSceneCommand(input);
+      const value = await invoke(STRUCTURE_DELETE_SCENE_CHANNEL, command);
+      try {
+        return parseSceneDeletionReceipt(value);
+      } catch {
+        throw new Error("Invalid Scene deletion receipt");
+      }
+    },
+    listSceneTrash: async (input) => {
+      const command = parseListSceneTrashCommand(input);
+      const value = await invoke(STRUCTURE_LIST_SCENE_TRASH_CHANNEL, command);
+      try {
+        return parseSceneTrashListProjection(value);
+      } catch {
+        throw new Error("Invalid Scene trash list");
+      }
+    },
+    restoreSceneTrash: async (input) => {
+      const command = parseRestoreSceneTrashCommand(input);
+      const value = await invoke(STRUCTURE_RESTORE_SCENE_TRASH_CHANNEL, command);
+      try {
+        return parseSceneDeletionReceipt(value);
+      } catch {
+        throw new Error("Invalid Scene restore receipt");
+      }
+    },
+    undoSceneDeletion: async (input) => {
+      const command = parseUndoSceneDeletionCommand(input);
+      const value = await invoke(STRUCTURE_UNDO_SCENE_DELETION_CHANNEL, command);
+      try {
+        return parseSceneDeletionReceipt(value);
+      } catch {
+        throw new Error("Invalid Scene deletion undo receipt");
       }
     },
     runSceneExtraction: async (input) => {

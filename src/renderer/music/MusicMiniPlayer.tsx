@@ -171,9 +171,6 @@ export function MusicMiniPlayer(input: {
     !isLocalMediaTrack(currentTrack) || currentTrack.mediaKind === "video"
   );
   const hasPlaylist = input.playlist.length > 0;
-  const availableTrackCount = queue.length > 0
-    ? queue.length
-    : input.playlist.length;
 
   const ensurePlayer = useCallback(async (): Promise<YouTubePlayer> => {
     if (playerRef.current !== null) return playerRef.current;
@@ -512,7 +509,6 @@ export function MusicMiniPlayer(input: {
           }
           aria-pressed={shuffle}
           className={shuffle ? "is-active" : undefined}
-          disabled={availableTrackCount < 2}
           onClick={toggleShuffle}
           title={shuffle ? "랜덤 전체 반복 켜짐" : "랜덤 전체 반복"}
           type="button"

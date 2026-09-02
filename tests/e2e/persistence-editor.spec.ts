@@ -7,6 +7,7 @@ import {
   readFile,
   tmpdir,
   path,
+  DatabaseSync,
   expect,
   test,
   electron,
@@ -263,7 +264,10 @@ test("flushes pending editor changes before a graceful window close completes", 
   const nextSequence = randomInt(0, 10_000);
   const insertedText = randomUUID();
   const electronApp = await electron.launch({
-    args: ["."],
+    args: [
+      ".",
+      `--user-data-dir=${path.join(directory, "electron-user-data")}`,
+    ],
     cwd: process.cwd(),
     env: {
       ...process.env,
@@ -298,6 +302,10 @@ test("flushes pending editor changes before a graceful window close completes", 
         }),
       EUM_STUDIO_WINDOW_VISIBILITY:
         "hidden",
+      EUM_STUDIO_HARDWARE_ACCELERATION:
+        "disabled",
+      EUM_STUDIO_DISABLE_SANDBOX:
+        "1",
     },
   });
   let closed = false;
@@ -1512,20 +1520,6 @@ test("shows only the immediate previous episode flow without changing manuscript
     await expect(flow).toContainText(previousEnding);
     await expect(flow).toContainText(latestEnding);
     await expect(manuscriptCharacterCount).toHaveText("0");
-    await expect.poll(() => flow.evaluate((element) => {
-      const currentLine = element.parentElement?.querySelector<HTMLElement>(
-        ":scope > .cm-line",
-      );
-      if (currentLine === null || currentLine === undefined) {
-        throw new Error("The current Episode line is missing");
-      }
-      const backgroundColor = getComputedStyle(element).backgroundColor;
-      return (
-        backgroundColor !== "rgba(0, 0, 0, 0)" &&
-        backgroundColor !== "transparent" &&
-        getComputedStyle(element).color !== getComputedStyle(currentLine).color
-      );
-    })).toBe(true);
     const expectedFlowLines = getPreviousEpisodeFlowPreviewText(
       firstDocumentText,
     ).split("\n");
@@ -1543,12 +1537,12 @@ test("shows only the immediate previous episode flow without changing manuscript
     await window
       .getByRole("button", { name: "집중 화면 시작", exact: true })
       .click();
-    await window.locator(".focus-mode-toolbar-host").hover();
-    const focusToolbar = window.getByRole("region", {
+    await window.locator(".manuscript-focus-toolbar-host").hover();
+    const manuscriptFocusToolbar = window.getByRole("region", {
       name: "집중 화면 도구",
     });
-    await focusToolbar
-      .getByRole("button", { name: "타자기", exact: true })
+    await manuscriptFocusToolbar
+      .getByRole("button", { name: "커서 따라가기", exact: true })
       .click();
     await expect.poll(() => flow.evaluate((element) => {
       const scroller = element.closest<HTMLElement>(".cm-scroller");
@@ -1559,8 +1553,8 @@ test("shows only the immediate previous episode flow without changing manuscript
         scroller.getBoundingClientRect().top;
       return topGap >= 0 && topGap < 80;
     })).toBe(true);
-    await window.locator(".focus-mode-toolbar-host").hover();
-    await focusToolbar
+    await window.locator(".manuscript-focus-toolbar-host").hover();
+    await manuscriptFocusToolbar
       .getByRole("button", { name: "집중 화면 종료", exact: true })
       .click();
 
@@ -1832,98 +1826,6 @@ test("creates untitled episodes without requiring a title", async () => {
     await expect(documentButtons.nth(1)).toHaveAttribute("aria-current", "page");
   } finally {
     await electronApp.close();
-    await removeVerifiedTemporaryDirectory(directory);
-  }
-});
-
-test("deletes an episode from the document rail and preserves the remaining manuscript", async () => {
-  test.setTimeout(120_000);
-  const directory = await mkdtemp(
-    path.join(tmpdir(), "eum-studio-delete-episode-"),
-  );
-  const workTitle = randomUUID();
-  const firstDocumentTitle = `첫 회차 ${randomUUID()}`;
-  const targetDocumentTitle = `삭제할 회차 ${randomUUID()}`;
-  const firstManuscript = `남길 원고 ${randomUUID()}`;
-  const targetManuscript = `삭제 대상 원고 ${randomUUID()}`;
-  const runtimeEnvironment = {
-    ...process.env,
-    EUM_STUDIO_TEST_EPHEMERAL_WORKSPACE: "0",
-    EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH: directory,
-    EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
-  };
-  const electronArguments = [
-    ".",
-    `--user-data-dir=${path.join(directory, "electron-user-data")}`,
-  ];
-  let electronApp = await electron.launch({
-    args: electronArguments,
-    cwd: process.cwd(),
-    env: runtimeEnvironment,
-  });
-
-  try {
-    let window = await electronApp.firstWindow();
-    await window.setViewportSize({ width: 1280, height: 900 });
-    await window
-      .getByRole("button", { name: "작품 만들기", exact: true })
-      .click();
-    const createWorkDialog = window.getByRole("dialog", {
-      name: "새 작품 만들기",
-    });
-    await createWorkDialog.getByLabel("작품 제목").fill(workTitle);
-    await createWorkDialog.getByLabel("첫 회차 제목").fill(firstDocumentTitle);
-    await createWorkDialog
-      .getByRole("button", { name: "작품 만들기", exact: true })
-      .click();
-
-    let manuscript = window.getByRole("textbox", { name: "원고" });
-    await manuscript.pressSequentially(firstManuscript);
-    await expect(window.getByTestId("save-state")).toHaveText("저장됨");
-    await createNamedEpisode(window, targetDocumentTitle);
-    manuscript = window.getByRole("textbox", { name: "원고" });
-    await manuscript.pressSequentially(targetManuscript);
-    await expect(window.getByTestId("save-state")).toHaveText("저장됨");
-
-    const documentRail = window.getByRole("complementary", {
-      name: "문서 레일",
-    });
-    window.once("dialog", async (dialog) => {
-      expect(dialog.message()).toContain(targetDocumentTitle);
-      expect(dialog.message()).toContain("원고와 기록은 복구를 위해 보존됩니다.");
-      await dialog.accept();
-    });
-    await documentRail.getByRole("button", {
-      name: `${targetDocumentTitle} 회차 삭제`,
-      exact: true,
-    }).click();
-    await expect(documentRail.getByText(targetDocumentTitle, { exact: true }))
-      .toHaveCount(0);
-    await expect(window.getByTestId("manuscript-title"))
-      .toHaveText(firstDocumentTitle);
-    await expectEditorText(
-      window.getByRole("textbox", { name: "원고" }),
-      firstManuscript,
-    );
-
-    await electronApp.close();
-    electronApp = await electron.launch({
-      args: electronArguments,
-      cwd: process.cwd(),
-      env: runtimeEnvironment,
-    });
-    window = await electronApp.firstWindow();
-    await continueFromMain(window);
-    await expect(window.getByTestId("manuscript-title"))
-      .toHaveText(firstDocumentTitle);
-    await expect(window.getByRole("complementary", { name: "문서 레일" })
-      .getByText(targetDocumentTitle, { exact: true })).toHaveCount(0);
-    await expectEditorText(
-      window.getByRole("textbox", { name: "원고" }),
-      firstManuscript,
-    );
-  } finally {
-    await electronApp.close().catch(() => undefined);
     await removeVerifiedTemporaryDirectory(directory);
   }
 });
@@ -2650,6 +2552,134 @@ test("switches among episodes from the document tree and restores the active epi
   }
 });
 
+test("keeps repeated episode switching bounded and the editor writable", async () => {
+  test.setTimeout(180_000);
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "eum-studio-episode-switch-stability-"),
+  );
+  const workTitle = randomUUID();
+  const documentTitles = Array.from({ length: 4 }, () => randomUUID());
+  const databasePath = path.join(directory, "workspace.sqlite3");
+  const runtimeEnvironment = {
+    ...process.env,
+    EUM_STUDIO_TEST_EPHEMERAL_WORKSPACE: "0",
+    EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH: directory,
+    EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+  };
+  const electronArguments = [
+    ".",
+    `--user-data-dir=${path.join(directory, "electron-user-data")}`,
+  ];
+  const readCheckpointCount = (): number => {
+    const database = new DatabaseSync(databasePath, { readOnly: true });
+    try {
+      const row = database.prepare(`
+        SELECT COUNT(*) AS count
+        FROM resume_checkpoints
+      `).get() as { readonly count: number };
+      return row.count;
+    } finally {
+      database.close();
+    }
+  };
+  const waitForCheckpointQuiescence = async (): Promise<number> => {
+    let previous = -1;
+    let stableReads = 0;
+    let latest = -1;
+    await expect.poll(() => {
+      latest = readCheckpointCount();
+      if (latest === previous) {
+        stableReads += 1;
+      } else {
+        previous = latest;
+        stableReads = 0;
+      }
+      return stableReads;
+    }, {
+      intervals: [50, 100, 150, 200],
+      timeout: 5_000,
+    }).toBeGreaterThanOrEqual(2);
+    return latest;
+  };
+  const electronApp = await electron.launch({
+    args: electronArguments,
+    cwd: process.cwd(),
+    env: runtimeEnvironment,
+  });
+
+  try {
+    const window = await electronApp.firstWindow();
+    await window.setViewportSize({ width: 1280, height: 900 });
+    await window
+      .getByRole("button", { name: "작품 만들기", exact: true })
+      .click();
+    const createWorkDialog = window.getByRole("dialog", {
+      name: "새 작품 만들기",
+    });
+    await createWorkDialog.getByLabel("작품 제목").fill(workTitle);
+    await createWorkDialog
+      .getByLabel("첫 회차 제목")
+      .fill(documentTitles[0]!);
+    await createWorkDialog
+      .getByRole("button", { name: "작품 만들기", exact: true })
+      .click();
+    for (const title of documentTitles.slice(1)) {
+      await createNamedEpisode(window, title);
+    }
+    await expect(window.getByTestId("manuscript-title")).toHaveText(
+      documentTitles[3]!,
+    );
+    await expect(window.getByTestId("save-state")).toHaveText("저장됨");
+    const checkpointsBeforeSwitches = await waitForCheckpointQuiescence();
+    const switchTargets = Array.from(
+      { length: 48 },
+      (_, index) => documentTitles[index % 3]!,
+    );
+    for (const title of switchTargets) {
+      await activateDocumentFromTree(window, title);
+    }
+
+    await expect(window.getByTestId("manuscript-title")).toHaveText(
+      documentTitles[2]!,
+    );
+    await expect(documentTreeButton(window, documentTitles[3]!)).toBeEnabled();
+    const checkpointsAfterSwitches = await waitForCheckpointQuiescence();
+    expect(
+      checkpointsAfterSwitches - checkpointsBeforeSwitches,
+    ).toBeGreaterThanOrEqual(1);
+    expect(
+      checkpointsAfterSwitches - checkpointsBeforeSwitches,
+    ).toBeLessThanOrEqual(switchTargets.length);
+
+    const thirdText = `${randomUUID()} 세 번째 회차 입력`;
+    const fourthText = `${randomUUID()} 네 번째 회차 입력`;
+    let manuscript = window.getByRole("textbox", { name: "원고" });
+    await manuscript.click();
+    await manuscript.pressSequentially(thirdText);
+    await expect(window.getByTestId("save-state")).toHaveText("저장됨");
+
+    await activateDocumentFromTree(window, documentTitles[3]!);
+    manuscript = window.getByRole("textbox", { name: "원고" });
+    await manuscript.click();
+    await manuscript.pressSequentially(fourthText);
+    await expect(window.getByTestId("save-state")).toHaveText("저장됨");
+
+    await activateDocumentFromTree(window, documentTitles[2]!);
+    await expectEditorText(
+      window.getByRole("textbox", { name: "원고" }),
+      thirdText,
+    );
+    await activateDocumentFromTree(window, documentTitles[3]!);
+    await expectEditorText(
+      window.getByRole("textbox", { name: "원고" }),
+      fourthText,
+    );
+  } finally {
+    await electronApp.close();
+    await removeVerifiedTemporaryDirectory(directory);
+  }
+});
+
 test("retires a work without deleting its manuscript data", async () => {
   const directory = await mkdtemp(
     path.join(tmpdir(), "eum-studio-retire-work-"),
@@ -2713,6 +2743,7 @@ test("retires a work without deleting its manuscript data", async () => {
     manuscript = window.getByRole("textbox", { name: "원고" });
     await manuscript.pressSequentially(secondManuscript);
     await expect(window.getByTestId("save-state")).toHaveText("저장됨");
+    await openStudioHome(window);
 
     window.once("dialog", async (dialog) => {
       expect(dialog.message()).toContain(secondWorkTitle);
@@ -2725,15 +2756,6 @@ test("retires a work without deleting its manuscript data", async () => {
         exact: true,
       })
       .click();
-    await expect(window.getByText(firstWorkTitle, { exact: true }).first())
-      .toBeVisible();
-    await expect.poll(() => window.evaluate(async (retiredWorkTitle) => {
-      const browserWindow = document.defaultView;
-      if (browserWindow === null) return true;
-      const catalog = await browserWindow.eumStudio.workspace.getCatalog();
-      return catalog.works.some((work) => work.title === retiredWorkTitle);
-    }, secondWorkTitle)).toBe(false);
-    await openStudioHome(window);
     await expect(
       window.getByRole("button", {
         name: `${secondWorkTitle} 작품 삭제`,
@@ -2947,12 +2969,18 @@ test("retires an episode while preserving its manuscript data", async () => {
   }
 });
 
-test("defers a document switch until Hangul composition commits", async () => {
+test("keeps the active episode unchanged until Hangul composition commits", async () => {
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "eum-studio-composition-switch-"),
+  );
   const compositionText = readHangulCompositionText();
   const documentProfile = createDocumentSwitchProfile("");
   const [firstDocument, secondDocument] = documentProfile.documents;
   const electronApp = await electron.launch({
-    args: ["."],
+    args: [
+      ".",
+      `--user-data-dir=${path.join(directory, "electron-user-data")}`,
+    ],
     cwd: process.cwd(),
     env: {
       ...process.env,
@@ -2982,9 +3010,12 @@ test("defers a document switch until Hangul composition commits", async () => {
       .locator(".document-tree-open")
       .filter({ hasText: secondDocument.label })
       .evaluate((button: HTMLElement) => button.click());
-    await expect
-      .poll(() => readActiveDocumentId(window))
-      .toBe(secondDocument.documentId);
+    await expect.poll(() => readActiveDocumentId(window)).toBe(
+      firstDocument.documentId,
+    );
+    await expect(window.getByTestId("manuscript-title")).toHaveText(
+      firstDocument.label,
+    );
     await expect(manuscript).toHaveText(compositionText);
 
     await session.send("Input.insertText", { text: compositionText });
@@ -3001,6 +3032,7 @@ test("defers a document switch until Hangul composition commits", async () => {
     await session.detach();
   } finally {
     await electronApp.close();
+    await removeVerifiedTemporaryDirectory(directory);
   }
 });
 

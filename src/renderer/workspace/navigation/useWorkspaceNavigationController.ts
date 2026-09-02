@@ -1,9 +1,11 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import {
+  DEFAULT_CANON_TAB,
   DEFAULT_REVIEW_TAB,
   DEFAULT_STRUCTURE_TAB,
   DEFAULT_WORK_SECTION,
+  type CanonTab,
   type ReviewTab,
   type StructureTab,
   type WorkSection,
@@ -11,8 +13,8 @@ import {
 import type { SceneExtractionSelection } from "../../editor/SceneExtractionPanel";
 
 type WorkReturnLocation = Readonly<{
-  section: "structure" | "review";
-  tab: StructureTab | ReviewTab;
+  section: "structure" | "canon" | "review";
+  tab: StructureTab | CanonTab | ReviewTab;
 }>;
 
 export type WorkspaceNavigationState = ReturnType<
@@ -26,6 +28,7 @@ export function useWorkspaceNavigationState() {
   const [structureTab, setStructureTab] = useState<StructureTab>(
     DEFAULT_STRUCTURE_TAB,
   );
+  const [canonTab, setCanonTab] = useState<CanonTab>(DEFAULT_CANON_TAB);
   const [reviewTab, setReviewTab] = useState<ReviewTab>(DEFAULT_REVIEW_TAB);
   const [workReturnLocation, setWorkReturnLocation] =
     useState<WorkReturnLocation | null>(null);
@@ -49,6 +52,7 @@ export function useWorkspaceNavigationState() {
   const resetWorkspaceNavigation = useCallback(() => {
     setWorkSection(DEFAULT_WORK_SECTION);
     setStructureTab(DEFAULT_STRUCTURE_TAB);
+    setCanonTab(DEFAULT_CANON_TAB);
     setReviewTab(DEFAULT_REVIEW_TAB);
     setWorkReturnLocation(null);
   }, []);
@@ -57,6 +61,9 @@ export function useWorkspaceNavigationState() {
   }, []);
   const selectStructureTab = useCallback((tab: StructureTab) => {
     setStructureTab(tab);
+  }, []);
+  const selectCanonTab = useCallback((tab: CanonTab) => {
+    setCanonTab(tab);
   }, []);
   const selectReviewTab = useCallback((tab: ReviewTab) => {
     setReviewTab(tab);
@@ -67,16 +74,20 @@ export function useWorkspaceNavigationState() {
   const preserveCurrentWorkLocation = useCallback(() => {
     if (workSection === "structure") {
       setWorkReturnLocation({ section: "structure", tab: structureTab });
+    } else if (workSection === "canon") {
+      setWorkReturnLocation({ section: "canon", tab: canonTab });
     } else if (workSection === "review") {
       setWorkReturnLocation({ section: "review", tab: reviewTab });
     }
-  }, [reviewTab, structureTab, workSection]);
+  }, [canonTab, reviewTab, structureTab, workSection]);
   const returnToPreviousWorkLocation = useCallback(() => {
     const target = workReturnLocation;
     if (target === null) return;
     setWorkReturnLocation(null);
     if (target.section === "structure") {
       setStructureTab(target.tab as StructureTab);
+    } else if (target.section === "canon") {
+      setCanonTab(target.tab as CanonTab);
     } else {
       setReviewTab(target.tab as ReviewTab);
     }
@@ -93,6 +104,7 @@ export function useWorkspaceNavigationState() {
   return useMemo(() => ({
     workSection,
     structureTab,
+    canonTab,
     reviewTab,
     workReturnLocation,
     recordsNowMs,
@@ -101,6 +113,7 @@ export function useWorkspaceNavigationState() {
     resetWorkspaceNavigation,
     showWorkSection,
     selectStructureTab,
+    selectCanonTab,
     selectReviewTab,
     clearWorkReturnLocation,
     preserveCurrentWorkLocation,
@@ -109,6 +122,7 @@ export function useWorkspaceNavigationState() {
     touchRecordsNow,
   }), [
     beginWorkNavigationReset,
+    canonTab,
     clearWorkReturnLocation,
     openRecordsDocument,
     preserveCurrentWorkLocation,
@@ -117,6 +131,7 @@ export function useWorkspaceNavigationState() {
     returnToPreviousWorkLocation,
     reviewTab,
     selectReviewTab,
+    selectCanonTab,
     selectStructureTab,
     showWorkSection,
     structureTab,
@@ -129,13 +144,18 @@ export function useWorkspaceNavigationState() {
 
 export function useWorkspaceNavigationController(input: Readonly<{
   captureCandidateSelection: () => Promise<SceneExtractionSelection | null>;
-  exitFocusMode: () => void;
+  exitManuscriptFocus: () => void;
   navigation: WorkspaceNavigationState;
   openCharacterWorkspace: () => Promise<unknown>;
   openPlotWorkspace: (
     initialTab: "board" | "scenes",
   ) => Promise<SceneExtractionSelection | null>;
   refreshCandidates: () => void;
+  refreshCanonCandidates: () => void;
+  refreshContinuity: () => void;
+  refreshCharacterKnowledge: () => void;
+  refreshContextPlanner: () => void;
+  refreshNarrativeDigests: () => void;
   selectCandidateSceneExtraction: (
     selection: SceneExtractionSelection | null,
   ) => void;
@@ -150,7 +170,7 @@ export function useWorkspaceNavigationController(input: Readonly<{
 
   const changeWorkSection = useCallback((section: WorkSection) => {
     if (input.versionActionState !== "idle") return;
-    if (section !== "write") input.exitFocusMode();
+    if (section !== "write") input.exitManuscriptFocus();
     input.navigation.clearWorkReturnLocation();
     input.navigation.showWorkSection(section);
     if (section === "review" && input.navigation.reviewTab === "records") {
@@ -160,6 +180,12 @@ export function useWorkspaceNavigationController(input: Readonly<{
       input.navigation.reviewTab === "candidates"
     ) {
       openCandidateReview();
+    }
+    if (section === "canon") {
+      input.refreshCanonCandidates();
+      if (input.navigation.canonTab === "continuity") input.refreshContinuity();
+      if (input.navigation.canonTab === "knowledge") input.refreshCharacterKnowledge();
+      if (input.navigation.canonTab === "context") input.refreshContextPlanner();
     }
   }, [input, openCandidateReview]);
 
@@ -182,7 +208,7 @@ export function useWorkspaceNavigationController(input: Readonly<{
   }, [input]);
 
   const changeStructureTab = useCallback((tab: StructureTab) => {
-    input.exitFocusMode();
+    input.exitManuscriptFocus();
     input.navigation.clearWorkReturnLocation();
     if (tab === "characters") {
       void openCharacterWorkspace();
@@ -203,9 +229,20 @@ export function useWorkspaceNavigationController(input: Readonly<{
     if (tab === "candidates") openCandidateReview();
   }, [input.navigation, openCandidateReview]);
 
+  const changeCanonTab = useCallback((tab: CanonTab) => {
+    input.navigation.selectCanonTab(tab);
+    input.navigation.clearWorkReturnLocation();
+    if (tab === "review") input.refreshCanonCandidates();
+    if (tab === "continuity") input.refreshContinuity();
+    if (tab === "knowledge") input.refreshCharacterKnowledge();
+    if (tab === "digest") input.refreshNarrativeDigests();
+    if (tab === "context") input.refreshContextPlanner();
+  }, [input]);
+
   return {
     changeWorkSection,
     changeStructureTab,
+    changeCanonTab,
     changeReviewTab,
     openCharacterWorkspace,
     openPlotWorkspace,

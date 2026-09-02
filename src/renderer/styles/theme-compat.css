@@ -14,6 +14,11 @@
     .nord-theme,
     .focus-dark-theme
   ) {
+  --eum-accent-text: color-mix(
+    in srgb,
+    var(--starlight-accent) 72%,
+    var(--starlight-text-primary)
+  );
   color-scheme: dark;
 }
 
@@ -65,7 +70,7 @@
     .document-tree-open.is-active,
     .bottom-event-card.is-current
   ) {
-  color: var(--starlight-accent-hover);
+  color: var(--eum-accent-text);
   background: var(--starlight-hover) !important;
   border-color: var(--starlight-border);
 }
@@ -747,7 +752,7 @@
 
 /* Focus themes keep the Pomodoro status and its expanded toolbar visible. */
 .studio-app-shell:is(.focus-light-theme, .focus-dark-theme)
-  .focus-mode-toolbar-host {
+  .manuscript-focus-toolbar-host {
   z-index: 60;
 }
 
@@ -767,9 +772,9 @@
 }
 
 .studio-app-shell:is(.focus-light-theme, .focus-dark-theme)
-  .focus-mode-pomodoro-status,
+  .manuscript-focus-pomodoro-status,
 .studio-app-shell:is(.focus-light-theme, .focus-dark-theme)
-  .focus-mode-toolbar {
+  .manuscript-focus-toolbar {
   color: var(--starlight-text-primary);
   background: color-mix(
     in srgb,
@@ -785,7 +790,6 @@
 }
 
 .studio-app-shell:is(.focus-light-theme, .focus-dark-theme)
-  .focus-mode-pomodoro-status span {
+  .manuscript-focus-pomodoro-status span {
   color: var(--starlight-text-secondary);
 }
-

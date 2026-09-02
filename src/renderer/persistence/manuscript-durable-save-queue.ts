@@ -297,6 +297,20 @@ export class ManuscriptDurableSaveQueue {
     return null;
   }
 
+  flushForNavigation(
+    documentId: EntityId<"Document">,
+  ): Promise<void> {
+    const document = this.#getDocument(documentId);
+    if (document.composing) {
+      this.#cancelTimer(document);
+      document.flushRequested = true;
+      return Promise.reject(new ManuscriptDurableSaveQueueError(
+        `Cannot navigate while IME composition owns pending text for document ${document.documentId}`,
+      ));
+    }
+    return this.flush(documentId);
+  }
+
   flushForClose(
     documentId: EntityId<"Document">,
   ): Promise<void> {

@@ -732,6 +732,7 @@ test("creates the first local Work and reopens its saved manuscript after restar
     EUM_STUDIO_TEST_EPHEMERAL_WORKSPACE: "0",
     EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH: directory,
     EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+    EUM_STUDIO_DISABLE_SANDBOX: "1",
   };
   const electronArguments = [
     ".",
@@ -805,10 +806,10 @@ test("creates the first local Work and reopens its saved manuscript after restar
     await manuscript.pressSequentially(manuscriptText);
     await expect(page.getByTestId("save-state")).toHaveText("저장됨");
     await openReviewTab(page, "버전");
-    const snapshotRegion = page.getByRole("region", { name: "작품 스냅샷" });
-    await snapshotRegion.getByLabel("작품 스냅샷 이름").fill(snapshotLabel);
+    const snapshotRegion = page.getByRole("region", { name: "명명된 기준점 슬롯" });
+    await snapshotRegion.getByLabel("기준점 슬롯 이름").fill(snapshotLabel);
     await snapshotRegion
-      .getByRole("button", { name: "생성", exact: true })
+      .getByRole("button", { name: "이 슬롯에 기준점 만들기", exact: true })
       .click();
     await expect(snapshotRegion.getByText(snapshotLabel, { exact: true })).toBeVisible();
     const snapshotRevisionProjection = await page.evaluate(async () => {
@@ -945,7 +946,7 @@ test("creates the first local Work and reopens its saved manuscript after restar
     await openReviewTab(restartedPage, "버전");
     await expect(
       restartedPage
-        .getByRole("region", { name: "작품 스냅샷" })
+        .getByRole("region", { name: "명명된 기준점 슬롯" })
         .getByText(snapshotLabel, { exact: true }),
     ).toBeVisible();
     await openWorkSection(restartedPage, "쓰기");
@@ -1398,6 +1399,7 @@ test("compares one immutable WorkSnapshot across current Documents", async () =>
     EUM_STUDIO_TEST_EPHEMERAL_WORKSPACE: "0",
     EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH: directory,
     EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+    EUM_STUDIO_DISABLE_SANDBOX: "1",
   };
   const electronApp = await electron.launch({
     args: [
@@ -1436,16 +1438,16 @@ test("compares one immutable WorkSnapshot across current Documents", async () =>
     await expect(page.getByTestId("save-state")).toHaveText("저장됨");
 
     await openReviewTab(page, "버전");
-    const snapshotRegion = page.getByRole("region", { name: "작품 스냅샷" });
-    await snapshotRegion.getByLabel("작품 스냅샷 이름").fill(snapshotLabel);
+    const snapshotRegion = page.getByRole("region", { name: "명명된 기준점 슬롯" });
+    await snapshotRegion.getByLabel("기준점 슬롯 이름").fill(snapshotLabel);
     await snapshotRegion
-      .getByRole("button", { name: "생성", exact: true })
+      .getByRole("button", { name: "이 슬롯에 기준점 만들기", exact: true })
       .click();
     await expect(snapshotRegion.getByText(snapshotLabel, { exact: true })).toBeVisible();
 
     await expect(
       snapshotRegion.getByRole("button", {
-        name: `${snapshotLabel} 스냅샷 비교`,
+        name: `${snapshotLabel} 현재 기준점 비교`,
         exact: true,
       }),
     ).toBeEnabled();
@@ -1466,7 +1468,7 @@ test("compares one immutable WorkSnapshot across current Documents", async () =>
     await openReviewTab(page, "버전");
     await snapshotRegion
       .getByRole("button", {
-        name: `${snapshotLabel} 스냅샷 비교`,
+        name: `${snapshotLabel} 현재 기준점 비교`,
         exact: true,
       })
       .click();

@@ -15,6 +15,7 @@ import {
   approveLoreCandidateWithRefresh,
   createLoreCandidateRecord,
   createLoreEntryRecord,
+  loadCanonicalLoreEntries,
   readLoreSelection,
   rejectLoreCandidateRecord,
   retireLoreEntryWithCompatibility,
@@ -232,6 +233,22 @@ function linksPort(input: Partial<LoreLinksCompatibilityPort> = {}) {
 }
 
 describe("lore controller helpers", () => {
+  it("reloads the authoritative Lore projection without Candidate mutation", async () => {
+    const entries = [loreEntry("reload")];
+    const client = {
+      list: vi.fn(async () => ({
+        schemaVersion: 1 as const,
+        workId: entries[0]!.workId,
+        entries,
+      })),
+    } as Pick<LoreEntriesClient, "list">;
+
+    await expect(loadCanonicalLoreEntries({
+      activeWorkId: entries[0]!.workId,
+      client,
+    })).resolves.toEqual(entries);
+  });
+
   it("delays reset and atomically loads entries, Candidates, and links", async () => {
     let scheduled: (() => void) | null = null;
     const cancel = vi.fn();

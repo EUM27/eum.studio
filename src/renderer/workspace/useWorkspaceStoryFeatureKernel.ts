@@ -3,6 +3,7 @@ import { useCallback, useMemo, type RefObject } from "react";
 import type { StudioBridge } from "../../application/contracts/studio-bridge";
 import type { ManuscriptDocumentSource } from "../../application/editor/manuscript-document-profile";
 import { deriveWorkStructureOverview } from "../../application/structure/work-structure-overview";
+import type { SceneProjection } from "../../application/structure/scene-projection";
 import type { WorkspaceWorkSummary } from "../../application/workspace/workspace-contract";
 import { entityId, type EntityId } from "../../domain/writing";
 import type { ManuscriptEditorHandle } from "../editor/ManuscriptEditor";
@@ -20,6 +21,7 @@ import type { usePersistenceCoordinator } from "./session/usePersistenceCoordina
 import type { useWorkspaceCoreFeatureKernel } from "./useWorkspaceCoreFeatureKernel";
 import { useWorkspaceManuscriptActionsController } from "./editor/useWorkspaceManuscriptActionsController";
 import { useMoveRangeToEpisodeController } from "../features/editor-tools/useMoveRangeToEpisodeController";
+import { useAutomaticSceneAnalysisController } from "../features/analysis/useAutomaticSceneAnalysisController";
 
 export function useWorkspaceStoryFeatureKernel(input: Readonly<{
   activeDocument: ManuscriptDocumentSource | undefined;
@@ -38,6 +40,8 @@ export function useWorkspaceStoryFeatureKernel(input: Readonly<{
   reloadRuntimeAfterEpisodeMove: (
     preferredDocumentId: EntityId<"Document">,
   ) => Promise<void>;
+  sceneAnalysisSettingsRevision: number;
+  sceneAnalysisEnabled: boolean | null;
   structureKernel: ReturnType<typeof useWorkspaceStructureKernel>;
   telemetryStore: ManuscriptTelemetryStore;
 }>) {
@@ -56,6 +60,9 @@ export function useWorkspaceStoryFeatureKernel(input: Readonly<{
     characterRelations,
     characters,
     charactersController,
+    canonReviewController,
+    continuityController,
+    characterKnowledgeController,
     editorToolsController,
     eventWorkspaceEditorPort,
     loreActionState,
@@ -67,6 +74,7 @@ export function useWorkspaceStoryFeatureKernel(input: Readonly<{
     refreshEventRailAfterPlotChange,
     selectedCharacterId,
     selectedLoreEntryId,
+    narrativeDigestController,
   } = input.coreKernel;
   const {
     eventBlocks,
@@ -90,6 +98,7 @@ export function useWorkspaceStoryFeatureKernel(input: Readonly<{
   } = input.structureKernel;
   const {
     preserveCurrentWorkLocation,
+    selectCanonTab,
     selectStructureTab,
     showWorkSection,
   } = input.navigation;
@@ -176,6 +185,8 @@ export function useWorkspaceStoryFeatureKernel(input: Readonly<{
       ) ?? false,
       materializeDocumentText: (document: ManuscriptDocumentSource) =>
         manuscriptEditorRef.current?.materializeDocumentText(document),
+      isDocumentComposing: (document: ManuscriptDocumentSource) =>
+        manuscriptEditorRef.current?.isDocumentComposing(document) ?? false,
       readDocumentState: (document: ManuscriptDocumentSource) =>
         manuscriptEditorRef.current?.readDocumentState(document),
       recordSceneBoundaryHistory: (
@@ -195,6 +206,22 @@ export function useWorkspaceStoryFeatureKernel(input: Readonly<{
       entityId<"SceneExtractionRequest">(crypto.randomUUID()), []);
     const createSceneDraftRequestId = useCallback(() =>
       entityId<"SceneDraftRequest">(crypto.randomUUID()), []);
+    const automaticSceneAnalysisController = useAutomaticSceneAnalysisController({
+      activeWorkId,
+      assistantClient: input.client.assistant,
+      canonReviewController,
+      conversationId: assistantConversationId,
+      digestClient: input.client.narrativeDigest,
+      documents: activeWorkDocuments,
+      persistDocument,
+      refreshDigests: narrativeDigestController.refresh,
+      refreshSceneProjection,
+      sceneProjection,
+      settingsClient: input.client.settings,
+      settingsEnabled: input.sceneAnalysisEnabled,
+      settingsRevision: input.sceneAnalysisSettingsRevision,
+      structureClient: input.client.structure,
+    });
     const sceneWorkspaceControllerInput = useMemo(() => ({
       activeDocument: activeDocument ?? null,
       activeWorkId: activeWork?.workId ?? null,
@@ -206,11 +233,13 @@ export function useWorkspaceStoryFeatureKernel(input: Readonly<{
       documents: activeWorkDocuments,
       editor: sceneWorkspaceEditorPort,
       openWritingSurface: openWritingSurfaceForSceneDraft,
+      onSceneSplit: automaticSceneAnalysisController.analyzeSplit,
       persistDocument,
       prepareSceneExtractionCapture: preparePlotSourceNavigation,
       reconcile: structureProjectionReconcile,
       refreshSceneMusicQueueCandidates,
       refreshSceneProjection,
+      reloadRuntimeAfterSceneMutation: input.reloadRuntimeAfterEpisodeMove,
       sceneExtractionCandidates,
       sceneProjection,
       state: sceneWorkspaceState,
@@ -226,10 +255,12 @@ export function useWorkspaceStoryFeatureKernel(input: Readonly<{
       input.client.assistant,
       input.client.structure,
       openWritingSurfaceForSceneDraft,
+      automaticSceneAnalysisController.analyzeSplit,
       persistDocument,
       preparePlotSourceNavigation,
       refreshSceneMusicQueueCandidates,
       refreshSceneProjection,
+      input.reloadRuntimeAfterEpisodeMove,
       sceneExtractionCandidates,
       sceneProjection,
       sceneWorkspaceEditorPort,
@@ -350,6 +381,44 @@ export function useWorkspaceStoryFeatureKernel(input: Readonly<{
     const {
       fragments,
     } = fragmentsController;
+    const openCanonReview = useCallback(() => {
+      selectCanonTab("review");
+      showWorkSection("canon");
+    }, [selectCanonTab, showWorkSection]);
+    const openContinuity = useCallback(() => {
+      selectCanonTab("continuity");
+      showWorkSection("canon");
+    }, [selectCanonTab, showWorkSection]);
+    const openCharacterKnowledge = useCallback(() => {
+      selectCanonTab("knowledge");
+      showWorkSection("canon");
+    }, [selectCanonTab, showWorkSection]);
+    const reviewSceneCanon=useCallback(async(scene:SceneProjection)=>{
+      if(scene.range===null||scene.integrity!=="resolved")return null;
+      const document=activeWorkDocuments.find((candidate)=>candidate.documentId===scene.documentId);
+      if(document===undefined)return null;
+      await persistDocument(document);
+      const currentRevisionId=durableSaveQueueRef.current?.getCurrentRevisionId(scene.documentId)??scene.documentRevisionId;
+      if(currentRevisionId!==scene.documentRevisionId){
+        canonReviewController.reportError("장면 원고가 바뀌었습니다. 장면 목록을 새로 읽은 뒤 다시 점검하세요.");
+        await refreshSceneProjection(scene.workId);
+        return null;
+      }
+      const finalized=await input.client.structure.finalizeSceneCanonCheck({
+        schemaVersion:1,workId:scene.workId,sceneKey:scene.sceneKey,
+        documentId:scene.documentId,documentRevisionId:scene.documentRevisionId,
+        from:scene.range.start,to:scene.range.end,
+      });
+      await refreshSceneProjection(scene.workId);
+      openCanonReview();
+      return canonReviewController.runReview(finalized.sourceRange,["character","character-relation","lore-entry"]);
+    },[activeWorkDocuments,canonReviewController,durableSaveQueueRef,input.client.structure,openCanonReview,persistDocument,refreshSceneProjection]);
+    const openSceneContinuity=useCallback(()=>{
+      openContinuity();void continuityController.refresh();
+    },[continuityController,openContinuity]);
+    const openSceneKnowledge=useCallback(()=>{
+      openCharacterKnowledge();void characterKnowledgeController.refresh();
+    },[characterKnowledgeController,openCharacterKnowledge]);
     const {
       captureCharacterWorkspaceSelection,
       createLoreEntry,
@@ -358,10 +427,17 @@ export function useWorkspaceStoryFeatureKernel(input: Readonly<{
       captureFragment,
       moveSelectionToFragment,
       insertFragmentAtCursor,
+      runCanonReviewSelection,
+      stageContinuitySelection,
+      runContinuityReviewSelection,
+      stageCharacterKnowledgeSelection,
       handleManuscriptTransaction,
     } = useWorkspaceManuscriptActionsController({
       controllers: {
         activity: activityController,
+        canon: canonReviewController,
+        continuity: continuityController,
+        characterKnowledge: characterKnowledgeController,
         characters: charactersController,
         editorTools: editorToolsController,
         fragments: fragmentsController,
@@ -372,6 +448,11 @@ export function useWorkspaceStoryFeatureKernel(input: Readonly<{
         workspaceLayout: workspaceLayoutController,
       },
       manuscriptEditorRef,
+      navigation: {
+        openCanonReview,
+        openContinuity,
+        openCharacterKnowledge,
+      },
       persistence: {
         durableSaveQueueRef,
       },
@@ -411,6 +492,7 @@ export function useWorkspaceStoryFeatureKernel(input: Readonly<{
     linkLoreForeshadow,
     unlinkLoreForeshadow,
     fragmentsController,
+    automaticSceneAnalysisController,
     fragments,
     captureCharacterWorkspaceSelection,
     createLoreEntry,
@@ -419,11 +501,18 @@ export function useWorkspaceStoryFeatureKernel(input: Readonly<{
     captureFragment,
     moveSelectionToFragment,
     insertFragmentAtCursor,
+    runCanonReviewSelection,
+    stageContinuitySelection,
+    runContinuityReviewSelection,
+    stageCharacterKnowledgeSelection,
     handleManuscriptTransaction,
     moveRangeToEpisodeController,
     performSceneDraft,
     updateSceneDraftCandidate,
     applySceneDraftCandidate,
     regenerateSceneDraftCandidate,
+    reviewSceneCanon,
+    openSceneContinuity,
+    openSceneKnowledge,
   };
 }

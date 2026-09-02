@@ -82,6 +82,17 @@ const DEFAULT_TIMER_PORT: LoreTimerPort = Object.freeze({
   cancel: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
 });
 
+export async function loadCanonicalLoreEntries(input: Readonly<{
+  activeWorkId: EntityId<"Work">;
+  client: Pick<LoreEntriesClient, "list">;
+}>): Promise<readonly LoreEntryProjection[]> {
+  const projection = await input.client.list({
+    schemaVersion: 1,
+    workId: input.activeWorkId,
+  });
+  return projection.entries;
+}
+
 export function startLoreWorkLoad(input: Readonly<{
   activeWorkId: EntityId<"Work"> | null;
   candidatesClient: LoreCandidatesClient;

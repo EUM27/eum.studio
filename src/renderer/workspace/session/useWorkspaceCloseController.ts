@@ -19,10 +19,10 @@ export function useWorkspaceCloseController(input: Readonly<{
     StudioBridge["editor"],
     "onManuscriptCloseRequest" | "completeManuscriptCloseRequest"
   >;
-  focusModeOwnedWritingSessionIdRef: {
+  manuscriptFocusOwnedWritingSessionIdRef: {
     current: EntityId<"WritingSession"> | null;
   };
-  focusModeSessionPendingRef: { current: Promise<void> };
+  manuscriptFocusSessionPendingRef: { current: Promise<void> };
   getQueue: () => ManuscriptDurableSaveQueue | null;
   runtime: Readonly<{
     activeDocumentId: EntityId<"Document"> | null;
@@ -49,25 +49,25 @@ export function useWorkspaceCloseController(input: Readonly<{
         ports: {
           waitForContinuousReading: input.waitForContinuousReading,
           waitForWorkLayout: input.waitForWorkLayout,
-          waitForFocusSession: () => input.focusModeSessionPendingRef.current,
-          stopOwnedFocusSession: async (document) => {
-            const focusSession = input.activeWritingSessionRef.current;
-            const focusSessionId =
-              input.focusModeOwnedWritingSessionIdRef.current;
+          waitForManuscriptFocusSession: () => input.manuscriptFocusSessionPendingRef.current,
+          stopOwnedManuscriptFocusSession: async (document) => {
+            const manuscriptFocusSession = input.activeWritingSessionRef.current;
+            const manuscriptFocusSessionId =
+              input.manuscriptFocusOwnedWritingSessionIdRef.current;
             if (
               document !== undefined &&
-              focusSession !== undefined &&
-              focusSession.sessionId === focusSessionId
+              manuscriptFocusSession !== undefined &&
+              manuscriptFocusSession.sessionId === manuscriptFocusSessionId
             ) {
               const projection = await input.activityClient.stopSession({
                 schemaVersion: 1,
                 workId: document.workId,
-                sessionId: focusSession.sessionId,
+                sessionId: manuscriptFocusSession.sessionId,
               });
               input.activeWritingSessionRef.current = projection.sessions.find(
                 (session) => session.sessionId === projection.activeSessionId,
               );
-              input.focusModeOwnedWritingSessionIdRef.current = null;
+              input.manuscriptFocusOwnedWritingSessionIdRef.current = null;
             }
           },
           captureResume: input.captureResume,

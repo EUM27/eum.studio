@@ -32,6 +32,13 @@
 | `07-current-data-migration-map.md` | `92D38F32ABF5A66E146C6F70D85FE827F9B191D2B42072C72FB1B19602FE8F2D` |
 | `08-foundation-poc-execution-plan.md` | `3DDBF47A361E1AFF51398CA1B7D691A8D271E32F70E83F1A614E51E3E6AC2E07` |
 
+## 승인 기능 설계
+
+| 문서 | SHA-256 | 승인 범위 |
+|---|---|---|
+| `C:\Users\limoj\OneDrive\바탕 화면\eum-studio-canon-continuity-independent-design.md` | `343577C44367C4E38A61913822A13400B5DAA028BE2EA76123F7BBF6A31F3FC5` | 작품 별빛·연속성 독립 구현 설계의 Gate 0부터 Gate 8까지 |
+
+
 ## 적용 우선순위
 
 1. 제품 헌법의 소유권과 금지선

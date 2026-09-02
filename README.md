@@ -4,7 +4,25 @@
 
 ## 현재 상태
 
-`음악 Gate 14 — YouTube·로컬 파일 통합 미디어 플레이어` 완료
+`자동 장면 분석 재시도·창 복구 standalone 설치 완료`
+
+장면 자동 분석을 schema 24의 단계 원장으로 보강했다. 같은 장면 요약이 이미 저장됐더라도 별빛 검토가 대기·연결 필요·권한 필요·원본 변경·실패 상태면 요약을 다시 생성하지 않고 별빛 단계만 재시도한다. 완료된 별빛 Candidate ID 또는 무변경 결과, 시도 횟수와 실패 사유를 source fingerprint별로 보존하며, 자동 경로는 더 이상 수동 Canon 검토 UI controller의 pending 상태를 공유하지 않는다. 편집기 아래에는 현재 자동 분석 상태와 실패 후 `다시 시도`를 표시하고 이야기 흐름 이력에는 장면 전환·분할·회차 전환 및 별빛 단계 결과를 연결해 보여준다.
+
+standalone 데스크톱은 startup 예외를 회수하고 단일 인스턴스로 동작한다. main window renderer가 종료되면 같은 BrowserWindow를 새 renderer process로 다시 불러오며, 두 번째 실행은 새 DB writer를 만들지 않고 기존 창을 활성화한다. `ready-to-show` 시점을 놓쳐도 renderer load 완료 뒤 창을 표시하는 fallback을 두었고, production Electron과 별도 standalone 패키지에서 renderer process kill→새 PID·UI 복구, 두 번째 실행 exit 0, 정상 닫기 뒤 process 0건을 검증했다.
+
+검증된 새 패키지를 `out/eum-studio-win-x64`에 원자 교체했고 OneDrive 바탕화면 바로가기는 이 기본 경로를 연다. 실제 사용자 DB는 schema 24 migration receipt·작품 4개·회차 53개·FK 위반 0·quick check `ok`를 확인했다. 교체 전 DB와 구버전 package는 각각 `workspace-v1/codex-backups`와 `out/eum-studio-win-x64-previous-*`에 복구용으로 보존했다. 기존 process 0에서 바로가기를 한 번만 실행해 `이음 스튜디오` 창이 표시되는지 확인했고 정상 창 닫기 1초 뒤 package process 0건을 재검증했다.
+
+작품별 `장면 전환·분할·회차 전환 시 분석 요약과 별빛 후보 저장` 스위치를 추가했다. 기본값은 OFF이며, 사용자가 켜면서 작품 범위의 장면 읽기·전송 권한을 명시적으로 부여하고 실제 GPT 연결이 유지될 때만 실행한다. 나가는 장면 또는 분할된 각 장면의 stable `sceneId`, exact `DocumentRevision`·UTF-16 범위·본문 hash와 사용한 별빛 revision을 불변 이야기 요약에 봉인한다. 같은 source fingerprint는 다시 전송하지 않으며, 별빛 정보 변화는 `LoreEntry` 별빛을 자동 수정하지 않고 기존 필드별 Candidate 검토함에만 저장한다. schema 23 migration은 기존 schema 22 이야기 요약과 source manifest를 그대로 보존하면서 장면 source 원장과 작품별 스위치만 추가한다.
+
+기능 OFF·연결 끊김의 무실행 계약을 집중 검증했고, production Electron에서는 기능 ON 뒤 실제 장면 분할, 장면 요약 2개, 별빛 Candidate 1개, connector 요청 4개, SQLite 재조회와 FK 위반 0건을 검증했다. 기존 작품 별빛 Gate 0–8, 수동 장면 별빛 점검, 불변 이야기 흐름과 재실행 이력도 같은 최종 bundle에서 유지된다.
+
+최종 standalone Windows 패키지는 `out/eum-studio-win-x64`에 원자 교체했으며 개발 서버 없이 `file://` renderer, packaged main, typed preload와 새 빈 작업실 bootstrap을 검증했다.
+
+사용자가 지정한 `eum-studio-canon-continuity-independent-design.md`의 exact SHA-256을 승인 기능 설계 manifest에 등록했다. schema 16의 stable `sceneId` 선행 조건과 schema 17 Scene trash를 보존한 채 schema 18 별빛 원장을 추가했다. exact 원고 selection에서 Character·CharacterRelation·LoreEntry의 필드별 변경 Candidate를 만들고, 사용자가 필드를 편집·부분 승인·거절한 뒤에만 source/target revision을 재검증하여 별빛·Anchor·evidence·decision receipt를 한 SQLite transaction으로 갱신한다. production Electron 재실행, 승인 transaction 중 실제 process kill, stale source/target과 성능 fixture를 각각 독립 명령으로 재현할 수 있다.
+
+이번 연속 Goal은 같은 승인 설계의 Gate 2부터 Gate 8까지를 완료했다. 열린 연속성, CharacterKnowledge, 결정적 Context Planner, 실제 connector manifest/activity, 불변 NarrativeDigest, stable Scene 수동 점검·장면별 연속성/지식·split/merge lineage 검토, 기존 불변 WorkSnapshot 기반 명명 슬롯·장면 단위 read-only 선택 계획을 실제 제품 경로에 연결했다. 마지막 Gate 8은 별빛 9종을 Obsidian 호환 Markdown으로 내보내는 사용자 실행형 단방향 adapter이며, Markdown을 별빛으로 다시 가져오거나 감시·동기화·write-back하는 경로는 없다.
+
+직전 `음악 Gate 14 — YouTube·로컬 파일 통합 미디어 플레이어`도 완료 상태를 유지한다.
 
 기존 YouTube 검색·장면 큐·집중 시작 재생을 유지하면서 작품별 미디어 라이브러리에 MP3·MP4를 등록하고 같은 재생목록에서 섞어 재생한다. 등록 기본값은 `원본 위치 연결`이며 `앱에 가져오기`도 선택할 수 있다. 로컬 절대 경로는 renderer에 노출하지 않고 main process의 opaque descriptor와 `eum-media://` 단일-range 스트리밍으로 재생한다. 상단 플레이어는 곡 정보·진행 위치·셔플·이전/재생/다음·반복·음량·영상·정지·목록을 한 줄에 둔 컴팩트 형태로 바꿨고, production Electron에서 YouTube→원본 MP3→관리형 MP4 혼합 큐와 완전 재실행 복원을 검증했다.
 
@@ -73,6 +91,12 @@ npm run typecheck
 npm run test:run
 npm run build
 npm run test:e2e
+npm run test:e2e -- tests/e2e/canon-review.spec.ts
+npm run test:process:canon-review
+npm run performance:canon-review
+npm run test:e2e -- tests/e2e/continuity.spec.ts
+npm run test:process:continuity
+npm run performance:continuity
 npm run performance:poc-1
 npm run crash:poc-2
 npm run performance:poc-2

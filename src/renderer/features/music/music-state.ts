@@ -1,4 +1,9 @@
-import type { MusicTrackProjection } from "../../../application/music/media-track";
+import {
+  musicTrackIdentity,
+  type LocalMediaTrackProjection,
+  type MusicTrackProjection,
+} from "../../../application/music/media-track";
+import type { WorkMusicSettings } from "../../../application/music/work-music-settings";
 
 export type MusicPlaybackRequest = Readonly<{
   nonce: number;
@@ -19,5 +24,20 @@ export function createMusicPlaybackRequest(
       tracks.length - 1,
     ),
     tracks: Object.freeze([...tracks]),
+  });
+}
+
+export function withoutRegisteredLocalMedia(
+  settings: WorkMusicSettings,
+  removedTrack: LocalMediaTrackProjection,
+): WorkMusicSettings {
+  const removedIdentity = musicTrackIdentity(removedTrack);
+  const keepTrack = (track: MusicTrackProjection) =>
+    musicTrackIdentity(track) !== removedIdentity;
+  return Object.freeze({
+    ...settings,
+    favoriteTracks: Object.freeze(settings.favoriteTracks.filter(keepTrack)),
+    playlistTracks: Object.freeze(settings.playlistTracks.filter(keepTrack)),
+    localMedia: Object.freeze(settings.localMedia.filter(keepTrack)),
   });
 }

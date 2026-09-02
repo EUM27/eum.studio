@@ -21,6 +21,8 @@ function createLoadClient(failure?: Error) {
   const results = Object.freeze([
     Object.freeze({ schemaVersion: 1, partners: Object.freeze([{ partnerId: "partner-1" }]) }),
     Object.freeze({ schemaVersion: 1, submissions: Object.freeze([{ submissionId: "submission-1" }]) }),
+    Object.freeze({ schemaVersion: 1, templates: Object.freeze([{ templateId: "template-1" }]) }),
+    Object.freeze({ schemaVersion: 1, responses: Object.freeze([{ responseId: "response-1" }]) }),
     Object.freeze({ schemaVersion: 1, contracts: Object.freeze([{ contractId: "contract-1" }]) }),
     Object.freeze({ schemaVersion: 1, publications: Object.freeze([{ publicationId: "publication-1" }]) }),
     Object.freeze({ schemaVersion: 1, settlements: Object.freeze([{ settlementId: "settlement-1" }]) }),
@@ -34,21 +36,25 @@ function createLoadClient(failure?: Error) {
   const calls = {
     partners: vi.fn(async () => results[0]),
     submissions: vi.fn(async () => results[1]),
+    templates: vi.fn(async () => results[2]),
+    responses: vi.fn(async () => results[3]),
     contracts: failure === undefined
-      ? vi.fn(async () => results[2])
+      ? vi.fn(async () => results[4])
       : vi.fn(() => Promise.reject(failure)),
-    publications: vi.fn(async () => results[3]),
-    settlements: vi.fn(async () => results[4]),
-    payments: vi.fn(async () => results[5]),
-    sources: vi.fn(async () => results[6]),
-    mailCandidates: vi.fn(async () => results[7]),
-    mailConnection: vi.fn(async () => results[8]),
-    mailSchedule: vi.fn(async () => results[9]),
-    assistantConnections: vi.fn(async () => results[10]),
+    publications: vi.fn(async () => results[5]),
+    settlements: vi.fn(async () => results[6]),
+    payments: vi.fn(async () => results[7]),
+    sources: vi.fn(async () => results[8]),
+    mailCandidates: vi.fn(async () => results[9]),
+    mailConnection: vi.fn(async () => results[10]),
+    mailSchedule: vi.fn(async () => results[11]),
+    assistantConnections: vi.fn(async () => results[12]),
   };
   const client = {
     publishingPartners: { list: calls.partners },
     publishingSubmissions: { list: calls.submissions },
+    publishingFormTemplates: { list: calls.templates },
+    publishingFormResponses: { list: calls.responses },
     publishingContracts: { list: calls.contracts },
     publishingPublications: { list: calls.publications },
     publishingSettlements: { list: calls.settlements },
@@ -63,7 +69,7 @@ function createLoadClient(failure?: Error) {
 }
 
 describe("publishing controller helpers", () => {
-  it("loads all eleven authoritative projections atomically with the exact Work filters", async () => {
+  it("loads all thirteen authoritative projections atomically with the exact Work filters", async () => {
     const { calls, client, results } = createLoadClient();
     const workId = entityId<"Work">("work-1");
 
@@ -71,6 +77,8 @@ describe("publishing controller helpers", () => {
       .resolves.toEqual(results);
     expect(calls.partners).toHaveBeenCalledWith({ schemaVersion: 1 });
     expect(calls.submissions).toHaveBeenCalledWith({ schemaVersion: 1, workId });
+    expect(calls.templates).toHaveBeenCalledWith({ schemaVersion: 1 });
+    expect(calls.responses).toHaveBeenCalledWith({ schemaVersion: 1, workId });
     expect(calls.contracts).toHaveBeenCalledWith({ schemaVersion: 1, workId });
     expect(calls.publications).toHaveBeenCalledWith({ schemaVersion: 1, workId });
     expect(calls.settlements).toHaveBeenCalledWith({ schemaVersion: 1, workId });
@@ -82,7 +90,7 @@ describe("publishing controller helpers", () => {
     expect(calls.assistantConnections).toHaveBeenCalledWith();
   });
 
-  it("rejects the whole eleven-query load without a partial result", async () => {
+  it("rejects the whole thirteen-query load without a partial result", async () => {
     const failure = new Error("contract ledger failed");
     const { calls, client } = createLoadClient(failure);
 
@@ -202,7 +210,7 @@ describe("publishing controller helpers", () => {
     );
 
     expect(controllerSource).not.toContain("window.");
-    expect(controllerSource.match(/\buseState(?:<|\()/gu)).toHaveLength(24);
+    expect(controllerSource.match(/\buseState(?:<|\()/gu)).toHaveLength(26);
     expect(shellSource.match(/usePublishingController\(window\.eumStudio\)/gu))
       .toHaveLength(1);
     expect(shellSource.indexOf("usePublishingController(window.eumStudio)"))

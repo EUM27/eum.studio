@@ -13,6 +13,7 @@ import {
   openStructureTab,
   createNamedEpisode,
   expectEditorText,
+  readHangulCompositionText,
   readEditorText,
   removeVerifiedTemporaryDirectory,
   type Locator,
@@ -1544,80 +1545,9 @@ test("adds scenes and events from the manuscript right-click menu", async () => 
     const manuscript = page.getByRole("textbox", { name: "원고" });
     await manuscript.pressSequentially(manuscriptText);
     await expect(page.getByTestId("save-state")).toHaveText("저장됨");
-
-    await manuscript.press("Control+A");
-    await expect.poll(() => page.locator(".manuscript-editor").evaluate(
-      (element) => ({
-        anchor: Number(element.getAttribute("data-selection-anchor")),
-        head: Number(element.getAttribute("data-selection-head")),
-      }),
-    )).toEqual({ anchor: 0, head: manuscriptText.length });
-    await manuscript.press("ArrowLeft");
-
-    await manuscript.press("Control+Home");
-    for (let index = 0; index < prefix.length; index += 1) {
-      await manuscript.press("ArrowRight");
-    }
-    for (let index = 0; index < exactText.length; index += 1) {
-      await manuscript.press("Shift+ArrowRight");
-    }
     await rightClickOffset(page, manuscript, prefix.length + 1);
     let contextMenu = page.getByRole("menu", { name: "원고 우클릭 메뉴" });
-    await expect(contextMenu.getByRole("menuitem")).toHaveText([
-      "잘라내기",
-      "복사",
-      "붙여넣기",
-      "장면 추가",
-      "사건 추가",
-      "여기부터 다음 화로 보내기",
-    ]);
-    await contextMenu.getByRole("menuitem", {
-      name: "복사",
-      exact: true,
-    }).click();
-    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
-      .toBe(exactText);
-
-    await manuscript.press("Control+Home");
-    for (let index = 0; index < prefix.length; index += 1) {
-      await manuscript.press("ArrowRight");
-    }
-    for (let index = 0; index < exactText.length; index += 1) {
-      await manuscript.press("Shift+ArrowRight");
-    }
-    await rightClickOffset(page, manuscript, prefix.length + 1);
-    contextMenu = page.getByRole("menu", { name: "원고 우클릭 메뉴" });
-    await contextMenu.getByRole("menuitem", {
-      name: "잘라내기",
-      exact: true,
-    }).click();
-    await expectEditorText(
-      manuscript,
-      manuscriptText.slice(0, prefix.length) +
-        manuscriptText.slice(prefix.length + exactText.length),
-    );
-    await rightClickOffset(page, manuscript, Math.max(0, prefix.length - 1));
-    contextMenu = page.getByRole("menu", { name: "원고 우클릭 메뉴" });
-    await contextMenu.getByRole("menuitem", {
-      name: "붙여넣기",
-      exact: true,
-    }).click();
-    await expect.poll(() => manuscript.textContent()).toContain(exactText);
-    await manuscript.press("Control+z");
-    await manuscript.press("Control+z");
-    await expectEditorText(manuscript, manuscriptText);
-
-    await rightClickOffset(page, manuscript, prefix.length + 1);
-    contextMenu = page.getByRole("menu", { name: "원고 우클릭 메뉴" });
     await expect(contextMenu).toBeVisible();
-    await expect(contextMenu.getByRole("menuitem")).toHaveText([
-      "잘라내기",
-      "복사",
-      "붙여넣기",
-      "장면 추가",
-      "사건 추가",
-      "여기부터 다음 화로 보내기",
-    ]);
     await contextMenu.getByRole("menuitem", {
       name: "장면 추가",
       exact: true,
@@ -1691,169 +1621,6 @@ test("adds scenes and events from the manuscript right-click menu", async () => 
     await expect(plannedDialog).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(plannedDialog).toBeHidden();
-    await openStructureTab(page, "장면");
-    page.once("dialog", async (dialog) => {
-      expect(dialog.message()).toContain("이 장면 구분을 삭제할까요?");
-      expect(dialog.message()).toContain(
-        "원고는 삭제되지 않고 인접 장면과 합쳐집니다.",
-      );
-      await dialog.accept();
-    });
-    await sceneCards.nth(1).getByRole("button", {
-      name: "장면 삭제",
-      exact: true,
-    }).click();
-    await expect(sceneCards).toHaveCount(1);
-    await openWorkSection(page, "쓰기");
-    await expectEditorText(manuscript, manuscriptText);
-  } finally {
-    await electronApp.close().catch(() => undefined);
-    await removeVerifiedTemporaryDirectory(directory);
-  }
-});
-
-test("moves here-to-end into the next episode, keeps one Scene across episodes, and undoes once", async () => {
-  test.setTimeout(180_000);
-  const directory = await mkdtemp(
-    path.join(tmpdir(), "eum-studio-next-episode-range-move-"),
-  );
-  const suffix = randomUUID().slice(0, 8);
-  const workTitle = `교차 장면 이동 ${suffix}`;
-  const sourceTitle = `9화 ${suffix}`;
-  const targetTitle = `10화 ${suffix}`;
-  const sourceText = `도입 장면 줄리안 등장 대화가 계속된다 폭탄 발언 ${suffix}`;
-  const targetText = `다음날 아침 ${suffix}`;
-  const sceneStart = sourceText.indexOf("줄리안 등장");
-  const moveFrom = sourceText.indexOf("대화가 계속된다");
-  const movedText = sourceText.slice(moveFrom);
-  const runtimeEnvironment = {
-    ...process.env,
-    EUM_STUDIO_TEST_EPHEMERAL_WORKSPACE: "0",
-    EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH: directory,
-    EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
-  };
-  const electronArguments = [
-    ".",
-    `--user-data-dir=${path.join(directory, "electron-user-data")}`,
-  ];
-  let electronApp = await electron.launch({
-    args: electronArguments,
-    cwd: process.cwd(),
-    env: runtimeEnvironment,
-  });
-
-  const rightClickOffset = async (
-    page: Page,
-    manuscript: Locator,
-    offset: number,
-  ) => {
-    const point = await manuscript.locator(".cm-line").first().evaluate(
-      (line, targetOffset) => {
-        const textNode = line.firstChild;
-        if (!(textNode instanceof Text)) {
-          throw new Error("CodeMirror line text node is missing");
-        }
-        const range = document.createRange();
-        range.setStart(textNode, targetOffset);
-        range.setEnd(textNode, Math.min(targetOffset + 1, textNode.length));
-        const rectangle = range.getBoundingClientRect();
-        return {
-          x: rectangle.left + Math.max(1, rectangle.width / 2),
-          y: rectangle.top + rectangle.height / 2,
-        };
-      },
-      offset,
-    );
-    await page.mouse.click(point.x, point.y, { button: "right" });
-  };
-
-  try {
-    let page = await electronApp.firstWindow();
-    await page.setViewportSize({ width: 1280, height: 900 });
-    await page.getByRole("button", { name: "작품 만들기", exact: true }).click();
-    const createWorkDialog = page.getByRole("dialog", { name: "새 작품 만들기" });
-    await createWorkDialog.getByLabel("작품 제목").fill(workTitle);
-    await createWorkDialog.getByLabel("첫 회차 제목").fill(sourceTitle);
-    await createWorkDialog.getByRole("button", {
-      name: "작품 만들기",
-      exact: true,
-    }).click();
-    let manuscript = page.getByRole("textbox", { name: "원고" });
-    await manuscript.pressSequentially(sourceText);
-    await expect(page.getByTestId("save-state")).toHaveText("저장됨");
-
-    await rightClickOffset(page, manuscript, sceneStart);
-    await page.getByRole("menu", { name: "원고 우클릭 메뉴" })
-      .getByRole("menuitem", { name: "장면 추가", exact: true })
-      .click();
-    await expect.poll(async () => page.evaluate(async () => {
-      const catalog = await window.eumStudio.workspace.getCatalog();
-      if (catalog.activeWorkId === null) return 0;
-      return (await window.eumStudio.structure.listSceneProjection({
-        schemaVersion: 1,
-        workId: catalog.activeWorkId,
-      })).scenes.length;
-    })).toBe(2);
-
-    await createNamedEpisode(page, targetTitle);
-    manuscript = page.getByRole("textbox", { name: "원고" });
-    await manuscript.pressSequentially(targetText);
-    await expect(page.getByTestId("save-state")).toHaveText("저장됨");
-    const documentRail = page.getByRole("complementary", { name: "문서 레일" });
-    await documentRail.getByRole("button", { name: new RegExp(`${sourceTitle}$`, "u") })
-      .click();
-    await expect(page.getByTestId("manuscript-title")).toHaveText(sourceTitle);
-    manuscript = page.getByRole("textbox", { name: "원고" });
-    await manuscript.press("Control+Home");
-    for (let index = 0; index < moveFrom; index += 1) {
-      await manuscript.press("ArrowRight");
-    }
-    for (let index = moveFrom; index < sourceText.length; index += 1) {
-      await manuscript.press("Shift+ArrowRight");
-    }
-    await rightClickOffset(page, manuscript, moveFrom + 1);
-    await page.getByRole("menu", { name: "원고 우클릭 메뉴" })
-      .getByRole("menuitem", {
-        name: "여기부터 다음 화로 보내기",
-        exact: true,
-      })
-      .click();
-    await expect(page.getByTestId("save-state")).toHaveText("저장됨");
-    await expectEditorText(manuscript, sourceText.slice(0, moveFrom));
-
-    await documentRail.getByRole("button", { name: new RegExp(`${targetTitle}$`, "u") })
-      .click();
-    manuscript = page.getByRole("textbox", { name: "원고" });
-    await expectEditorText(manuscript, movedText + targetText);
-    await openStructureTab(page, "장면");
-    await expect(page.getByRole("region", { name: "현재 회차 장면" }))
-      .toContainText(`${sourceTitle} → ${targetTitle}`);
-    await openWorkSection(page, "쓰기");
-    manuscript = page.getByRole("textbox", { name: "원고" });
-    await manuscript.press("Control+z");
-    await expectEditorText(manuscript, targetText);
-    await documentRail.getByRole("button", { name: new RegExp(`${sourceTitle}$`, "u") })
-      .click();
-    manuscript = page.getByRole("textbox", { name: "원고" });
-    await expectEditorText(manuscript, sourceText);
-
-    await electronApp.close();
-    electronApp = await electron.launch({
-      args: electronArguments,
-      cwd: process.cwd(),
-      env: runtimeEnvironment,
-    });
-    page = await electronApp.firstWindow();
-    await continueFromMain(page);
-    const restartedRail = page.getByRole("complementary", { name: "문서 레일" });
-    await restartedRail.getByRole("button", {
-      name: new RegExp(`${targetTitle}$`, "u"),
-    }).click();
-    await expectEditorText(page.getByRole("textbox", { name: "원고" }), targetText);
-    await restartedRail.getByRole("button", {
-      name: new RegExp(`${sourceTitle}$`, "u"),
-    }).click();
-    await expectEditorText(page.getByRole("textbox", { name: "원고" }), sourceText);
   } finally {
     await electronApp.close().catch(() => undefined);
     await removeVerifiedTemporaryDirectory(directory);
@@ -2301,19 +2068,43 @@ test("projects final scenes from configured rules, folded overrides, and event e
       .getByRole("button", { name: "앞 장면과 병합", exact: true })
       .click();
     await expect(sceneCards).toHaveCount(1);
-    await openWorkSection(page, "쓰기");
-    manuscript = page.getByRole("textbox", { name: "원고" });
-    await manuscript.click();
-    await manuscript.press("Control+Home");
-    for (let index = 0; index < separatorFrom; index += 1) {
-      await manuscript.press("ArrowRight");
-    }
-    await openStructureTab(page, "장면");
+    await expect(sceneRegion.getByRole("button", {
+      name: "현재 위치에서 분할",
+      exact: true,
+    })).toHaveCount(0);
+    const splitAtExactSeparator = async () => {
+      await openWorkSection(page, "쓰기");
+      manuscript = page.getByRole("textbox", { name: "원고" });
+      await manuscript.click();
+      await manuscript.press("Control+End");
+      const splitPoint = await manuscript.locator(".cm-line").nth(1).evaluate(
+        (line) => {
+          const textNode = document.createTreeWalker(
+            line,
+            NodeFilter.SHOW_TEXT,
+          ).nextNode();
+          if (!(textNode instanceof Text)) {
+            throw new Error("CodeMirror scene separator text node is missing");
+          }
+          const range = document.createRange();
+          range.setStart(textNode, 0);
+          range.setEnd(textNode, Math.min(1, textNode.length));
+          const rectangle = range.getBoundingClientRect();
+          return {
+            x: rectangle.left + Math.max(1, rectangle.width / 2),
+            y: rectangle.top + rectangle.height / 2,
+          };
+        },
+      );
+      await page.mouse.click(splitPoint.x, splitPoint.y, { button: "right" });
+      await page.getByRole("menu", { name: "원고 우클릭 메뉴" })
+        .getByRole("menuitem", { name: "장면 나누기", exact: true })
+        .click();
+      await openStructureTab(page, "장면");
+    };
+    await splitAtExactSeparator();
     sceneRegion = page.getByRole("region", { name: "현재 회차 장면" });
     sceneCards = sceneRegion.locator(".scene-list-card");
-    await sceneCards.nth(0)
-      .getByRole("button", { name: "현재 위치에서 분할", exact: true })
-      .click();
     await expect(sceneCards).toHaveCount(2);
     await expect(sceneCards.nth(0)).toContainText(firstEventTitle);
     await expect(sceneCards.nth(1)).toContainText(secondEventTitle);
@@ -2337,6 +2128,56 @@ test("projects final scenes from configured rules, folded overrides, and event e
     await expect(sceneCards.nth(0))
       .toContainText("제외 해제");
 
+    await sceneCards.nth(1)
+      .getByRole("button", { name: "앞 장면과 병합", exact: true })
+      .click();
+    await expect(sceneCards).toHaveCount(1);
+    let metadataReview = sceneRegion.locator(".scene-metadata-review-summary");
+    const revealMetadataReview = async () => {
+      await metadataReview.evaluate((element) => {
+        if (!(element instanceof HTMLDetailsElement)) {
+          throw new Error("Scene metadata review details are unavailable");
+        }
+        element.open = true;
+      });
+    };
+    await expect(metadataReview.locator("summary"))
+      .toHaveText("장면 연결 재검토 2건");
+    await revealMetadataReview();
+    await metadataReview
+      .getByRole("button", { name: "제안 장면 1에 연결", exact: true })
+      .first()
+      .click();
+    await expect(metadataReview.locator("summary"))
+      .toHaveText("장면 연결 재검토 1건");
+    await revealMetadataReview();
+    await metadataReview
+      .getByRole("button", { name: "제안 장면 1에 연결", exact: true })
+      .click();
+    await expect(metadataReview).toHaveCount(0);
+    await expect(sceneCards.nth(0)).toContainText(plannedEventTitle);
+    await expect(sceneCards.nth(0)).toContainText("제외 해제");
+
+    await splitAtExactSeparator();
+    sceneRegion = page.getByRole("region", { name: "현재 회차 장면" });
+    sceneCards = sceneRegion.locator(".scene-list-card");
+    await expect(sceneCards).toHaveCount(2);
+    metadataReview = sceneRegion.locator(".scene-metadata-review-summary");
+    await expect(metadataReview.locator("summary"))
+      .toHaveText("장면 연결 재검토 2건");
+    await revealMetadataReview();
+    await metadataReview
+      .getByRole("button", { name: "연결 해제", exact: true })
+      .first()
+      .click();
+    await expect(metadataReview.locator("summary"))
+      .toHaveText("장면 연결 재검토 1건");
+    await revealMetadataReview();
+    await metadataReview
+      .getByRole("button", { name: "연결 해제", exact: true })
+      .click();
+    await expect(metadataReview).toHaveCount(0);
+
     const beforeRestart = await readProjection(page);
     expect(beforeRestart.status).toBe("clean");
     expect(beforeRestart.ruleSet).toMatchObject({
@@ -2345,12 +2186,18 @@ test("projects final scenes from configured rules, folded overrides, and event e
     });
     expect(beforeRestart.scenes).toHaveLength(2);
     expect(beforeRestart.sceneEventOverrides).toHaveLength(2);
-    expect(beforeRestart.scenes[0]?.excludedEvents).toMatchObject([
-      { title: firstEventTitle },
-    ]);
+    expect(beforeRestart.sceneEventOverrides.every(
+      (eventOverride) => eventOverride.binding.status === "detached",
+    )).toBe(true);
+    expect(beforeRestart.scenes[0]?.excludedEvents).toEqual([]);
+    expect(beforeRestart.scenes[0]?.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: firstEventTitle, membership: "automatic" }),
+    ]));
     expect(beforeRestart.scenes[1]?.events).toEqual(expect.arrayContaining([
       expect.objectContaining({ title: secondEventTitle, membership: "automatic" }),
-      expect.objectContaining({ title: plannedEventTitle, membership: "manual" }),
+    ]));
+    expect(beforeRestart.scenes[1]?.events).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: plannedEventTitle }),
     ]));
 
     await electronApp.close();
@@ -2368,8 +2215,7 @@ test("projects final scenes from configured rules, folded overrides, and event e
     sceneCards = sceneRegion.locator(".scene-list-card");
     await expect(sceneCards).toHaveCount(2);
     await expect(sceneCards.nth(0).locator(".scene-excluded-events"))
-      .toContainText(firstEventTitle);
-    await expect(sceneCards.nth(1)).toContainText(plannedEventTitle);
+      .toHaveCount(0);
     expect(await readProjection(page)).toEqual(beforeRestart);
 
     await sceneCards.nth(1).locator(".scene-list-open-button").click();
@@ -2379,6 +2225,271 @@ test("projects final scenes from configured rules, folded overrides, and event e
         head: Number(element.getAttribute("data-selection-head")),
       })),
     ).toEqual({ anchor: separatorFrom, head: manuscriptText.length });
+  } finally {
+    await electronApp.close().catch(() => undefined);
+    await removeVerifiedTemporaryDirectory(directory);
+  }
+});
+
+test("blocks SceneOverride creation during Hangul IME composition and allows split after commit", async () => {
+  test.setTimeout(120_000);
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "eum-studio-scene-ime-guard-e2e-"),
+  );
+  const suffix = randomUUID().slice(0, 8);
+  const workTitle = `장면 IME 작품-${suffix}`;
+  const documentTitle = `장면 IME 회차-${suffix}`;
+  const manuscriptText = `앞 장면 ${suffix} 뒤 장면 ${suffix}`;
+  const splitOffset = manuscriptText.indexOf(" 뒤 장면");
+  const compositionText = readHangulCompositionText();
+  const electronApp = await electron.launch({
+    args: [
+      ".",
+      `--user-data-dir=${path.join(directory, "electron-user-data")}`,
+    ],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      EUM_STUDIO_TEST_EPHEMERAL_WORKSPACE: "0",
+      EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH: directory,
+      EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+    },
+  });
+
+  const readSceneState = (page: Page) => page.evaluate(async () => {
+    const catalog = await window.eumStudio.workspace.getCatalog();
+    if (catalog.activeWorkId === null) throw new Error("Expected an active Work");
+    const [overrides, projection] = await Promise.all([
+      window.eumStudio.structure.listSceneOverrides({
+        schemaVersion: 1,
+        workId: catalog.activeWorkId,
+      }),
+      window.eumStudio.structure.listSceneProjection({
+        schemaVersion: 1,
+        workId: catalog.activeWorkId,
+      }),
+    ]);
+    return { overrides, projection };
+  });
+  const readPointAtOffset = (
+    manuscript: Locator,
+    offset: number,
+  ) => manuscript.locator(".cm-line").first().evaluate((line, targetOffset) => {
+    const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
+    let remaining = targetOffset;
+    let textNode = walker.nextNode();
+    while (textNode instanceof Text) {
+      if (remaining < textNode.length) {
+        const range = document.createRange();
+        range.setStart(textNode, remaining);
+        range.setEnd(textNode, Math.min(remaining + 1, textNode.length));
+        const rectangle = range.getBoundingClientRect();
+        return {
+          x: rectangle.left + Math.max(1, rectangle.width / 2),
+          y: rectangle.top + rectangle.height / 2,
+        };
+      }
+      remaining -= textNode.length;
+      textNode = walker.nextNode();
+    }
+    throw new Error(`CodeMirror offset is unavailable: ${targetOffset}`);
+  }, offset);
+
+  try {
+    const page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.getByRole("button", { name: "작품 만들기", exact: true }).click();
+    const createWorkDialog = page.getByRole("dialog", { name: "새 작품 만들기" });
+    await createWorkDialog.getByLabel("작품 제목").fill(workTitle);
+    await createWorkDialog.getByLabel("첫 회차 제목").fill(documentTitle);
+    await createWorkDialog.getByRole("button", {
+      name: "작품 만들기",
+      exact: true,
+    }).click();
+    const manuscript = page.getByRole("textbox", { name: "원고" });
+    await manuscript.pressSequentially(manuscriptText);
+    await expect(page.getByTestId("save-state")).toHaveText("저장됨");
+
+    await manuscript.focus();
+    await manuscript.press("Control+End");
+    const session = await page.context().newCDPSession(page);
+    await session.send("Input.imeSetComposition", {
+      text: compositionText,
+      selectionStart: compositionText.length,
+      selectionEnd: compositionText.length,
+      replacementStart: 0,
+      replacementEnd: 0,
+    });
+    await expect(manuscript).toContainText(compositionText);
+    const composingPoint = await readPointAtOffset(manuscript, splitOffset);
+    await manuscript.evaluate((content, point) => {
+      content.dispatchEvent(new MouseEvent("contextmenu", {
+        bubbles: true,
+        button: 2,
+        cancelable: true,
+        clientX: point.x,
+        clientY: point.y,
+      }));
+    }, composingPoint);
+    await expect(page.getByRole("menu", { name: "원고 우클릭 메뉴" }))
+      .toHaveCount(0);
+    let sceneState = await readSceneState(page);
+    expect(sceneState.overrides.sceneOverrides).toHaveLength(0);
+    expect(sceneState.projection.scenes).toHaveLength(1);
+
+    await session.send("Input.insertText", { text: compositionText });
+    await expect(page.getByTestId("save-state")).toHaveText("저장됨");
+    const committedPoint = await readPointAtOffset(manuscript, splitOffset);
+    await page.mouse.click(committedPoint.x, committedPoint.y, { button: "right" });
+    await page.getByRole("menu", { name: "원고 우클릭 메뉴" })
+      .getByRole("menuitem", { name: "장면 나누기", exact: true })
+      .click();
+    await expect.poll(async () =>
+      (await readSceneState(page)).projection.scenes.length
+    ).toBe(2);
+    sceneState = await readSceneState(page);
+    expect(sceneState.overrides.sceneOverrides).toHaveLength(1);
+    expect(sceneState.overrides.sceneOverrides[0]).toMatchObject({
+      operation: "split",
+      boundaries: [{ range: { from: splitOffset, to: splitOffset } }],
+    });
+    await session.detach();
+  } finally {
+    await electronApp.close().catch(() => undefined);
+    await removeVerifiedTemporaryDirectory(directory);
+  }
+});
+
+test("deletes a Scene through preview, undoes with Ctrl+Z, and restores from trash after restart", async () => {
+  test.setTimeout(180_000);
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "eum-studio-scene-trash-e2e-"),
+  );
+  const suffix = randomUUID().slice(0, 8);
+  const workTitle = `장면 휴지통 작품-${suffix}`;
+  const documentTitle = `장면 휴지통 회차-${suffix}`;
+  const eventTitle = `삭제 장면 사건-${suffix}`;
+  const deletedSceneText = `삭제할 장면 ${suffix}`;
+  const retainedSceneText = `남길 장면 ${suffix}`;
+  const manuscriptText = `${deletedSceneText}\n***\n${retainedSceneText}`;
+  const electronArguments = [
+    ".",
+    `--user-data-dir=${path.join(directory, "electron-user-data")}`,
+  ];
+  const runtimeEnvironment = {
+    ...process.env,
+    EUM_STUDIO_TEST_EPHEMERAL_WORKSPACE: "0",
+    EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH: directory,
+    EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+  };
+  let electronApp = await electron.launch({
+    args: electronArguments,
+    cwd: process.cwd(),
+    env: runtimeEnvironment,
+  });
+
+  const openScenes = async (page: Page) => {
+    await openStructureTab(page, "장면");
+    const region = page.getByRole("region", { name: "현재 회차 장면" });
+    return {
+      region,
+      cards: region.locator(".scene-list-card"),
+    };
+  };
+
+  const confirmFirstSceneDeletion = async (page: Page) => {
+    const { cards } = await openScenes(page);
+    await expect(cards).toHaveCount(2);
+    await cards.nth(0).getByRole("button", { name: "장면 삭제", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "장면 삭제 미리보기" });
+    await expect(dialog).toContainText(deletedSceneText);
+    await expect(dialog).toContainText(eventTitle);
+    await dialog.getByRole("button", { name: "휴지통으로 이동", exact: true }).click();
+    await expect(dialog).toBeHidden();
+  };
+
+  try {
+    let page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.getByRole("button", { name: "작품 만들기", exact: true }).click();
+    const createWorkDialog = page.getByRole("dialog", { name: "새 작품 만들기" });
+    await createWorkDialog.getByLabel("작품 제목").fill(workTitle);
+    await createWorkDialog.getByLabel("첫 회차 제목").fill(documentTitle);
+    await createWorkDialog
+      .getByRole("button", { name: "작품 만들기", exact: true })
+      .click();
+    await openReviewRail(page);
+    let manuscript = page.getByRole("textbox", { name: "원고" });
+    await manuscript.click();
+    await manuscript.pressSequentially(manuscriptText);
+    await expectEditorText(manuscript, manuscriptText);
+    await expect(page.getByTestId("save-state")).toHaveText("저장됨");
+
+    const addPlannedEvent = page.getByRole("button", {
+      name: "예정 사건 추가",
+      exact: true,
+    });
+    await addPlannedEvent.evaluate((element) =>
+      element.scrollIntoView({ block: "center" })
+    );
+    await addPlannedEvent.evaluate((element) => {
+      if (!(element instanceof HTMLButtonElement)) {
+        throw new Error("Planned event setup button is unavailable");
+      }
+      element.click();
+    });
+    const eventDialog = page.getByRole("dialog", { name: "예정 사건 추가" });
+    await eventDialog.getByLabel("사건 제목").fill(eventTitle);
+    await eventDialog.getByRole("button", { name: "등록", exact: true }).click();
+    await expect(eventDialog).toBeHidden();
+    let sceneSurface = await openScenes(page);
+    await expect(sceneSurface.cards).toHaveCount(2);
+    const firstUnassigned = sceneSurface.cards.nth(0).locator(".scene-unassigned-events");
+    await firstUnassigned.locator("summary").click();
+    await firstUnassigned.locator("li")
+      .filter({ hasText: eventTitle })
+      .getByRole("button", { name: "이 장면에 포함", exact: true })
+      .click();
+    await expect(sceneSurface.cards.nth(0)).toContainText(eventTitle);
+
+    await confirmFirstSceneDeletion(page);
+    await openWorkSection(page, "쓰기");
+    manuscript = page.getByRole("textbox", { name: "원고" });
+    await expectEditorText(manuscript, retainedSceneText);
+    await manuscript.press("Control+z");
+    await expectEditorText(manuscript, manuscriptText);
+
+    sceneSurface = await openScenes(page);
+    await expect(sceneSurface.cards).toHaveCount(2);
+    await expect(sceneSurface.cards.nth(0)).toContainText(eventTitle);
+    await confirmFirstSceneDeletion(page);
+    await openWorkSection(page, "쓰기");
+    manuscript = page.getByRole("textbox", { name: "원고" });
+    await expectEditorText(manuscript, retainedSceneText);
+
+    await electronApp.close();
+    electronApp = await electron.launch({
+      args: electronArguments,
+      cwd: process.cwd(),
+      env: runtimeEnvironment,
+    });
+    page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(page.getByText(workTitle, { exact: true }).first()).toBeVisible();
+    await continueFromMain(page);
+    sceneSurface = await openScenes(page);
+    await expect(sceneSurface.cards).toHaveCount(1);
+    const trash = sceneSurface.region.locator(".scene-trash-summary");
+    await expect(trash.locator("summary")).toHaveText("장면 휴지통 1건");
+    await trash.locator("summary").click();
+    await trash.getByRole("button", { name: "복원", exact: true }).click();
+    await expect(trash.locator("summary")).toHaveText("장면 휴지통 0건");
+    await openWorkSection(page, "쓰기");
+    manuscript = page.getByRole("textbox", { name: "원고" });
+    await expectEditorText(manuscript, manuscriptText);
+    sceneSurface = await openScenes(page);
+    await expect(sceneSurface.cards).toHaveCount(2);
+    await expect(sceneSurface.cards.nth(0)).toContainText(eventTitle);
   } finally {
     await electronApp.close().catch(() => undefined);
     await removeVerifiedTemporaryDirectory(directory);

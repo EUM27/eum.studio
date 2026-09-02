@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { StudioBridge } from "../../../application/contracts/studio-bridge";
 import type { ManuscriptDocumentSource } from "../../../application/editor/manuscript-document-profile";
@@ -10,12 +10,19 @@ import type {
   SceneExtractionScene,
 } from "../../../application/structure/scene-extraction-contract";
 import type { SceneDraftCandidate } from "../../../application/structure/scene-draft-contract";
+import type { SceneMetadataBindingProjection } from "../../../application/structure/scene-metadata-binding-contract";
+import type {
+  SceneDeletionPreview,
+  SceneDeletionReceipt,
+  SceneTrashEntryProjection,
+} from "../../../application/structure/scene-trash-contract";
 import type {
   SceneEventOverrideOperation,
   SceneProjection,
   SceneProjectionList,
   UpdateSceneRuleSetCommand,
 } from "../../../application/structure/scene-projection";
+import { resolveSceneDeletionTarget } from "../../../application/structure/scene-deletion-plan";
 import { entityId, type EntityId } from "../../../domain/writing";
 import type {
   ManuscriptDocumentStateSummary,
@@ -40,6 +47,13 @@ type SceneStructureClient = Pick<
   | "relocateSceneSegment"
   | "updateSceneRuleSet"
   | "setSceneEventOverride"
+  | "rebindSceneMetadata"
+  | "prepareSceneDeletion"
+  | "deleteScene"
+  | "listSceneTrash"
+  | "restoreSceneTrash"
+  | "undoSceneDeletion"
+  | "listSceneAnnotations"
   | "runSceneExtraction"
   | "decideSceneExtractionBoundary"
   | "decideSceneExtractionAnnotation"
@@ -68,7 +82,12 @@ export type SceneWorkspaceState = ReturnType<typeof useSceneWorkspaceState>;
 
 export function useSceneWorkspaceState() {
   const [sceneActionState, setSceneActionState] = useState<
-    "idle" | "creating" | "updating-rule" | "updating-event"
+    | "idle"
+    | "creating"
+    | "deleting"
+    | "restoring"
+    | "updating-rule"
+    | "updating-event"
   >("idle");
   const [sceneActionError, setSceneActionError] = useState<string | null>(null);
   const [sceneDraftActionState, setSceneDraftActionState] =
@@ -259,6 +278,9 @@ export function useSceneWorkspaceController(input: Readonly<{
     materializeDocumentText: (
       document: ManuscriptDocumentSource,
     ) => string | undefined;
+    isDocumentComposing: (
+      document: ManuscriptDocumentSource,
+    ) => boolean;
     readDocumentState: (
       document: ManuscriptDocumentSource,
     ) => ManuscriptDocumentStateSummary | null | undefined;
@@ -268,6 +290,11 @@ export function useSceneWorkspaceController(input: Readonly<{
     ) => boolean;
   }>;
   openWritingSurface: () => void;
+  onSceneSplit?: (
+    projection: SceneProjectionList,
+    documentId: EntityId<"Document">,
+    offset: number,
+  ) => void;
   persistDocument: (document: ManuscriptDocumentSource) => Promise<void>;
   prepareSceneExtractionCapture: () => void;
   reconcile: StructureReconcile;
@@ -277,11 +304,61 @@ export function useSceneWorkspaceController(input: Readonly<{
   refreshSceneProjection: ReturnType<
     typeof useStructureController
   >["refreshSceneProjection"];
+  reloadRuntimeAfterSceneMutation: (
+    preferredDocumentId: EntityId<"Document">,
+  ) => Promise<void>;
   sceneExtractionCandidates: readonly SceneExtractionCandidate[];
   sceneProjection: SceneProjectionList | null;
   state: SceneWorkspaceState;
   structureClient: SceneStructureClient;
 }>) {
+  const inputRef = useRef(input);
+  useEffect(() => {
+    inputRef.current = input;
+  }, [input]);
+  const [storedSceneDeletionPreview, setSceneDeletionPreview] =
+    useState<SceneDeletionPreview | null>(null);
+  const sceneDeletionPreview =
+    storedSceneDeletionPreview?.workId === input.activeWorkId
+      ? storedSceneDeletionPreview
+      : null;
+  const [sceneTrashState, setSceneTrashState] = useState<Readonly<{
+    workId: EntityId<"Work"> | null;
+    entries: readonly SceneTrashEntryProjection[];
+  }>>({ workId: null, entries: [] });
+  const sceneTrashEntries = sceneTrashState.workId === input.activeWorkId
+    ? sceneTrashState.entries
+    : [];
+  const [storedLastSceneDeletion, setLastSceneDeletion] =
+    useState<SceneDeletionReceipt | null>(null);
+  const lastSceneDeletion =
+    storedLastSceneDeletion?.entry.workId === input.activeWorkId
+      ? storedLastSceneDeletion
+      : null;
+  const lastSceneDeletionRef = useRef<SceneDeletionReceipt | null>(null);
+
+  const refreshSceneTrash = useCallback(async (
+    workId: EntityId<"Work">,
+  ) => {
+    const trash = await inputRef.current.structureClient.listSceneTrash({
+      schemaVersion: 1,
+      workId,
+    });
+    setSceneTrashState({ workId, entries: trash.entries });
+    return trash.entries;
+  }, []);
+
+  useEffect(() => {
+    const workId = input.activeWorkId;
+    lastSceneDeletionRef.current = null;
+    if (workId === null) return;
+    void refreshSceneTrash(workId).catch(() => {
+      inputRef.current.state.setSceneActionError(
+        "장면 휴지통을 불러오지 못했습니다.",
+      );
+    });
+  }, [input.activeWorkId, refreshSceneTrash]);
+
   const sceneBoundaryPreviews = useMemo<
     readonly ManuscriptSceneBoundaryPreview[]
   >(() => {
@@ -339,6 +416,12 @@ export function useSceneWorkspaceController(input: Readonly<{
       currentDocument === null ||
       input.state.sceneActionState !== "idle"
     ) return;
+    if (input.editor.isDocumentComposing(currentDocument)) {
+      input.state.setSceneActionError(
+        "한글 입력 조합 중에는 장면 구조를 변경할 수 없습니다.",
+      );
+      return;
+    }
     const summary = explicitOffset === undefined
       ? input.editor.readDocumentState(currentDocument)
       : null;
@@ -365,10 +448,34 @@ export function useSceneWorkspaceController(input: Readonly<{
     input.state.setSceneActionError(null);
     try {
       await input.persistDocument(currentDocument);
+      if (input.editor.isDocumentComposing(currentDocument)) {
+        throw new Error("Scene override is unavailable during IME composition");
+      }
+      const expectedDocumentRevisionId =
+        input.editor.getCurrentRevisionId(currentDocument.documentId);
+      const currentManuscript =
+        input.editor.materializeDocumentText(currentDocument);
+      const currentSummary = explicitOffset === undefined
+        ? input.editor.readDocumentState(currentDocument)
+        : null;
+      const currentSelection = explicitOffset === undefined
+        ? currentSummary?.selection.ranges[currentSummary.selection.mainIndex]
+        : selection;
+      if (
+        expectedDocumentRevisionId === null ||
+        expectedDocumentRevisionId === undefined ||
+        currentManuscript !== manuscript ||
+        currentSelection === undefined ||
+        currentSelection.anchor !== selection.anchor ||
+        currentSelection.head !== selection.head
+      ) {
+        throw new Error("Scene override source changed before command creation");
+      }
       const created = await input.structureClient.createSceneOverride({
         schemaVersion: 1,
         workId: currentDocument.workId,
         documentId: currentDocument.documentId,
+        expectedDocumentRevisionId,
         selection: { anchor: selection.anchor, head: selection.head },
         exactQuote: manuscript.slice(selection.from, selection.to),
         operation,
@@ -383,7 +490,14 @@ export function useSceneWorkspaceController(input: Readonly<{
           exactQuote: manuscript.slice(selection.from, selection.to),
         });
       }
-      await input.refreshSceneProjection(currentDocument.workId);
+      const projection = await input.refreshSceneProjection(currentDocument.workId);
+      if (operation === "split") {
+        input.onSceneSplit?.(
+          projection,
+          currentDocument.documentId,
+          selection.from,
+        );
+      }
     } catch {
       input.state.setSceneActionError(
         operation === "split"
@@ -409,6 +523,12 @@ export function useSceneWorkspaceController(input: Readonly<{
       input.state.setSceneActionError("장면 나눔 실행취소 대상을 열 수 없습니다.");
       return;
     }
+    if (input.editor.isDocumentComposing(document)) {
+      input.state.setSceneActionError(
+        "한글 입력 조합 중에는 장면 구조를 변경할 수 없습니다.",
+      );
+      return;
+    }
     const manuscript = input.editor.materializeDocumentText(document);
     const from = Math.min(entry.selection.anchor, entry.selection.head);
     const to = Math.max(entry.selection.anchor, entry.selection.head);
@@ -424,10 +544,24 @@ export function useSceneWorkspaceController(input: Readonly<{
     input.state.setSceneActionError(null);
     try {
       await input.persistDocument(document);
+      if (input.editor.isDocumentComposing(document)) {
+        throw new Error("Scene boundary history is unavailable during IME composition");
+      }
+      const expectedDocumentRevisionId =
+        input.editor.getCurrentRevisionId(document.documentId);
+      const currentManuscript = input.editor.materializeDocumentText(document);
+      if (
+        expectedDocumentRevisionId === null ||
+        expectedDocumentRevisionId === undefined ||
+        currentManuscript !== manuscript
+      ) {
+        throw new Error("Scene boundary history source changed before command creation");
+      }
       await input.structureClient.createSceneOverride({
         schemaVersion: 1,
         workId: entry.workId,
         documentId: entry.documentId,
+        expectedDocumentRevisionId,
         selection: entry.selection,
         exactQuote: entry.exactQuote,
         operation: active ? "split" : "merge",
@@ -457,6 +591,12 @@ export function useSceneWorkspaceController(input: Readonly<{
       scene.range === null ||
       previousScene.range === null
     ) return;
+    if (input.editor.isDocumentComposing(currentDocument)) {
+      input.state.setSceneActionError(
+        "한글 입력 조합 중에는 장면 구조를 변경할 수 없습니다.",
+      );
+      return;
+    }
     const crossesEpisodeBoundary =
       previousScene.documentId !== scene.documentId;
     if (
@@ -477,10 +617,28 @@ export function useSceneWorkspaceController(input: Readonly<{
     input.state.setSceneActionError(null);
     try {
       await input.persistDocument(currentDocument);
+      if (input.editor.isDocumentComposing(currentDocument)) {
+        throw new Error("Scene merge is unavailable during IME composition");
+      }
+      const expectedDocumentRevisionId =
+        input.editor.getCurrentRevisionId(currentDocument.documentId);
+      const currentManuscript =
+        input.editor.materializeDocumentText(currentDocument);
+      if (
+        expectedDocumentRevisionId === null ||
+        expectedDocumentRevisionId === undefined ||
+        currentManuscript !== manuscript ||
+        scene.documentRevisionId !== expectedDocumentRevisionId ||
+        (!crossesEpisodeBoundary &&
+          previousScene.documentRevisionId !== expectedDocumentRevisionId)
+      ) {
+        throw new Error("Scene merge source changed before command creation");
+      }
       await input.structureClient.createSceneOverride({
         schemaVersion: 1,
         workId: currentDocument.workId,
         documentId: currentDocument.documentId,
+        expectedDocumentRevisionId,
         selection: { anchor: from, head: to },
         exactQuote: manuscript.slice(from, to),
         operation: "merge",
@@ -501,6 +659,12 @@ export function useSceneWorkspaceController(input: Readonly<{
     if (
       input.state.sceneActionState !== "idle"
     ) return;
+    if (input.editor.isDocumentComposing(currentDocument)) {
+      input.state.setSceneActionError(
+        "한글 입력 조합 중에는 장면 구조를 변경할 수 없습니다.",
+      );
+      return;
+    }
     if (!Number.isSafeInteger(offset) || offset < 0) {
       input.state.setSceneActionError("합칠 현재 장면 위치를 읽지 못했습니다.");
       return;
@@ -600,10 +764,36 @@ export function useSceneWorkspaceController(input: Readonly<{
     }
   }, [input]);
 
-  const deleteScenes = useCallback(async (
+  const refreshAfterSceneTrashMutation = useCallback(async (
+    workId: EntityId<"Work">,
+    preferredDocumentId: EntityId<"Document">,
+  ) => {
+    await inputRef.current.reloadRuntimeAfterSceneMutation(preferredDocumentId);
+    const current = inputRef.current;
+    const [projection, annotations] = await Promise.all([
+      current.refreshSceneProjection(workId),
+      current.structureClient.listSceneAnnotations({ schemaVersion: 1, workId }),
+      refreshSceneTrash(workId),
+    ]);
+    current.reconcile.replaceSceneProjection(projection);
+    current.reconcile.replaceSceneAnnotations(annotations.annotations);
+    await current.refreshSceneMusicQueueCandidates(workId);
+  }, [refreshSceneTrash]);
+
+  const prepareSceneDeletionGroup = useCallback(async (
     requestedScenes: readonly SceneProjection[],
   ) => {
-    if (input.state.sceneActionState !== "idle") return;
+    const current = inputRef.current;
+    if (current.state.sceneActionState !== "idle") return;
+    if (
+      current.activeDocument !== null &&
+      current.editor.isDocumentComposing(current.activeDocument)
+    ) {
+      current.state.setSceneActionError(
+        "한글 입력 조합 중에는 장면 구조를 변경할 수 없습니다.",
+      );
+      return;
+    }
     const scenes = requestedScenes.filter(
       (scene, index, candidates) =>
         scene.range !== null &&
@@ -611,65 +801,149 @@ export function useSceneWorkspaceController(input: Readonly<{
           (candidate) => candidate.sceneKey === scene.sceneKey,
         ) === index,
     );
-    if (scenes.length === 0) return;
-    const prepared = scenes.map((scene) => {
-      const document = input.documents.find(
-        (candidate) => candidate.documentId === scene.documentId,
-      );
-      const manuscript = document === undefined
-        ? undefined
-        : input.editor.materializeDocumentText(document);
-      if (document === undefined || manuscript === undefined || scene.range === null) {
-        throw new Error("삭제할 장면 범위를 읽지 못했습니다.");
-      }
-      return Object.freeze({ document, manuscript, scene, range: scene.range });
-    });
-    input.state.setSceneActionState("creating");
-    input.state.setSceneActionError(null);
+    const first = scenes[0];
+    if (first === undefined) return;
+    let target: ReturnType<typeof resolveSceneDeletionTarget>;
     try {
-      const documents = prepared.filter(
-        (entry, index, candidates) =>
-          candidates.findIndex(
-            (candidate) =>
-              candidate.document.documentId === entry.document.documentId,
-          ) === index,
+      target = resolveSceneDeletionTarget({
+        requestedScenes: scenes,
+        scenes: current.sceneProjection?.scenes ?? scenes,
+      });
+    } catch {
+      current.state.setSceneActionError(
+        "서로 다른 장면은 한 번에 삭제할 수 없습니다.",
       );
-      for (const { document } of documents) {
-        await input.persistDocument(document);
+      return;
+    }
+    current.state.setSceneActionState("creating");
+    current.state.setSceneActionError(null);
+    try {
+      const activeIsAffected = scenes.some(
+        (scene) => scene.documentId === current.activeDocument?.documentId,
+      );
+      if (activeIsAffected && current.activeDocument !== null) {
+        await current.persistDocument(current.activeDocument);
       }
-      for (const { document, manuscript, range } of prepared) {
-        await input.structureClient.createSceneOverride({
-          schemaVersion: 1,
-          workId: document.workId,
-          documentId: document.documentId,
-          selection: {
-            anchor: range.start,
-            head: range.end,
-          },
-          exactQuote: manuscript.slice(range.start, range.end),
-          operation: "delete",
-          note: "",
-        });
-      }
-      await input.refreshSceneProjection(prepared[0]!.document.workId);
+      const preview = await current.structureClient.prepareSceneDeletion({
+        schemaVersion: 1,
+        workId: first.workId,
+        target,
+      });
+      setSceneDeletionPreview(preview);
     } catch (reason) {
-      input.state.setSceneActionError(
+      current.state.setSceneActionError(
+        reason instanceof Error
+          ? reason.message
+          : "장면 삭제 미리보기를 만들지 못했습니다.",
+      );
+    } finally {
+      current.state.setSceneActionState("idle");
+    }
+  }, []);
+
+  const prepareSceneDeletion = useCallback((scene: SceneProjection) =>
+    prepareSceneDeletionGroup([scene]), [prepareSceneDeletionGroup]);
+
+  const cancelSceneDeletion = useCallback(() => {
+    if (inputRef.current.state.sceneActionState === "idle") {
+      setSceneDeletionPreview(null);
+    }
+  }, []);
+
+  const confirmSceneDeletion = useCallback(async () => {
+    const current = inputRef.current;
+    const preview = sceneDeletionPreview;
+    if (preview === null || current.state.sceneActionState !== "idle") return;
+    current.state.setSceneActionState("deleting");
+    current.state.setSceneActionError(null);
+    try {
+      const receipt = await current.structureClient.deleteScene({
+        schemaVersion: 1,
+        preview,
+      });
+      const preferredDocumentId =
+        current.activeDocument?.documentId ?? preview.documents[0]!.documentId;
+      await refreshAfterSceneTrashMutation(preview.workId, preferredDocumentId);
+      lastSceneDeletionRef.current = receipt;
+      setLastSceneDeletion(receipt);
+      setSceneDeletionPreview(null);
+    } catch (reason) {
+      current.state.setSceneActionError(
         reason instanceof Error ? reason.message : "장면을 삭제하지 못했습니다.",
       );
     } finally {
-      input.state.setSceneActionState("idle");
+      current.state.setSceneActionState("idle");
     }
-  }, [input]);
+  }, [refreshAfterSceneTrashMutation, sceneDeletionPreview]);
 
-  const deleteScene = useCallback(async (scene: SceneProjection) => {
-    await deleteScenes([scene]);
-  }, [deleteScenes]);
-
-  const deleteSceneGroup = useCallback(async (
-    scenes: readonly SceneProjection[],
+  const restoreSceneTrash = useCallback(async (
+    entry: SceneTrashEntryProjection,
   ) => {
-    await deleteScenes(scenes);
-  }, [deleteScenes]);
+    const current = inputRef.current;
+    if (current.state.sceneActionState !== "idle" || !entry.canRestore) return;
+    current.state.setSceneActionState("restoring");
+    current.state.setSceneActionError(null);
+    try {
+      await current.structureClient.restoreSceneTrash({
+        schemaVersion: 1,
+        workId: entry.workId,
+        sceneTrashEntryId: entry.sceneTrashEntryId,
+        expectedRevision: entry.revision,
+      });
+      const preferredDocumentId =
+        current.activeDocument?.documentId ?? entry.documents[0]!.documentId;
+      await refreshAfterSceneTrashMutation(entry.workId, preferredDocumentId);
+      lastSceneDeletionRef.current = null;
+      setLastSceneDeletion(null);
+    } catch (reason) {
+      current.state.setSceneActionError(
+        reason instanceof Error ? reason.message : "장면을 복원하지 못했습니다.",
+      );
+    } finally {
+      current.state.setSceneActionState("idle");
+    }
+  }, [refreshAfterSceneTrashMutation]);
+
+  const undoLastSceneDeletion = useCallback(async () => {
+    const current = inputRef.current;
+    const receipt = lastSceneDeletionRef.current;
+    if (receipt === null || current.state.sceneActionState !== "idle") return;
+    current.state.setSceneActionState("restoring");
+    current.state.setSceneActionError(null);
+    try {
+      await current.structureClient.undoSceneDeletion({
+        schemaVersion: 1,
+        workId: receipt.entry.workId,
+        sceneTrashEntryId: receipt.entry.sceneTrashEntryId,
+        expectedRevision: receipt.entry.revision,
+      });
+      const preferredDocumentId =
+        current.activeDocument?.documentId ?? receipt.entry.documents[0]!.documentId;
+      await refreshAfterSceneTrashMutation(receipt.entry.workId, preferredDocumentId);
+      lastSceneDeletionRef.current = null;
+      setLastSceneDeletion(null);
+    } catch (reason) {
+      current.state.setSceneActionError(
+        reason instanceof Error ? reason.message : "장면 삭제를 되돌리지 못했습니다.",
+      );
+    } finally {
+      current.state.setSceneActionState("idle");
+    }
+  }, [refreshAfterSceneTrashMutation]);
+
+  const requestUndoLastSceneDeletion = useCallback((): boolean => {
+    const current = inputRef.current;
+    const receipt = lastSceneDeletionRef.current;
+    if (receipt === null || current.state.sceneActionState !== "idle") return false;
+    const exactDeletedRevisions = receipt.documentRevisions.every((revision) =>
+      current.documents.find(
+        (document) => document.documentId === revision.documentId,
+      )?.documentRevisionId === revision.revisionId
+    );
+    if (!exactDeletedRevisions) return false;
+    void undoLastSceneDeletion();
+    return true;
+  }, [undoLastSceneDeletion]);
 
   const updateSceneRuleSet = useCallback(async (
     draft: Pick<
@@ -725,6 +999,46 @@ export function useSceneWorkspaceController(input: Readonly<{
     } catch {
       input.state.setSceneActionError(
         "장면의 사건 소속을 변경하지 못했습니다.",
+      );
+    } finally {
+      input.state.setSceneActionState("idle");
+    }
+  }, [input]);
+
+  const rebindSceneMetadata = useCallback(async (
+    binding: SceneMetadataBindingProjection,
+    targetSceneId: EntityId<"Scene"> | null,
+  ) => {
+    if (
+      input.activeWorkId === null ||
+      binding.workId !== input.activeWorkId ||
+      input.state.sceneActionState !== "idle"
+    ) return;
+    input.state.setSceneActionState("updating-event");
+    input.state.setSceneActionError(null);
+    try {
+      await input.structureClient.rebindSceneMetadata({
+        schemaVersion: 1,
+        workId: binding.workId,
+        sceneMetadataBindingId: binding.sceneMetadataBindingId,
+        expectedBindingRevision: binding.revision,
+        targetSceneId,
+      });
+      const [projection, annotations] = await Promise.all([
+        input.refreshSceneProjection(binding.workId),
+        input.structureClient.listSceneAnnotations({
+          schemaVersion: 1,
+          workId: binding.workId,
+        }),
+      ]);
+      input.reconcile.replaceSceneProjection(projection);
+      input.reconcile.replaceSceneAnnotations(annotations.annotations);
+      await input.refreshSceneMusicQueueCandidates(binding.workId);
+    } catch (reason) {
+      input.state.setSceneActionError(
+        reason instanceof Error
+          ? reason.message
+          : "장면 메타데이터 연결을 변경하지 못했습니다.",
       );
     } finally {
       input.state.setSceneActionState("idle");
@@ -1136,13 +1450,22 @@ export function useSceneWorkspaceController(input: Readonly<{
     sceneBoundaryPreviews,
     createSceneBoundary,
     applySceneBoundaryHistory,
-    deleteScene,
-    deleteSceneGroup,
+    sceneDeletionPreview,
+    sceneTrashEntries,
+    lastSceneDeletion,
+    sceneActionState: input.state.sceneActionState,
+    prepareSceneDeletion,
+    prepareSceneDeletionGroup,
+    cancelSceneDeletion,
+    confirmSceneDeletion,
+    restoreSceneTrash,
+    requestUndoLastSceneDeletion,
     mergeCurrentSceneWithPrevious,
     mergeSceneWithPrevious,
     relocateSceneRange,
     updateSceneRuleSet,
     setSceneEventOverride,
+    rebindSceneMetadata,
     captureSceneExtractionSelection,
     performSceneExtraction,
     grantSceneExtractionPermission,

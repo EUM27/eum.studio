@@ -28,8 +28,16 @@ describe("character relation contract", () => {
       workId: "work-a",
       relationId: "relation-a",
       expectedRevision: 2,
-      changes: { description: "현재는 경계한다." },
-    }).changes).toEqual({ description: "현재는 경계한다." });
+      changes: {
+        fromCharacterId: "character-c",
+        toCharacterId: "character-d",
+        description: "현재는 경계한다.",
+      },
+    }).changes).toEqual({
+      fromCharacterId: "character-c",
+      toCharacterId: "character-d",
+      description: "현재는 경계한다.",
+    });
     expect(parseRetireCharacterRelationCommand({
       schemaVersion: 1,
       workId: "work-a",

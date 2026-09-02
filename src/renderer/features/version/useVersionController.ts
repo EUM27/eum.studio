@@ -14,6 +14,10 @@ import type {
   WorkSnapshotProjection,
 } from "../../../application/revisions/work-version-contract";
 import type { WorkSnapshotComparisonProjection } from "../../../application/revisions/work-snapshot-comparison";
+import {
+  deriveWorkSnapshotSlots,
+  type WorkSnapshotSceneSelectionPlan,
+} from "../../../application/revisions/work-snapshot-scene-plan";
 import type { EntityId } from "../../../domain/writing";
 
 type VersionProjectionLoadResult = {
@@ -48,6 +52,8 @@ export function useVersionController(input: Readonly<{
   >([]);
   const [workSnapshotComparison, setWorkSnapshotComparison] =
     useState<WorkSnapshotComparisonProjection | null>(null);
+  const [workSnapshotScenePlan,setWorkSnapshotScenePlan]=
+    useState<WorkSnapshotSceneSelectionPlan|null>(null);
   const [snapshotLabel, setSnapshotLabel] = useState("");
   const [versionActionState, setVersionActionState] = useState<
     | "idle"
@@ -224,15 +230,16 @@ export function useVersionController(input: Readonly<{
     setVersionActionState("comparing-snapshot");
     setVersionActionError(null);
     setWorkSnapshotComparison(null);
+    setWorkSnapshotScenePlan(null);
     try {
       await input.persistDocument(input.document);
-      const projection = await input.client.compareWorkSnapshot({
-        schemaVersion: 1,
-        workId: input.document.workId,
-        workSnapshotId,
-      });
+      const [projection,scenePlan] = await Promise.all([
+        input.client.compareWorkSnapshot({schemaVersion:1,workId:input.document.workId,workSnapshotId}),
+        input.client.planWorkSnapshotScenes({schemaVersion:1,workId:input.document.workId,workSnapshotId,selectedSceneIds:[]}),
+      ]);
       if (versionLoadSequenceRef.current !== sequence) return;
       setWorkSnapshotComparison(projection);
+      setWorkSnapshotScenePlan(scenePlan);
     } catch {
       if (versionLoadSequenceRef.current === sequence) {
         setVersionActionError("작품 스냅샷을 비교하지 못했습니다.");
@@ -247,7 +254,15 @@ export function useVersionController(input: Readonly<{
   const closeWorkSnapshotComparison = useCallback(() => {
     versionLoadSequenceRef.current += 1;
     setWorkSnapshotComparison(null);
+    setWorkSnapshotScenePlan(null);
   }, []);
+
+  const toggleWorkSnapshotSceneSelection=useCallback(async(sceneId:EntityId<"Scene">,selected:boolean)=>{
+    const plan=workSnapshotScenePlan;if(input.document===null||plan===null||versionActionState!=="idle")return;
+    const selectedSceneIds=selected?[...plan.scenes.filter((scene)=>scene.selected).map((scene)=>scene.sceneId),sceneId]:plan.scenes.filter((scene)=>scene.selected&&scene.sceneId!==sceneId).map((scene)=>scene.sceneId);
+    setVersionActionState("comparing-snapshot");setVersionActionError(null);
+    try{setWorkSnapshotScenePlan(await input.client.planWorkSnapshotScenes({schemaVersion:1,workId:plan.workId,workSnapshotId:plan.workSnapshotId,selectedSceneIds}));}catch{setVersionActionError("장면 선택 plan을 갱신하지 못했습니다.");}finally{setVersionActionState("idle");}
+  },[input.client,input.document,versionActionState,workSnapshotScenePlan]);
 
   const changeSnapshotLabel = useCallback((value: string) => {
     setSnapshotLabel(value);
@@ -258,7 +273,9 @@ export function useVersionController(input: Readonly<{
     highlightedDocumentRevisionId,
     documentRevisionPreview,
     workSnapshots,
+    workSnapshotSlots:deriveWorkSnapshotSlots(workSnapshots),
     workSnapshotComparison,
+    workSnapshotScenePlan,
     snapshotLabel,
     versionActionState,
     versionActionError,
@@ -270,6 +287,7 @@ export function useVersionController(input: Readonly<{
     createWorkSnapshot,
     compareWorkSnapshot,
     closeWorkSnapshotComparison,
+    toggleWorkSnapshotSceneSelection,
     changeSnapshotLabel,
   };
 }

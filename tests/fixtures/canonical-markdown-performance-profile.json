@@ -1,0 +1,8 @@
+{
+  "fixtureUse": "measurement-only; not a product limit or user-data default",
+  "measurement": {
+    "entitiesPerKind": 100,
+    "documentCount": 500,
+    "iterationCount": 10
+  }
+}

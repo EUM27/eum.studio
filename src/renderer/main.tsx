@@ -11,6 +11,8 @@ import "./styles/document-controls.css";
 import "./styles/workspace-layout.css";
 import "./styles/document-rail-compat.css";
 import "./styles/workspace-ia-compat.css";
+import "./styles/manuscript-annotations.css";
+import "./styles/canon-workspace.css";
 import "./styles/dialogs.css";
 import "./styles/schedule.css";
 import "./styles/activity-records.css";

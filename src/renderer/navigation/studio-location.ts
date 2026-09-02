@@ -7,7 +7,14 @@ export type StudioSection =
   | "resources"
   | "settings";
 
-export type WorkSection = "write" | "structure" | "review" | "operations";
+export type WorkSection =
+  | "write"
+  | "structure"
+  | "canon"
+  | "review"
+  | "operations";
+
+export type CanonTab = "canonical" | "review" | "continuity" | "knowledge" | "digest" | "context";
 
 export type StructureTab =
   | "overview"
@@ -33,12 +40,13 @@ export type StudioLocation =
       readonly scope: "work";
       readonly workId: EntityId<"Work">;
       readonly section: WorkSection;
-      readonly tab?: StructureTab | ReviewTab;
+      readonly tab?: StructureTab | CanonTab | ReviewTab;
       readonly documentId?: EntityId<"Document">;
       readonly entityId?: string;
       readonly returnTo?: StudioLocation;
     };
 
 export const DEFAULT_WORK_SECTION: WorkSection = "write";
+export const DEFAULT_CANON_TAB: CanonTab = "canonical";
 export const DEFAULT_STRUCTURE_TAB: StructureTab = "overview";
 export const DEFAULT_REVIEW_TAB: ReviewTab = "records";

@@ -1,5 +1,9 @@
 import { entityId, type EntityId } from "../../domain/writing";
 import {
+  parseSceneMetadataBindingProjection,
+  type SceneMetadataBindingProjection,
+} from "../structure/scene-metadata-binding-contract";
+import {
   parseYouTubeVideoProjection,
   type YouTubeVideoProjection,
 } from "./youtube-music";
@@ -15,6 +19,7 @@ export type SceneMusicQueueCandidate = {
   readonly revision: number;
   readonly workId: EntityId<"Work">;
   readonly sceneKey: string;
+  readonly binding: SceneMetadataBindingProjection;
   readonly sceneAnnotationId: EntityId<"SceneAnnotation">;
   readonly sceneAnnotationRevision: number;
   readonly providerId: string;
@@ -146,7 +151,7 @@ export function parseSceneMusicQueueCandidate(
   const label = "SceneMusicQueueCandidate";
   const input = record(value, label);
   exact(input, [
-    "schemaVersion", "candidateId", "revision", "workId", "sceneKey",
+    "schemaVersion", "candidateId", "revision", "workId", "sceneKey", "binding",
     "sceneAnnotationId", "sceneAnnotationRevision", "providerId", "query",
     "status", "integrity", "options", "selectedOptionId", "createdAt",
     "updatedAt",
@@ -186,15 +191,28 @@ export function parseSceneMusicQueueCandidate(
   ) {
     throw new Error(`${label}.selectedOptionId does not match status`);
   }
+  const candidateId = id<"SceneMusicQueueCandidate">(
+    input.candidateId,
+    `${label}.candidateId`,
+  );
+  const workId = id<"Work">(input.workId, `${label}.workId`);
+  const sceneKey = nonEmpty(input.sceneKey, `${label}.sceneKey`);
+  const binding = parseSceneMetadataBindingProjection(input.binding);
+  if (
+    binding.workId !== workId ||
+    binding.metadataKind !== "music-queue" ||
+    binding.metadataId !== candidateId ||
+    binding.sourceSceneKey !== sceneKey
+  ) {
+    throw new Error(`${label}.binding does not match the music Candidate`);
+  }
   return Object.freeze({
     schemaVersion: 1,
-    candidateId: id<"SceneMusicQueueCandidate">(
-      input.candidateId,
-      `${label}.candidateId`,
-    ),
+    candidateId,
     revision: positiveInteger(input.revision, `${label}.revision`),
-    workId: id<"Work">(input.workId, `${label}.workId`),
-    sceneKey: nonEmpty(input.sceneKey, `${label}.sceneKey`),
+    workId,
+    sceneKey,
+    binding,
     sceneAnnotationId: id<"SceneAnnotation">(
       input.sceneAnnotationId,
       `${label}.sceneAnnotationId`,

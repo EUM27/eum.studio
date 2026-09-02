@@ -37,6 +37,7 @@ import type {
   useSceneWorkspaceState,
 } from "./useSceneWorkspaceController";
 import type { useStructureController } from "./useStructureController";
+import type { useSceneCanonContextController } from "./useSceneCanonContextController";
 import { CharacterStructurePanel } from "../../structure/CharacterStructurePanel";
 import { EventStructurePanel } from "../../structure/EventStructurePanel";
 import { ForeshadowStructurePanel } from "../../structure/ForeshadowStructurePanel";
@@ -74,6 +75,7 @@ export type SceneStructureContentProps = Readonly<{
     scene: ReturnType<typeof useSceneWorkspaceController>;
     sceneState: ReturnType<typeof useSceneWorkspaceState>;
     structure: ReturnType<typeof useStructureController>;
+    sceneCanon?: ReturnType<typeof useSceneCanonContextController>;
   }>;
   musicConnected: boolean;
   navigation: Readonly<{
@@ -81,6 +83,9 @@ export type SceneStructureContentProps = Readonly<{
     previewSceneExtractionCandidate: ComponentProps<
       typeof SceneExtractionPanel
     >["onPreviewCandidate"];
+    reviewSceneCanon?: ComponentProps<typeof SceneList>["onReviewSceneCanon"];
+    openSceneContinuity?: ComponentProps<typeof SceneList>["onOpenSceneContinuity"];
+    openSceneKnowledge?: ComponentProps<typeof SceneList>["onOpenSceneKnowledge"];
   }>;
   oauthStatus: ComponentProps<typeof SceneExtractionPanel>["oauthStatus"];
   onOpenSettings: (() => void) | undefined;
@@ -175,17 +180,31 @@ export function SceneStructureContent(input: SceneStructureContentProps) {
         musicPlaybackAvailable={music.youtubeMusicProfile !== null}
         musicQueueBusy={music.sceneMusicQueueActionState !== "idle"}
         musicQueueCandidates={music.sceneMusicQueueCandidates}
+        sceneTrashEntries={scene.sceneTrashEntries}
+        sceneCanonContexts={input.controllers.sceneCanon?.contexts??[]}
         onMergeWithPrevious={(sceneProjection, previousScene) => {
-          void scene.mergeSceneWithPrevious(sceneProjection, previousScene);
+          void scene.mergeSceneWithPrevious(sceneProjection, previousScene).then(()=>
+            input.controllers.sceneCanon?.refresh()
+          );
         }}
         onDeleteScene={(sceneProjection) => {
-          void scene.deleteScene(sceneProjection);
+          void scene.prepareSceneDeletion(sceneProjection);
         }}
         onOpenMusicSettings={() => input.onOpenSettings?.()}
         onOpenScene={input.navigation.focusScene}
+        {...(input.navigation.reviewSceneCanon===undefined?{}:{onReviewSceneCanon:input.navigation.reviewSceneCanon})}
+        {...(input.navigation.openSceneContinuity===undefined?{}:{onOpenSceneContinuity:input.navigation.openSceneContinuity})}
+        {...(input.navigation.openSceneKnowledge===undefined?{}:{onOpenSceneKnowledge:input.navigation.openSceneKnowledge})}
+        {...(input.controllers.sceneCanon===undefined?{}:{onRefreshSceneCanonContexts:()=>{void input.controllers.sceneCanon?.refresh();}})}
         onPlayFavoriteMusicVideo={(video) => music.playMusicQueue([video])}
         onPlaySceneMusicQueue={(candidate) => {
           void music.playSelectedSceneMusicQueue(candidate);
+        }}
+        onRebindSceneMetadata={(binding, targetSceneId) => {
+          void scene.rebindSceneMetadata(binding, targetSceneId);
+        }}
+        onRestoreSceneTrash={(entry) => {
+          void scene.restoreSceneTrash(entry);
         }}
         onSearchSceneMusic={(annotation, query) => {
           void music.searchSceneMusicQueues(annotation, query);
@@ -205,9 +224,6 @@ export function SceneStructureContent(input: SceneStructureContentProps) {
             operation,
             expectedRevision,
           );
-        }}
-        onSplitScene={() => {
-          void scene.createSceneBoundary("split");
         }}
         onToggleFavoriteMusicVideo={(video) => {
           void music.toggleFavoriteMusicTrack(video);

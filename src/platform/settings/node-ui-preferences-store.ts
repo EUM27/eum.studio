@@ -24,6 +24,17 @@ export async function openNodeUiPreferencesStore(input: {
   await mkdir(input.rootDirectoryPath, { recursive: true });
   const filePath = path.join(input.rootDirectoryPath, "preferences.json");
 
+  async function writeProjection(
+    projection: UiPreferencesProjection,
+  ): Promise<void> {
+    const temporaryPath = path.join(
+      input.rootDirectoryPath,
+      `preferences-${randomUUID()}.tmp`,
+    );
+    await writeFile(temporaryPath, `${JSON.stringify(projection)}\n`, "utf8");
+    await rename(temporaryPath, filePath);
+  }
+
   async function readCurrent(): Promise<UiPreferencesProjection> {
     try {
       return parseUiPreferencesProjection(
@@ -53,17 +64,12 @@ export async function openNodeUiPreferencesStore(input: {
         );
       }
       const saved = parseUiPreferencesProjection({
-        schemaVersion: 1,
+        schemaVersion: 2,
         revision: current.revision + 1,
         themeKey: command.themeKey,
-        focusMode: command.focusMode,
+        manuscriptFocus: command.manuscriptFocus,
       });
-      const temporaryPath = path.join(
-        input.rootDirectoryPath,
-        `preferences-${randomUUID()}.tmp`,
-      );
-      await writeFile(temporaryPath, `${JSON.stringify(saved)}\n`, "utf8");
-      await rename(temporaryPath, filePath);
+      await writeProjection(saved);
       return readCurrent();
     },
   });

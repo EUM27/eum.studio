@@ -1,10 +1,9 @@
 /*
  * Eum Studio desktop surface.
  *
- * This file owns the visible application frame. The layout follows the
- * approved Novela reference: compact window bar, one left navigation/tree,
- * and one uninterrupted manuscript surface. Domain and persistence behavior
- * remain owned by the existing workspace components.
+ * This file owns the visible application frame: compact window bar, one left
+ * navigation/tree, and one uninterrupted manuscript surface. Domain and
+ * persistence behavior remain owned by the existing workspace components.
  */
 
 :root {
@@ -39,6 +38,7 @@ textarea {
 .studio-app-shell {
   --eum-accent: var(--starlight-accent, #d97706);
   --eum-accent-strong: var(--starlight-accent-hover, #b45309);
+  --eum-accent-text: var(--eum-accent-strong);
   --eum-accent-soft: var(--starlight-hover, #fafafa);
   --eum-accent-border: var(--starlight-accent, #d97706);
   --eum-bg: var(--starlight-primary, #fdfcfa);
@@ -49,6 +49,7 @@ textarea {
   --eum-text: var(--starlight-text-primary, #1a1a1a);
   --eum-text-muted: var(--starlight-text-secondary, #6b7280);
   --eum-text-faint: var(--starlight-text-tertiary, #9ca3af);
+  --eum-control-text: var(--eum-text-muted);
   --eum-topbar-height: 38px;
   --eum-sidebar-width: clamp(220px, 20vw, 288px);
   --eum-review-rail-width: clamp(18rem, 24vw, 22rem);
@@ -151,11 +152,11 @@ textarea {
   width: 28px;
   height: 28px;
   place-items: center;
-  color: var(--eum-accent-strong);
+  color: var(--eum-accent-text);
   font-size: 18px;
   font-weight: 800;
   line-height: 1;
-  -webkit-app-region: no-drag;
+  -webkit-app-region: drag;
 }
 
 .studio-app-shell .app-topbar-button {
@@ -167,7 +168,7 @@ textarea {
   place-items: center;
   border: 0;
   border-radius: 6px;
-  color: #727272;
+  color: var(--eum-control-text);
   background: transparent;
   cursor: pointer;
   -webkit-app-region: no-drag;
@@ -175,7 +176,7 @@ textarea {
 
 .studio-app-shell .app-topbar-button:hover:not(:disabled) {
   color: var(--eum-text);
-  background: #eeeeee;
+  background: var(--eum-accent-soft);
 }
 
 .studio-app-shell .app-topbar-button:disabled {
@@ -189,7 +190,7 @@ textarea {
   max-width: 900px;
   margin-left: auto;
   flex: 1 1 900px;
-  -webkit-app-region: no-drag;
+  -webkit-app-region: drag;
 }
 
 .studio-app-shell .app-topbar-product {
@@ -217,7 +218,7 @@ textarea {
 
 .studio-app-shell .app-topbar-settings.is-active {
   color: var(--eum-text);
-  background: #eeeeee;
+  background: var(--eum-accent-soft);
 }
 
 .studio-app-shell .starlight-theme-picker {

@@ -36,8 +36,11 @@ describe("regular document persistence", () => {
     const execution = persistDocumentRegularly({
       queue: null,
       document,
+      waitForCompositionEnd: async () => undefined,
       captureResume,
     });
+    expect(captureResume).not.toHaveBeenCalled();
+    await Promise.resolve();
     expect(captureResume).not.toHaveBeenCalled();
     await Promise.resolve();
     expect(captureResume).toHaveBeenCalledOnce();
@@ -48,7 +51,7 @@ describe("regular document persistence", () => {
   it("waits for one exact flush before one exact capture", async () => {
     const flushGate = deferred<void>();
     const order: string[] = [];
-    const flush = vi.fn((documentId: typeof document.documentId) => {
+    const flushForNavigation = vi.fn((documentId: typeof document.documentId) => {
       expect(documentId).toBe(document.documentId);
       order.push("flush:start");
       return flushGate.promise.then(() => {
@@ -59,43 +62,60 @@ describe("regular document persistence", () => {
       expect(captured).toBe(document);
       order.push("capture");
     });
-    const queue: RegularPersistenceQueuePort = { flush };
+    const waitForCompositionEnd = vi.fn(async (
+      currentDocument: ManuscriptDocumentSource,
+    ) => {
+      expect(currentDocument).toBe(document);
+      order.push("composition:end");
+    });
+    const queue: RegularPersistenceQueuePort = { flushForNavigation };
     const execution = persistDocumentRegularly({
       queue,
       document,
+      waitForCompositionEnd,
       captureResume,
     });
-    expect(flush).toHaveBeenCalledOnce();
+    expect(waitForCompositionEnd).toHaveBeenCalledOnce();
+    expect(flushForNavigation).not.toHaveBeenCalled();
     expect(captureResume).not.toHaveBeenCalled();
+    await Promise.resolve();
+    expect(flushForNavigation).toHaveBeenCalledOnce();
     flushGate.resolve();
     await expect(execution).resolves.toBeUndefined();
-    expect(order).toEqual(["flush:start", "flush:end", "capture"]);
+    expect(order).toEqual([
+      "composition:end",
+      "flush:start",
+      "flush:end",
+      "capture",
+    ]);
     expect(captureResume).toHaveBeenCalledOnce();
   });
 
   it("propagates the raw flush failure and short-circuits capture without retry", async () => {
     const failure = new Error("flush failed");
-    const flush = vi.fn(() => Promise.reject(failure));
+    const flushForNavigation = vi.fn(() => Promise.reject(failure));
     const captureResume = vi.fn(async () => undefined);
     await expect(persistDocumentRegularly({
-      queue: { flush },
+      queue: { flushForNavigation },
       document,
+      waitForCompositionEnd: async () => undefined,
       captureResume,
     })).rejects.toBe(failure);
-    expect(flush).toHaveBeenCalledOnce();
+    expect(flushForNavigation).toHaveBeenCalledOnce();
     expect(captureResume).not.toHaveBeenCalled();
   });
 
   it("propagates the raw capture failure after exactly one successful flush", async () => {
     const failure = new Error("capture failed");
-    const flush = vi.fn(async () => undefined);
+    const flushForNavigation = vi.fn(async () => undefined);
     const captureResume = vi.fn(() => Promise.reject(failure));
     await expect(persistDocumentRegularly({
-      queue: { flush },
+      queue: { flushForNavigation },
       document,
+      waitForCompositionEnd: async () => undefined,
       captureResume,
     })).rejects.toBe(failure);
-    expect(flush).toHaveBeenCalledOnce();
+    expect(flushForNavigation).toHaveBeenCalledOnce();
     expect(captureResume).toHaveBeenCalledOnce();
     expect(captureResume).toHaveBeenCalledWith(document);
   });
@@ -250,7 +270,7 @@ describe("SerialPersistenceLane", () => {
       "input.client.saveContinuousReadingProgress({",
     );
     expect(closeSource).toContain(
-      "input.focusModeSessionPendingRef.current",
+      "input.manuscriptFocusSessionPendingRef.current",
     );
     expect(closeSource).toContain("coordinateWorkspaceCloseRequest({");
     expect(runtimeProjectionSource).toContain(

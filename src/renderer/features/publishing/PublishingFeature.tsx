@@ -51,6 +51,9 @@ export function PublishingFeature({
       onDisconnectMail={controller.disconnectPublishingMail}
       onSaveMailSchedule={controller.savePublishingMailSchedule}
       onCreateSubmission={controller.createPublishingSubmission}
+      onCreateFormTemplate={controller.createPublishingFormTemplate}
+      onUpdateFormTemplate={controller.updatePublishingFormTemplate}
+      onSaveFormResponse={controller.savePublishingFormResponse}
       onSelect={controller.selectPublishingPartner}
       onSelectContract={controller.selectPublishingContract}
       onSelectPublication={controller.selectPublishingPublication}
@@ -65,6 +68,8 @@ export function PublishingFeature({
       onUpdatePayment={controller.updatePublishingPayment}
       onUpdateSubmission={controller.updatePublishingSubmission}
       partners={controller.publishingPartners}
+      formTemplates={controller.publishingFormTemplates}
+      formResponses={controller.publishingFormResponses}
       mailCandidates={controller.publishingMailCandidates}
       mailConnection={controller.publishingMailConnection}
       mailSchedule={controller.publishingMailSchedule}

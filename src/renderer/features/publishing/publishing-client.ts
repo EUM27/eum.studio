@@ -4,6 +4,8 @@ import type { EntityId } from "../../../domain/writing";
 export type PublishingClient = {
   readonly publishingPartners: StudioBridge["publishingPartners"];
   readonly publishingSubmissions: StudioBridge["publishingSubmissions"];
+  readonly publishingFormTemplates: StudioBridge["publishingFormTemplates"];
+  readonly publishingFormResponses: StudioBridge["publishingFormResponses"];
   readonly publishingContracts: StudioBridge["publishingContracts"];
   readonly publishingPublications: StudioBridge["publishingPublications"];
   readonly publishingSettlements: StudioBridge["publishingSettlements"];
@@ -26,6 +28,8 @@ export function loadPublishingControllerState(
   return Promise.all([
     client.publishingPartners.list({ schemaVersion: 1 }),
     client.publishingSubmissions.list({ schemaVersion: 1, workId }),
+    client.publishingFormTemplates.list({ schemaVersion: 1 }),
+    client.publishingFormResponses.list({ schemaVersion: 1, workId }),
     client.publishingContracts.list({ schemaVersion: 1, workId }),
     client.publishingPublications.list({ schemaVersion: 1, workId }),
     client.publishingSettlements.list({ schemaVersion: 1, workId }),

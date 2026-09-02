@@ -5,6 +5,7 @@ import {
   STRUCTURE_CREATE_ANCHORLESS_EVENT_CHANNEL,
   STRUCTURE_CREATE_EVENT_BLOCK_CHANNEL,
   STRUCTURE_CREATE_SCENE_OVERRIDE_CHANNEL,
+  STRUCTURE_DELETE_SCENE_CHANNEL,
   STRUCTURE_RELOCATE_SCENE_SEGMENT_CHANNEL,
   STRUCTURE_DECIDE_SCENE_EXTRACTION_ANNOTATION_CHANNEL,
   STRUCTURE_DECIDE_SCENE_EXTRACTION_BOUNDARY_CHANNEL,
@@ -16,15 +17,22 @@ import {
   STRUCTURE_LIST_SCENE_EXTRACTION_CANDIDATES_CHANNEL,
   STRUCTURE_LIST_SCENE_OVERRIDES_CHANNEL,
   STRUCTURE_LIST_SCENE_PROJECTION_CHANNEL,
+  STRUCTURE_LIST_SCENE_CANON_CONTEXTS_CHANNEL,
+  STRUCTURE_FINALIZE_SCENE_CANON_CHECK_CHANNEL,
+  STRUCTURE_LIST_SCENE_TRASH_CHANNEL,
   STRUCTURE_MOVE_EVENT_BLOCK_CHANNEL,
   STRUCTURE_PREPARE_SCENE_DRAFT_INSERTION_CHANNEL,
   STRUCTURE_REPLACE_EVENT_SOURCE_CHANNEL,
   STRUCTURE_RETIRE_EVENT_SOURCE_CHANNEL,
   STRUCTURE_RUN_SCENE_DRAFT_CHANNEL,
   STRUCTURE_RUN_SCENE_EXTRACTION_CHANNEL,
+  STRUCTURE_REBIND_SCENE_METADATA_CHANNEL,
+  STRUCTURE_PREPARE_SCENE_DELETION_CHANNEL,
+  STRUCTURE_RESTORE_SCENE_TRASH_CHANNEL,
   STRUCTURE_SET_SCENE_EVENT_OVERRIDE_CHANNEL,
   STRUCTURE_UPDATE_SCENE_DRAFT_CANDIDATE_CHANNEL,
   STRUCTURE_UPDATE_SCENE_RULE_SET_CHANNEL,
+  STRUCTURE_UNDO_SCENE_DELETION_CHANNEL,
 } from "../../application/contracts/studio-bridge";
 import {
   parseCreateAnchorlessEventCommand,
@@ -61,6 +69,26 @@ import {
   type SceneOverrideProjection,
 } from "../../application/structure/scene-override-contract";
 import {
+  parseRebindSceneMetadataCommand,
+  type RebindSceneMetadataCommand,
+  type SceneMetadataBindingProjection,
+} from "../../application/structure/scene-metadata-binding-contract";
+import {
+  parseDeleteSceneCommand,
+  parseListSceneTrashCommand,
+  parsePrepareSceneDeletionCommand,
+  parseRestoreSceneTrashCommand,
+  parseUndoSceneDeletionCommand,
+  type DeleteSceneCommand,
+  type ListSceneTrashCommand,
+  type PrepareSceneDeletionCommand,
+  type RestoreSceneTrashCommand,
+  type SceneDeletionPreview,
+  type SceneDeletionReceipt,
+  type SceneTrashListProjection,
+  type UndoSceneDeletionCommand,
+} from "../../application/structure/scene-trash-contract";
+import {
   parseListSceneProjectionCommand,
   parseSetSceneEventOverrideCommand,
   parseUpdateSceneRuleSetCommand,
@@ -69,6 +97,14 @@ import {
   type SetSceneEventOverrideCommand,
   type UpdateSceneRuleSetCommand,
 } from "../../application/structure/scene-projection";
+import {
+  parseFinalizeSceneCanonCheckCommand,
+  parseListSceneCanonContextsCommand,
+  type FinalizeSceneCanonCheckCommand,
+  type ListSceneCanonContextsCommand,
+  type SceneCanonContextListProjection,
+  type SceneCanonCheckProjection,
+} from "../../application/structure/scene-canon-context";
 import {
   parseDecideSceneExtractionAnnotationCommand,
   parseDecideSceneExtractionBoundaryCommand,
@@ -134,12 +170,36 @@ export type StructureIpcRuntime = Readonly<{
   listSceneProjection: (
     command: ListSceneProjectionCommand,
   ) => Promise<SceneProjectionList>;
+  listSceneCanonContexts: (
+    command: ListSceneCanonContextsCommand,
+  ) => Promise<SceneCanonContextListProjection>;
+  finalizeSceneCanonCheck: (
+    command: FinalizeSceneCanonCheckCommand,
+  ) => Promise<SceneCanonCheckProjection>;
   updateSceneRuleSet: (
     command: UpdateSceneRuleSetCommand,
   ) => Promise<SceneProjectionList>;
   setSceneEventOverride: (
     command: SetSceneEventOverrideCommand,
   ) => Promise<SceneProjectionList>;
+  rebindSceneMetadata: (
+    command: RebindSceneMetadataCommand,
+  ) => Promise<SceneMetadataBindingProjection>;
+  prepareSceneDeletion: (
+    command: PrepareSceneDeletionCommand,
+  ) => Promise<SceneDeletionPreview>;
+  deleteScene: (
+    command: DeleteSceneCommand,
+  ) => Promise<SceneDeletionReceipt>;
+  listSceneTrash: (
+    command: ListSceneTrashCommand,
+  ) => Promise<SceneTrashListProjection>;
+  restoreSceneTrash: (
+    command: RestoreSceneTrashCommand,
+  ) => Promise<SceneDeletionReceipt>;
+  undoSceneDeletion: (
+    command: UndoSceneDeletionCommand,
+  ) => Promise<SceneDeletionReceipt>;
   runSceneExtraction: (
     command: RunSceneExtractionCommand,
   ) => Promise<SceneExtractionResult>;
@@ -210,10 +270,26 @@ export function registerStructureIpc(input: Readonly<{
     (command) => input.runtime.listSceneOverrides(command));
   handle(STRUCTURE_LIST_SCENE_PROJECTION_CHANNEL, parseListSceneProjectionCommand,
     (command) => input.runtime.listSceneProjection(command));
+  handle(STRUCTURE_LIST_SCENE_CANON_CONTEXTS_CHANNEL, parseListSceneCanonContextsCommand,
+    (command) => input.runtime.listSceneCanonContexts(command));
+  handle(STRUCTURE_FINALIZE_SCENE_CANON_CHECK_CHANNEL, parseFinalizeSceneCanonCheckCommand,
+    (command) => input.runtime.finalizeSceneCanonCheck(command));
   handle(STRUCTURE_UPDATE_SCENE_RULE_SET_CHANNEL, parseUpdateSceneRuleSetCommand,
     (command) => input.runtime.updateSceneRuleSet(command));
   handle(STRUCTURE_SET_SCENE_EVENT_OVERRIDE_CHANNEL, parseSetSceneEventOverrideCommand,
     (command) => input.runtime.setSceneEventOverride(command));
+  handle(STRUCTURE_REBIND_SCENE_METADATA_CHANNEL, parseRebindSceneMetadataCommand,
+    (command) => input.runtime.rebindSceneMetadata(command));
+  handle(STRUCTURE_PREPARE_SCENE_DELETION_CHANNEL, parsePrepareSceneDeletionCommand,
+    (command) => input.runtime.prepareSceneDeletion(command));
+  handle(STRUCTURE_DELETE_SCENE_CHANNEL, parseDeleteSceneCommand,
+    (command) => input.runtime.deleteScene(command));
+  handle(STRUCTURE_LIST_SCENE_TRASH_CHANNEL, parseListSceneTrashCommand,
+    (command) => input.runtime.listSceneTrash(command));
+  handle(STRUCTURE_RESTORE_SCENE_TRASH_CHANNEL, parseRestoreSceneTrashCommand,
+    (command) => input.runtime.restoreSceneTrash(command));
+  handle(STRUCTURE_UNDO_SCENE_DELETION_CHANNEL, parseUndoSceneDeletionCommand,
+    (command) => input.runtime.undoSceneDeletion(command));
   handle(STRUCTURE_RUN_SCENE_EXTRACTION_CHANNEL, parseRunSceneExtractionCommand,
     (command) => input.runtime.runSceneExtraction(command));
   handle(

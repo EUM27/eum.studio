@@ -14,6 +14,7 @@ import {
   approveLoreCandidateWithRefresh,
   createLoreCandidateRecord,
   createLoreEntryRecord,
+  loadCanonicalLoreEntries,
   readLoreSelection,
   rejectLoreCandidateRecord,
   retireLoreEntryWithCompatibility,
@@ -118,6 +119,26 @@ export function useLoreController(input: Readonly<{
     input.links,
     input.workLoadId,
   ]);
+
+  const refreshCanonicalEntries = useCallback(async (): Promise<boolean> => {
+    const activeWorkId = input.activeWorkId;
+    if (activeWorkId === null) return false;
+    try {
+      const entries = await loadCanonicalLoreEntries({
+        activeWorkId,
+        client: input.entriesClient,
+      });
+      setLoreEntries(entries);
+      setSelectedLoreEntryId((current) =>
+        reconcileSelectedLoreEntry(current, entries)
+      );
+      setLoreActionError(null);
+      return true;
+    } catch {
+      setLoreActionError(LORE_MESSAGES.loadFailed);
+      return false;
+    }
+  }, [input.activeWorkId, input.entriesClient]);
 
   const createLoreEntry = useCallback(async (
     draft: LoreEntryDraftInput,
@@ -499,6 +520,7 @@ export function useLoreController(input: Readonly<{
     loreCandidateDialogOpen,
     loreCandidateActionState,
     loreCandidateActionError,
+    refreshCanonicalEntries,
     selectLoreEntry,
     closeLoreDialog,
     enterLoreStructureSurface,

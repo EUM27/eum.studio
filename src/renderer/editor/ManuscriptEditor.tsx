@@ -133,7 +133,15 @@ import {
   type ManuscriptHeatmapMode,
 } from "./manuscript-analysis";
 import { createForwardWritingProtection } from "./forward-writing-protection";
-import { resolveTypewriterScrollTop } from "./typewriter-scroll-position";
+import { resolveCursorFollowScrollTop } from "./cursor-follow-scroll-position";
+import {
+  createManuscriptAnnotationExtension,
+  setManuscriptAnnotationRangesEffect,
+  type ManuscriptAnnotationRange,
+} from "./manuscript-annotation-extension";
+import {
+  ManuscriptCompositionNavigationGate,
+} from "./manuscript-composition-navigation-gate";
 
 export type ManuscriptDocumentStateSummary = {
   readonly statistics: ManuscriptTextStatistics;
@@ -142,24 +150,24 @@ export type ManuscriptDocumentStateSummary = {
 
 export type ManuscriptFocusPresentation = {
   readonly active: boolean;
-  readonly contentWidthPx: number;
-  readonly currentBlockHighlight: boolean;
-  readonly typewriterMode: boolean;
-  readonly typewriterPositionPercent: number;
-  readonly zoomPercent: number;
+  readonly manuscriptWidthPx: number;
+  readonly highlightCurrentParagraph: boolean;
+  readonly cursorFollowEnabled: boolean;
+  readonly cursorViewportPercent: number;
+  readonly textScalePercent: number;
 };
 
-const typewriterScrollRequestVersions = new WeakMap<EditorView, number>();
+const cursorFollowScrollRequestVersions = new WeakMap<EditorView, number>();
 
-function requestTypewriterCursorPosition(
+function requestCursorViewportPosition(
   view: EditorView,
   positionPercent: number,
 ): void {
   const requestVersion =
-    (typewriterScrollRequestVersions.get(view) ?? 0) + 1;
-  typewriterScrollRequestVersions.set(view, requestVersion);
+    (cursorFollowScrollRequestVersions.get(view) ?? 0) + 1;
+  cursorFollowScrollRequestVersions.set(view, requestVersion);
   view.scrollDOM.style.setProperty(
-    "--typewriter-scroll-space",
+    "--cursor-follow-scroll-space",
     `${view.scrollDOM.clientHeight}px`,
   );
   window.setTimeout(() => {
@@ -168,8 +176,8 @@ function requestTypewriterCursorPosition(
     );
     if (
       !view.dom.isConnected ||
-      canvas?.dataset.focusTypewriter !== "true" ||
-      typewriterScrollRequestVersions.get(view) !== requestVersion
+      canvas?.dataset.cursorFollow !== "true" ||
+      cursorFollowScrollRequestVersions.get(view) !== requestVersion
     ) {
       return;
     }
@@ -179,7 +187,7 @@ function requestTypewriterCursorPosition(
     }
     const scroller = view.scrollDOM;
     const scrollerRect = scroller.getBoundingClientRect();
-    const requestedScrollTop = resolveTypewriterScrollTop({
+    const requestedScrollTop = resolveCursorFollowScrollTop({
       currentScrollTop: scroller.scrollTop,
       cursorBottom: cursor.bottom,
       cursorTop: cursor.top,
@@ -196,7 +204,7 @@ export type ManuscriptEditorProps = {
   readonly accessibleName: string;
   readonly activeDocument: ManuscriptDocumentSource;
   readonly formattingProfile: ManuscriptFormattingProfile;
-  readonly focusPresentation?: ManuscriptFocusPresentation;
+  readonly manuscriptFocus?: ManuscriptFocusPresentation;
   readonly forwardWriteProtectedLength?: number | null;
   readonly heatmapMode?: ManuscriptHeatmapMode;
   readonly canMoveToNextEpisode: boolean;
@@ -204,6 +212,7 @@ export type ManuscriptEditorProps = {
   readonly loreEntries: readonly LoreEntryProjection[];
   readonly layoutSettings?: ManuscriptLayoutSettings;
   readonly orderedDocuments: readonly ManuscriptDocumentSource[];
+  readonly annotationRanges?: readonly ManuscriptAnnotationRange[];
   readonly readOnly: boolean;
   readonly resumeLocation:
     | Extract<
@@ -232,6 +241,22 @@ export type ManuscriptEditorProps = {
   readonly onOpenContinuousReading: () => void;
   readonly onOpenPreflight: () => void;
   readonly onOpenAnalysis?: () => void;
+  readonly onCanonReview: (
+    document: ManuscriptDocumentSource,
+    selection: ManuscriptCanonReviewSelection,
+  ) => void;
+  readonly onContinuityManual: (
+    document: ManuscriptDocumentSource,
+    selection: ManuscriptCanonReviewSelection,
+  ) => void;
+  readonly onContinuityReview: (
+    document: ManuscriptDocumentSource,
+    selection: ManuscriptCanonReviewSelection,
+  ) => void;
+  readonly onCharacterKnowledge: (
+    document: ManuscriptDocumentSource,
+    selection: ManuscriptCanonReviewSelection,
+  ) => void;
   readonly onAddEvent: () => void;
   readonly onAddScene: () => void;
   readonly onMergeScene: (
@@ -270,6 +295,12 @@ export type ManuscriptEditorHandle = {
   readonly materializeDocumentText: (
     document: ManuscriptDocumentSource,
   ) => string;
+  readonly isDocumentComposing: (
+    document: ManuscriptDocumentSource,
+  ) => boolean;
+  readonly waitForDocumentCompositionEnd: (
+    document: ManuscriptDocumentSource,
+  ) => Promise<void>;
   readonly serializeDocumentEditorState: (
     document: ManuscriptDocumentSource,
   ) => string;
@@ -317,6 +348,33 @@ export type ManuscriptContextSelection = Readonly<{
   head: number;
 }>;
 
+export type ManuscriptCanonReviewSelection = Readonly<{
+  from: number;
+  to: number;
+  exactText: string;
+}>;
+
+export function createCanonReviewContextSelection(
+  documentText: string,
+  selection: Readonly<{ from: number; to: number }>,
+  composing: boolean,
+): ManuscriptCanonReviewSelection | null {
+  if (
+    composing ||
+    !Number.isSafeInteger(selection.from) ||
+    !Number.isSafeInteger(selection.to) ||
+    selection.from < 0 ||
+    selection.to <= selection.from ||
+    selection.to > documentText.length
+  ) {
+    return null;
+  }
+  const exactText = documentText.slice(selection.from, selection.to);
+  return exactText.length === 0
+    ? null
+    : Object.freeze({ from: selection.from, to: selection.to, exactText });
+}
+
 export function resolveManuscriptContextSelection(
   selection: Readonly<{ anchor: number; head: number; from: number; to: number }>,
   pointerOffset: number,
@@ -357,8 +415,9 @@ export const ManuscriptEditor = forwardRef<
   {
     accessibleName,
     activeDocument,
+    annotationRanges = [],
     formattingProfile,
-    focusPresentation,
+    manuscriptFocus,
     forwardWriteProtectedLength = null,
     heatmapMode = "off",
     canMoveToNextEpisode,
@@ -385,6 +444,10 @@ export const ManuscriptEditor = forwardRef<
     onOpenContinuousReading,
     onOpenPreflight,
     onOpenAnalysis,
+    onCanonReview,
+    onContinuityManual,
+    onContinuityReview,
+    onCharacterKnowledge,
     onTransaction,
     onUndoExternal,
     readOnly,
@@ -403,6 +466,9 @@ export const ManuscriptEditor = forwardRef<
   const synchronizingLayoutRef = useRef(false);
   const activeDocumentRef = useRef<ManuscriptDocumentSource | null>(null);
   const pendingDocumentRef = useRef<ManuscriptDocumentSource | null>(null);
+  const compositionNavigationGateRef = useRef(
+    new ManuscriptCompositionNavigationGate(),
+  );
   const stateRegistryRef = useRef(new ManuscriptDocumentStateRegistry());
   const orderedDocumentsRef = useRef(orderedDocuments);
   orderedDocumentsRef.current = orderedDocuments;
@@ -412,6 +478,8 @@ export const ManuscriptEditor = forwardRef<
   sceneBoundaryPreviewsRef.current = sceneBoundaryPreviews;
   const sceneRangesRef = useRef(sceneRanges);
   sceneRangesRef.current = sceneRanges;
+  const annotationRangesRef = useRef(annotationRanges);
+  annotationRangesRef.current = annotationRanges;
   const [activeFormatting, setActiveFormatting] =
     useState<ActiveManuscriptFormatting>(() => ({
       bold: false,
@@ -444,15 +512,16 @@ export const ManuscriptEditor = forwardRef<
     canMoveToNextEpisode: boolean;
     canMergeScene: boolean;
     canPaste: boolean;
+    canonReviewSelection: ManuscriptCanonReviewSelection | null;
     sceneOffset: number;
   }> | null>(null);
   const readOnlyCompartmentRef = useRef(
     new Compartment(),
   );
   const forwardWritingProtectionCompartmentRef = useRef(new Compartment());
-  const focusHighlightCompartmentRef = useRef(new Compartment());
-  const focusPresentationRef = useRef(focusPresentation);
-  focusPresentationRef.current = focusPresentation;
+  const currentParagraphHighlightCompartmentRef = useRef(new Compartment());
+  const manuscriptFocusRef = useRef(manuscriptFocus);
+  manuscriptFocusRef.current = manuscriptFocus;
   const notifyBlur = useEffectEvent(onBlur);
   const notifyCompositionEnd = useEffectEvent(onCompositionEnd);
   const notifyDocumentActivated = useEffectEvent(onDocumentActivated);
@@ -465,6 +534,10 @@ export const ManuscriptEditor = forwardRef<
   const notifyLoreCueHover = useEffectEvent(onLoreCueHover);
   const notifyAddEvent = useEffectEvent(onAddEvent);
   const notifyAddScene = useEffectEvent(onAddScene);
+  const notifyCanonReview = useEffectEvent(onCanonReview);
+  const notifyContinuityManual = useEffectEvent(onContinuityManual);
+  const notifyContinuityReview = useEffectEvent(onContinuityReview);
+  const notifyCharacterKnowledge = useEffectEvent(onCharacterKnowledge);
   const notifyMergeScene = useEffectEvent(onMergeScene);
   const notifyMoveSceneRange = useEffectEvent(onMoveSceneRange);
   const notifySplitScene = useEffectEvent(onSplitScene);
@@ -520,6 +593,48 @@ export const ManuscriptEditor = forwardRef<
     () => ({
       materializeDocumentText(document) {
         return materializeDocumentText(document);
+      },
+      isDocumentComposing(document) {
+        const view = viewRef.current;
+        const active = activeDocumentRef.current;
+        return view !== null &&
+          active?.documentId === document.documentId &&
+          active.workId === document.workId &&
+          (view.composing || view.compositionStarted);
+      },
+      waitForDocumentCompositionEnd(document) {
+        const view = viewRef.current;
+        const active = activeDocumentRef.current;
+        if (
+          view === null ||
+          active?.documentId !== document.documentId ||
+          active.workId !== document.workId
+        ) {
+          return Promise.reject(new Error(
+            `The active editor state is unavailable for ${document.documentId}`,
+          ));
+        }
+        return compositionNavigationGateRef.current.waitForEnd(
+          {
+            workId: document.workId,
+            documentId: document.documentId,
+          },
+          {
+            isComposing: () => {
+              const currentView = viewRef.current;
+              const currentDocument = activeDocumentRef.current;
+              return currentView === view &&
+                currentDocument?.workId === document.workId &&
+                currentDocument.documentId === document.documentId &&
+                (view.composing || view.compositionStarted);
+            },
+            blur: () => view.contentDOM.blur(),
+            afterPaint: (callback) => {
+              window.requestAnimationFrame(() => callback());
+            },
+            onFallbackEnd: () => notifyCompositionEnd(document),
+          },
+        );
       },
       serializeDocumentEditorState(document) {
         const view = viewRef.current;
@@ -803,9 +918,9 @@ export const ManuscriptEditor = forwardRef<
           ]),
           keymap.of(historyKeymap),
           EditorView.lineWrapping,
-          focusHighlightCompartmentRef.current.of(
-            focusPresentationRef.current?.active === true &&
-              focusPresentationRef.current.currentBlockHighlight
+          currentParagraphHighlightCompartmentRef.current.of(
+            manuscriptFocusRef.current?.active === true &&
+              manuscriptFocusRef.current.highlightCurrentParagraph
               ? highlightActiveLine()
               : [],
           ),
@@ -822,6 +937,7 @@ export const ManuscriptEditor = forwardRef<
               if (active !== null) notifyMoveSceneRange(active, move);
             },
           ),
+          createManuscriptAnnotationExtension(annotationRangesRef.current),
           createSceneBoundaryHistoryExtension(
             notifySceneBoundaryHistoryToggle,
           ),
@@ -866,6 +982,11 @@ export const ManuscriptEditor = forwardRef<
           }),
           EditorView.domEventHandlers({
             contextmenu: (event, view) => {
+              if (view.composing || view.compositionStarted) {
+                event.preventDefault();
+                setContextMenu(null);
+                return true;
+              }
               const pointerOffset = view.posAtCoords({
                 x: event.clientX,
                 y: event.clientY,
@@ -876,6 +997,13 @@ export const ManuscriptEditor = forwardRef<
               const selection = resolveManuscriptContextSelection(
                 current,
                 pointerOffset,
+              );
+              const selectionFrom = Math.min(selection.anchor, selection.head);
+              const selectionTo = Math.max(selection.anchor, selection.head);
+              const canonReviewSelection = createCanonReviewContextSelection(
+                view.state.doc.toString(),
+                { from: selectionFrom, to: selectionTo },
+                view.composing || view.compositionStarted,
               );
               if (
                 current.anchor !== selection.anchor ||
@@ -923,6 +1051,7 @@ export const ManuscriptEditor = forwardRef<
                 canPaste:
                   !readOnly &&
                   typeof navigator.clipboard?.readText === "function",
+                canonReviewSelection: readOnly ? null : canonReviewSelection,
                 sceneOffset: pointerOffset,
               });
               return true;
@@ -973,14 +1102,14 @@ export const ManuscriptEditor = forwardRef<
               (transaction) => transaction.isUserEvent("select.pointer"),
             );
             if (
-              focusPresentationRef.current?.active === true &&
-              focusPresentationRef.current.typewriterMode &&
+              manuscriptFocusRef.current?.active === true &&
+              manuscriptFocusRef.current.cursorFollowEnabled &&
               (update.docChanged || update.selectionSet) &&
               !pointerSelection
             ) {
-              requestTypewriterCursorPosition(
+              requestCursorViewportPosition(
                 update.view,
-                focusPresentationRef.current.typewriterPositionPercent,
+                manuscriptFocusRef.current.cursorViewportPercent,
               );
             }
           }),
@@ -1018,6 +1147,13 @@ export const ManuscriptEditor = forwardRef<
   const syncManuscriptSceneRanges = useEffectEvent((view: EditorView) => {
     view.dispatch({
       effects: setManuscriptSceneRangesEffect.of(sceneRangesRef.current),
+    });
+  });
+  const syncManuscriptAnnotationRanges = useEffectEvent((view: EditorView) => {
+    view.dispatch({
+      effects: setManuscriptAnnotationRangesEffect.of(
+        annotationRangesRef.current,
+      ),
     });
   });
   const syncHeatmapMode = useEffectEvent((
@@ -1141,9 +1277,9 @@ export const ManuscriptEditor = forwardRef<
           forwardWritingProtectionCompartmentRef.current.reconfigure(
             createForwardWritingProtection(forwardWriteProtectedLength),
           ),
-          focusHighlightCompartmentRef.current.reconfigure(
-            focusPresentationRef.current?.active === true &&
-              focusPresentationRef.current.currentBlockHighlight
+          currentParagraphHighlightCompartmentRef.current.reconfigure(
+            manuscriptFocusRef.current?.active === true &&
+              manuscriptFocusRef.current.highlightCurrentParagraph
               ? highlightActiveLine()
               : [],
           ),
@@ -1176,6 +1312,8 @@ export const ManuscriptEditor = forwardRef<
 
     const initialDocument = initialDocumentRef.current;
     const stateRegistry = stateRegistryRef.current;
+    const compositionNavigationGate =
+      compositionNavigationGateRef.current;
     const initialSnapshot = stateRegistry.restore(
       initialDocument,
       createDocumentState,
@@ -1201,6 +1339,10 @@ export const ManuscriptEditor = forwardRef<
       queueMicrotask(() => {
         if (compositionDocument !== null) {
           notifyCompositionEnd(compositionDocument);
+          compositionNavigationGate.resolve({
+            workId: compositionDocument.workId,
+            documentId: compositionDocument.documentId,
+          });
         }
         if (pendingDocument !== null) {
           pendingDocumentRef.current = null;
@@ -1229,6 +1371,11 @@ export const ManuscriptEditor = forwardRef<
       view.contentDOM.removeEventListener(
         "compositionend",
         handleCompositionEnd,
+      );
+      compositionNavigationGate.rejectAll((identity) =>
+        new Error(
+          `The manuscript editor closed before composition ended for ${identity.documentId}`,
+        )
       );
       view.destroy();
       viewRef.current = null;
@@ -1314,6 +1461,13 @@ export const ManuscriptEditor = forwardRef<
   useEffect(() => {
     const view = viewRef.current;
     if (view !== null) {
+      syncManuscriptAnnotationRanges(view);
+    }
+  }, [annotationRanges]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (view !== null) {
       syncHeatmapMode(view, heatmapMode);
     }
   }, [heatmapMode]);
@@ -1378,13 +1532,13 @@ export const ManuscriptEditor = forwardRef<
     });
   }, [forwardWriteProtectedLength]);
 
-  const focusPresentationActive = focusPresentation?.active === true;
-  const focusCurrentBlockHighlight =
-    focusPresentation?.active === true && focusPresentation.currentBlockHighlight;
-  const focusTypewriterMode =
-    focusPresentation?.active === true && focusPresentation.typewriterMode;
-  const focusTypewriterPositionPercent =
-    focusPresentation?.typewriterPositionPercent;
+  const manuscriptFocusActive = manuscriptFocus?.active === true;
+  const highlightCurrentParagraph =
+    manuscriptFocus?.active === true && manuscriptFocus.highlightCurrentParagraph;
+  const cursorFollowEnabled =
+    manuscriptFocus?.active === true && manuscriptFocus.cursorFollowEnabled;
+  const cursorViewportPercent =
+    manuscriptFocus?.cursorViewportPercent;
 
   useEffect(() => {
     const view = viewRef.current;
@@ -1392,11 +1546,11 @@ export const ManuscriptEditor = forwardRef<
       return;
     }
     view.dispatch({
-      effects: focusHighlightCompartmentRef.current.reconfigure(
-        focusCurrentBlockHighlight ? highlightActiveLine() : [],
+      effects: currentParagraphHighlightCompartmentRef.current.reconfigure(
+        highlightCurrentParagraph ? highlightActiveLine() : [],
       ),
     });
-  }, [focusCurrentBlockHighlight]);
+  }, [highlightCurrentParagraph]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -1404,14 +1558,14 @@ export const ManuscriptEditor = forwardRef<
       return;
     }
     if (
-      focusTypewriterMode &&
-      focusTypewriterPositionPercent !== undefined
+      cursorFollowEnabled &&
+      cursorViewportPercent !== undefined
     ) {
-      requestTypewriterCursorPosition(view, focusTypewriterPositionPercent);
+      requestCursorViewportPosition(view, cursorViewportPercent);
     } else {
-      view.scrollDOM.style.removeProperty("--typewriter-scroll-space");
+      view.scrollDOM.style.removeProperty("--cursor-follow-scroll-space");
     }
-  }, [focusTypewriterMode, focusTypewriterPositionPercent]);
+  }, [cursorFollowEnabled, cursorViewportPercent]);
 
   const dispatchFormattingEffect = (
     effect: StateEffect<unknown>,
@@ -2124,20 +2278,20 @@ export const ManuscriptEditor = forwardRef<
       )}
       <div
         className="manuscript-editor-canvas"
-        data-focus-current-block={
-          focusCurrentBlockHighlight ? "true" : undefined
+        data-current-paragraph-highlight={
+          highlightCurrentParagraph ? "true" : undefined
         }
-        data-focus-presentation={focusPresentationActive ? "true" : undefined}
-        data-focus-typewriter={focusTypewriterMode ? "true" : undefined}
+        data-manuscript-focus={manuscriptFocusActive ? "true" : undefined}
+        data-cursor-follow={cursorFollowEnabled ? "true" : undefined}
         style={
           {
             "--manuscript-content-width": `${activeFormatting.contentWidthPx}px`,
-            ...(focusPresentation?.active === true
+            ...(manuscriptFocus?.active === true
               ? {
-                  "--focus-content-width": `${focusPresentation.contentWidthPx}px`,
-                  "--focus-font-size": `${
+                  "--manuscript-focus-width": `${manuscriptFocus.manuscriptWidthPx}px`,
+                  "--manuscript-focus-font-size": `${
                     activeFormatting.fontSizePx *
-                    (focusPresentation.zoomPercent / 100)
+                    (manuscriptFocus.textScalePercent / 100)
                   }px`,
                 }
               : {}),
@@ -2153,8 +2307,35 @@ export const ManuscriptEditor = forwardRef<
           copyDisabled={!contextMenu.canCopy}
           cutDisabled={!contextMenu.canCut}
           mergeSceneDisabled={!contextMenu.canMergeScene}
+          canonReviewDisabled={contextMenu.canonReviewSelection === null}
+          continuityDisabled={contextMenu.canonReviewSelection === null}
+          characterKnowledgeDisabled={contextMenu.canonReviewSelection === null}
           onAddEvent={notifyAddEvent}
           onAddScene={notifyAddScene}
+          onCanonReview={() => {
+            const document = activeDocumentRef.current;
+            if (document !== null && contextMenu.canonReviewSelection !== null) {
+              notifyCanonReview(document, contextMenu.canonReviewSelection);
+            }
+          }}
+          onContinuityManual={() => {
+            const document = activeDocumentRef.current;
+            if (document !== null && contextMenu.canonReviewSelection !== null) {
+              notifyContinuityManual(document, contextMenu.canonReviewSelection);
+            }
+          }}
+          onContinuityReview={() => {
+            const document = activeDocumentRef.current;
+            if (document !== null && contextMenu.canonReviewSelection !== null) {
+              notifyContinuityReview(document, contextMenu.canonReviewSelection);
+            }
+          }}
+          onCharacterKnowledge={() => {
+            const document = activeDocumentRef.current;
+            if (document !== null && contextMenu.canonReviewSelection !== null) {
+              notifyCharacterKnowledge(document, contextMenu.canonReviewSelection);
+            }
+          }}
           onMergeScene={() => {
             const view = viewRef.current;
             if (view !== null) {

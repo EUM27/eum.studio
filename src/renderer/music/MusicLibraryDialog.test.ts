@@ -39,12 +39,14 @@ describe("MusicLibraryDialog", () => {
       onPlayQueueTrack: () => undefined,
       onPlayTrack: () => undefined,
       onRegisterLocalMedia: () => undefined,
+      onRemoveLocalMedia: () => undefined,
       onRemoveFromQueue: () => undefined,
       onSearch: () => undefined,
       onToggleFavorite: () => undefined,
       queue: [video],
       queueSaving: false,
       registeringMode: null,
+      removingMediaId: null,
       results: [video],
       searching: false,
     }));
@@ -53,6 +55,9 @@ describe("MusicLibraryDialog", () => {
     expect(markup).toContain('aria-label="내 미디어 탭"');
     expect(markup).toContain('aria-label="YouTube 검색 탭"');
     expect(markup).toContain('aria-label="즐겨찾기 탭"');
+    expect(markup).toContain('<button aria-label="원본 위치 연결"');
+    expect(markup).toContain('<button aria-label="앱에 가져오기"');
+    expect(markup).not.toContain("미디어 파일 등록");
     expect(markup).toContain('aria-label="재생목록"');
     expect(markup).toContain('aria-label="전체 재생"');
     expect(markup).toContain("집중 음악 위로 이동");

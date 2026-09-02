@@ -285,7 +285,7 @@
 }
 
 .studio-app-shell .work-primary-navigation button.is-active {
-  color: var(--eum-accent-strong);
+  color: var(--eum-accent-text);
   background: var(--eum-panel);
   box-shadow: 0 1px 3px rgb(0 0 0 / 8%);
 }
@@ -797,65 +797,65 @@
   background: color-mix(in srgb, var(--eum-accent) 48%, transparent);
 }
 
-.studio-app-shell:has(.writing-workspace-focus-mode) {
+.studio-app-shell:has(.writing-workspace-manuscript-focus) {
   --eum-sidebar-width: 0px;
   --eum-topbar-height: 0px;
 }
 
-.studio-app-shell.is-editor:has(.writing-workspace-focus-mode[data-work-section]) {
+.studio-app-shell.is-editor:has(.writing-workspace-manuscript-focus[data-work-section]) {
   --eum-sidebar-width: 0px;
 }
 
-.studio-app-shell:has(.writing-workspace-focus-mode) > .app-topbar,
-.studio-app-shell:has(.writing-workspace-focus-mode) > .sidebar,
-.studio-app-shell:has(.writing-workspace-focus-mode) > .studio-event-rail-host,
-.studio-app-shell:has(.writing-workspace-focus-mode) .session-feedback-panel,
-.studio-app-shell .writing-workspace-focus-mode > .manuscript-header,
-.studio-app-shell .writing-workspace-focus-mode .document-tab-strip,
-.studio-app-shell .writing-workspace-focus-mode .manuscript-formatting-toolbar,
-.studio-app-shell .writing-workspace-focus-mode .workspace-rail-right,
-.studio-app-shell .writing-workspace-focus-mode .rail-reentry {
+.studio-app-shell:has(.writing-workspace-manuscript-focus) > .app-topbar,
+.studio-app-shell:has(.writing-workspace-manuscript-focus) > .sidebar,
+.studio-app-shell:has(.writing-workspace-manuscript-focus) > .studio-event-rail-host,
+.studio-app-shell:has(.writing-workspace-manuscript-focus) .session-feedback-panel,
+.studio-app-shell .writing-workspace-manuscript-focus > .manuscript-header,
+.studio-app-shell .writing-workspace-manuscript-focus .document-tab-strip,
+.studio-app-shell .writing-workspace-manuscript-focus .manuscript-formatting-toolbar,
+.studio-app-shell .writing-workspace-manuscript-focus .workspace-rail-right,
+.studio-app-shell .writing-workspace-manuscript-focus .rail-reentry {
   display: none;
 }
 
-.studio-app-shell:has(.writing-workspace-focus-mode) > .workspace {
+.studio-app-shell:has(.writing-workspace-manuscript-focus) > .workspace {
   grid-column: 1 / -1;
 }
 
-.studio-app-shell.is-editor:has(.writing-workspace-focus-mode[data-work-section])
+.studio-app-shell.is-editor:has(.writing-workspace-manuscript-focus[data-work-section])
   > .workspace {
   grid-column: 1 / -1;
 }
 
-.studio-app-shell .writing-workspace-focus-mode {
+.studio-app-shell .writing-workspace-manuscript-focus {
   grid-template-rows: minmax(0, 1fr) auto;
 }
 
-.studio-app-shell .writing-workspace-focus-mode > .workspace-body {
+.studio-app-shell .writing-workspace-manuscript-focus > .workspace-body {
   grid-row: 1;
 }
 
-.studio-app-shell .writing-workspace-focus-mode > .workspace-statusbar {
+.studio-app-shell .writing-workspace-manuscript-focus > .workspace-statusbar {
   grid-row: 2;
 }
 
-.studio-app-shell .writing-workspace-focus-mode .workspace-center,
-.studio-app-shell .writing-workspace-focus-mode .manuscript-workspace-surface,
-.studio-app-shell .writing-workspace-focus-mode .manuscript-editor-shell,
-.studio-app-shell .writing-workspace-focus-mode .manuscript-editor-canvas {
+.studio-app-shell .writing-workspace-manuscript-focus .workspace-center,
+.studio-app-shell .writing-workspace-manuscript-focus .manuscript-workspace-surface,
+.studio-app-shell .writing-workspace-manuscript-focus .manuscript-editor-shell,
+.studio-app-shell .writing-workspace-manuscript-focus .manuscript-editor-canvas {
   width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
 }
 
-.studio-app-shell .writing-workspace-focus-mode .manuscript-workspace-surface {
+.studio-app-shell .writing-workspace-manuscript-focus .manuscript-workspace-surface {
   position: relative;
   grid-template-rows: minmax(0, 1fr);
 }
 
-.studio-app-shell .focus-mode-toolbar-host {
-  --focus-pomodoro-color: var(--eum-accent);
+.studio-app-shell .manuscript-focus-toolbar-host {
+  --manuscript-focus-pomodoro-color: var(--eum-accent);
   position: absolute;
   z-index: 28;
   top: 0;
@@ -864,7 +864,7 @@
   height: 48px;
 }
 
-.studio-app-shell .focus-mode-floating-surface {
+.studio-app-shell .manuscript-focus-floating-surface {
   position: absolute;
   top: 8px;
   left: 50%;
@@ -873,21 +873,21 @@
   transform: translateX(-50%);
 }
 
-.studio-app-shell .focus-mode-floating-surface.is-moved {
+.studio-app-shell .manuscript-focus-floating-surface.is-moved {
   position: fixed;
 }
 
 .studio-app-shell
-  .focus-mode-toolbar-host[data-pomodoro-phase="work"] {
-  --focus-pomodoro-color: var(--eum-accent);
+  .manuscript-focus-toolbar-host[data-pomodoro-phase="work"] {
+  --manuscript-focus-pomodoro-color: var(--eum-accent);
 }
 
 .studio-app-shell
-  .focus-mode-toolbar-host[data-pomodoro-phase="break"] {
-  --focus-pomodoro-color: #2f9e61;
+  .manuscript-focus-toolbar-host[data-pomodoro-phase="break"] {
+  --manuscript-focus-pomodoro-color: #2f9e61;
 }
 
-.studio-app-shell .focus-mode-pomodoro-status {
+.studio-app-shell .manuscript-focus-pomodoro-status {
   position: absolute;
   z-index: 1;
   top: 0;
@@ -899,14 +899,14 @@
   padding: 5px 10px;
   border: 1px solid color-mix(
     in srgb,
-    var(--focus-pomodoro-color) 45%,
+    var(--manuscript-focus-pomodoro-color) 45%,
     var(--eum-line)
   );
   border-radius: 999px;
-  color: var(--focus-pomodoro-color);
+  color: var(--manuscript-focus-pomodoro-color);
   background: color-mix(
     in srgb,
-    var(--focus-pomodoro-color) 9%,
+    var(--manuscript-focus-pomodoro-color) 9%,
     var(--eum-panel)
   );
   box-shadow: 0 8px 24px rgb(24 20 28 / 12%);
@@ -917,22 +917,22 @@
   backdrop-filter: blur(14px);
 }
 
-.studio-app-shell .focus-mode-pomodoro-status strong,
-.studio-app-shell .focus-mode-pomodoro-status span,
-.studio-app-shell .focus-mode-pomodoro-status output {
+.studio-app-shell .manuscript-focus-pomodoro-status strong,
+.studio-app-shell .manuscript-focus-pomodoro-status span,
+.studio-app-shell .manuscript-focus-pomodoro-status output {
   white-space: nowrap;
 }
 
-.studio-app-shell .focus-mode-pomodoro-status strong {
+.studio-app-shell .manuscript-focus-pomodoro-status strong {
   font-size: 13px;
 }
 
-.studio-app-shell .focus-mode-pomodoro-status span {
+.studio-app-shell .manuscript-focus-pomodoro-status span {
   color: var(--eum-text-muted);
   font-size: 12px;
 }
 
-.studio-app-shell .focus-mode-pomodoro-status output {
+.studio-app-shell .manuscript-focus-pomodoro-status output {
   font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
   font-size: 14px;
   font-variant-numeric: tabular-nums;
@@ -940,14 +940,14 @@
 }
 
 .studio-app-shell
-  .focus-mode-toolbar-host:is(:hover, :focus-within)
-  .focus-mode-pomodoro-status {
+  .manuscript-focus-toolbar-host:is(:hover, :focus-within)
+  .manuscript-focus-pomodoro-status {
   opacity: 0;
   transform: translate(-50%, -8px);
   pointer-events: none;
 }
 
-.studio-app-shell .focus-mode-toolbar {
+.studio-app-shell .manuscript-focus-toolbar {
   position: relative;
   width: 100%;
   min-height: 54px;
@@ -970,9 +970,9 @@
     opacity 200ms ease 300ms;
 }
 
-.studio-app-shell .focus-mode-toolbar-host:hover .focus-mode-toolbar,
-.studio-app-shell .focus-mode-toolbar-host:focus-within .focus-mode-toolbar,
-.studio-app-shell .focus-mode-floating-surface.is-moved .focus-mode-toolbar {
+.studio-app-shell .manuscript-focus-toolbar-host:hover .manuscript-focus-toolbar,
+.studio-app-shell .manuscript-focus-toolbar-host:focus-within .manuscript-focus-toolbar,
+.studio-app-shell .manuscript-focus-floating-surface.is-moved .manuscript-focus-toolbar {
   transform: translateY(0);
   opacity: 1;
   pointer-events: auto;
@@ -980,13 +980,13 @@
 }
 
 .studio-app-shell
-  .focus-mode-floating-surface.is-moved
-  .focus-mode-pomodoro-status {
+  .manuscript-focus-floating-surface.is-moved
+  .manuscript-focus-pomodoro-status {
   opacity: 0;
   pointer-events: none;
 }
 
-.studio-app-shell .focus-mode-toolbar-title {
+.studio-app-shell .manuscript-focus-toolbar-title {
   min-width: 86px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -996,22 +996,22 @@
   gap: 1px;
 }
 
-.studio-app-shell .focus-mode-drag-handle {
+.studio-app-shell .manuscript-focus-drag-handle {
   grid-row: 1 / 3;
 }
 
-.studio-app-shell .focus-mode-toolbar-title strong {
+.studio-app-shell .manuscript-focus-toolbar-title strong {
   font-size: 13px;
 }
 
 .studio-app-shell
-  .focus-mode-toolbar[data-pomodoro-phase]
-  .focus-mode-toolbar-title strong {
-  color: var(--focus-pomodoro-color);
+  .manuscript-focus-toolbar[data-pomodoro-phase]
+  .manuscript-focus-toolbar-title strong {
+  color: var(--manuscript-focus-pomodoro-color);
 }
 
-.studio-app-shell .focus-mode-toolbar-title span,
-.studio-app-shell .focus-mode-save-status {
+.studio-app-shell .manuscript-focus-toolbar-title span,
+.studio-app-shell .manuscript-focus-save-status {
   overflow: hidden;
   color: var(--eum-text-muted);
   font-size: 12px;
@@ -1019,9 +1019,9 @@
   white-space: nowrap;
 }
 
-.studio-app-shell .focus-mode-width-control,
-.studio-app-shell .focus-mode-zoom-control,
-.studio-app-shell .focus-mode-typewriter-position {
+.studio-app-shell .manuscript-focus-width-control,
+.studio-app-shell .manuscript-focus-text-scale-control,
+.studio-app-shell .manuscript-focus-cursor-position {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1030,26 +1030,26 @@
   white-space: nowrap;
 }
 
-.studio-app-shell .focus-mode-width-control input {
+.studio-app-shell .manuscript-focus-width-control input {
   width: clamp(90px, 14vw, 155px);
   accent-color: var(--eum-accent);
 }
 
-.studio-app-shell .focus-mode-typewriter-position input {
+.studio-app-shell .manuscript-focus-cursor-position input {
   width: clamp(72px, 9vw, 110px);
   accent-color: var(--eum-accent);
 }
 
-.studio-app-shell .focus-mode-width-control output,
-.studio-app-shell .focus-mode-zoom-control output,
-.studio-app-shell .focus-mode-typewriter-position output {
+.studio-app-shell .manuscript-focus-width-control output,
+.studio-app-shell .manuscript-focus-text-scale-control output,
+.studio-app-shell .manuscript-focus-cursor-position output {
   min-width: 42px;
   color: var(--eum-text);
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
 
-.studio-app-shell .focus-mode-toolbar button {
+.studio-app-shell .manuscript-focus-toolbar button {
   min-height: 30px;
   display: inline-flex;
   align-items: center;
@@ -1104,39 +1104,39 @@
   background: var(--eum-accent-soft);
 }
 
-.studio-app-shell .focus-mode-zoom-control button {
+.studio-app-shell .manuscript-focus-text-scale-control button {
   width: 28px;
   min-width: 28px;
   padding: 0;
 }
 
-.studio-app-shell .focus-mode-toolbar button:hover:not(:disabled),
-.studio-app-shell .focus-mode-toolbar button[aria-pressed="true"] {
+.studio-app-shell .manuscript-focus-toolbar button:hover:not(:disabled),
+.studio-app-shell .manuscript-focus-toolbar button[aria-pressed="true"] {
   border-color: var(--eum-accent-border);
   color: var(--eum-accent-strong);
   background: var(--eum-accent-soft);
 }
 
-.studio-app-shell .focus-mode-toolbar button:disabled {
+.studio-app-shell .manuscript-focus-toolbar button:disabled {
   opacity: 0.42;
   cursor: default;
 }
 
-.studio-app-shell .focus-mode-save-status {
+.studio-app-shell .manuscript-focus-save-status {
   max-width: 90px;
   margin-left: auto;
 }
 
-.studio-app-shell .focus-mode-exit {
+.studio-app-shell .manuscript-focus-exit {
   color: var(--eum-text) !important;
 }
 
 .studio-app-shell
-  .manuscript-editor-canvas[data-focus-presentation="true"]
+  .manuscript-editor-canvas[data-manuscript-focus="true"]
   .cm-content {
-  width: min(100%, var(--focus-content-width, 700px)) !important;
-  max-width: min(100%, var(--focus-content-width, 700px)) !important;
-  font-size: var(--focus-font-size) !important;
+  width: min(100%, var(--manuscript-focus-width, 700px)) !important;
+  max-width: min(100%, var(--manuscript-focus-width, 700px)) !important;
+  font-size: var(--manuscript-focus-font-size) !important;
   transition:
     width 160ms ease,
     max-width 160ms ease,
@@ -1144,7 +1144,7 @@
 }
 
 .studio-app-shell
-  .writing-workspace-focus-mode
+  .writing-workspace-manuscript-focus
   .manuscript-editor-canvas
   .cm-content {
   min-height: 100%;
@@ -1155,27 +1155,27 @@
 }
 
 .studio-app-shell
-  .manuscript-editor-canvas[data-focus-typewriter="true"]
+  .manuscript-editor-canvas[data-cursor-follow="true"]
   .cm-content {
-  padding-top: var(--typewriter-scroll-space, 100dvh) !important;
-  padding-bottom: var(--typewriter-scroll-space, 100dvh) !important;
+  padding-top: var(--cursor-follow-scroll-space, 100dvh) !important;
+  padding-bottom: var(--cursor-follow-scroll-space, 100dvh) !important;
 }
 
 .studio-app-shell
-  .manuscript-editor-canvas[data-focus-typewriter="true"]
+  .manuscript-editor-canvas[data-cursor-follow="true"]
   .cm-content[data-has-previous-flow="true"] {
   padding-top: 48px !important;
 }
 
 .studio-app-shell
-  .manuscript-editor-canvas[data-focus-current-block="true"]
+  .manuscript-editor-canvas[data-current-paragraph-highlight="true"]
   .cm-line {
   opacity: 0.3;
   transition: opacity 200ms ease;
 }
 
 .studio-app-shell
-  .manuscript-editor-canvas[data-focus-current-block="true"]
+  .manuscript-editor-canvas[data-current-paragraph-highlight="true"]
   .cm-line.cm-activeLine {
   opacity: 1;
   background: transparent;
@@ -1186,13 +1186,13 @@
     display: none;
   }
 
-  .studio-app-shell .focus-mode-toolbar {
+  .studio-app-shell .manuscript-focus-toolbar {
     align-content: center;
     flex-wrap: wrap;
   }
 
-  .studio-app-shell .focus-mode-toolbar-title,
-  .studio-app-shell .focus-mode-save-status {
+  .studio-app-shell .manuscript-focus-toolbar-title,
+  .studio-app-shell .manuscript-focus-save-status {
     display: none;
   }
 }

@@ -9,6 +9,10 @@ export function pickSettingsRuntime(
     getWorkMusicSettings: (command) => runtime.getWorkMusicSettings(command),
     saveWorkMusicSettings: (command) =>
       runtime.saveWorkMusicSettings(command),
+    getWorkSceneAnalysisSettings: (command) =>
+      runtime.getWorkSceneAnalysisSettings(command),
+    saveWorkSceneAnalysisSettings: (command) =>
+      runtime.saveWorkSceneAnalysisSettings(command),
     getWorkInspirationSettings: (command) =>
       runtime.getWorkInspirationSettings(command),
     saveWorkInspirationSettings: (command) =>

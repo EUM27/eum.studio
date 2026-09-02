@@ -12,6 +12,8 @@ const stylesheet = Buffer.concat([
   readFileSync(new URL("../styles/workspace-layout.css", import.meta.url)),
   readFileSync(new URL("../styles/document-rail-compat.css", import.meta.url)),
   readFileSync(new URL("../styles/workspace-ia-compat.css", import.meta.url)),
+  readFileSync(new URL("../styles/manuscript-annotations.css", import.meta.url)),
+  readFileSync(new URL("../styles/canon-workspace.css", import.meta.url)),
   readFileSync(new URL("../styles/dialogs.css", import.meta.url)),
   readFileSync(new URL("../styles/schedule.css", import.meta.url)),
   readFileSync(new URL("../styles/activity-records.css", import.meta.url)),
@@ -68,6 +70,8 @@ describe("studio home layout", () => {
         'import "./styles/workspace-layout.css";',
         'import "./styles/document-rail-compat.css";',
         'import "./styles/workspace-ia-compat.css";',
+        'import "./styles/manuscript-annotations.css";',
+        'import "./styles/canon-workspace.css";',
         'import "./styles/dialogs.css";',
         'import "./styles/schedule.css";',
         'import "./styles/activity-records.css";',
@@ -86,6 +90,18 @@ describe("studio home layout", () => {
         'import "./shell/studio-app-shell.css";',
       ].join("\n"),
     );
+  });
+
+  it("keeps the canon review as a bounded three-column workspace", () => {
+    const workspace = ruleFor(".studio-app-shell .canon-workspace");
+    const reviewGrid = ruleFor(".studio-app-shell .canon-review-grid");
+
+    expect(workspace).toContain("min-width: 0");
+    expect(workspace).toContain("min-height: 0");
+    expect(reviewGrid).toContain(
+      "grid-template-columns: minmax(220px, 0.72fr) minmax(360px, 1.35fr) minmax(260px, 0.9fr)",
+    );
+    expect(reviewGrid).toContain("overflow: hidden");
   });
 
   it("keeps the resume action compact and the library visually balanced", () => {
@@ -143,10 +159,10 @@ describe("studio home layout", () => {
 
   it("uses the full app width for the centered manuscript focus screen", () => {
     const focusShell = ruleFor(
-      ".studio-app-shell.is-editor:has(.writing-workspace-focus-mode[data-work-section])",
+      ".studio-app-shell.is-editor:has(.writing-workspace-manuscript-focus[data-work-section])",
     );
     const focusWorkspace = ruleFor(
-      ".studio-app-shell.is-editor:has(.writing-workspace-focus-mode[data-work-section])\n  > .workspace",
+      ".studio-app-shell.is-editor:has(.writing-workspace-manuscript-focus[data-work-section])\n  > .workspace",
     );
 
     expect(focusShell).toContain("--eum-sidebar-width: 0px");
@@ -155,25 +171,25 @@ describe("studio home layout", () => {
 
   it("keeps all focus floating toolbar text readable", () => {
     const statusTitle = ruleFor(
-      ".studio-app-shell .focus-mode-pomodoro-status strong",
+      ".studio-app-shell .manuscript-focus-pomodoro-status strong",
     );
     const statusDetail = ruleFor(
-      ".studio-app-shell .focus-mode-pomodoro-status span",
+      ".studio-app-shell .manuscript-focus-pomodoro-status span",
     );
     const statusTimer = lastRuleFor(
-      ".studio-app-shell .focus-mode-pomodoro-status output",
+      ".studio-app-shell .manuscript-focus-pomodoro-status output",
     );
     const toolbarTitle = ruleFor(
-      ".studio-app-shell .focus-mode-toolbar-title strong",
+      ".studio-app-shell .manuscript-focus-toolbar-title strong",
     );
     const toolbarDetail = ruleFor(
-      ".studio-app-shell .focus-mode-toolbar-title span,\n.studio-app-shell .focus-mode-save-status",
+      ".studio-app-shell .manuscript-focus-toolbar-title span,\n.studio-app-shell .manuscript-focus-save-status",
     );
     const toolbarControls = ruleFor(
-      ".studio-app-shell .focus-mode-width-control,\n.studio-app-shell .focus-mode-zoom-control,\n.studio-app-shell .focus-mode-typewriter-position",
+      ".studio-app-shell .manuscript-focus-width-control,\n.studio-app-shell .manuscript-focus-text-scale-control,\n.studio-app-shell .manuscript-focus-cursor-position",
     );
     const toolbarButton = ruleFor(
-      ".studio-app-shell .focus-mode-toolbar button",
+      ".studio-app-shell .manuscript-focus-toolbar button",
     );
 
     expect(statusTitle).toContain("font-size: 13px");

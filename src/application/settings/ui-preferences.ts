@@ -1,39 +1,39 @@
-export type FocusModePreferences = Readonly<{
-  contentWidthPx: number;
-  zoomPercent: number;
-  currentBlockHighlight: boolean;
-  typewriterMode: boolean;
-  typewriterPositionPercent: number;
+export type ManuscriptFocusPreferences = Readonly<{
+  manuscriptWidthPx: number;
+  textScalePercent: number;
+  highlightCurrentParagraph: boolean;
+  cursorFollowEnabled: boolean;
+  cursorViewportPercent: number;
 }>;
 
 export type UiPreferencesProjection = Readonly<{
-  schemaVersion: 1;
+  schemaVersion: 2;
   revision: number;
   themeKey: string;
-  focusMode: FocusModePreferences;
+  manuscriptFocus: ManuscriptFocusPreferences;
 }>;
 
 export type SaveUiPreferencesCommand = Readonly<{
-  schemaVersion: 1;
+  schemaVersion: 2;
   expectedRevision: number;
   themeKey: string;
-  focusMode: FocusModePreferences;
+  manuscriptFocus: ManuscriptFocusPreferences;
 }>;
 
-export const DEFAULT_FOCUS_MODE_PREFERENCES: FocusModePreferences =
+export const DEFAULT_MANUSCRIPT_FOCUS_PREFERENCES: ManuscriptFocusPreferences =
   Object.freeze({
-    contentWidthPx: 700,
-    zoomPercent: 100,
-    currentBlockHighlight: false,
-    typewriterMode: false,
-    typewriterPositionPercent: 40,
+    manuscriptWidthPx: 700,
+    textScalePercent: 100,
+    highlightCurrentParagraph: false,
+    cursorFollowEnabled: false,
+    cursorViewportPercent: 40,
   });
 
 export const DEFAULT_UI_PREFERENCES: UiPreferencesProjection = Object.freeze({
-  schemaVersion: 1,
+  schemaVersion: 2,
   revision: 0,
   themeKey: "light-mode",
-  focusMode: DEFAULT_FOCUS_MODE_PREFERENCES,
+  manuscriptFocus: DEFAULT_MANUSCRIPT_FOCUS_PREFERENCES,
 });
 
 function record(value: unknown, label: string): Record<string, unknown> {
@@ -85,29 +85,38 @@ function boolean(value: unknown, label: string): boolean {
   return value;
 }
 
-export function parseFocusModePreferences(
+export function parseManuscriptFocusPreferences(
   value: unknown,
-  label = "FocusModePreferences",
-): FocusModePreferences {
+  label = "ManuscriptFocusPreferences",
+): ManuscriptFocusPreferences {
   const input = record(value, label);
   exact(input, [
-    "contentWidthPx",
-    "zoomPercent",
-    "currentBlockHighlight",
-    "typewriterMode",
-    "typewriterPositionPercent",
+    "manuscriptWidthPx",
+    "textScalePercent",
+    "highlightCurrentParagraph",
+    "cursorFollowEnabled",
+    "cursorViewportPercent",
   ], label);
   return Object.freeze({
-    contentWidthPx: positiveFinite(input.contentWidthPx, `${label}.contentWidthPx`),
-    zoomPercent: positiveFinite(input.zoomPercent, `${label}.zoomPercent`),
-    currentBlockHighlight: boolean(
-      input.currentBlockHighlight,
-      `${label}.currentBlockHighlight`,
+    manuscriptWidthPx: positiveFinite(
+      input.manuscriptWidthPx,
+      `${label}.manuscriptWidthPx`,
     ),
-    typewriterMode: boolean(input.typewriterMode, `${label}.typewriterMode`),
-    typewriterPositionPercent: positiveFinite(
-      input.typewriterPositionPercent,
-      `${label}.typewriterPositionPercent`,
+    textScalePercent: positiveFinite(
+      input.textScalePercent,
+      `${label}.textScalePercent`,
+    ),
+    highlightCurrentParagraph: boolean(
+      input.highlightCurrentParagraph,
+      `${label}.highlightCurrentParagraph`,
+    ),
+    cursorFollowEnabled: boolean(
+      input.cursorFollowEnabled,
+      `${label}.cursorFollowEnabled`,
+    ),
+    cursorViewportPercent: positiveFinite(
+      input.cursorViewportPercent,
+      `${label}.cursorViewportPercent`,
     ),
   });
 }
@@ -118,19 +127,19 @@ export function parseUiPreferencesProjection(
   const input = record(value, "UiPreferencesProjection");
   exact(
     input,
-    ["schemaVersion", "revision", "themeKey", "focusMode"],
+    ["schemaVersion", "revision", "themeKey", "manuscriptFocus"],
     "UiPreferencesProjection",
   );
-  if (input.schemaVersion !== 1) {
-    throw new Error("UiPreferencesProjection.schemaVersion must be 1");
+  if (input.schemaVersion !== 2) {
+    throw new Error("UiPreferencesProjection.schemaVersion must be 2");
   }
   return Object.freeze({
-    schemaVersion: 1,
+    schemaVersion: 2,
     revision: nonNegativeInteger(input.revision, "UiPreferencesProjection.revision"),
     themeKey: nonEmptyText(input.themeKey, "UiPreferencesProjection.themeKey"),
-    focusMode: parseFocusModePreferences(
-      input.focusMode,
-      "UiPreferencesProjection.focusMode",
+    manuscriptFocus: parseManuscriptFocusPreferences(
+      input.manuscriptFocus,
+      "UiPreferencesProjection.manuscriptFocus",
     ),
   });
 }
@@ -141,22 +150,22 @@ export function parseSaveUiPreferencesCommand(
   const input = record(value, "SaveUiPreferencesCommand");
   exact(
     input,
-    ["schemaVersion", "expectedRevision", "themeKey", "focusMode"],
+    ["schemaVersion", "expectedRevision", "themeKey", "manuscriptFocus"],
     "SaveUiPreferencesCommand",
   );
-  if (input.schemaVersion !== 1) {
-    throw new Error("SaveUiPreferencesCommand.schemaVersion must be 1");
+  if (input.schemaVersion !== 2) {
+    throw new Error("SaveUiPreferencesCommand.schemaVersion must be 2");
   }
   return Object.freeze({
-    schemaVersion: 1,
+    schemaVersion: 2,
     expectedRevision: nonNegativeInteger(
       input.expectedRevision,
       "SaveUiPreferencesCommand.expectedRevision",
     ),
     themeKey: nonEmptyText(input.themeKey, "SaveUiPreferencesCommand.themeKey"),
-    focusMode: parseFocusModePreferences(
-      input.focusMode,
-      "SaveUiPreferencesCommand.focusMode",
+    manuscriptFocus: parseManuscriptFocusPreferences(
+      input.manuscriptFocus,
+      "SaveUiPreferencesCommand.manuscriptFocus",
     ),
   });
 }

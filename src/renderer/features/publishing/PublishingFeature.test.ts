@@ -90,8 +90,8 @@ describe("PublishingFeature", () => {
       return member.name.getText(dialog.sourceFile);
     });
 
-    expect(liveAttributeNames).toHaveLength(61);
-    expect(declaredPropertyNames).toHaveLength(61);
+    expect(liveAttributeNames).toHaveLength(66);
+    expect(declaredPropertyNames).toHaveLength(66);
     expect([...liveAttributeNames].sort()).toEqual(
       [...declaredPropertyNames].sort(),
     );

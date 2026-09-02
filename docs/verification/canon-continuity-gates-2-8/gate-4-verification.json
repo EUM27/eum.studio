@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "gate": 4,
+  "verifiedAt": "2026-08-29",
+  "designSha256": "343577C44367C4E38A61913822A13400B5DAA028BE2EA76123F7BBF6A31F3FC5",
+  "storage": {
+    "targetSchemaVersion": 21,
+    "migrationId": "local-workspace-context-planner-v20-to-v21",
+    "migrationDefinitionSha256": "658624097e81eee0b670d7fc1e6319db1a1a3733819d9e5df33d77aa9166c064",
+    "tables": [
+      "assistant_entity_context_policies",
+      "assistant_context_manifests",
+      "assistant_context_activities"
+    ]
+  },
+  "electronE2E": {
+    "viewport": { "width": 1280, "height": 800 },
+    "passes": 1,
+    "fullRelaunches": 2,
+    "connectorManifestBudget": 32768,
+    "verified": [
+      "virtual relevant default",
+      "required policy persistence",
+      "deterministic planned result",
+      "explicit required-context-over-budget",
+      "receipt-linked manifest projection",
+      "privacy-safe activity projection",
+      "bounded three-column layout"
+    ],
+    "auditedRows": {
+      "policies": 2,
+      "manifests": 1,
+      "activities": 1,
+      "foreignKeyViolations": 0
+    },
+    "hostException": "Windows 10.0.26200 requires EUM_STUDIO_DISABLE_SANDBOX=1 only for the E2E child; the default BrowserWindow policy remains sandboxed and isolated."
+  },
+  "performance": {
+    "artifact": "gate-4-context-performance.json",
+    "candidates": 1000,
+    "required": 10,
+    "withheld": 100,
+    "selected": 750,
+    "plannerP50Ms": 2.340000000000032,
+    "plannerP95Ms": 3.328199999999981,
+    "manifestProjectionP50Ms": 0.3905000000000314,
+    "manifestProjectionP95Ms": 0.791499999999985,
+    "deterministicAcrossReverseOrder": true,
+    "fixtureIsProductLimit": false
+  },
+  "productionConnectorIntegration": {
+    "paths": ["canon.review", "continuity.review"],
+    "order": ["plan", "permission-and-receipt", "manifest", "connector", "candidate-persist", "activity"],
+    "requiredOverBudgetStopsBeforeReceipt": true,
+    "requiredOverBudgetStopsBeforeConnector": true,
+    "activitySensitiveFieldsPresent": false
+  },
+  "regression": {
+    "fullVitest": {
+      "filesPassed": 300,
+      "testsPassed": 1115,
+      "testsSkipped": 1,
+      "baselineFailures": 1,
+      "baselineFailure": "src/renderer/workspace/session/RuntimeBootstrapController.test.ts:343"
+    },
+    "gate2And3ElectronPasses": 2,
+    "lint": "pass",
+    "typecheck": "pass",
+    "architecture": "pass",
+    "productionBuild": "pass"
+  }
+}

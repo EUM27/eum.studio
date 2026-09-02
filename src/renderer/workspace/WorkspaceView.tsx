@@ -11,11 +11,13 @@ import type { YouTubeMusicConnectionStatus } from "../../application/music/youtu
 import type { WorkspaceWorkSummary } from "../../application/workspace/workspace-contract";
 import type { EntityId } from "../../domain/writing";
 import type { ManuscriptEditorHandle } from "../editor/ManuscriptEditor";
+import { CanonWorkspace } from "../canon/CanonWorkspace";
+import type { ContinuitySubjectOption } from "../canon/ContinuityPanel";
 import { LoreCueTooltip } from "../editor/LoreCueDisclosure";
 import { ManuscriptTelemetryStore } from "../editor/manuscript-telemetry-store";
 import { SceneDraftPanel } from "../editor/SceneDraftPanel";
 import { AssistantDialogHost } from "../features/assistant/AssistantDialogHost";
-import type { useFocusModeController } from "../features/activity/useFocusModeController";
+import type { useManuscriptFocusController } from "../features/activity/useManuscriptFocusController";
 import {
   SceneStructureContent,
   StructureWorkspaceHost,
@@ -72,7 +74,7 @@ export function WorkspaceView(input: Readonly<{
   activeWork: WorkspaceWorkSummary | undefined;
   activeWorkId: EntityId<"Work"> | null;
   controllers: Readonly<{
-    focus: ReturnType<typeof useFocusModeController>;
+    manuscriptFocus: ReturnType<typeof useManuscriptFocusController>;
     layout: ReturnType<typeof useWorkspaceLayoutController>;
     lifecycle: ReturnType<typeof useWorkspaceLifecycle>;
     navigationState: ReturnType<typeof useWorkspaceNavigationState>;
@@ -148,11 +150,11 @@ export function WorkspaceView(input: Readonly<{
   const reviewRailId = reviewIds.rail;
   const reviewVersionsTabId = reviewIds.versions;
   const reviewWorkTabId = reviewIds.work;
-  const focusModeController = input.controllers.focus;
+  const manuscriptFocusController = input.controllers.manuscriptFocus;
   const {
-    exitFocusMode,
-    focusMode,
-  } = focusModeController;
+    exitManuscriptFocus,
+    manuscriptFocusActive,
+  } = manuscriptFocusController;
   const workspaceLayoutController = input.controllers.layout;
   const {
     activeManuscriptPosition,
@@ -169,6 +171,7 @@ export function WorkspaceView(input: Readonly<{
     openRecordsDocument,
     recordsNowMs,
     returnToPreviousWorkLocation,
+    canonTab,
     reviewTab,
     selectReviewTab,
     showWorkSection,
@@ -179,6 +182,7 @@ export function WorkspaceView(input: Readonly<{
   } = workspaceNavigationState;
   const {
     eventWorkspaceController,
+    manuscriptAnnotationsController,
     loreCueController,
     manuscriptSearchController,
     assistantController,
@@ -208,7 +212,14 @@ export function WorkspaceView(input: Readonly<{
     charactersController,
     loreController,
     refreshLoreCandidates,
+    canonReviewController,
+    continuityController,
+    characterKnowledgeController,
+    contextPlannerController,
+    narrativeDigestController,
   } = input.coreKernel;
+  const { refreshCandidates: refreshCanonReviewCandidates } =
+    canonReviewController;
   const {
     activateDocumentById,
     cancelWorkTitleEdit,
@@ -242,6 +253,9 @@ export function WorkspaceView(input: Readonly<{
     compareSceneDraftCandidate,
     openLoreEntryEvidence,
     openLoreCandidateEvidence,
+    openCanonReviewEvidence,
+    openContinuityEvidence,
+    openCharacterKnowledgeEvidence,
     openPlotThreadSource,
     openWorkStructureDocument,
     openEventRailSource,
@@ -289,12 +303,20 @@ export function WorkspaceView(input: Readonly<{
     captureFragment,
     moveSelectionToFragment,
     insertFragmentAtCursor,
+    runCanonReviewSelection,
+    stageContinuitySelection,
+    runContinuityReviewSelection,
+    stageCharacterKnowledgeSelection,
     handleManuscriptTransaction,
+    automaticSceneAnalysisController,
     moveRangeToEpisodeController,
     performSceneDraft,
     updateSceneDraftCandidate,
     applySceneDraftCandidate,
     regenerateSceneDraftCandidate,
+    reviewSceneCanon,
+    openSceneContinuity,
+    openSceneKnowledge,
   } = input.storyKernel;
   const {
     eventRail,
@@ -310,6 +332,7 @@ export function WorkspaceView(input: Readonly<{
     sceneWorkspaceState,
     selectSceneExtraction,
     structureController,
+    sceneCanonContextController,
     workStructureState,
   } = input.structureKernel;
   const {
@@ -324,8 +347,8 @@ export function WorkspaceView(input: Readonly<{
       runtime.startupRecovery.status !== "clean"
         ? "writing-workspace-recovery"
         : null,
-      focusMode && workspaceSurface === "manuscript"
-        ? "writing-workspace-focus-mode"
+      manuscriptFocusActive && workspaceSurface === "manuscript"
+        ? "writing-workspace-manuscript-focus"
         : null,
       activeForwardWriting !== null && workspaceSurface === "manuscript"
         ? "writing-workspace-forward-writing"
@@ -340,21 +363,46 @@ export function WorkspaceView(input: Readonly<{
     const refreshCandidatesForNavigation = useCallback(() => {
       void refreshLoreCandidates();
     }, [refreshLoreCandidates]);
+    const refreshCanonCandidatesForNavigation = useCallback(() => {
+      void refreshCanonReviewCandidates();
+    }, [refreshCanonReviewCandidates]);
+    const refreshContinuityForNavigation = useCallback(() => {
+      void continuityController.refresh();
+    }, [continuityController]);
+    const refreshCharacterKnowledgeForNavigation = useCallback(() => {
+      void characterKnowledgeController.refresh();
+    }, [characterKnowledgeController]);
+    const refreshContextPlannerForNavigation = useCallback(() => {
+      void contextPlannerController.refresh();
+    }, [contextPlannerController]);
+    const refreshNarrativeDigestsForNavigation = useCallback(() => {
+      void narrativeDigestController.refresh();
+    }, [narrativeDigestController]);
     const workspaceNavigationControllerInput = useMemo(() => Object.freeze({
       captureCandidateSelection: captureCharacterWorkspaceSelection,
-      exitFocusMode,
+      exitManuscriptFocus,
       navigation: workspaceNavigationState,
       openCharacterWorkspace: prepareCharacterWorkspace,
       openPlotWorkspace: preparePlotWorkspace,
       refreshCandidates: refreshCandidatesForNavigation,
+      refreshCanonCandidates: refreshCanonCandidatesForNavigation,
+      refreshContinuity: refreshContinuityForNavigation,
+      refreshCharacterKnowledge: refreshCharacterKnowledgeForNavigation,
+      refreshContextPlanner: refreshContextPlannerForNavigation,
+      refreshNarrativeDigests: refreshNarrativeDigestsForNavigation,
       selectCandidateSceneExtraction: selectSceneExtraction,
       versionActionState,
     }), [
       captureCharacterWorkspaceSelection,
-      exitFocusMode,
+      exitManuscriptFocus,
       prepareCharacterWorkspace,
       preparePlotWorkspace,
       refreshCandidatesForNavigation,
+      refreshCanonCandidatesForNavigation,
+      refreshContinuityForNavigation,
+      refreshCharacterKnowledgeForNavigation,
+      refreshContextPlannerForNavigation,
+      refreshNarrativeDigestsForNavigation,
       selectSceneExtraction,
       versionActionState,
       workspaceNavigationState,
@@ -362,6 +410,7 @@ export function WorkspaceView(input: Readonly<{
     const {
       changeWorkSection,
       changeStructureTab,
+      changeCanonTab,
       changeReviewTab,
       openPlotWorkspace,
     } = useWorkspaceNavigationController(workspaceNavigationControllerInput);
@@ -405,11 +454,15 @@ export function WorkspaceView(input: Readonly<{
           scene: sceneWorkspaceController,
           sceneState: sceneWorkspaceState,
           structure: structureController,
+          sceneCanon: sceneCanonContextController,
         }}
         musicConnected={youtubeMusicConnectionStatus?.apiKeyConfigured === true}
         navigation={{
           focusScene,
           previewSceneExtractionCandidate,
+          reviewSceneCanon,
+          openSceneContinuity,
+          openSceneKnowledge,
         }}
         oauthStatus={chatGptOAuthStatus}
         onOpenSettings={onOpenSettings}
@@ -525,6 +578,135 @@ export function WorkspaceView(input: Readonly<{
         }}
         recordsNowMs={recordsNowMs}
         sceneContent={sceneStructureContent}
+      />
+    );
+    const continuitySubjectOptions = useMemo<readonly ContinuitySubjectOption[]>(() => {
+      const characterNames = new Map(activeWorkCharacters.map((entry) => [
+        entry.characterId,
+        entry.name,
+      ]));
+      const sceneOptions = input.structureKernel.sceneProjection?.workId === activeWorkId
+        ? input.structureKernel.sceneProjection.scenes.flatMap((scene) =>
+            scene.sceneIdentity === undefined
+              ? []
+              : [Object.freeze({
+                  key: `scene:${scene.sceneIdentity.sceneId}`,
+                  entity: Object.freeze({
+                    kind: "scene" as const,
+                    id: scene.sceneIdentity.sceneId,
+                  }),
+                  label: `장면 ${scene.sceneIndex + 1}`,
+                })]
+          )
+        : [];
+      return Object.freeze([
+        ...activeWorkCharacters.filter((entry) => entry.retiredAt === null).map((entry) => Object.freeze({
+          key: `character:${entry.characterId}`,
+          entity: Object.freeze({ kind: "character" as const, id: entry.characterId }),
+          label: `인물 · ${entry.name}`,
+        })),
+        ...activeWorkCharacterRelations.filter((entry) => entry.retiredAt === null).map((entry) => Object.freeze({
+          key: `character-relation:${entry.relationId}`,
+          entity: Object.freeze({
+            kind: "character-relation" as const,
+            id: entry.relationId,
+          }),
+          label: `관계 · ${characterNames.get(entry.fromCharacterId) ?? entry.fromCharacterId} → ${characterNames.get(entry.toCharacterId) ?? entry.toCharacterId}`,
+        })),
+        ...activeWorkLoreEntries.filter((entry) => entry.retiredAt === null).map((entry) => Object.freeze({
+          key: `lore-entry:${entry.loreEntryId}`,
+          entity: Object.freeze({ kind: "lore-entry" as const, id: entry.loreEntryId }),
+          label: `별빛 · ${entry.title}`,
+        })),
+        ...activeWorkEventBlocks.filter((entry) => entry.retiredAt === null).map((entry) => Object.freeze({
+          key: `event-block:${entry.eventBlockId}`,
+          entity: Object.freeze({ kind: "event-block" as const, id: entry.eventBlockId }),
+          label: `사건 · ${entry.title}`,
+        })),
+        ...activeWorkPlots.filter((entry) => entry.retiredAt === null).map((entry) => Object.freeze({
+          key: `plot-thread:${entry.plotThreadId}`,
+          entity: Object.freeze({ kind: "plot-thread" as const, id: entry.plotThreadId }),
+          label: `플롯 · ${entry.title}`,
+        })),
+        ...foreshadowLines.filter((entry) => entry.retiredAt === null).map((entry) => Object.freeze({
+          key: `foreshadow-line:${entry.lineId}`,
+          entity: Object.freeze({ kind: "foreshadow-line" as const, id: entry.lineId }),
+          label: `복선 · ${entry.title}`,
+        })),
+        ...sceneOptions,
+      ]);
+    }, [
+      activeWorkCharacterRelations,
+      activeWorkCharacters,
+      activeWorkEventBlocks,
+      activeWorkId,
+      activeWorkLoreEntries,
+      activeWorkPlots,
+      foreshadowLines,
+      input.structureKernel.sceneProjection,
+    ]);
+    const characterKnowledgeReferenceOptions = useMemo(() => Object.freeze([
+      ...continuitySubjectOptions,
+      ...(continuityController.overview?.threads ?? []).map((entry) => Object.freeze({
+        key: `continuity-thread:${entry.threadId}`,
+        entity: Object.freeze({
+          kind: "continuity-thread" as const,
+          id: entry.threadId,
+        }),
+        label: `연속성 · ${entry.title}`,
+      })),
+      ...characterKnowledgeController.entries.map((entry) => Object.freeze({
+        key: `character-knowledge:${entry.knowledgeId}`,
+        entity: Object.freeze({
+          kind: "character-knowledge" as const,
+          id: entry.knowledgeId,
+        }),
+        label: `인물 지식 · ${entry.statement}`,
+      })),
+    ]), [
+      characterKnowledgeController.entries,
+      continuityController.overview,
+      continuitySubjectOptions,
+    ]);
+    const canonWorkspaceContent = activeWork === undefined ? null : (
+      <CanonWorkspace
+        activeTab={canonTab}
+        characters={activeWorkCharacters}
+        controller={canonReviewController}
+        continuityController={continuityController}
+        continuitySubjectOptions={continuitySubjectOptions}
+        characterKnowledgeController={characterKnowledgeController}
+        characterKnowledgeReferenceOptions={characterKnowledgeReferenceOptions}
+        contextPlannerController={contextPlannerController}
+        contextEntityOptions={characterKnowledgeReferenceOptions}
+        narrativeDigestController={narrativeDigestController}
+        narrativeDigestDocuments={activeWorkDocuments.map((document) => ({
+          documentId: document.documentId,
+          label: document.label,
+        }))}
+        documentLabels={activeWorkDocumentLabels}
+        loreEntries={activeWorkLoreEntries}
+        onEvidenceOpen={(evidence) => {
+          void openCanonReviewEvidence(evidence);
+        }}
+        onContinuityEvidenceOpen={(evidence) => {
+          void openContinuityEvidence(evidence);
+        }}
+        onCharacterKnowledgeEvidenceOpen={(evidence) => {
+          void openCharacterKnowledgeEvidence(evidence);
+        }}
+        onContinuitySourceOpen={(source) => {
+          changeStructureTab(
+            source.sourceKind === "plot-thread"
+              ? "plots"
+              : source.sourceKind === "foreshadow-line"
+                ? "foreshadow"
+                : "characters",
+          );
+        }}
+        onTabChange={changeCanonTab}
+        relations={activeWorkCharacterRelations}
+        workTitle={activeWork.title}
       />
     );
     const workOperationsContent = activeWork === undefined ? null : (
@@ -709,30 +891,68 @@ export function WorkspaceView(input: Readonly<{
               <ManuscriptWorkspaceSurface
                 activeDocument={activeDocument ?? null}
                 activeWorkDocuments={activeWorkDocuments}
+                automaticSceneAnalysis={automaticSceneAnalysisController}
                 callbacks={{
                   onCompositionEnd: handleCompositionEnd,
-                  onDocumentActivated: handleDocumentActivated,
+                  onDocumentActivated: (document,summary) => {
+                    handleDocumentActivated(document,summary);
+                    const selection=summary.selection.ranges[summary.selection.mainIndex];
+                    if(selection!==undefined){
+                      automaticSceneAnalysisController.observePosition(
+                        document,
+                        selection.head,
+                      );
+                    }
+                  },
                   onFormattingChange: handleFormattingChange,
-                  onTransaction: handleManuscriptTransaction,
+                  onTransaction: (
+                    document,
+                    transaction,
+                    statistics,
+                    composing,
+                    editorStateJson,
+                  ) => {
+                    handleManuscriptTransaction(
+                      document,
+                      transaction,
+                      statistics,
+                      composing,
+                      editorStateJson,
+                    );
+                    const selection=transaction.selection.ranges[
+                      transaction.selection.mainIndex
+                    ];
+                    if(selection!==undefined){
+                      automaticSceneAnalysisController.observePosition(
+                        document,
+                        selection.head,
+                      );
+                    }
+                  },
                 }}
                 controllers={{
                   activity: activityController,
+                  annotations: manuscriptAnnotationsController,
                   editorTools: editorToolsController,
                   event: eventWorkspaceController,
                   episodeMove: moveRangeToEpisodeController,
-                  focus: focusModeController,
+                  manuscriptFocus: manuscriptFocusController,
                   loreCue: loreCueController,
                   readingLayout: readingLayoutController,
                   scene: sceneWorkspaceController,
                 }}
                 editorRef={manuscriptEditorRef}
-                focusStatus={{
+                manuscriptFocusStatus={{
                   forwardWriting: focusForwardWritingStatus,
                   pomodoro: focusPomodoroStatus,
                   save: focusSaveStatus,
                   timer: focusPomodoroTimerText,
                 }}
                 loreEntries={activeWorkLoreEntries}
+                onCanonReview={runCanonReviewSelection}
+                onContinuityManual={stageContinuitySelection}
+                onContinuityReview={runContinuityReviewSelection}
+                onCharacterKnowledge={stageCharacterKnowledgeSelection}
                 navigation={{
                   activateDocument: activateDocumentById,
                   closeDocumentTab: closeDocumentTabById,
@@ -753,6 +973,10 @@ export function WorkspaceView(input: Readonly<{
                 activeWork !== undefined &&
                 workSection === "structure" &&
                 structureWorkspaceContent}
+              {runtime.status === "ready" &&
+                activeWork !== undefined &&
+                workSection === "canon" &&
+                canonWorkspaceContent}
               {runtime.status === "ready" &&
                 activeWork !== undefined &&
                 workSection === "review" &&
@@ -808,16 +1032,29 @@ export function WorkspaceView(input: Readonly<{
               activeWork={activeWork ?? null}
               commands={{
                 captureCharacterWorkspaceSelection,
+                openAnnotation: (annotation) => {
+                  if (
+                    activeDocument !== undefined &&
+                    annotation.sourceDocumentId === activeDocument.documentId &&
+                    annotation.range !== null
+                  ) {
+                    manuscriptEditorRef.current?.selectDocumentRange(
+                      activeDocument,
+                      annotation.range,
+                    );
+                  }
+                },
                 openCandidateInbox: () => {
                   selectReviewTab("candidates");
                   showWorkSection("review");
-                  exitFocusMode();
+                  exitManuscriptFocus();
                 },
                 openPlotWorkspace,
                 toggleRightRail: () => toggleRail("right"),
               }}
               controllers={{
                 assistant: assistantController,
+                annotations: manuscriptAnnotationsController,
                 characters: charactersController,
                 event: eventWorkspaceController,
                 eventState: eventWorkspaceState,
@@ -864,12 +1101,13 @@ export function WorkspaceView(input: Readonly<{
             activeWorkId={activeWorkId}
             controllers={{
               activity: activityController,
+              annotations: manuscriptAnnotationsController,
               editorTools: editorToolsController,
               event: eventWorkspaceController,
               eventState: eventWorkspaceState,
               scene: sceneWorkspaceController,
               sceneState: sceneWorkspaceState,
-              focus: focusModeController,
+              manuscriptFocus: manuscriptFocusController,
               music: musicController,
               readingLayout: readingLayoutController,
               schedule: scheduleController,

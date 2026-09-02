@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "fixtureUse": {
+    "measurementInputOnly": true,
+    "productLimit": false,
+    "userDefault": false
+  },
+  "environment": {
+    "platform": "win32",
+    "architecture": "x64",
+    "node": "v24.13.0"
+  },
+  "rowCounts": {
+    "threads": 1000,
+    "history": 1000,
+    "candidates": 1000,
+    "candidateItems": 1000,
+    "plannerProposals": 200
+  },
+  "databaseBytes": {
+    "beforeRows": 1744896,
+    "afterRows": 3215360,
+    "growth": 1470464
+  },
+  "timings": {
+    "threadProjectionMs": {
+      "raw": [
+        120.3415,
+        104.04939999999988,
+        109.13889999999992
+      ],
+      "p50": 109.13889999999992,
+      "p95": 120.3415
+    },
+    "candidateProjectionMs": {
+      "raw": [
+        83.2197000000001,
+        86.33760000000007,
+        74.77030000000013
+      ],
+      "p50": 83.2197000000001,
+      "p95": 86.33760000000007
+    },
+    "plannerMs": {
+      "raw": [
+        1.3852999999999156,
+        0.8940000000000055,
+        1.1415999999999258
+      ],
+      "p50": 1.1415999999999258,
+      "p95": 1.3852999999999156
+    }
+  },
+  "rendererCommitCount": {
+    "measured": false,
+    "value": null,
+    "reason": "storage-and-application-harness"
+  }
+}

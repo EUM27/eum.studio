@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "fixtureUse": "Measurement-only fixture. Counts and timings are not product limits or user-data defaults.",
+  "measurement": {
+    "documentCount": 500,
+    "entityCountPerKind": 400,
+    "iterationCount": 20
+  }
+}

@@ -36,6 +36,14 @@ import {
   type SaveYouTubeMusicConnectionCommand,
   type YouTubeMusicConnectionStatus,
 } from "../../music/youtube-music-connection";
+import {
+  parseGetWorkSceneAnalysisSettingsCommand,
+  parseSaveWorkSceneAnalysisSettingsCommand,
+  parseWorkSceneAnalysisSettingsProjection,
+  type GetWorkSceneAnalysisSettingsCommand,
+  type SaveWorkSceneAnalysisSettingsCommand,
+  type WorkSceneAnalysisSettingsProjection,
+} from "../../settings/work-scene-analysis-settings";
 
 export const APP_SETTINGS_PROFILE_CHANNEL = "studio:settings:profile";
 export const APP_SETTINGS_GET_CHANNEL = "studio:settings:get";
@@ -58,6 +66,10 @@ export const YOUTUBE_MUSIC_CONNECTION_STATUS_CHANNEL =
   "studio:music:youtube-connection-status";
 export const YOUTUBE_MUSIC_CONNECTION_SAVE_CHANNEL =
   "studio:music:youtube-connection-save";
+export const SCENE_ANALYSIS_SETTINGS_GET_WORK_CHANNEL =
+  "studio:scene-analysis:get-work-settings";
+export const SCENE_ANALYSIS_SETTINGS_SAVE_WORK_CHANNEL =
+  "studio:scene-analysis:save-work-settings";
 
 export type SettingsBridgeChannel =
   | typeof APP_SETTINGS_PROFILE_CHANNEL
@@ -71,7 +83,9 @@ export type SettingsBridgeChannel =
   | typeof INSPIRATION_SETTINGS_GET_WORK_CHANNEL
   | typeof INSPIRATION_SETTINGS_SAVE_WORK_CHANNEL
   | typeof YOUTUBE_MUSIC_CONNECTION_STATUS_CHANNEL
-  | typeof YOUTUBE_MUSIC_CONNECTION_SAVE_CHANNEL;
+  | typeof YOUTUBE_MUSIC_CONNECTION_SAVE_CHANNEL
+  | typeof SCENE_ANALYSIS_SETTINGS_GET_WORK_CHANNEL
+  | typeof SCENE_ANALYSIS_SETTINGS_SAVE_WORK_CHANNEL;
 
 export type SettingsBridgePayload =
   | SaveAppSettingsCommand
@@ -80,7 +94,9 @@ export type SettingsBridgePayload =
   | SaveWorkMusicSettingsCommand
   | GetWorkInspirationSettingsCommand
   | SaveWorkInspirationSettingsCommand
-  | SaveYouTubeMusicConnectionCommand;
+  | SaveYouTubeMusicConnectionCommand
+  | GetWorkSceneAnalysisSettingsCommand
+  | SaveWorkSceneAnalysisSettingsCommand;
 
 export type SettingsBridge = Readonly<{
   getProfile: () => Promise<AppSettingsProfile>;
@@ -107,6 +123,12 @@ export type SettingsBridge = Readonly<{
   saveYouTubeMusicConnection: (
     command: SaveYouTubeMusicConnectionCommand,
   ) => Promise<YouTubeMusicConnectionStatus>;
+  getWorkSceneAnalysis: (
+    command: GetWorkSceneAnalysisSettingsCommand,
+  ) => Promise<WorkSceneAnalysisSettingsProjection>;
+  saveWorkSceneAnalysis: (
+    command: SaveWorkSceneAnalysisSettingsCommand,
+  ) => Promise<WorkSceneAnalysisSettingsProjection>;
 }>;
 
 export type SettingsBridgeInvoke = (
@@ -236,6 +258,24 @@ export function createSettingsBridge(
         return parseYouTubeMusicConnectionStatus(value);
       } catch {
         throw new Error("Invalid saved YouTube music connection status");
+      }
+    },
+    getWorkSceneAnalysis: async (input) => {
+      const command = parseGetWorkSceneAnalysisSettingsCommand(input);
+      const value = await invoke(SCENE_ANALYSIS_SETTINGS_GET_WORK_CHANNEL, command);
+      try {
+        return parseWorkSceneAnalysisSettingsProjection(value);
+      } catch {
+        throw new Error("Invalid Work scene analysis settings projection");
+      }
+    },
+    saveWorkSceneAnalysis: async (input) => {
+      const command = parseSaveWorkSceneAnalysisSettingsCommand(input);
+      const value = await invoke(SCENE_ANALYSIS_SETTINGS_SAVE_WORK_CHANNEL, command);
+      try {
+        return parseWorkSceneAnalysisSettingsProjection(value);
+      } catch {
+        throw new Error("Invalid saved Work scene analysis settings projection");
       }
     },
   });

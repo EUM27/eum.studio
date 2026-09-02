@@ -450,12 +450,17 @@ async function expectDialogFitsDesktop(dialog: Locator): Promise<void> {
 }
 
 async function selectElectronRuntimeHashAlgorithm(): Promise<string> {
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "eum-electron-hash-discovery-"),
+  );
   const discoveryApp = await electron.launch({
-    args: ["."],
+    args: [".", `--user-data-dir=${path.join(directory, "electron-user-data")}`],
     cwd: process.cwd(),
     env: {
       ...process.env,
+      EUM_STUDIO_TEST_EPHEMERAL_WORKSPACE: "1",
       EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+      EUM_STUDIO_DISABLE_SANDBOX: "1",
     },
   });
   try {
@@ -490,6 +495,7 @@ async function selectElectronRuntimeHashAlgorithm(): Promise<string> {
     ] as string;
   } finally {
     await discoveryApp.close();
+    await removeVerifiedTemporaryDirectory(directory);
   }
 }
 

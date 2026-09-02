@@ -23,8 +23,14 @@ function render(session: ContinuousReadingSession): string {
   return renderToStaticMarkup(
     createElement(ContinuousReadingDialog, {
       session,
+      annotations: [],
+      annotationBusy: false,
+      annotationError: null,
+      onCreateAnnotation: async () => null,
       onClose: async () => undefined,
       onProgress: async () => undefined,
+      onRetireAnnotation: async () => false,
+      onUpdateAnnotation: async () => null,
     }),
   );
 }

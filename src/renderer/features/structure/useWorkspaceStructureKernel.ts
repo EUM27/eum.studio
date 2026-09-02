@@ -15,6 +15,7 @@ import {
   useSceneWorkspaceState,
 } from "./useSceneWorkspaceController";
 import { useStructureController } from "./useStructureController";
+import { useSceneCanonContextController } from "./useSceneCanonContextController";
 import { useWorkStructureState } from "../../workspace/structure/useWorkStructureState";
 import type { WorkspaceRuntimeState } from "../../workspace/session/workspace-session-state";
 
@@ -155,6 +156,10 @@ export function useWorkspaceStructureKernel(input: Readonly<{
       plotsClient: input.client.plots,
       structureClient: input.client.structure,
     });
+    const sceneCanonContextController=useSceneCanonContextController({
+      activeWorkId:structureWorkLoadId,
+      client:input.client.structure,
+    });
     const {
       eventBlocks,
       eventSources,
@@ -211,6 +216,7 @@ export function useWorkspaceStructureKernel(input: Readonly<{
     eventMutations,
     plotMutations,
     structureProjectionReconcile,
+    sceneCanonContextController,
     replaceSceneProjection,
     preparePlotSourceNavigation,
     sceneDraftActionState,

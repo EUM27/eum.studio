@@ -32,7 +32,6 @@ export function StudioAppShell({
         .filter((className): className is string => className !== null)
         .join(" ")}
       data-ui-model="eum-studio-desktop"
-      data-visual-model="novela"
       data-starlight-theme={theme}
       style={themeStyle}
     >

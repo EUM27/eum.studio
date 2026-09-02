@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "gate": 7,
+  "designSha256": "343577C44367C4E38A61913822A13400B5DAA028BE2EA76123F7BBF6A31F3FC5",
+  "acceptance": {
+    "reusesImmutableWorkSnapshot": true,
+    "namedSlotProjection": true,
+    "sameNamePreservesHistory": true,
+    "sceneLevelComparison": true,
+    "explicitReadOnlySelectionPlan": true,
+    "automaticMergeAllowed": false,
+    "applyCommand": null,
+    "secondSnapshotSource": false
+  },
+  "freshVerification": {
+    "focused": "4 application/dialog files and 6 tests passed; named-slot real local workspace test passed with 99 unrelated tests skipped",
+    "fullVitest": "311 files and 1140 tests passed, 1 skipped; same pre-existing RuntimeBootstrapController.test.ts:343 failure only",
+    "electron": "named slot current/history, immutable Scene manifest, changed alternative Scene, read-only selection, no merge/apply button, full relaunch, FK=0 passed",
+    "regression": "existing immutable WorkSnapshot across current Documents test passed in the same production build",
+    "lint": "pass",
+    "typecheck": "pass",
+    "architecture": "pass",
+    "build": "pass; existing large-chunk warning only",
+    "diffCheck": "pass"
+  },
+  "performanceArtifact": "gate-7-work-snapshot-scene-performance.json",
+  "performance": {
+    "snapshots": 1000,
+    "slots": 100,
+    "scenes": 500,
+    "selectedScenes": 100,
+    "namedSlotProjectionP50Ms": 0.20529999999996562,
+    "namedSlotProjectionP95Ms": 0.328899999999976,
+    "readOnlyScenePlanP50Ms": 0.9076000000000022,
+    "readOnlyScenePlanP95Ms": 2.6637999999999806,
+    "automaticMergeAllowed": false,
+    "applyCommandGenerated": false
+  }
+}

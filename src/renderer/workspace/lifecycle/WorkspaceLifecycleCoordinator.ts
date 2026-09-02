@@ -55,8 +55,8 @@ export type WorkspaceCloseQueuePort = Readonly<{
 export type WorkspaceClosePorts = Readonly<{
   waitForContinuousReading: () => Promise<void>;
   waitForWorkLayout: () => Promise<void>;
-  waitForFocusSession: () => Promise<void>;
-  stopOwnedFocusSession: (
+  waitForManuscriptFocusSession: () => Promise<void>;
+  stopOwnedManuscriptFocusSession: (
     document: ManuscriptDocumentSource | undefined,
   ) => Promise<void>;
   captureResume: (document: ManuscriptDocumentSource) => Promise<unknown>;
@@ -65,6 +65,64 @@ export type WorkspaceClosePorts = Readonly<{
     status: "saved" | "failed",
   ) => Promise<unknown>;
 }>;
+
+export type WorkspaceActivationTask = () => Promise<void>;
+
+type WorkspaceActivationWaiter = Readonly<{
+  resolve: () => void;
+  reject: (reason: unknown) => void;
+}>;
+
+type PendingWorkspaceActivation = {
+  task: WorkspaceActivationTask;
+  waiters: WorkspaceActivationWaiter[];
+};
+
+/**
+ * Runs one workspace activation at a time and keeps only the latest task that
+ * arrived while an activation was running. All callers waiting on superseded
+ * pending tasks settle with the latest pending activation.
+ */
+export class LatestWorkspaceActivationLane {
+  #running = false;
+  #pending: PendingWorkspaceActivation | null = null;
+
+  enqueue(task: WorkspaceActivationTask): Promise<void> {
+    const result = new Promise<void>((resolve, reject) => {
+      const waiter = Object.freeze({ resolve, reject });
+      if (this.#pending === null) {
+        this.#pending = { task, waiters: [waiter] };
+      } else {
+        this.#pending.task = task;
+        this.#pending.waiters.push(waiter);
+      }
+    });
+    this.#drain();
+    return result;
+  }
+
+  #drain(): void {
+    if (this.#running) return;
+    this.#running = true;
+    void (async () => {
+      try {
+        while (this.#pending !== null) {
+          const pending = this.#pending;
+          this.#pending = null;
+          try {
+            await pending.task();
+            for (const waiter of pending.waiters) waiter.resolve();
+          } catch (error) {
+            for (const waiter of pending.waiters) waiter.reject(error);
+          }
+        }
+      } finally {
+        this.#running = false;
+        if (this.#pending !== null) this.#drain();
+      }
+    })();
+  }
+}
 
 export function planWorkspaceLocationActivation(input: Readonly<{
   documentProfile: ManuscriptDocumentProfile;
@@ -224,8 +282,8 @@ export function coordinateWorkspaceCloseRequest(input: Readonly<{
     .then(async () => {
       await input.ports.waitForContinuousReading();
       await input.ports.waitForWorkLayout();
-      await input.ports.waitForFocusSession();
-      await input.ports.stopOwnedFocusSession(input.activeDocument);
+      await input.ports.waitForManuscriptFocusSession();
+      await input.ports.stopOwnedManuscriptFocusSession(input.activeDocument);
       if (input.activeDocument !== undefined) {
         await input.ports.captureResume(input.activeDocument);
       }

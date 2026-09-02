@@ -7,6 +7,7 @@ import {
   VERSION_LIST_WORK_SNAPSHOTS_CHANNEL,
   VERSION_READ_DOCUMENT_REVISION_CHANNEL,
   VERSION_RESTORE_DOCUMENT_REVISION_CHANNEL,
+  VERSION_PLAN_WORK_SNAPSHOT_SCENES_CHANNEL,
 } from "../../application/contracts/studio-bridge";
 import {
   parseCreateWorkSnapshotCommand,
@@ -30,6 +31,11 @@ import {
   type CompareWorkSnapshotCommand,
   type WorkSnapshotComparisonProjection,
 } from "../../application/revisions/work-snapshot-comparison";
+import {
+  parsePlanWorkSnapshotSceneSelectionCommand,
+  type PlanWorkSnapshotSceneSelectionCommand,
+  type WorkSnapshotSceneSelectionPlan,
+} from "../../application/revisions/work-snapshot-scene-plan";
 
 export type VersionIpcRuntime = Readonly<{
   listDocumentRevisions: (
@@ -50,6 +56,9 @@ export type VersionIpcRuntime = Readonly<{
   compareWorkSnapshot: (
     command: CompareWorkSnapshotCommand,
   ) => Promise<WorkSnapshotComparisonProjection>;
+  planWorkSnapshotSceneSelection: (
+    command: PlanWorkSnapshotSceneSelectionCommand,
+  ) => Promise<WorkSnapshotSceneSelectionPlan>;
 }>;
 
 export function registerVersionIpc(input: Readonly<{
@@ -108,6 +117,15 @@ export function registerVersionIpc(input: Readonly<{
       input.authorizeSender(event);
       return input.runtime.compareWorkSnapshot(
         parseCompareWorkSnapshotCommand(value),
+      );
+    },
+  );
+  input.ipcMain.handle(
+    VERSION_PLAN_WORK_SNAPSHOT_SCENES_CHANNEL,
+    (event,value:unknown)=>{
+      input.authorizeSender(event);
+      return input.runtime.planWorkSnapshotSceneSelection(
+        parsePlanWorkSnapshotSceneSelectionCommand(value),
       );
     },
   );

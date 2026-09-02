@@ -32,6 +32,7 @@ export type AssistantConnectorManifestEntry = {
   readonly connectorKind: string;
   readonly displayName: string;
   readonly capabilities: readonly AssistantCapability[];
+  readonly contextTokenBudget: number;
   readonly credentialPolicy: AssistantConnectorCredentialPolicy;
   readonly runtimeConfig: {
     readonly endpoint: AssistantConnectorRuntimeFieldPolicy;
@@ -148,6 +149,7 @@ function parseEntry(
     "connectorKind",
     "displayName",
     "capabilities",
+    "contextTokenBudget",
     "credentialPolicy",
     "runtimeConfig",
   ], label);
@@ -166,6 +168,16 @@ function parseEntry(
     connectorKind: nonEmptyString(input.connectorKind, `${label}.connectorKind`),
     displayName: nonEmptyString(input.displayName, `${label}.displayName`),
     capabilities,
+    contextTokenBudget: (() => {
+      if (
+        typeof input.contextTokenBudget !== "number" ||
+        !Number.isSafeInteger(input.contextTokenBudget) ||
+        input.contextTokenBudget < 1
+      ) {
+        throw new Error(`${label}.contextTokenBudget must be a positive safe integer`);
+      }
+      return input.contextTokenBudget;
+    })(),
     credentialPolicy: enumValue(
       input.credentialPolicy,
       ASSISTANT_CONNECTOR_CREDENTIAL_POLICIES,

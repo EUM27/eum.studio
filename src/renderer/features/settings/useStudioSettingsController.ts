@@ -11,8 +11,10 @@ import type {
   AppSettingsProjection,
 } from "../../../application/settings/app-settings";
 import type { YouTubeMusicConnectionStatus } from "../../../application/music/youtube-music-connection";
+import type { WorkSceneAnalysisSettingsProjection } from "../../../application/settings/work-scene-analysis-settings";
 import type { EntityId } from "../../../domain/writing";
 import type { AppSettingsSaveValue } from "../../settings/AppSettingsDialog";
+import { ensureWorkSceneAnalysisPermissions } from "./scene-analysis-permissions";
 
 export function useStudioSettingsController(input: Readonly<{
   activeWorkId: EntityId<"Work"> | null;
@@ -30,6 +32,8 @@ export function useStudioSettingsController(input: Readonly<{
     useState<MusicSettingsProfile | null>(null);
   const [workMusicSettingsProjection, setWorkMusicSettingsProjection] =
     useState<WorkMusicSettingsProjection | null>(null);
+  const [workSceneAnalysisSettingsProjection, setWorkSceneAnalysisSettingsProjection] =
+    useState<WorkSceneAnalysisSettingsProjection | null>(null);
   const [youtubeMusicConnectionStatus, setYoutubeMusicConnectionStatus] =
     useState<YouTubeMusicConnectionStatus | null>(null);
   const [chatGptOAuthStatus, setChatGptOAuthStatus] =
@@ -70,6 +74,7 @@ export function useStudioSettingsController(input: Readonly<{
     setAppSettingsProjection(null);
     setMusicSettingsProfile(null);
     setWorkMusicSettingsProjection(null);
+    setWorkSceneAnalysisSettingsProjection(null);
     setChatGptOAuthStatus(null);
     setChatGptOAuthLoginState("idle");
     setAppSettingsError(null);
@@ -86,6 +91,12 @@ export function useStudioSettingsController(input: Readonly<{
             schemaVersion: 1,
             workId: input.activeWorkId,
           }),
+      input.activeWorkId === null
+        ? Promise.resolve(null)
+        : input.settingsClient.getWorkSceneAnalysis({
+            schemaVersion: 1,
+            workId: input.activeWorkId,
+          }),
     ]).then(
       ([
         profile,
@@ -94,6 +105,7 @@ export function useStudioSettingsController(input: Readonly<{
         youtubeStatus,
         chatGptStatus,
         workMusicProjection,
+        workSceneAnalysisProjection,
       ]) => {
         setAppSettingsProfile(profile);
         setAppSettingsProjection(projection);
@@ -101,6 +113,7 @@ export function useStudioSettingsController(input: Readonly<{
         setYoutubeMusicConnectionStatus(youtubeStatus);
         setChatGptOAuthStatus(chatGptStatus);
         setWorkMusicSettingsProjection(workMusicProjection);
+        setWorkSceneAnalysisSettingsProjection(workSceneAnalysisProjection);
         setAppSettingsActionState("idle");
       },
       (reason: unknown) => {
@@ -138,6 +151,38 @@ export function useStudioSettingsController(input: Readonly<{
           expectedRevision: youtubeMusicConnectionStatus?.revision ?? 0,
           apiKey: { mode: "replace", value: value.youtubeApiKey },
         });
+    const saveSceneAnalysis = async () => {
+      if (
+        value.workSceneAnalysisEnabled === null ||
+        workSceneAnalysisSettingsProjection === null
+      ) {
+        return workSceneAnalysisSettingsProjection;
+      }
+      if (
+        value.workSceneAnalysisEnabled ===
+          workSceneAnalysisSettingsProjection.settings.enabled
+      ) {
+        return workSceneAnalysisSettingsProjection;
+      }
+      const enabling = value.workSceneAnalysisEnabled &&
+        !workSceneAnalysisSettingsProjection.settings.enabled;
+      if (enabling) {
+        if (input.activeWorkId === null || chatGptOAuthStatus === null) {
+          throw new Error("현재 작품의 GPT 연결 상태를 확인하지 못했습니다.");
+        }
+        await ensureWorkSceneAnalysisPermissions({
+          workId: input.activeWorkId,
+          status: chatGptOAuthStatus,
+          client: input.assistantClient,
+        });
+      }
+      return input.settingsClient.saveWorkSceneAnalysis({
+        schemaVersion: 1,
+        workId: workSceneAnalysisSettingsProjection.workId,
+        expectedRevision: workSceneAnalysisSettingsProjection.revision,
+        settings: { enabled: value.workSceneAnalysisEnabled },
+      });
+    };
     void Promise.all([
       input.settingsClient.save({
         schemaVersion: 1,
@@ -148,11 +193,13 @@ export function useStudioSettingsController(input: Readonly<{
       }),
       saveWorkMusic,
       saveYouTubeConnection,
+      saveSceneAnalysis(),
     ]).then(
-      ([saved, savedWorkMusic, savedYouTubeStatus]) => {
+      ([saved, savedWorkMusic, savedYouTubeStatus, savedSceneAnalysis]) => {
         setAppSettingsProjection(saved);
         setWorkMusicSettingsProjection(savedWorkMusic);
         setYoutubeMusicConnectionStatus(savedYouTubeStatus);
+        setWorkSceneAnalysisSettingsProjection(savedSceneAnalysis);
         setAppSettingsScheduleRevision(saved.revision);
         setAppSettingsActionState("idle");
         setShowAppSettings(false);
@@ -166,9 +213,13 @@ export function useStudioSettingsController(input: Readonly<{
     );
   }, [
     appSettingsProjection,
+    input.activeWorkId,
+    input.assistantClient,
     input.settingsClient,
     workMusicSettingsProjection,
     youtubeMusicConnectionStatus,
+    workSceneAnalysisSettingsProjection,
+    chatGptOAuthStatus,
   ]);
 
   const removeYouTubeMusicConnection = useCallback(() => {
@@ -219,6 +270,7 @@ export function useStudioSettingsController(input: Readonly<{
     appSettingsProjection,
     musicSettingsProfile,
     workMusicSettingsProjection,
+    workSceneAnalysisSettingsProjection,
     youtubeMusicConnectionStatus,
     chatGptOAuthStatus,
     chatGptOAuthLoginState,

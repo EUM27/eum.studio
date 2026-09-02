@@ -9,6 +9,10 @@ import { MusicMiniPlayer } from "./MusicMiniPlayer";
 
 const musicTitlebarStyles = [
   readFileSync(
+    new URL("../styles/shell-foundation.css", import.meta.url),
+    "utf8",
+  ),
+  readFileSync(
     new URL("../styles/publishing-revision-music-plot-compat.css", import.meta.url),
     "utf8",
   ),
@@ -66,6 +70,9 @@ describe("MusicMiniPlayer", () => {
     expect(markup).toContain('aria-label="음악 재생"');
     expect(markup).toContain('aria-label="다음 곡"');
     expect(markup).toContain('aria-label="랜덤 전체 반복 켜기"');
+    expect(markup).not.toMatch(
+      /<button aria-label="랜덤 전체 반복 켜기"[^>]*\sdisabled(?:=""|(?=\s|>))/u,
+    );
     expect(markup).toContain('aria-label="반복 끔"');
     expect(markup).toContain('aria-label="음악 재생"');
     expect(markup).toContain('aria-label="선곡·재생목록 열기"');
@@ -76,7 +83,13 @@ describe("MusicMiniPlayer", () => {
 
   it("keeps the titlebar player controls and playlist close button clickable", () => {
     expect(musicTitlebarStyles).toMatch(
+      /\.app-topbar-music\s*\{[^}]*-webkit-app-region:\s*drag;/u,
+    );
+    expect(musicTitlebarStyles).toMatch(
       /\.app-topbar-music \.music-mini-player button\s*\{[^}]*-webkit-app-region:\s*no-drag;/u,
+    );
+    expect(musicTitlebarStyles).toMatch(
+      /\.app-topbar-music \.music-mini-player input\s*\{[^}]*-webkit-app-region:\s*no-drag;/u,
     );
     expect(musicTitlebarStyles).toMatch(
       /\.app-topbar-music\s+\.music-library-dialog\s+> header\s+> button\s*\{[^}]*-webkit-app-region:\s*no-drag;/u,

@@ -19,6 +19,12 @@ import type { EntityId } from "../../domain/writing";
 import type { ManuscriptEditorHandle } from "../editor/ManuscriptEditor";
 import { useActivityController } from "../features/activity/useActivityController";
 import { useAssistantController } from "../features/assistant/useAssistantController";
+import { useManuscriptAnnotationsController } from "../features/annotations/useManuscriptAnnotationsController";
+import { useCanonReviewController } from "../features/canon/useCanonReviewController";
+import { useContinuityController } from "../features/continuity/useContinuityController";
+import { useCharacterKnowledgeController } from "../features/knowledge/useCharacterKnowledgeController";
+import { useContextPlannerController } from "../features/context/useContextPlannerController";
+import { useNarrativeDigestController } from "../features/digest/useNarrativeDigestController";
 import { useCharactersController } from "../features/characters/useCharactersController";
 import { useEditorToolsController } from "../features/editor-tools/useEditorToolsController";
 import { useManuscriptSearchController } from "../features/editor-tools/useManuscriptSearchController";
@@ -31,7 +37,7 @@ import { useEventWorkspaceController } from "../features/structure/useEventWorks
 import type { useWorkspaceStructureKernel } from "../features/structure/useWorkspaceStructureKernel";
 import { useVersionController } from "../features/version/useVersionController";
 import { useDocumentCompletionController } from "./documents/useDocumentCompletionController";
-import type { useFocusModeController } from "../features/activity/useFocusModeController";
+import type { useManuscriptFocusController } from "../features/activity/useManuscriptFocusController";
 import type { useWorkspaceLifecycle } from "./lifecycle/useWorkspaceLifecycle";
 import type { useWorkspaceLayoutController } from "./layout/useWorkspaceLayoutController";
 import type { DocumentNavigationSurfaceWaiter } from "./navigation/useWorkspaceDocumentNavigatorController";
@@ -71,17 +77,17 @@ export function useWorkspaceCoreFeatureKernel(input: Readonly<{
     activeWritingSessionRef: MutableRefObject<
       WritingSessionProjection | undefined
     >;
-    focusModeOwnedWritingSessionIdRef: MutableRefObject<
+    manuscriptFocusOwnedWritingSessionIdRef: MutableRefObject<
       EntityId<"WritingSession"> | null
     >;
-    focusModeSessionPendingRef: MutableRefObject<Promise<void>>;
+    manuscriptFocusSessionPendingRef: MutableRefObject<Promise<void>>;
   }>;
   captureResumeForDocument: ReturnType<
     typeof useResumeCheckpointController
   >["captureResume"];
   client: StudioBridge;
   controllers: Readonly<{
-    focus: ReturnType<typeof useFocusModeController>;
+    manuscriptFocus: ReturnType<typeof useManuscriptFocusController>;
     layout: ReturnType<typeof useWorkspaceLayoutController>;
     lifecycle: ReturnType<typeof useWorkspaceLifecycle>;
     navigation: ReturnType<typeof useWorkspaceNavigationState>;
@@ -139,13 +145,13 @@ export function useWorkspaceCoreFeatureKernel(input: Readonly<{
   } = input;
   const {
     activeWritingSessionRef,
-    focusModeOwnedWritingSessionIdRef,
-    focusModeSessionPendingRef,
+    manuscriptFocusOwnedWritingSessionIdRef,
+    manuscriptFocusSessionPendingRef,
   } = input.activityRefs;
   const {
-    changeFocusMode,
-    focusMode,
-  } = input.controllers.focus;
+    setManuscriptFocusActive,
+    manuscriptFocusActive,
+  } = input.controllers.manuscriptFocus;
   const {
     openRail: openWorkspaceLayoutRail,
     railState,
@@ -215,6 +221,32 @@ export function useWorkspaceCoreFeatureKernel(input: Readonly<{
     const eventWorkspaceController = useEventWorkspaceController(
       eventWorkspaceControllerInput,
     );
+    const manuscriptAnnotationsEditorPort = useMemo(() => ({
+      readSelection: (document: ManuscriptDocumentSource) => {
+        const summary = manuscriptEditorRef.current?.readDocumentState(document);
+        const selection =
+          summary?.selection.ranges[summary.selection.mainIndex];
+        return selection === undefined
+          ? undefined
+          : Object.freeze({
+              anchor: selection.anchor,
+              head: selection.head,
+              from: selection.from,
+              to: selection.to,
+              empty: selection.empty,
+            });
+      },
+      materializeDocumentText: (document: ManuscriptDocumentSource) =>
+        manuscriptEditorRef.current?.materializeDocumentText(document),
+      persistDocument,
+    }), [manuscriptEditorRef, persistDocument]);
+    const manuscriptAnnotationsController =
+      useManuscriptAnnotationsController({
+        activeDocument: activeDocument ?? null,
+        activeWorkId,
+        client: input.client.manuscriptAnnotations,
+        editor: manuscriptAnnotationsEditorPort,
+      });
     const {
       refreshEventRailAfterPlotChange,
     } = eventWorkspaceController;
@@ -355,8 +387,8 @@ export function useWorkspaceCoreFeatureKernel(input: Readonly<{
         document: ManuscriptDocumentSource,
         range: Readonly<{ from: number; to: number }>,
       ) => manuscriptEditorRef.current?.selectDocumentRange(document, range) ?? false,
-      setFocusMode: changeFocusMode,
-    }), [changeFocusMode, manuscriptEditorRef]);
+      setManuscriptFocusActive,
+    }), [setManuscriptFocusActive, manuscriptEditorRef]);
     const editorToolsControllerInput = useMemo(() => ({
       client: input.client.editor,
       document: activeDocument ?? null,
@@ -615,22 +647,22 @@ export function useWorkspaceCoreFeatureKernel(input: Readonly<{
     );
     const activityCoordination = useMemo(() => Object.freeze({
       activeWritingSessionRef,
-      focusModeOwnedWritingSessionIdRef,
-      focusModeSessionPendingRef,
+      manuscriptFocusOwnedWritingSessionIdRef,
+      manuscriptFocusSessionPendingRef,
     }), [
       activeWritingSessionRef,
-      focusModeOwnedWritingSessionIdRef,
-      focusModeSessionPendingRef,
+      manuscriptFocusOwnedWritingSessionIdRef,
+      manuscriptFocusSessionPendingRef,
     ]);
     const activityControllerInput = useMemo(() => ({
       activeWorkId,
       client: input.client.activity,
       document: activeDocument ?? null,
-      focusMode,
+      manuscriptFocusActive,
       coordination: activityCoordination,
       persistDocument,
       onPomodoroStarted: playMusicForPomodoroStartPort,
-    }), [activeDocument, activeWorkId, activityCoordination, focusMode, input.client.activity, persistDocument, playMusicForPomodoroStartPort]);
+    }), [activeDocument, activeWorkId, activityCoordination, manuscriptFocusActive, input.client.activity, persistDocument, playMusicForPomodoroStartPort]);
     const activityController = useActivityController(activityControllerInput);
     const {
       pomodoro,
@@ -677,12 +709,59 @@ export function useWorkspaceCoreFeatureKernel(input: Readonly<{
       selectedLoreEntryId,
       loreActionState,
       refreshLoreCandidates,
+      refreshCanonicalEntries,
       sharedLinkAction: loreSharedLinkAction,
     } = loreController;
+    const {
+      refreshCanonicalRecords: refreshCharacterCanonicalRecords,
+    } = charactersController;
+    const refreshCanonicalRecords = useCallback(async () => {
+      await Promise.all([
+        refreshCharacterCanonicalRecords(),
+        refreshCanonicalEntries(),
+      ]);
+    }, [
+      refreshCanonicalEntries,
+      refreshCharacterCanonicalRecords,
+    ]);
+    const canonReviewController = useCanonReviewController({
+      activeWorkId,
+      assistantClient: input.client.assistant,
+      client: input.client.canon,
+      conversationId: assistantConversationId,
+      refreshCanonical: refreshCanonicalRecords,
+      workLoadId: activeWorkId,
+    });
+    const continuityController = useContinuityController({
+      activeWorkId,
+      assistantClient: input.client.assistant,
+      client: input.client.continuity,
+      conversationId: assistantConversationId,
+      workLoadId: activeWorkId,
+    });
+    const characterKnowledgeController = useCharacterKnowledgeController({
+      activeWorkId,
+      client: input.client.characterKnowledge,
+      workLoadId: activeWorkId,
+    });
+    const contextPlannerController = useContextPlannerController({
+      activeWorkId,
+      assistantClient: input.client.assistant,
+      client: input.client.contextPlanner,
+      workLoadId: activeWorkId,
+    });
+    const narrativeDigestController = useNarrativeDigestController({
+      activeWorkId,
+      assistantClient: input.client.assistant,
+      client: input.client.narrativeDigest,
+      conversationId: assistantConversationId,
+      workLoadId: activeWorkId,
+    });
   
   return {
     eventWorkspaceEditorPort,
     eventWorkspaceController,
+    manuscriptAnnotationsController,
     refreshEventRailAfterPlotChange,
     loreCueController,
     manuscriptSearchController,
@@ -724,5 +803,10 @@ export function useWorkspaceCoreFeatureKernel(input: Readonly<{
     loreActionState,
     refreshLoreCandidates,
     loreSharedLinkAction,
+    canonReviewController,
+    continuityController,
+    characterKnowledgeController,
+    contextPlannerController,
+    narrativeDigestController,
   };
 }

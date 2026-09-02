@@ -51,17 +51,17 @@ export type ActivityCoordinationRefs = Readonly<{
   activeWritingSessionRef: MutableRefObject<
     WritingSessionProjection | undefined
   >;
-  focusModeOwnedWritingSessionIdRef: MutableRefObject<
+  manuscriptFocusOwnedWritingSessionIdRef: MutableRefObject<
     EntityId<"WritingSession"> | null
   >;
-  focusModeSessionPendingRef: MutableRefObject<Promise<void>>;
+  manuscriptFocusSessionPendingRef: MutableRefObject<Promise<void>>;
 }>;
 
 export function useActivityController(input: Readonly<{
   activeWorkId: EntityId<"Work"> | null;
   client: StudioBridge["activity"];
   document: ManuscriptDocumentSource | null;
-  focusMode: boolean;
+  manuscriptFocusActive: boolean;
   coordination: ActivityCoordinationRefs;
   persistDocument: (document: ManuscriptDocumentSource) => Promise<void>;
   onPomodoroStarted: (
@@ -70,8 +70,8 @@ export function useActivityController(input: Readonly<{
 }>) {
   const {
     activeWritingSessionRef,
-    focusModeOwnedWritingSessionIdRef,
-    focusModeSessionPendingRef,
+    manuscriptFocusOwnedWritingSessionIdRef,
+    manuscriptFocusSessionPendingRef,
   } = input.coordination;
   const [workActivity, setWorkActivity] =
     useState<WorkActivityProjection | null>(null);
@@ -110,16 +110,16 @@ export function useActivityController(input: Readonly<{
 
   const editingDocumentKeyRef = useRef<string | null>(null);
   const writingSessionTransitionPendingRef = useRef(false);
-  const focusModeRef = useRef(input.focusMode);
-  const focusModeSessionTransitionPendingRef = useRef(false);
-  const focusModeSessionAttemptedRef = useRef(false);
+  const manuscriptFocusActiveRef = useRef(input.manuscriptFocusActive);
+  const manuscriptFocusSessionTransitionPendingRef = useRef(false);
+  const manuscriptFocusSessionAttemptedRef = useRef(false);
   const pomodoroReconcilePendingRef = useRef(false);
   const pomodoroResumePendingRef = useRef(false);
   const resumePausedPomodoroOnInputRef = useRef<() => void>(() => undefined);
 
   useEffect(() => {
-    focusModeRef.current = input.focusMode;
-  }, [input.focusMode]);
+    manuscriptFocusActiveRef.current = input.manuscriptFocusActive;
+  }, [input.manuscriptFocusActive]);
 
   useEffect(() => {
     if (input.activeWorkId === null) {
@@ -340,54 +340,54 @@ export function useActivityController(input: Readonly<{
     if (
       input.document === null ||
       activityActionState !== "idle" ||
-      focusModeSessionTransitionPendingRef.current
+      manuscriptFocusSessionTransitionPendingRef.current
     ) {
       return;
     }
-    if (input.focusMode) {
+    if (input.manuscriptFocusActive) {
       if (
         activeWritingSession !== undefined ||
-        focusModeSessionAttemptedRef.current
+        manuscriptFocusSessionAttemptedRef.current
       ) {
         return;
       }
-      focusModeSessionAttemptedRef.current = true;
-      focusModeSessionTransitionPendingRef.current = true;
+      manuscriptFocusSessionAttemptedRef.current = true;
+      manuscriptFocusSessionTransitionPendingRef.current = true;
       const document = input.document;
       const transition = startWritingSession(document).then(async (projection) => {
         const started = projection?.sessions.find(
           (session) => session.sessionId === projection.activeSessionId,
         );
         if (started === undefined) return;
-        if (!focusModeRef.current) {
+        if (!manuscriptFocusActiveRef.current) {
           await stopWritingSession(started, document);
           return;
         }
-        focusModeOwnedWritingSessionIdRef.current =
+        manuscriptFocusOwnedWritingSessionIdRef.current =
           started.sessionId;
       }).finally(() => {
-        focusModeSessionTransitionPendingRef.current = false;
+        manuscriptFocusSessionTransitionPendingRef.current = false;
       });
-      focusModeSessionPendingRef.current = transition;
+      manuscriptFocusSessionPendingRef.current = transition;
       void transition;
       return;
     }
-    focusModeSessionAttemptedRef.current = false;
+    manuscriptFocusSessionAttemptedRef.current = false;
     const ownedSessionId =
-      focusModeOwnedWritingSessionIdRef.current;
+      manuscriptFocusOwnedWritingSessionIdRef.current;
     if (ownedSessionId === null) return;
-    focusModeOwnedWritingSessionIdRef.current = null;
+    manuscriptFocusOwnedWritingSessionIdRef.current = null;
     if (activeWritingSession?.sessionId !== ownedSessionId) return;
-    focusModeSessionTransitionPendingRef.current = true;
+    manuscriptFocusSessionTransitionPendingRef.current = true;
     const transition = stopWritingSession(
       activeWritingSession,
       input.document,
     ).then(() => undefined).finally(() => {
-      focusModeSessionTransitionPendingRef.current = false;
+      manuscriptFocusSessionTransitionPendingRef.current = false;
     });
-    focusModeSessionPendingRef.current = transition;
+    manuscriptFocusSessionPendingRef.current = transition;
     void transition;
-  }, [activeWritingSession, activityActionState, focusModeOwnedWritingSessionIdRef, focusModeSessionPendingRef, input, startWritingSession, stopWritingSession]);
+  }, [activeWritingSession, activityActionState, manuscriptFocusOwnedWritingSessionIdRef, manuscriptFocusSessionPendingRef, input, startWritingSession, stopWritingSession]);
 
   const handleDocumentEdited = useCallback(
     (document: ManuscriptDocumentSource) => {
@@ -434,7 +434,7 @@ export function useActivityController(input: Readonly<{
       }
       const currentWritingSession =
         activeWritingSessionRef.current;
-      if (input.focusMode) {
+      if (input.manuscriptFocusActive) {
         if (!writingSessionTransitionPendingRef.current) {
           void input.persistDocument(document).catch(() => undefined);
         }

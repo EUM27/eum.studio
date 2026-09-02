@@ -2,7 +2,10 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it, vi } from "vitest";
 
-import type { MusicTrackProjection } from "../../../application/music/media-track";
+import type {
+  LocalMediaTrackProjection,
+  MusicTrackProjection,
+} from "../../../application/music/media-track";
 import type { WorkMusicSettingsProjection } from "../../../application/music/work-music-settings";
 import type { YouTubeMusicProfile } from "../../../application/music/youtube-music";
 import { entityId } from "../../../domain/writing";
@@ -13,7 +16,10 @@ import {
   type MusicTimerPort,
   type WorkMusicSettingsReadClient,
 } from "./music-client";
-import { createMusicPlaybackRequest } from "./music-state";
+import {
+  createMusicPlaybackRequest,
+  withoutRegisteredLocalMedia,
+} from "./music-state";
 
 const workA = entityId<"Work">("work-music-a");
 const workB = entityId<"Work">("work-music-b");
@@ -26,6 +32,20 @@ function track(suffix: string): MusicTrackProjection {
     channel: `채널 ${suffix}`,
     thumbnailUrl: null,
     externalUrl: `https://music.invalid/${suffix}`,
+  });
+}
+
+function localTrack(suffix: string): LocalMediaTrackProjection {
+  return Object.freeze({
+    sourceKind: "local-file",
+    mediaId: `media-${suffix}`,
+    workId: workA,
+    title: `로컬 음악 ${suffix}`,
+    fileName: `${suffix}.mp3`,
+    mediaKind: "audio",
+    mediaType: "audio/mpeg",
+    storageMode: "external-reference",
+    byteLength: 128,
   });
 }
 
@@ -232,6 +252,27 @@ describe("music controller core", () => {
     expect(third?.startIndex).toBe(2);
   });
 
+  it("removes registered local media from the library, playlist, and favorites", () => {
+    const removed = localTrack("removed");
+    const preserved = localTrack("preserved");
+    const remote = track("remote");
+    const current = Object.freeze({
+      ...settings(workA, "remove").settings,
+      favoriteTracks: Object.freeze([removed, remote]),
+      playlistTracks: Object.freeze([remote, removed]),
+      localMedia: Object.freeze([removed, preserved]),
+    });
+
+    const next = withoutRegisteredLocalMedia(current, removed);
+
+    expect(next.favoriteTracks).toEqual([remote]);
+    expect(next.playlistTracks).toEqual([remote]);
+    expect(next.localMedia).toEqual([preserved]);
+    expect(current.localMedia).toEqual([removed, preserved]);
+    expect(Object.isFrozen(next)).toBe(true);
+    expect(Object.isFrozen(next.localMedia)).toBe(true);
+  });
+
   it("keeps music state and mutations in the music slice while hosts compose UI and Pomodoro", () => {
     const appSource = readFileSync(
       new URL("../../App.tsx", import.meta.url),
@@ -276,7 +317,7 @@ describe("music controller core", () => {
     expect(uiHostSource).toContain("<MusicMiniPlayer");
     expect(uiHostSource).toContain("<MusicLibraryDialog");
     expect(controllerSource.match(/replaceWorkMusicSettings\(saved\)/gu))
-      .toHaveLength(3);
+      .toHaveLength(4);
 
     const playlistSave = controllerSource.slice(
       controllerSource.indexOf("const saveMusicLibraryQueue = useCallback("),
@@ -289,7 +330,7 @@ describe("music controller core", () => {
     expect(playlistSave).toContain("setMusicLibraryQueue(previousQueue)");
     const register = controllerSource.slice(
       controllerSource.indexOf("const registerLocalMedia = useCallback("),
-      controllerSource.indexOf("const searchSceneMusicQueues = useCallback("),
+      controllerSource.indexOf("const removeRegisteredLocalMedia = useCallback("),
     );
     expect(register).toContain("replaceWorkMusicSettings(saved)");
     expect(register).not.toContain("setMusicLibraryQueue");

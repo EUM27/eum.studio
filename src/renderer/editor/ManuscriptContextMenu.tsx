@@ -7,11 +7,18 @@ export function ManuscriptContextMenu(input: {
   readonly clientX: number;
   readonly clientY: number;
   readonly copyDisabled: boolean;
+  readonly canonReviewDisabled: boolean;
+  readonly continuityDisabled: boolean;
+  readonly characterKnowledgeDisabled: boolean;
   readonly cutDisabled: boolean;
   readonly mergeSceneDisabled: boolean;
   readonly pasteDisabled: boolean;
   readonly onAddEvent: () => void;
   readonly onAddScene: () => void;
+  readonly onCanonReview: () => void;
+  readonly onContinuityManual: () => void;
+  readonly onContinuityReview: () => void;
+  readonly onCharacterKnowledge: () => void;
   readonly onSplitScene: () => void;
   readonly onCopy: () => void;
   readonly onCut: () => void;
@@ -102,6 +109,51 @@ export function ManuscriptContextMenu(input: {
         type="button"
       >
         붙여넣기
+      </button>
+      <div className="manuscript-context-menu-separator" role="separator" />
+      <button
+        disabled={input.canonReviewDisabled}
+        onClick={() => {
+          input.onClose();
+          input.onCanonReview();
+        }}
+        role="menuitem"
+        type="button"
+      >
+        별빛 변경 점검
+      </button>
+      <button
+        disabled={input.continuityDisabled}
+        onClick={() => {
+          input.onClose();
+          input.onContinuityManual();
+        }}
+        role="menuitem"
+        type="button"
+      >
+        열린 연속성으로 저장
+      </button>
+      <button
+        disabled={input.continuityDisabled}
+        onClick={() => {
+          input.onClose();
+          input.onContinuityReview();
+        }}
+        role="menuitem"
+        type="button"
+      >
+        연속성 점검
+      </button>
+      <button
+        disabled={input.characterKnowledgeDisabled}
+        onClick={() => {
+          input.onClose();
+          input.onCharacterKnowledge();
+        }}
+        role="menuitem"
+        type="button"
+      >
+        인물 지식으로 저장
       </button>
       <div className="manuscript-context-menu-separator" role="separator" />
       <button

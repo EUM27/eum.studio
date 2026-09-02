@@ -49,7 +49,7 @@ export type EditorToolsPort = Readonly<{
     document: ManuscriptDocumentSource,
     range: Readonly<{ from: number; to: number }>,
   ) => boolean;
-  setFocusMode: (enabled: boolean) => void;
+  setManuscriptFocusActive: (enabled: boolean) => void;
 }>;
 
 export function useEditorToolsController(input: Readonly<{
@@ -135,7 +135,7 @@ export function useEditorToolsController(input: Readonly<{
       baselineCharacterCount: summary.statistics.characterCount,
       writtenCharacters: 0,
     });
-    input.editor.setFocusMode(true);
+    input.editor.setManuscriptFocusActive(true);
     setShowForwardWritingDialog(false);
     const document = input.document;
     queueMicrotask(() => {
@@ -147,7 +147,7 @@ export function useEditorToolsController(input: Readonly<{
   }, [input.document, input.editor]);
   const stopForwardWriting = useCallback(() => {
     setForwardWriting(null);
-    input.editor.setFocusMode(false);
+    input.editor.setManuscriptFocusActive(false);
     setShowForwardWritingDialog(false);
   }, [input.editor]);
 

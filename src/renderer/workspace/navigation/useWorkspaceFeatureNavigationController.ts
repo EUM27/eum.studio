@@ -33,7 +33,10 @@ import type { PlotWorkspaceTab } from "../../editor/PlotWorkspace";
 import { createForeshadowManuscriptPort } from "../../features/foreshadow/foreshadow-client";
 import type { useAssistantController } from "../../features/assistant/useAssistantController";
 import type { useCharactersController } from "../../features/characters/useCharactersController";
-import type { useFocusModeController } from "../../features/activity/useFocusModeController";
+import type { useCanonReviewController } from "../../features/canon/useCanonReviewController";
+import type { useContinuityController } from "../../features/continuity/useContinuityController";
+import type { useCharacterKnowledgeController } from "../../features/knowledge/useCharacterKnowledgeController";
+import type { useManuscriptFocusController } from "../../features/activity/useManuscriptFocusController";
 import type {
   useEventWorkspaceState,
 } from "../../features/structure/useEventWorkspaceController";
@@ -57,6 +60,7 @@ import { DocumentNavigator } from "./DocumentNavigator";
 import type {
   DocumentNavigationDocument,
   DocumentNavigationPorts,
+  DocumentNavigationTarget,
 } from "./document-target";
 import type { useWorkspaceNavigationState } from "./useWorkspaceNavigationController";
 
@@ -66,6 +70,36 @@ export type DocumentNavigationFeatureAdapter = Readonly<{
   onRevealSucceeded: (document: DocumentNavigationDocument) => void;
   surfacePolicy?: "write" | "preserve";
 }>;
+
+export type CanonEvidenceNavigationSource = Readonly<{
+  documentId: EntityId<"Document"> | string;
+  documentRevisionId: EntityId<"DocumentRevision"> | string;
+  from: number;
+  to: number;
+  exactText: string;
+}>;
+
+export function createCanonEvidenceNavigationTarget(
+  workId: EntityId<"Work">,
+  evidence: CanonEvidenceNavigationSource,
+): Extract<DocumentNavigationTarget, { kind: "exact-selection" }> | null {
+  if (
+    !Number.isSafeInteger(evidence.from) ||
+    !Number.isSafeInteger(evidence.to) ||
+    evidence.from < 0 ||
+    evidence.to <= evidence.from ||
+    evidence.exactText.length === 0
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    kind: "exact-selection",
+    workId,
+    documentId: evidence.documentId as EntityId<"Document">,
+    documentRevisionId: evidence.documentRevisionId as EntityId<"DocumentRevision">,
+    range: Object.freeze({ from: evidence.from, to: evidence.to }),
+  });
+}
 
 export function useWorkspaceFeatureNavigationController(input: Readonly<{
   activeDocument: ManuscriptDocumentSource | undefined;
@@ -84,10 +118,13 @@ export function useWorkspaceFeatureNavigationController(input: Readonly<{
   >["captureResume"];
   controllers: Readonly<{
     assistant: ReturnType<typeof useAssistantController>;
+    canon: ReturnType<typeof useCanonReviewController>;
+    continuity: ReturnType<typeof useContinuityController>;
+    characterKnowledge: ReturnType<typeof useCharacterKnowledgeController>;
     characters: ReturnType<typeof useCharactersController>;
     eventState: ReturnType<typeof useEventWorkspaceState>;
     foreshadow: ReturnType<typeof useForeshadowController>;
-    focus: ReturnType<typeof useFocusModeController>;
+    manuscriptFocus: ReturnType<typeof useManuscriptFocusController>;
     fragments: ReturnType<typeof useFragmentsController>;
     lore: ReturnType<typeof useLoreController>;
     plotState: ReturnType<typeof usePlotWorkspaceState>;
@@ -143,6 +180,18 @@ export function useWorkspaceFeatureNavigationController(input: Readonly<{
     reportAssistantContextError,
   } = input.controllers.assistant;
   const {
+    clearFeedback: clearCanonReviewFeedback,
+    reportError: reportCanonReviewError,
+  } = input.controllers.canon;
+  const {
+    clearFeedback: clearContinuityFeedback,
+    reportError: reportContinuityError,
+  } = input.controllers.continuity;
+  const {
+    clearFeedback: clearCharacterKnowledgeFeedback,
+    reportError: reportCharacterKnowledgeError,
+  } = input.controllers.characterKnowledge;
+  const {
     evidenceNavigation: characterEvidenceNavigation,
     focusCharacterInStructure,
     hideCharacterDialog,
@@ -160,8 +209,8 @@ export function useWorkspaceFeatureNavigationController(input: Readonly<{
     sourceNavigation: foreshadowSourceNavigation,
   } = input.controllers.foreshadow;
   const {
-    exitFocusMode,
-  } = input.controllers.focus;
+    exitManuscriptFocus,
+  } = input.controllers.manuscriptFocus;
   const {
     completeFragmentSourceNavigation,
     failFragmentSourceNavigation,
@@ -211,10 +260,142 @@ export function useWorkspaceFeatureNavigationController(input: Readonly<{
   } = input.controllers.workStructure;
   const {
     preserveCurrentWorkLocation,
+    selectCanonTab,
     selectStructureTab,
     showWorkSection,
     workSection,
   } = input.controllers.workspaceNavigation;
+
+  const openCanonEvidence = useCallback(async (
+    evidence: CanonEvidenceNavigationSource,
+    surface: Readonly<{
+      clearFeedback(): void;
+      label: string;
+      reportError(message: string): void;
+      tab: "review" | "continuity" | "knowledge";
+    }>,
+  ) => {
+    if (runtime.status !== "ready" || activeWork === undefined) {
+      surface.reportError(`${surface.label} 근거를 열 수 있는 작품이 준비되지 않았습니다.`);
+      return;
+    }
+    const target = createCanonEvidenceNavigationTarget(activeWork.workId, evidence);
+    if (target === null) {
+      surface.reportError(`${surface.label} 근거의 정확한 원문 범위가 올바르지 않습니다.`);
+      return;
+    }
+    const sourceDocument = runtime.documentProfile.documents.find((document) =>
+      document.workId === activeWork.workId &&
+      document.documentId === evidence.documentId
+    );
+    if (sourceDocument === undefined) {
+      surface.reportError(`${surface.label} 근거의 원본 회차를 현재 작품에서 찾지 못했습니다.`);
+      return;
+    }
+    preserveCurrentWorkLocation();
+    surface.clearFeedback();
+    const orderedDocumentIds = runtime.documentProfile.documents
+      .filter((document) => document.workId === sourceDocument.workId)
+      .map((document) => document.documentId);
+    const currentActiveDocumentId = runtime.activeDocumentId ?? sourceDocument.documentId;
+    let crossDocumentActivationStarted = false;
+    const result = await documentNavigator.open(
+      { target },
+      createDocumentNavigationPorts({
+        onActivationStarted: () => {
+          crossDocumentActivationStarted = true;
+        },
+        applyTabPolicy: (document) => {
+          if (crossDocumentActivationStarted) {
+            setDocumentTabSession((current) =>
+              openWorkspaceSessionDocumentTab({
+                session: current,
+                workId: document.workId,
+                orderedDocumentIds,
+                activeDocumentId: currentActiveDocumentId,
+                documentId: document.documentId,
+              })
+            );
+          }
+          return "applied";
+        },
+        onRevealSucceeded: (document) => {
+          documentNavigationSelectionResumeSuppressionRef.current =
+            Object.freeze({ ...document });
+        },
+      }),
+    );
+    const resumeSuppression = documentNavigationSelectionResumeSuppressionRef.current;
+    if (
+      resumeSuppression?.workId === sourceDocument.workId &&
+      resumeSuppression.documentId === sourceDocument.documentId
+    ) {
+      documentNavigationSelectionResumeSuppressionRef.current = null;
+    }
+    if (result.status === "superseded") return;
+    if (result.status === "opened") {
+      if (result.path !== "cross-document") {
+        void captureResumeForDocument(sourceDocument).catch(() => undefined);
+      }
+      return;
+    }
+    selectCanonTab(surface.tab);
+    showWorkSection("canon");
+    if (result.status === "missing-document") {
+      surface.reportError(`${surface.label} 근거의 원본 회차를 현재 작품에서 찾지 못했습니다.`);
+    } else if (result.status === "stale-revision") {
+      surface.reportError(`${surface.label} 근거가 가리키는 원고 revision과 현재 원고가 다릅니다.`);
+    } else if (
+      result.status === "blocked" &&
+      result.reason === "activation-rejected"
+    ) {
+      surface.reportError(`${surface.label} 근거의 원본 회차를 열지 못했습니다.`);
+    } else {
+      surface.reportError(`${surface.label} 근거의 정확한 원문 범위를 선택하지 못했습니다.`);
+    }
+  }, [
+    activeWork,
+    captureResumeForDocument,
+    createDocumentNavigationPorts,
+    documentNavigationSelectionResumeSuppressionRef,
+    documentNavigator,
+    preserveCurrentWorkLocation,
+    runtime,
+    selectCanonTab,
+    setDocumentTabSession,
+    showWorkSection,
+  ]);
+
+  const openCanonReviewEvidence = useCallback((
+    evidence: CanonEvidenceNavigationSource,
+  ) => openCanonEvidence(evidence, {
+    clearFeedback: clearCanonReviewFeedback,
+    label: "별빛",
+    reportError: reportCanonReviewError,
+    tab: "review",
+  }), [clearCanonReviewFeedback, openCanonEvidence, reportCanonReviewError]);
+
+  const openContinuityEvidence = useCallback((
+    evidence: CanonEvidenceNavigationSource,
+  ) => openCanonEvidence(evidence, {
+    clearFeedback: clearContinuityFeedback,
+    label: "연속성",
+    reportError: reportContinuityError,
+    tab: "continuity",
+  }), [clearContinuityFeedback, openCanonEvidence, reportContinuityError]);
+
+  const openCharacterKnowledgeEvidence = useCallback((
+    evidence: CanonEvidenceNavigationSource,
+  ) => openCanonEvidence(evidence, {
+    clearFeedback: clearCharacterKnowledgeFeedback,
+    label: "인물 지식",
+    reportError: reportCharacterKnowledgeError,
+    tab: "knowledge",
+  }), [
+    clearCharacterKnowledgeFeedback,
+    openCanonEvidence,
+    reportCharacterKnowledgeError,
+  ]);
 
   const focusScene = useCallback(
       async (scene: SceneProjection) => {
@@ -1712,7 +1893,7 @@ export function useWorkspaceFeatureNavigationController(input: Readonly<{
         focusCharacterInStructure(character.characterId);
         selectStructureTab("characters");
         showWorkSection("structure");
-        exitFocusMode();
+        exitManuscriptFocus();
         return;
       }
       if (reference.kind === "plot") {
@@ -1729,7 +1910,7 @@ export function useWorkspaceFeatureNavigationController(input: Readonly<{
         showPlotInWorkspace(plot.plotThreadId, "board");
         selectStructureTab("plots");
         showWorkSection("structure");
-        exitFocusMode();
+        exitManuscriptFocus();
         return;
       }
       const line = foreshadowLines.find(
@@ -1747,7 +1928,7 @@ export function useWorkspaceFeatureNavigationController(input: Readonly<{
       focusForeshadowLineInStructure(line.lineId);
       selectStructureTab("foreshadow");
       showWorkSection("structure");
-      exitFocusMode();
+      exitManuscriptFocus();
     },
     [
       activeWork,
@@ -1756,7 +1937,7 @@ export function useWorkspaceFeatureNavigationController(input: Readonly<{
       activeWorkPlots,
       assistantContextActionState,
       dismissAssistantContextForNavigation,
-      exitFocusMode,
+      exitManuscriptFocus,
       focusForeshadowLineInStructure,
       foreshadowLines,
       reportAssistantContextError,
@@ -1767,6 +1948,9 @@ export function useWorkspaceFeatureNavigationController(input: Readonly<{
   );
 
   return {
+    openCanonReviewEvidence,
+    openContinuityEvidence,
+    openCharacterKnowledgeEvidence,
     openAssistantSettingReference,
     focusScene,
     openAssistantVocabularyOccurrence,

@@ -4644,7 +4644,7 @@ tasks:
       commands:
         - cmd: "Read-only Activity ownership, direct-client and Korean literal inspection"
           status: pass
-      summary: "Moved bundle load/reset, WritingSession/focus-mode transitions, edit/blur session coordination, Pomodoro reconcile/actions/phase alerts, goals, readthrough and export state behind injected activity/persistence/music ports. All 16 moved Korean literals existed unchanged in the prior App; no project tests ran."
+      summary: "Moved bundle load/reset, WritingSession/manuscript-focus transitions, edit/blur session coordination, Pomodoro reconcile/actions/phase alerts, goals, readthrough and export state behind injected activity/persistence/music ports. All 16 moved Korean literals existed unchanged in the prior App; no project tests ran."
 
   - id: T135
     type: worker
@@ -4958,10 +4958,10 @@ tasks:
     assignee: Worker
     status: done
     reasoning_hint: medium
-    objective: "Move focus mode and Work UI preference state/change commands from App.tsx into a focus-mode controller without changing local-storage compatibility or editor behavior."
+    objective: "Move manuscript-focus and Work UI preference state/change commands from App.tsx into a manuscript-focus controller without changing editor behavior."
     allowed_files:
       - "src/renderer/App.tsx"
-      - "src/renderer/features/activity/useFocusModeController.ts"
+      - "src/renderer/features/activity/useManuscriptFocusController.ts"
     verify:
       - "No tests/build/typecheck/lint. Use source inspection only until the user changes the testing instruction."
     stop_if:
@@ -4970,11 +4970,11 @@ tasks:
       result: done
       changed_files:
         - "src/renderer/App.tsx"
-        - "src/renderer/features/activity/useFocusModeController.ts"
+        - "src/renderer/features/activity/useManuscriptFocusController.ts"
       commands:
-        - cmd: "Read-only focus ownership, storage-key/default/clamp and duplicate-setter inspection"
+        - cmd: "Read-only manuscript-focus ownership, storage-key/default/clamp and duplicate-setter inspection"
           status: pass
-      summary: "Moved focus mode, content width, zoom, current-block highlight and typewriter mode/position preferences into an injected storage/callback controller. The legacy storage key, defaults, clamps and callback timing remain exact; App retains shortcut overlay/forward-writing guards; no project tests ran."
+      summary: "Moved manuscript-focus activation, manuscript width, text scale, current-paragraph highlight and cursor-follow preferences into an injected storage/callback controller. The product-owned storage key, defaults, clamps and callback timing remain exact; App retains shortcut overlay/forward-writing guards; no project tests ran."
 
   - id: T149
     type: worker
@@ -5358,7 +5358,7 @@ tasks:
       - "tests/e2e/structure-features.spec.ts"
       - "tests/e2e/schedule-assistant.spec.ts"
       - "tests/e2e/persistence-editor.spec.ts"
-      - "tests/e2e/focus-music-theme.spec.ts"
+      - "tests/e2e/manuscript-focus-music-theme.spec.ts"
       - "tests/e2e/publishing-lore.spec.ts"
       - "tests/e2e/events-plots-scenes.spec.ts"
       - "scripts/split-desktop-shell-e2e.mjs"
@@ -5378,7 +5378,7 @@ tasks:
         - "tests/e2e/structure-features.spec.ts"
         - "tests/e2e/schedule-assistant.spec.ts"
         - "tests/e2e/persistence-editor.spec.ts"
-        - "tests/e2e/focus-music-theme.spec.ts"
+        - "tests/e2e/manuscript-focus-music-theme.spec.ts"
         - "tests/e2e/publishing-lore.spec.ts"
         - "tests/e2e/events-plots-scenes.spec.ts"
         - "scripts/architecture-report.mjs"
@@ -5635,7 +5635,7 @@ tasks:
     assignee: Worker
     status: done
     reasoning_hint: high
-    objective: "Mechanically extract focus toolbar, open-document tabs, ManuscriptEditor and editor error JSX into a typed manuscript workspace surface host."
+    objective: "Mechanically extract the manuscript-focus toolbar, open-document tabs, ManuscriptEditor and editor error JSX into a typed manuscript workspace surface host."
     allowed_files:
       - "src/renderer/App.tsx"
       - "src/renderer/workspace/editor/ManuscriptWorkspaceSurface.tsx"
@@ -5655,7 +5655,7 @@ tasks:
       commands:
         - cmd: "Source-only manuscript gate/full JSX attribute/editor prop-ref-callback mapping plus parser, relative-import and unused-import audit"
           status: pass
-      summary: "Moved focus toolbar, open-document tabs, ManuscriptEditor and editor errors into a typed surface host. The full JSX attribute surface and editor callbacks are unchanged; App.tsx fell to 5,493 lines; no project tests ran."
+      summary: "Moved the manuscript-focus toolbar, open-document tabs, ManuscriptEditor and editor errors into a typed surface host. The full JSX attribute surface and editor callbacks are unchanged; App.tsx fell to 5,493 lines; no project tests ran."
 
   - id: T176
     type: worker
@@ -5976,7 +5976,7 @@ tasks:
       - "tests/e2e/structure-features.spec.ts"
       - "tests/e2e/schedule-assistant.spec.ts"
       - "tests/e2e/persistence-editor.spec.ts"
-      - "tests/e2e/focus-music-theme.spec.ts"
+      - "tests/e2e/manuscript-focus-music-theme.spec.ts"
       - "tests/e2e/publishing-lore.spec.ts"
       - "tests/e2e/events-plots-scenes.spec.ts"
       - "scripts/architecture-report.mjs"
@@ -5996,7 +5996,7 @@ tasks:
         - "tests/e2e/structure-features.spec.ts"
         - "tests/e2e/schedule-assistant.spec.ts"
         - "tests/e2e/persistence-editor.spec.ts"
-        - "tests/e2e/focus-music-theme.spec.ts"
+        - "tests/e2e/manuscript-focus-music-theme.spec.ts"
         - "tests/e2e/publishing-lore.spec.ts"
         - "tests/e2e/events-plots-scenes.spec.ts"
         - "scripts/architecture-report.mjs"
@@ -6045,7 +6045,7 @@ tasks:
         - cmd: "npx playwright test tests/e2e/events-plots-scenes.spec.ts tests/e2e/features/fragments.spec.ts"
           status: pass
           summary: "14 production Electron tests passed."
-        - cmd: "npx playwright test tests/e2e/focus-music-theme.spec.ts"
+        - cmd: "npx playwright test tests/e2e/manuscript-focus-music-theme.spec.ts"
           status: pass
           summary: "16 production Electron tests passed."
         - cmd: "npx playwright test tests/e2e/manuscript-activity.spec.ts"

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { StudioBridge } from "../../../application/contracts/studio-bridge";
 import type {
+  LocalMediaTrackProjection,
   LocalMediaStorageMode,
   MusicTrackProjection,
 } from "../../../application/music/media-track";
@@ -27,6 +28,7 @@ import {
 } from "./music-client";
 import {
   createMusicPlaybackRequest,
+  withoutRegisteredLocalMedia,
   type MusicPlaybackRequest,
 } from "./music-state";
 
@@ -65,10 +67,16 @@ export function useMusicController(input: Readonly<{
     readonly MusicTrackProjection[]
   >([]);
   const [musicLibraryActionState, setMusicLibraryActionState] = useState<
-    "idle" | "searching" | "saving-playlist" | "registering-media"
+    | "idle"
+    | "searching"
+    | "saving-playlist"
+    | "registering-media"
+    | "removing-media"
   >("idle");
   const [localMediaRegistrationMode, setLocalMediaRegistrationMode] =
     useState<LocalMediaStorageMode | null>(null);
+  const [localMediaRemovalId, setLocalMediaRemovalId] =
+    useState<string | null>(null);
   const [musicLibraryError, setMusicLibraryError] = useState<string | null>(
     null,
   );
@@ -289,6 +297,54 @@ export function useMusicController(input: Readonly<{
       );
     } finally {
       setLocalMediaRegistrationMode(null);
+      setMusicLibraryActionState("idle");
+    }
+  }, [
+    input.activeWorkId,
+    input.operations,
+    musicLibraryActionState,
+    replaceWorkMusicSettings,
+    sceneMusicQueueActionState,
+    workMusicSettings,
+  ]);
+
+  const removeRegisteredLocalMedia = useCallback(async (
+    track: LocalMediaTrackProjection,
+  ) => {
+    if (
+      input.activeWorkId === null ||
+      input.operations === undefined ||
+      workMusicSettings?.workId !== input.activeWorkId ||
+      track.workId !== input.activeWorkId ||
+      !workMusicSettings.settings.localMedia.some(
+        (entry) => entry.mediaId === track.mediaId,
+      ) ||
+      musicLibraryActionState !== "idle" ||
+      sceneMusicQueueActionState !== "idle"
+    ) return;
+    setMusicLibraryActionState("removing-media");
+    setLocalMediaRemovalId(track.mediaId);
+    setMusicLibraryError(null);
+    try {
+      const saved = await input.operations.settings.saveWorkMusic({
+        schemaVersion: 1,
+        workId: input.activeWorkId,
+        expectedRevision: workMusicSettings.revision,
+        settings: withoutRegisteredLocalMedia(
+          workMusicSettings.settings,
+          track,
+        ),
+      });
+      replaceWorkMusicSettings(saved);
+      setMusicLibraryQueue(saved.settings.playlistTracks);
+    } catch (reason) {
+      setMusicLibraryError(
+        reason instanceof Error
+          ? reason.message
+          : "등록한 미디어를 삭제하지 못했습니다.",
+      );
+    } finally {
+      setLocalMediaRemovalId(null);
       setMusicLibraryActionState("idle");
     }
   }, [
@@ -560,6 +616,7 @@ export function useMusicController(input: Readonly<{
     searchMusicLibrary,
     saveMusicLibraryQueue,
     registerLocalMedia,
+    removeRegisteredLocalMedia,
     searchSceneMusicQueues,
     selectSceneMusicQueue,
     playSelectedSceneMusicQueue,
@@ -571,6 +628,7 @@ export function useMusicController(input: Readonly<{
     moveMusicLibraryQueueTrack,
     playMusicLibraryTrack,
     removeMusicLibraryTrack,
+    localMediaRemovalId,
     reconcile,
   };
 }

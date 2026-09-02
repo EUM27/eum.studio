@@ -1,4 +1,8 @@
 import { entityId, type EntityId } from "../../domain/writing";
+import {
+  parseSceneMetadataBindingProjection,
+  type SceneMetadataBindingProjection,
+} from "./scene-metadata-binding-contract";
 
 export type SceneAnnotationProjection = {
   readonly schemaVersion: 1;
@@ -6,6 +10,7 @@ export type SceneAnnotationProjection = {
   readonly revision: number;
   readonly workId: EntityId<"Work">;
   readonly sceneKey: string;
+  readonly binding: SceneMetadataBindingProjection;
   readonly documentId: EntityId<"Document">;
   readonly documentRevisionId: EntityId<"DocumentRevision">;
   readonly sourceCandidateId: EntityId<"SceneExtractionCandidate">;
@@ -149,6 +154,7 @@ export function parseSceneAnnotationProjection(
       "revision",
       "workId",
       "sceneKey",
+      "binding",
       "documentId",
       "documentRevisionId",
       "sourceCandidateId",
@@ -168,16 +174,29 @@ export function parseSceneAnnotationProjection(
     label,
   );
   schema(input, label);
+  const sceneAnnotationId = id<"SceneAnnotation">(
+    input,
+    "sceneAnnotationId",
+    label,
+  );
+  const workId = id<"Work">(input, "workId", label);
+  const sceneKey = nonEmpty(input, "sceneKey", label);
+  const binding = parseSceneMetadataBindingProjection(input.binding);
+  if (
+    binding.workId !== workId ||
+    binding.metadataKind !== "annotation" ||
+    binding.metadataId !== sceneAnnotationId ||
+    binding.sourceSceneKey !== sceneKey
+  ) {
+    throw new Error(`${label}.binding does not match the annotation`);
+  }
   return Object.freeze({
     schemaVersion: 1,
-    sceneAnnotationId: id<"SceneAnnotation">(
-      input,
-      "sceneAnnotationId",
-      label,
-    ),
+    sceneAnnotationId,
     revision: positiveInteger(input, "revision", label),
-    workId: id<"Work">(input, "workId", label),
-    sceneKey: nonEmpty(input, "sceneKey", label),
+    workId,
+    sceneKey,
+    binding,
     documentId: id<"Document">(input, "documentId", label),
     documentRevisionId: id<"DocumentRevision">(
       input,

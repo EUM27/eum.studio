@@ -336,6 +336,53 @@ describe("PublishingPartnerDialog", () => {
     expect(markup).not.toContain("카카오");
   });
 
+  it("opens a reusable publishing-form workspace without using one publisher as the default", () => {
+    const markup = renderToStaticMarkup(
+      createElement(PublishingPartnerDialog, {
+        actionState: "idle",
+        contracts: [],
+        error: null,
+        initialSection: "forms",
+        onClose: () => undefined,
+        onCreate: () => undefined,
+        onCreateContract: () => undefined,
+        onCreatePublication: () => undefined,
+        onCreateSettlement: () => undefined,
+        onCreateSubmission: () => undefined,
+        onCreateFormTemplate: () => undefined,
+        onUpdateFormTemplate: () => undefined,
+        onSaveFormResponse: () => undefined,
+        onSelect: () => undefined,
+        onSelectContract: () => undefined,
+        onSelectPublication: () => undefined,
+        onSelectSettlement: () => undefined,
+        onSelectSubmission: () => undefined,
+        onUpdate: () => undefined,
+        onUpdateContract: () => undefined,
+        onUpdatePublication: () => undefined,
+        onUpdateSettlement: () => undefined,
+        onUpdateSubmission: () => undefined,
+        partners: [partner],
+        formTemplates: [],
+        formResponses: [],
+        publications: [],
+        settlements: [],
+        selectedContractId: null,
+        selectedPartnerId: null,
+        selectedPublicationId: null,
+        selectedSettlementId: null,
+        selectedSubmissionId: null,
+        submissions: [],
+        works,
+      }),
+    );
+
+    expect(markup).toContain("투고 양식");
+    expect(markup).toContain("기본 템플릿 만들기");
+    expect(markup).toContain("투고처별 양식");
+    expect(markup).not.toContain("바로나글");
+  });
+
   it("shows editable submission history beside an immutable submission package", () => {
     const markup = renderToStaticMarkup(
       createElement(PublishingPartnerDialog, {

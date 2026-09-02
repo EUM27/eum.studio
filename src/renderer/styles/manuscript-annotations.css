@@ -1,0 +1,179 @@
+.cm-manuscript-annotation {
+  background: color-mix(in srgb, var(--accent-color, #8b7cf6) 22%, transparent);
+  border-bottom: 2px solid color-mix(in srgb, var(--accent-color, #8b7cf6) 72%, transparent);
+  border-radius: 0.18rem;
+}
+
+.manuscript-annotations-panel {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.manuscript-annotations-panel-header,
+.manuscript-annotations-panel-header > div,
+.manuscript-annotation-card > header,
+.manuscript-annotation-card-actions,
+.manuscript-annotation-edit-form > div,
+.manuscript-annotation-custom-tag-input {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.manuscript-annotations-panel-header {
+  justify-content: space-between;
+}
+
+.manuscript-annotations-panel-header h4,
+.manuscript-annotation-card p {
+  margin: 0;
+}
+
+.manuscript-annotations-show-all,
+.manuscript-annotation-tag-button,
+.manuscript-annotation-custom-tags button,
+.manuscript-annotation-card-actions button,
+.manuscript-annotation-edit-form button,
+.manuscript-annotation-custom-tag-input button {
+  border: 1px solid var(--border-subtle, rgba(127, 127, 127, 0.25));
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0.32rem 0.58rem;
+}
+
+.manuscript-annotation-tag-button[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent-color, #8b7cf6) 22%, transparent);
+  border-color: color-mix(in srgb, var(--accent-color, #8b7cf6) 62%, transparent);
+}
+
+.manuscript-annotation-composer,
+.manuscript-annotation-card,
+.manuscript-annotation-edit-form {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.manuscript-annotation-composer,
+.manuscript-annotation-card {
+  border: 1px solid var(--border-subtle, rgba(127, 127, 127, 0.22));
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+}
+
+.manuscript-annotation-composer p,
+.manuscript-annotation-empty {
+  color: var(--text-muted, #8b8b92);
+  font-size: 0.78rem;
+  margin: 0;
+}
+
+.manuscript-annotation-composer textarea,
+.manuscript-annotation-edit-form textarea,
+.manuscript-annotation-custom-tag-input input {
+  background: var(--surface-raised, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border-subtle, rgba(127, 127, 127, 0.28));
+  border-radius: 0.45rem;
+  color: inherit;
+  font: inherit;
+  min-width: 0;
+  padding: 0.5rem;
+  resize: vertical;
+}
+
+.manuscript-annotation-custom-tag-input input {
+  flex: 1;
+}
+
+.manuscript-annotation-tag-options,
+.manuscript-annotation-custom-tags,
+.manuscript-annotation-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.manuscript-annotation-list,
+.manuscript-annotation-tags {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.manuscript-annotation-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.manuscript-annotation-card > header {
+  justify-content: space-between;
+}
+
+.manuscript-annotation-card > header span {
+  color: var(--text-muted, #8b8b92);
+  font-size: 0.7rem;
+}
+
+.manuscript-annotation-quote {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  line-height: 1.5;
+  overflow: hidden;
+  padding: 0;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manuscript-annotation-quote:disabled {
+  cursor: default;
+  opacity: 0.68;
+}
+
+.manuscript-annotation-tags li {
+  background: color-mix(in srgb, var(--accent-color, #8b7cf6) 16%, transparent);
+  border-radius: 999px;
+  font-size: 0.7rem;
+  padding: 0.2rem 0.45rem;
+}
+
+.continuous-reading-annotation-layout {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, 1fr) minmax(17rem, 22rem);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.continuous-reading-dialog {
+  width: min(100%, 80rem);
+}
+
+.continuous-reading-annotation-panel {
+  border-left: 1px solid var(--border-subtle, rgba(127, 127, 127, 0.22));
+  min-height: 0;
+  overflow: auto;
+  padding: 1rem;
+}
+
+.continuous-reading-annotation-highlight {
+  background: color-mix(in srgb, var(--accent-color, #8b7cf6) 22%, transparent);
+  border-bottom: 2px solid color-mix(in srgb, var(--accent-color, #8b7cf6) 72%, transparent);
+  border-radius: 0.18rem;
+}
+
+@media (max-width: 920px) {
+  .continuous-reading-annotation-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .continuous-reading-annotation-panel {
+    border-left: 0;
+    border-top: 1px solid var(--border-subtle, rgba(127, 127, 127, 0.22));
+    max-height: 42vh;
+  }
+}

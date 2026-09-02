@@ -12,12 +12,14 @@ import type {
 } from "../../application/music/work-music-settings";
 import type { YouTubeMusicConnectionStatus } from "../../application/music/youtube-music-connection";
 import type { ChatGptOAuthConnectionStatus } from "../../application/assistant/chatgpt-oauth";
+import type { WorkSceneAnalysisSettingsProjection } from "../../application/settings/work-scene-analysis-settings";
 import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
 export type AppSettingsSaveValue = {
   readonly defaultEpisodeCharacters: number;
   readonly workMusicSettings: WorkMusicSettings | null;
   readonly youtubeApiKey: string | null;
+  readonly workSceneAnalysisEnabled: boolean | null;
 };
 
 export function parseDefaultEpisodeCharactersInput(
@@ -47,6 +49,7 @@ export function AppSettingsDialog({
   musicProjection,
   youtubeConnectionStatus,
   chatGptOAuthStatus,
+  sceneAnalysisProjection,
   chatGptOAuthLoginState,
   actionState,
   error,
@@ -61,6 +64,7 @@ export function AppSettingsDialog({
   readonly musicProjection: WorkMusicSettingsProjection | null;
   readonly youtubeConnectionStatus: YouTubeMusicConnectionStatus | null;
   readonly chatGptOAuthStatus: ChatGptOAuthConnectionStatus | null;
+  readonly sceneAnalysisProjection: WorkSceneAnalysisSettingsProjection | null;
   readonly chatGptOAuthLoginState: "idle" | "waiting";
   readonly actionState: "loading" | "idle" | "saving";
   readonly error: string | null;
@@ -78,6 +82,9 @@ export function AppSettingsDialog({
   const [workMusicSettings, setWorkMusicSettings] = useState<WorkMusicSettings | null>(
     musicProjection?.settings ?? null,
   );
+  const [workSceneAnalysisEnabled, setWorkSceneAnalysisEnabled] = useState(
+    sceneAnalysisProjection?.settings.enabled ?? false,
+  );
   const [validationError, setValidationError] = useState<string | null>(null);
   const busy = actionState !== "idle";
   useDialogDismiss({ disabled: actionState === "saving", onClose });
@@ -94,6 +101,9 @@ export function AppSettingsDialog({
         youtubeApiKey: youtubeApiKey.trim().length === 0
           ? null
           : youtubeApiKey.trim(),
+        workSceneAnalysisEnabled: sceneAnalysisProjection === null
+          ? null
+          : workSceneAnalysisEnabled,
       });
     } catch (reason) {
       setValidationError(
@@ -179,6 +189,26 @@ export function AppSettingsDialog({
               </div>
               <p>ChatGPT 계정으로 연결합니다. API 키를 입력하지 않습니다.</p>
               </div>
+
+              {sceneAnalysisProjection !== null && (
+                <div className="app-settings-section app-settings-work-section">
+                  <h3>현재 작품 장면 분석</h3>
+                  <label>
+                    <input
+                      checked={workSceneAnalysisEnabled}
+                      disabled={busy}
+                      onChange={(event) =>
+                        setWorkSceneAnalysisEnabled(event.currentTarget.checked)}
+                      type="checkbox"
+                    />
+                    <span>장면 전환·분할·회차 전환 시 분석 요약과 별빛 후보 저장</span>
+                  </label>
+                  <p>
+                    GPT 연결 중에만 실행합니다. 요약은 장면 이력으로 저장하고,
+                    별빛 변경은 후보 검토함에서 승인하기 전까지 별빛에 적용하지 않습니다.
+                  </p>
+                </div>
+              )}
 
               <div className="app-settings-section">
               <h3>YouTube 음악 연결</h3>

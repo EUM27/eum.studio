@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "fixtureUse": "measurement-only; not a product limit or user-data default",
+  "environment": {
+    "platform": "win32",
+    "architecture": "x64",
+    "node": "v24.13.0"
+  },
+  "rowCounts": {
+    "documents": 500,
+    "entities": 900,
+    "entitiesPerKind": 100,
+    "markdownFiles": 901
+  },
+  "outputBytes": 914934,
+  "timings": {
+    "canonicalToMarkdownMs": {
+      "raw": [
+        28.96799999999999,
+        24.665999999999997,
+        26.084599999999966,
+        21.4991,
+        23.701000000000022,
+        22.5043,
+        21.437000000000012,
+        21.13560000000001,
+        21.99109999999996,
+        21.628300000000024
+      ],
+      "p50": 21.99109999999996,
+      "p95": 28.96799999999999
+    }
+  },
+  "deterministicBundle": true,
+  "importSupported": false,
+  "databaseBytes": {
+    "measured": false,
+    "growth": null,
+    "reason": "pure-application-harness"
+  },
+  "rendererCommitCount": {
+    "measured": false,
+    "value": null,
+    "reason": "application-harness"
+  }
+}

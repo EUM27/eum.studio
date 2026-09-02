@@ -16,9 +16,11 @@ import {
   type SessionFeedbackPanelProps,
 } from "../activity/SessionFeedbackPanel";
 import { BottomEventRail } from "../editor/BottomEventRail";
+import { SceneDeletionDialog } from "../editor/SceneDeletionDialog";
 import { ManuscriptTelemetryStore } from "../editor/manuscript-telemetry-store";
 import type { useActivityController } from "../features/activity/useActivityController";
-import type { useFocusModeController } from "../features/activity/useFocusModeController";
+import type { useManuscriptAnnotationsController } from "../features/annotations/useManuscriptAnnotationsController";
+import type { useManuscriptFocusController } from "../features/activity/useManuscriptFocusController";
 import type { useEditorToolsController } from "../features/editor-tools/useEditorToolsController";
 import type { useMusicController } from "../features/music/useMusicController";
 import type { useScheduleController } from "../features/schedule/useScheduleController";
@@ -87,12 +89,13 @@ export function WorkspaceStatusToolsHost(input: Readonly<{
   activeWorkId: WorkspaceWorkSummary["workId"] | null;
   controllers: Readonly<{
     activity: ReturnType<typeof useActivityController>;
+    annotations: ReturnType<typeof useManuscriptAnnotationsController>;
     editorTools: ReturnType<typeof useEditorToolsController>;
     event: ReturnType<typeof useEventWorkspaceController>;
     eventState: ReturnType<typeof useEventWorkspaceState>;
     scene: ReturnType<typeof useSceneWorkspaceController>;
     sceneState: ReturnType<typeof useSceneWorkspaceState>;
-    focus: ReturnType<typeof useFocusModeController>;
+    manuscriptFocus: ReturnType<typeof useManuscriptFocusController>;
     music: ReturnType<typeof useMusicController>;
     readingLayout: ReturnType<typeof useReadingLayoutController>;
     schedule: ReturnType<typeof useScheduleController>;
@@ -135,7 +138,7 @@ export function WorkspaceStatusToolsHost(input: Readonly<{
   const eventState = input.controllers.eventState;
   const scene = input.controllers.scene;
   const sceneState = input.controllers.sceneState;
-  const focus = input.controllers.focus;
+  const manuscriptFocus = input.controllers.manuscriptFocus;
   const music = input.controllers.music;
   const readingLayout = input.controllers.readingLayout;
   const version = input.controllers.version;
@@ -166,7 +169,7 @@ export function WorkspaceStatusToolsHost(input: Readonly<{
             eventBusy={eventState.eventActionState !== "idle"}
             sceneBusy={sceneState.sceneActionState !== "idle"}
             onDetachEventRange={event.retireEventSource}
-            onDeleteSceneGroup={scene.deleteSceneGroup}
+            onDeleteSceneGroup={scene.prepareSceneDeletionGroup}
             onMoveEvent={event.moveEventBlock}
             {...(input.navigation.openScene === undefined
               ? {}
@@ -249,8 +252,8 @@ export function WorkspaceStatusToolsHost(input: Readonly<{
                   ? activity.activeFocusCycle
                   : undefined
               }
-              focusMode={focus.focusMode}
-              focusModeAvailable={
+              manuscriptFocusActive={manuscriptFocus.manuscriptFocusActive}
+              manuscriptFocusAvailable={
                 input.workspaceSurface === "manuscript" &&
                 editorTools.activeForwardWriting === null
               }
@@ -296,8 +299,8 @@ export function WorkspaceStatusToolsHost(input: Readonly<{
                   editorTools.openForwardWritingDialog();
                 }
               }}
-              onToggleFocusMode={() => {
-                focus.toggleFocusMode();
+              onToggleManuscriptFocus={() => {
+                manuscriptFocus.toggleManuscriptFocus();
               }}
               pomodoro={activity.pomodoro}
               telemetryStore={input.telemetryStore}
@@ -356,6 +359,15 @@ export function WorkspaceStatusToolsHost(input: Readonly<{
           </span>
         )}
       </footer>
+      <SceneDeletionDialog
+        busy={sceneState.sceneActionState !== "idle"}
+        error={sceneState.sceneActionError}
+        onCancel={scene.cancelSceneDeletion}
+        onConfirm={() => {
+          void scene.confirmSceneDeletion();
+        }}
+        preview={scene.sceneDeletionPreview}
+      />
       {input.controllers.schedule.showSchedule && activeWork !== null && (
         <div
           className="dialog-backdrop"
@@ -400,6 +412,7 @@ export function WorkspaceStatusToolsHost(input: Readonly<{
         activeDocument={activeDocument}
         activeWorkId={input.activeWorkId}
         activity={activity}
+        annotations={input.controllers.annotations}
         editorTools={editorTools}
         eventController={event}
         eventState={eventState}
@@ -436,6 +449,9 @@ export function WorkspaceStatusToolsHost(input: Readonly<{
             onRegisterLocalMedia={(storageMode) => {
               void music.registerLocalMedia(storageMode);
             }}
+            onRemoveLocalMedia={(track) => {
+              void music.removeRegisteredLocalMedia(track);
+            }}
             onRemoveFromQueue={music.removeMusicLibraryTrack}
             onSearch={(query) => {
               void music.searchMusicLibrary(query);
@@ -446,6 +462,7 @@ export function WorkspaceStatusToolsHost(input: Readonly<{
             queue={music.musicLibraryQueue}
             queueSaving={music.musicLibraryActionState === "saving-playlist"}
             registeringMode={music.localMediaRegistrationMode}
+            removingMediaId={music.localMediaRemovalId}
             results={music.musicLibraryResults}
             searching={music.musicLibraryActionState === "searching"}
           />,

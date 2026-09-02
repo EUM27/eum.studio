@@ -6,6 +6,9 @@ import type { WorkStructureOverviewProjection } from "../../../application/struc
 import type { WorkspaceWorkSummary } from "../../../application/workspace/workspace-contract";
 import { LoreCueInspector } from "../../editor/LoreCueDisclosure";
 import { ManuscriptTelemetryStore } from "../../editor/manuscript-telemetry-store";
+import { ManuscriptAnnotationsPanel } from "../../editor/ManuscriptAnnotationsPanel";
+import type { ManuscriptAnnotationProjection } from "../../../application/review/manuscript-annotation-contract";
+import type { useManuscriptAnnotationsController } from "../../features/annotations/useManuscriptAnnotationsController";
 import type { useAssistantController } from "../../features/assistant/useAssistantController";
 import type { useCharactersController } from "../../features/characters/useCharactersController";
 import type {
@@ -67,6 +70,7 @@ export function ReviewInspectorRail(input: Readonly<{
       >["characterWorkspaceSelection"]
     >;
     openCandidateInbox: () => void;
+    openAnnotation: (annotation: ManuscriptAnnotationProjection) => void;
     openPlotWorkspace: ReturnType<
       typeof useWorkspaceNavigationController
     >["openPlotWorkspace"];
@@ -74,6 +78,7 @@ export function ReviewInspectorRail(input: Readonly<{
   }>;
   controllers: Readonly<{
     assistant: ReturnType<typeof useAssistantController>;
+    annotations: ReturnType<typeof useManuscriptAnnotationsController>;
     characters: ReturnType<typeof useCharactersController>;
     event: ReturnType<typeof useEventWorkspaceController>;
     eventState: ReturnType<typeof useEventWorkspaceState>;
@@ -120,6 +125,7 @@ export function ReviewInspectorRail(input: Readonly<{
 }>) {
   const activeDocument = input.activeDocument;
   const assistant = input.controllers.assistant;
+  const annotations = input.controllers.annotations;
   const characters = input.controllers.characters;
   const event = input.controllers.event;
   const eventState = input.controllers.eventState;
@@ -214,6 +220,23 @@ export function ReviewInspectorRail(input: Readonly<{
                 hidden={reviewInspectorTab !== "current"}
               >
                 <ManuscriptReviewSummary telemetryStore={input.telemetryStore} />
+                <ManuscriptAnnotationsPanel
+                  activeDocumentId={activeDocument.documentId}
+                  annotations={annotations.annotations}
+                  busy={annotations.annotationActionState !== "idle"}
+                  documentTitles={Object.fromEntries(
+                    input.activeWork?.documents.map((document) => [
+                      document.documentId,
+                      document.title,
+                    ]) ?? [],
+                  )}
+                  error={annotations.annotationActionError}
+                  hasSelection={input.hasManuscriptSelection}
+                  onCreate={annotations.createAnnotationFromCurrentSelection}
+                  onOpen={input.commands.openAnnotation}
+                  onRetire={annotations.retireAnnotation}
+                  onUpdate={annotations.updateAnnotation}
+                />
                 {loreCueState.pinnedLoreCue !== null &&
                   loreCueState.pinnedLoreCue.workId === activeDocument.workId &&
                   loreCueState.pinnedLoreCue.documentId ===
@@ -698,21 +721,21 @@ export function ReviewInspectorRail(input: Readonly<{
                   )}
                 </section>
                 <section
-                  aria-label="작품 스냅샷"
+                  aria-label="명명된 기준점 슬롯"
                   className="event-block-list work-snapshot-list"
                 >
                   <header>
-                    <h4>작품 스냅샷</h4>
-                    <span>{version.workSnapshots.length}</span>
+                    <h4>명명된 기준점 슬롯</h4>
+                    <span>{version.workSnapshotSlots.length}</span>
                   </header>
                   <form
                     className="work-snapshot-form"
                     onSubmit={version.createWorkSnapshot}
                   >
                     <label>
-                      <span className="visually-hidden">작품 스냅샷 이름</span>
+                      <span className="visually-hidden">기준점 슬롯 이름</span>
                       <input
-                        aria-label="작품 스냅샷 이름"
+                        aria-label="기준점 슬롯 이름"
                         disabled={version.versionActionState !== "idle"}
                         onChange={(event) =>
                           version.changeSnapshotLabel(event.currentTarget.value)
@@ -730,34 +753,34 @@ export function ReviewInspectorRail(input: Readonly<{
                     >
                       {version.versionActionState === "creating-snapshot"
                         ? "생성 중"
-                        : "생성"}
+                        : "이 슬롯에 기준점 만들기"}
                     </button>
                   </form>
-                  {version.workSnapshots.length === 0 ? (
+                  {version.workSnapshotSlots.length === 0 ? (
                     <p className="empty-event-list">
-                      만든 작품 스냅샷이 없습니다.
+                      만든 기준점 슬롯이 없습니다.
                     </p>
                   ) : (
                     <ul>
-                      {version.workSnapshots.map((snapshot) => (
-                        <li key={snapshot.workSnapshotId}>
+                      {version.workSnapshotSlots.map((slot) => (
+                        <li key={slot.slotName}>
                           <div
                             className="work-snapshot-entry"
                             data-testid="work-snapshot-entry"
                           >
-                            <strong>{snapshot.label}</strong>
+                            <strong>{slot.slotName}</strong>
                             <span>
-                              {formatVersionTimestamp(snapshot.createdAt)} · 문서{
+                              {formatVersionTimestamp(slot.current.createdAt)} · 문서{
                                 " "
                               }
-                              {snapshot.documentRevisions.length}개
+                              {slot.current.documentRevisions.length}개
                             </span>
                             <button
-                              aria-label={`${snapshot.label} 스냅샷 비교`}
+                              aria-label={`${slot.slotName} 현재 기준점 비교`}
                               disabled={version.versionActionState !== "idle"}
                               onClick={() => {
                                 void version.compareWorkSnapshot(
-                                  snapshot.workSnapshotId,
+                                  slot.current.workSnapshotId,
                                 );
                               }}
                               type="button"

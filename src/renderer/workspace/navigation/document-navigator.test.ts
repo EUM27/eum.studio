@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { entityId } from "../../../domain/writing";
 import { DocumentNavigator } from "./DocumentNavigator";
+import { createCanonEvidenceNavigationTarget } from "./useWorkspaceFeatureNavigationController";
 import type {
   DocumentNavigationActivationOutcome,
   DocumentNavigationDocument,
@@ -64,6 +65,36 @@ function deferred<T>() {
     },
   };
 }
+
+describe("canon evidence navigation target", () => {
+  it("keeps the evidence Work, revision, and exact range intact", () => {
+    const workId = entityId<"Work">("work-canon-evidence");
+    expect(createCanonEvidenceNavigationTarget(workId, {
+      documentId: entityId<"Document">("document-navigation"),
+      documentRevisionId: entityId<"DocumentRevision">("revision-navigation"),
+      from: 7,
+      to: 19,
+      exactText: "정확한 근거 원문",
+    })).toEqual({
+      kind: "exact-selection",
+      workId,
+      documentId: "document-navigation",
+      documentRevisionId: "revision-navigation",
+      range: { from: 7, to: 19 },
+    });
+  });
+
+  it("rejects empty or invalid evidence ranges", () => {
+    const workId = entityId<"Work">("work-canon-evidence");
+    expect(createCanonEvidenceNavigationTarget(workId, {
+      documentId: entityId<"Document">("document-navigation"),
+      documentRevisionId: entityId<"DocumentRevision">("revision-navigation"),
+      from: 7,
+      to: 7,
+      exactText: "",
+    })).toBeNull();
+  });
+});
 
 describe("DocumentNavigator", () => {
   it("validates active Work ownership and document membership before activation", async () => {

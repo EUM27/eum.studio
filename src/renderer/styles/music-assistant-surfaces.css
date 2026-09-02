@@ -470,7 +470,7 @@
 }
 
 .studio-app-shell .music-library-register {
-  grid-template-columns: minmax(0, 1fr) 27px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
   padding: 6px 8px;
 }
@@ -483,6 +483,17 @@
   min-height: 25px;
   padding: 0 7px;
   font-size: 9px;
+}
+
+.studio-app-shell .music-library-register > button {
+  width: 100%;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 8px;
+  white-space: nowrap;
 }
 
 .studio-app-shell .music-library-connection {

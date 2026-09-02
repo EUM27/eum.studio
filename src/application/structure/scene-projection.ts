@@ -6,6 +6,10 @@ import {
   type EventSourceProjection,
 } from "./event-block-contract";
 import type { SceneOverrideProjection } from "./scene-override-contract";
+import {
+  parseSceneMetadataBindingProjection,
+  type SceneMetadataBindingProjection,
+} from "./scene-metadata-binding-contract";
 
 export type SceneBoundaryRule = {
   readonly boundaryRuleId: string;
@@ -60,6 +64,7 @@ export type SceneEventOverrideProjection = {
   readonly revision: number;
   readonly workId: EntityId<"Work">;
   readonly sceneKey: string;
+  readonly binding: SceneMetadataBindingProjection;
   readonly eventBlockId: EntityId<"EventBlock">;
   readonly operation: SceneEventOverrideOperation;
   readonly createdAt: string;
@@ -443,6 +448,7 @@ export function parseSceneEventOverrideProjection(
       "revision",
       "workId",
       "sceneKey",
+      "binding",
       "eventBlockId",
       "operation",
       "createdAt",
@@ -451,16 +457,29 @@ export function parseSceneEventOverrideProjection(
     label,
   );
   schema(input, label);
+  const sceneEventOverrideId = id<"SceneEventOverride">(
+    input,
+    "sceneEventOverrideId",
+    label,
+  );
+  const workId = id<"Work">(input, "workId", label);
+  const sceneKey = nonEmptyString(input, "sceneKey", label);
+  const binding = parseSceneMetadataBindingProjection(input.binding);
+  if (
+    binding.workId !== workId ||
+    binding.metadataKind !== "event-override" ||
+    binding.metadataId !== sceneEventOverrideId ||
+    binding.sourceSceneKey !== sceneKey
+  ) {
+    throw new Error(`${label}.binding does not match the event override`);
+  }
   return Object.freeze({
     schemaVersion: 1,
-    sceneEventOverrideId: id<"SceneEventOverride">(
-      input,
-      "sceneEventOverrideId",
-      label,
-    ),
+    sceneEventOverrideId,
     revision: integer(input, "revision", label, 1),
-    workId: id<"Work">(input, "workId", label),
-    sceneKey: nonEmptyString(input, "sceneKey", label),
+    workId,
+    sceneKey,
+    binding,
     eventBlockId: id<"EventBlock">(input, "eventBlockId", label),
     operation: parseSceneEventOverrideOperation(
       input.operation,
@@ -1087,19 +1106,82 @@ export function deriveSceneProjection(
         deletedRange.to === scene.range.end,
     );
   });
-  const scenesByKey = new Map(
-    visibleScenes.map((scene) => [scene.sceneKey, scene] as const),
-  );
+  const scenesWithIdentities = visibleScenes.map((scene) => {
+    if (scene.range === null || input.sceneSegments === undefined) return scene;
+    const matchingSegments = input.sceneSegments.filter(
+      (segment) =>
+        segment.documentId === scene.documentId &&
+        segment.range !== null &&
+        segment.range.start < scene.range!.end &&
+        segment.range.end > scene.range!.start,
+    );
+    const exactSegments = matchingSegments.filter(
+      (segment) =>
+        segment.range !== null &&
+        segment.range.start === scene.range!.start &&
+        segment.range.end === scene.range!.end,
+    );
+    const identitySegments = exactSegments.length > 0
+      ? exactSegments
+      : matchingSegments;
+    const sceneIds = [...new Set(
+      identitySegments.map((segment) => segment.sceneId),
+    )];
+    if (sceneIds.length === 0) return scene;
+    if (sceneIds.length > 1) {
+      status = higherStatus(status, "needsReview");
+      return Object.freeze({
+        ...scene,
+        integrity: scene.integrity === "broken" ? "broken" : "needsReview",
+      });
+    }
+    const sceneId = sceneIds[0] as EntityId<"Scene">;
+    const segments = input.sceneSegments
+      .filter((segment) => segment.sceneId === sceneId)
+      .sort(
+        (left, right) =>
+          left.documentIndex - right.documentIndex ||
+          (left.range?.start ?? Number.MAX_SAFE_INTEGER) -
+            (right.range?.start ?? Number.MAX_SAFE_INTEGER) ||
+          left.segmentId.localeCompare(right.segmentId),
+      );
+    return Object.freeze({
+      ...scene,
+      sceneIdentity: Object.freeze({
+        sceneId,
+        segments: Object.freeze(segments),
+      }),
+    });
+  });
   const overrideByPair = new Map<string, SceneEventOverrideProjection>();
   for (const override of sceneEventOverrides) {
-    if (!eventIds.has(override.eventBlockId) || !scenesByKey.has(override.sceneKey)) {
+    if (!eventIds.has(override.eventBlockId)) {
       status = higherStatus(status, "needsReview");
       continue;
     }
-    overrideByPair.set(`${override.sceneKey}\u0000${override.eventBlockId}`, override);
+    if (override.binding.status === "detached") continue;
+    if (
+      override.binding.status !== "current" ||
+      override.binding.sceneId === null
+    ) {
+      status = higherStatus(status, "needsReview");
+      continue;
+    }
+    const targetScenes = scenesWithIdentities.filter(
+      (scene) => scene.sceneIdentity?.sceneId === override.binding.sceneId,
+    );
+    if (targetScenes.length !== 1) {
+      status = higherStatus(status, "needsReview");
+      continue;
+    }
+    const targetScene = targetScenes[0] as SceneProjection;
+    overrideByPair.set(
+      `${targetScene.sceneKey}\u0000${override.eventBlockId}`,
+      override,
+    );
   }
   const assignedEventIds = new Set<EntityId<"EventBlock">>();
-  const projectedScenes = visibleScenes.map((scene) => {
+  const projectedScenes = scenesWithIdentities.map((scene) => {
     const automaticIds = new Set<EntityId<"EventBlock">>();
     if (scene.range !== null) {
       for (const eventBlock of eventBlocks) {
@@ -1156,53 +1238,6 @@ export function deriveSceneProjection(
     }
     return Object.freeze({ ...scene, events, excludedEvents });
   });
-  const scenesWithIdentities = projectedScenes.map((scene) => {
-    if (scene.range === null || input.sceneSegments === undefined) return scene;
-    const matchingSegments = input.sceneSegments.filter(
-      (segment) =>
-        segment.documentId === scene.documentId &&
-        segment.range !== null &&
-        segment.range.start < scene.range!.end &&
-        segment.range.end > scene.range!.start,
-    );
-    const exactSegments = matchingSegments.filter(
-      (segment) =>
-        segment.range !== null &&
-        segment.range.start === scene.range!.start &&
-        segment.range.end === scene.range!.end,
-    );
-    const identitySegments = exactSegments.length > 0
-      ? exactSegments
-      : matchingSegments;
-    const sceneIds = [...new Set(
-      identitySegments.map((segment) => segment.sceneId),
-    )];
-    if (sceneIds.length === 0) return scene;
-    if (sceneIds.length > 1) {
-      status = higherStatus(status, "needsReview");
-      return Object.freeze({
-        ...scene,
-        integrity: scene.integrity === "broken" ? "broken" : "needsReview",
-      });
-    }
-    const sceneId = sceneIds[0] as EntityId<"Scene">;
-    const segments = input.sceneSegments
-      .filter((segment) => segment.sceneId === sceneId)
-      .sort(
-        (left, right) =>
-          left.documentIndex - right.documentIndex ||
-          (left.range?.start ?? Number.MAX_SAFE_INTEGER) -
-            (right.range?.start ?? Number.MAX_SAFE_INTEGER) ||
-          left.segmentId.localeCompare(right.segmentId),
-      );
-    return Object.freeze({
-      ...scene,
-      sceneIdentity: Object.freeze({
-        sceneId,
-        segments: Object.freeze(segments),
-      }),
-    });
-  });
   const unassignedEvents = eventBlocks
     .filter((eventBlock) => !assignedEventIds.has(eventBlock.eventBlockId))
     .map((eventBlock) => Object.freeze({
@@ -1219,7 +1254,7 @@ export function deriveSceneProjection(
     workId: input.workId,
     status,
     ruleSet,
-    scenes: scenesWithIdentities,
+    scenes: projectedScenes,
     unassignedEvents,
     sceneEventOverrides,
   });

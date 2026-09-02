@@ -161,14 +161,20 @@ import {
   STRUCTURE_CREATE_EVENT_BLOCK_CHANNEL,
   STRUCTURE_MOVE_EVENT_BLOCK_CHANNEL,
   STRUCTURE_CREATE_SCENE_OVERRIDE_CHANNEL,
+  STRUCTURE_DELETE_SCENE_CHANNEL,
   STRUCTURE_LINK_EVENT_SOURCE_CHANNEL,
   STRUCTURE_LIST_EVENT_BLOCKS_CHANNEL,
   STRUCTURE_LIST_EVENT_RAIL_CHANNEL,
   STRUCTURE_LIST_SCENE_OVERRIDES_CHANNEL,
   STRUCTURE_LIST_SCENE_PROJECTION_CHANNEL,
+  STRUCTURE_LIST_SCENE_TRASH_CHANNEL,
+  STRUCTURE_REBIND_SCENE_METADATA_CHANNEL,
+  STRUCTURE_PREPARE_SCENE_DELETION_CHANNEL,
+  STRUCTURE_RESTORE_SCENE_TRASH_CHANNEL,
   STRUCTURE_REPLACE_EVENT_SOURCE_CHANNEL,
   STRUCTURE_RETIRE_EVENT_SOURCE_CHANNEL,
   STRUCTURE_SET_SCENE_EVENT_OVERRIDE_CHANNEL,
+  STRUCTURE_UNDO_SCENE_DELETION_CHANNEL,
   STRUCTURE_RUN_SCENE_EXTRACTION_CHANNEL,
   STRUCTURE_LIST_SCENE_EXTRACTION_CANDIDATES_CHANNEL,
   STRUCTURE_LIST_SCENE_ANNOTATIONS_CHANNEL,
@@ -442,6 +448,7 @@ describe("studio bridge contract", () => {
         connectorKind: "eum-structured-json-v1",
         displayName: "사용자 지정 구조화 JSON",
         capabilities: ["vocabulary-lookup" as const],
+        contextTokenBudget: 8192,
         credentialPolicy: "optional" as const,
         runtimeConfig: {
           endpoint: "required" as const,
@@ -4066,6 +4073,7 @@ describe("studio bridge contract", () => {
       schemaVersion: 1,
       workId,
       documentId,
+      expectedDocumentRevisionId: entityId<"DocumentRevision">(randomUUID()),
       selection: { anchor: 5, head: 5 },
       exactQuote: "",
       operation: "add",
@@ -4089,6 +4097,155 @@ describe("studio bridge contract", () => {
     expect(invoke).toHaveBeenCalledWith(
       STRUCTURE_LIST_SCENE_OVERRIDES_CHANNEL,
       { schemaVersion: 1, workId },
+    );
+  });
+
+  it("rebinds Scene metadata through its narrow stable-identity channel", async () => {
+    const workId = entityId<"Work">(randomUUID());
+    const bindingId = entityId<"SceneMetadataBinding">(randomUUID());
+    const sceneId = entityId<"Scene">(randomUUID());
+    const now = new Date().toISOString();
+    const binding = {
+      schemaVersion: 1,
+      sceneMetadataBindingId: bindingId,
+      revision: 3,
+      workId,
+      metadataKind: "annotation",
+      metadataId: randomUUID(),
+      sourceSceneKey: "source-scene-fingerprint",
+      sceneId,
+      status: "current",
+      proposedSceneId: null,
+      lineageOperationId: null,
+      createdAt: now,
+      updatedAt: now,
+    } as const;
+    const invoke = vi.fn().mockResolvedValue(binding);
+    const bridge = createStudioBridge(invoke);
+    const command = {
+      schemaVersion: 1,
+      workId,
+      sceneMetadataBindingId: bindingId,
+      expectedBindingRevision: 2,
+      targetSceneId: sceneId,
+    } as const;
+
+    await expect(bridge.structure.rebindSceneMetadata(command))
+      .resolves.toEqual(binding);
+    expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_REBIND_SCENE_METADATA_CHANNEL,
+      command,
+    );
+  });
+
+  it("exposes previewed Scene deletion, trash, restore, and undo on narrow channels", async () => {
+    const workId = entityId<"Work">(randomUUID());
+    const documentId = entityId<"Document">(randomUUID());
+    const sceneId = entityId<"Scene">(randomUUID());
+    const sceneTrashEntryId = entityId<"SceneTrashEntry">(randomUUID());
+    const now = new Date().toISOString();
+    const target = { sceneId, documentId, sceneKey: "scene-trash-source" };
+    const preview = {
+      schemaVersion: 1,
+      previewFingerprint: "sha256:scene-trash-preview",
+      workId,
+      target,
+      sceneRuleSetRevision: 2,
+      documents: [{
+        documentId,
+        documentTitle: "첫 회차",
+        expectedDocumentRevisionId:
+          entityId<"DocumentRevision">(randomUUID()),
+        sceneKey: target.sceneKey,
+        sceneRange: { start: 0, end: 4 },
+        deletionRange: { start: 0, end: 8 },
+        removedBoundaryAnchorId: entityId<"Anchor">(randomUUID()),
+        sceneContentUtf16Length: 4,
+        deletedUtf16Length: 8,
+        firstExcerpt: "첫 장면",
+        lastExcerpt: "첫 장면",
+      }],
+      metadata: [],
+    } as const;
+    const entry = {
+      schemaVersion: 1,
+      sceneTrashEntryId,
+      revision: 1,
+      workId,
+      sceneId,
+      sourceSceneKey: target.sceneKey,
+      sceneRuleSetRevision: 2,
+      status: "active",
+      documents: [{
+        sceneTrashDocumentId: entityId<"SceneTrashDocument">(randomUUID()),
+        documentId,
+        documentTitle: "첫 회차",
+        ordinal: 0,
+        beforeRevisionId: entityId<"DocumentRevision">(randomUUID()),
+        deletedRevisionId: entityId<"DocumentRevision">(randomUUID()),
+        restoredRevisionId: null,
+        sceneRange: { start: 0, end: 4 },
+        deletionRange: { start: 0, end: 8 },
+        deletedUtf16Length: 8,
+        firstExcerpt: "첫 장면",
+        lastExcerpt: "첫 장면",
+      }],
+      metadata: [],
+      canRestore: true,
+      conflictReason: null,
+      deletedAt: now,
+      restoredAt: null,
+    } as const;
+    const receipt = {
+      schemaVersion: 1,
+      status: "deleted",
+      entry,
+      documentRevisions: [{
+        documentId,
+        revisionId: entry.documents[0].deletedRevisionId,
+      }],
+    } as const;
+    const list = { schemaVersion: 1, workId, entries: [entry] } as const;
+    const invoke = vi.fn(async (channel) => {
+      if (channel === STRUCTURE_PREPARE_SCENE_DELETION_CHANNEL) return preview;
+      if (channel === STRUCTURE_LIST_SCENE_TRASH_CHANNEL) return list;
+      return receipt;
+    });
+    const bridge = createStudioBridge(invoke);
+    const prepareCommand = { schemaVersion: 1, workId, target } as const;
+    const deleteCommand = { schemaVersion: 1, preview } as const;
+    const restoreCommand = {
+      schemaVersion: 1,
+      workId,
+      sceneTrashEntryId,
+      expectedRevision: 1,
+    } as const;
+
+    await expect(bridge.structure.prepareSceneDeletion(prepareCommand))
+      .resolves.toEqual(preview);
+    await expect(bridge.structure.deleteScene(deleteCommand)).resolves.toEqual(receipt);
+    await expect(bridge.structure.listSceneTrash({ schemaVersion: 1, workId }))
+      .resolves.toEqual(list);
+    await expect(bridge.structure.restoreSceneTrash(restoreCommand))
+      .resolves.toEqual(receipt);
+    await expect(bridge.structure.undoSceneDeletion(restoreCommand))
+      .resolves.toEqual(receipt);
+    expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_PREPARE_SCENE_DELETION_CHANNEL,
+      prepareCommand,
+    );
+    expect(invoke).toHaveBeenCalledWith(STRUCTURE_DELETE_SCENE_CHANNEL, deleteCommand);
+    expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_LIST_SCENE_TRASH_CHANNEL,
+      { schemaVersion: 1, workId },
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_RESTORE_SCENE_TRASH_CHANNEL,
+      restoreCommand,
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_UNDO_SCENE_DELETION_CHANNEL,
+      restoreCommand,
     );
   });
 

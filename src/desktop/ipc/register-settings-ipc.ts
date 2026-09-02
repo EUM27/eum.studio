@@ -9,6 +9,8 @@ import {
   MUSIC_SETTINGS_GET_WORK_CHANNEL,
   MUSIC_SETTINGS_PROFILE_CHANNEL,
   MUSIC_SETTINGS_SAVE_WORK_CHANNEL,
+  SCENE_ANALYSIS_SETTINGS_GET_WORK_CHANNEL,
+  SCENE_ANALYSIS_SETTINGS_SAVE_WORK_CHANNEL,
   UI_PREFERENCES_GET_CHANNEL,
   UI_PREFERENCES_SAVE_CHANNEL,
   YOUTUBE_MUSIC_CONNECTION_SAVE_CHANNEL,
@@ -45,6 +47,13 @@ import {
   type SaveYouTubeMusicConnectionCommand,
   type YouTubeMusicConnectionStatus,
 } from "../../application/music/youtube-music-connection";
+import {
+  parseGetWorkSceneAnalysisSettingsCommand,
+  parseSaveWorkSceneAnalysisSettingsCommand,
+  type GetWorkSceneAnalysisSettingsCommand,
+  type SaveWorkSceneAnalysisSettingsCommand,
+  type WorkSceneAnalysisSettingsProjection,
+} from "../../application/settings/work-scene-analysis-settings";
 
 type MaybePromise<T> = T | Promise<T>;
 
@@ -69,6 +78,12 @@ export type SettingsIpcRuntime = Readonly<{
   saveYouTubeMusicConnection: (
     command: SaveYouTubeMusicConnectionCommand,
   ) => Promise<YouTubeMusicConnectionStatus>;
+  getWorkSceneAnalysisSettings: (
+    command: GetWorkSceneAnalysisSettingsCommand,
+  ) => Promise<WorkSceneAnalysisSettingsProjection>;
+  saveWorkSceneAnalysisSettings: (
+    command: SaveWorkSceneAnalysisSettingsCommand,
+  ) => Promise<WorkSceneAnalysisSettingsProjection>;
 }>;
 
 export function registerSettingsIpc(input: Readonly<{
@@ -158,6 +173,24 @@ export function registerSettingsIpc(input: Readonly<{
       input.authorizeSender(event);
       return input.runtime.saveYouTubeMusicConnection(
         parseSaveYouTubeMusicConnectionCommand(value),
+      );
+    },
+  );
+  input.ipcMain.handle(
+    SCENE_ANALYSIS_SETTINGS_GET_WORK_CHANNEL,
+    (event, value: unknown) => {
+      input.authorizeSender(event);
+      return input.runtime.getWorkSceneAnalysisSettings(
+        parseGetWorkSceneAnalysisSettingsCommand(value),
+      );
+    },
+  );
+  input.ipcMain.handle(
+    SCENE_ANALYSIS_SETTINGS_SAVE_WORK_CHANNEL,
+    (event, value: unknown) => {
+      input.authorizeSender(event);
+      return input.runtime.saveWorkSceneAnalysisSettings(
+        parseSaveWorkSceneAnalysisSettingsCommand(value),
       );
     },
   );

@@ -13,6 +13,10 @@ import { readFileSync } from "node:fs";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 
+if (process.env.EUM_STUDIO_DISABLE_SANDBOX === "1") {
+  app.commandLine.appendSwitch("no-sandbox");
+}
+
 import { registerStudioIpc } from "./ipc/register-studio-ipc";
 import { createApplicationRuntimes } from "./runtime/create-application-runtimes";
 import { pickEditorRuntime } from "./runtime/editor-runtime";
@@ -41,11 +45,32 @@ import {
   type SceneOverrideProjection,
 } from "../application/structure/scene-override-contract";
 import {
+  parseRebindSceneMetadataCommand,
+  type SceneMetadataBindingProjection,
+} from "../application/structure/scene-metadata-binding-contract";
+import {
+  parseDeleteSceneCommand,
+  parseListSceneTrashCommand,
+  parsePrepareSceneDeletionCommand,
+  parseRestoreSceneTrashCommand,
+  parseUndoSceneDeletionCommand,
+  type SceneDeletionPreview,
+  type SceneDeletionReceipt,
+  type SceneTrashListProjection,
+} from "../application/structure/scene-trash-contract";
+import {
   parseListSceneProjectionCommand,
   parseSetSceneEventOverrideCommand,
   parseUpdateSceneRuleSetCommand,
   type SceneProjectionList,
 } from "../application/structure/scene-projection";
+import {
+  parseFinalizeSceneCanonCheckCommand,
+  parseListSceneCanonContextsCommand,
+  parseSceneCanonContextListProjection,
+  type SceneCanonCheckProjection,
+  type SceneCanonContextListProjection,
+} from "../application/structure/scene-canon-context";
 import {
   parseListSceneExtractionCandidatesCommand,
   parseSceneExtractionCandidateList,
@@ -79,6 +104,12 @@ import {
   type FragmentProjection,
 } from "../application/fragments/fragment-contract";
 import {
+  parseListManuscriptAnnotationsCommand,
+  parseManuscriptAnnotationListProjection,
+  type ManuscriptAnnotationListProjection,
+  type ManuscriptAnnotationProjection,
+} from "../application/review/manuscript-annotation-contract";
+import {
   parseCharacterListProjection,
   parseListCharactersCommand,
   type CharacterListProjection,
@@ -104,6 +135,52 @@ import {
   type CharacterGenerationDecisionResult,
   type CharacterGenerationResult,
 } from "../application/characters/character-generation-contract";
+import {
+  parseCanonReviewCandidateList,
+  parseListCanonReviewCandidatesCommand,
+  type CanonReviewCandidate,
+  type CanonReviewCandidateList,
+  type CanonReviewDecisionResult,
+  type CanonReviewResult,
+} from "../application/canon/canon-review-contract";
+import {
+  parseContinuityReviewCandidateList,
+  parseListContinuityReviewCandidatesCommand,
+  type ContinuityReviewCandidate,
+  type ContinuityReviewCandidateList,
+  type ContinuityReviewDecisionResult,
+  type ContinuityReviewResult,
+} from "../application/continuity/continuity-review-contract";
+import {
+  parseContinuityOverviewProjection,
+  parseListContinuityThreadsCommand,
+  type ContinuityOverviewProjection,
+  type ContinuityThreadProjection,
+} from "../application/continuity/continuity-thread-contract";
+import {
+  parseCharacterKnowledgeListProjection,
+  parseListCharacterKnowledgeCommand,
+  parsePovKnowledgeContextProjection,
+  parseProjectPovKnowledgeCommand,
+  type CharacterKnowledgeListProjection,
+  type CharacterKnowledgeProjection,
+  type PovKnowledgeContextProjection,
+} from "../application/continuity/character-knowledge-contract";
+import {
+  parseAssistantEntityContextPolicyList,
+  parseListAssistantEntityContextPoliciesCommand,
+  type AssistantEntityContextPolicyList,
+  type AssistantEntityContextPolicyProjection,
+} from "../application/continuity/assistant-context-policy";
+import {
+  parseAssistantContextActivityList,
+  parseAssistantContextManifestList,
+  parseListAssistantContextActivitiesCommand,
+  parseListAssistantContextManifestsCommand,
+  type AssistantContextActivityList,
+  type AssistantContextManifestList,
+  type AssistantContextPlanProjection,
+} from "../application/continuity/assistant-context-manifest";
 import {
   parseListLoreEntriesCommand,
   parseLoreEntryListProjection,
@@ -137,6 +214,16 @@ import {
   type PublishingSubmissionListProjection,
   type PublishingSubmissionProjection,
 } from "../application/publishing/publishing-submission-contract";
+import {
+  parseListPublishingFormResponsesCommand,
+  parseListPublishingFormTemplatesCommand,
+  parsePublishingFormResponseListProjection,
+  parsePublishingFormTemplateListProjection,
+  type PublishingFormResponseListProjection,
+  type PublishingFormResponseProjection,
+  type PublishingFormTemplateListProjection,
+  type PublishingFormTemplateProjection,
+} from "../application/publishing/publishing-form-contract";
 import {
   parseListPublishingContractsCommand,
   parsePublishingContractListProjection,
@@ -353,6 +440,11 @@ import {
   type WorkMusicSettingsProjection,
 } from "../application/music/work-music-settings";
 import {
+  createDefaultWorkSceneAnalysisSettingsProjection,
+  parseGetWorkSceneAnalysisSettingsCommand,
+  type WorkSceneAnalysisSettingsProjection,
+} from "../application/settings/work-scene-analysis-settings";
+import {
   createDefaultWorkInspirationSettingsProjection,
   parseGetWorkInspirationSettingsCommand,
   type WorkInspirationSettingsProjection,
@@ -388,6 +480,10 @@ import {
   parseCompareWorkSnapshotCommand,
   type WorkSnapshotComparisonProjection,
 } from "../application/revisions/work-snapshot-comparison";
+import {
+  parsePlanWorkSnapshotSceneSelectionCommand,
+  type WorkSnapshotSceneSelectionPlan,
+} from "../application/revisions/work-snapshot-scene-plan";
 import { parseManuscriptDocumentProfile } from "../application/editor/manuscript-document-profile";
 import { parseManuscriptInputProfile } from "../application/editor/manuscript-input-profile";
 import { parseManuscriptFormattingProfile } from "../application/editor/manuscript-formatting";
@@ -406,6 +502,10 @@ import {
   type ExportManuscriptTextCommand,
   type ManuscriptPreflightSettingsProjection,
 } from "../application/editor/manuscript-preflight";
+import {
+  parseExportCanonicalMarkdownCommand,
+  type PreparedCanonicalMarkdownExport,
+} from "../application/export/canonical-markdown-export";
 import {
   normalizeImportedManuscriptText,
 } from "../application/editor/manuscript-text-import";
@@ -483,6 +583,7 @@ import {
 } from "./poc-resume-checkpoint-runtime-profile";
 import { readRuntimeProfileValue } from "./runtime-profile-source";
 import { exportNodeManuscriptText } from "../platform/export/node-manuscript-text-export";
+import { exportNodeCanonicalMarkdownBundle } from "../platform/export/node-canonical-markdown-export";
 import {
   openNodeAssistantConnectionStore,
 } from "../platform/assistant/node-assistant-connection-store";
@@ -493,6 +594,17 @@ import {
 import {
   createNodeChatGptCodexClient,
 } from "../platform/assistant/node-chatgpt-codex";
+import {
+  parseListNarrativeDigestsCommand,
+  parseNarrativeDigestListProjection,
+  type NarrativeDigestListProjection,
+  type NarrativeDigestResult,
+} from "../application/continuity/narrative-digest-contract";
+import {
+  parseListSceneAnalysisRunsCommand,
+  type AutomaticSceneAnalysisResult,
+  type SceneAnalysisRunListProjection,
+} from "../application/continuity/scene-analysis-run-contract";
 import {
   createChatGptOAuthWindowLauncher,
   createChatGptOAuthWindowOptions,
@@ -514,9 +626,12 @@ import { createPublishingMailScheduleRuntime } from "./publishing-mail-schedule-
 import { createStructuredJsonHttpConnector } from "../platform/assistant/structured-json-http-connector";
 import { entityId } from "../domain/writing";
 import {
+  canActivateMainWindow,
   createSecureWebPreferences,
   isAllowedRendererNavigation,
   isTrustedRendererIpcSender,
+  shouldRecoverMainWindowRenderer,
+  shouldDisableHardwareAcceleration,
   shouldShowMainWindow,
 } from "./window-policy";
 import {
@@ -530,6 +645,9 @@ let configuredRendererTarget: string | null =
 let pendingCloseRequest:
   ManuscriptCloseRequest | null = null;
 let allowMainWindowClose = false;
+let applicationHandlersRegistered = false;
+let applicationIsQuitting = false;
+let rendererRecoveryPromise: Promise<void> | null = null;
 let activeApplicationRuntime: ApplicationRuntime | null = null;
 let activeYouTubePlayerReferer: string | null = null;
 
@@ -622,8 +740,16 @@ type ApplicationRuntime = {
   relocateSceneSegment(value: unknown): Promise<SceneProjectionList>;
   listSceneOverrides(value: unknown): Promise<SceneOverrideListProjection>;
   listSceneProjection(value: unknown): Promise<SceneProjectionList>;
+  listSceneCanonContexts(value: unknown): Promise<SceneCanonContextListProjection>;
+  finalizeSceneCanonCheck(value: unknown): Promise<SceneCanonCheckProjection>;
   updateSceneRuleSet(value: unknown): Promise<SceneProjectionList>;
   setSceneEventOverride(value: unknown): Promise<SceneProjectionList>;
+  rebindSceneMetadata(value: unknown): Promise<SceneMetadataBindingProjection>;
+  prepareSceneDeletion(value: unknown): Promise<SceneDeletionPreview>;
+  deleteScene(value: unknown): Promise<SceneDeletionReceipt>;
+  listSceneTrash(value: unknown): Promise<SceneTrashListProjection>;
+  restoreSceneTrash(value: unknown): Promise<SceneDeletionReceipt>;
+  undoSceneDeletion(value: unknown): Promise<SceneDeletionReceipt>;
   runSceneExtraction(value: unknown): Promise<SceneExtractionResult>;
   listSceneExtractionCandidates(value: unknown): Promise<SceneExtractionCandidateList>;
   decideSceneExtractionBoundary(value: unknown): Promise<SceneExtractionDecisionResult>;
@@ -648,6 +774,10 @@ type ApplicationRuntime = {
   updateFragment(value: unknown): Promise<FragmentProjection>;
   recordFragmentUse(value: unknown): Promise<FragmentProjection>;
   retireFragment(value: unknown): Promise<FragmentProjection>;
+  createManuscriptAnnotation(value: unknown): Promise<ManuscriptAnnotationProjection>;
+  listManuscriptAnnotations(value: unknown): Promise<ManuscriptAnnotationListProjection>;
+  updateManuscriptAnnotation(value: unknown): Promise<ManuscriptAnnotationProjection>;
+  retireManuscriptAnnotation(value: unknown): Promise<ManuscriptAnnotationProjection>;
   createCharacter(value: unknown): Promise<CharacterProjection>;
   listCharacters(value: unknown): Promise<CharacterListProjection>;
   updateCharacter(value: unknown): Promise<CharacterProjection>;
@@ -672,6 +802,11 @@ type ApplicationRuntime = {
   createPublishingPartner(value: unknown): Promise<PublishingPartnerProjection>;
   listPublishingPartners(value: unknown): Promise<PublishingPartnerListProjection>;
   updatePublishingPartner(value: unknown): Promise<PublishingPartnerProjection>;
+  createPublishingFormTemplate(value: unknown): Promise<PublishingFormTemplateProjection>;
+  listPublishingFormTemplates(value: unknown): Promise<PublishingFormTemplateListProjection>;
+  updatePublishingFormTemplate(value: unknown): Promise<PublishingFormTemplateProjection>;
+  listPublishingFormResponses(value: unknown): Promise<PublishingFormResponseListProjection>;
+  savePublishingFormResponse(value: unknown): Promise<PublishingFormResponseProjection>;
   createPublishingSubmission(value: unknown): Promise<PublishingSubmissionProjection>;
   listPublishingSubmissions(value: unknown): Promise<PublishingSubmissionListProjection>;
   updatePublishingSubmission(value: unknown): Promise<PublishingSubmissionProjection>;
@@ -769,6 +904,12 @@ type ApplicationRuntime = {
   saveAppSettings(value: unknown): Promise<AppSettingsProjection>;
   getWorkMusicSettings(value: unknown): Promise<WorkMusicSettingsProjection>;
   saveWorkMusicSettings(value: unknown): Promise<WorkMusicSettingsProjection>;
+  getWorkSceneAnalysisSettings(
+    value: unknown,
+  ): Promise<WorkSceneAnalysisSettingsProjection>;
+  saveWorkSceneAnalysisSettings(
+    value: unknown,
+  ): Promise<WorkSceneAnalysisSettingsProjection>;
   getWorkInspirationSettings(
     value: unknown,
   ): Promise<WorkInspirationSettingsProjection>;
@@ -802,6 +943,39 @@ type ApplicationRuntime = {
   runAssistantExternalSettingReview(
     value: unknown,
   ): Promise<AssistantExternalSettingReviewResult>;
+  runCanonReview(value: unknown): Promise<CanonReviewResult>;
+  listCanonReviewCandidates(value: unknown): Promise<CanonReviewCandidateList>;
+  updateCanonReviewItem(value: unknown): Promise<CanonReviewCandidate>;
+  resolveCanonReviewItemTarget(value: unknown): Promise<CanonReviewCandidate>;
+  decideCanonReviewItem(value: unknown): Promise<CanonReviewDecisionResult>;
+  createContinuityThread(value: unknown): Promise<ContinuityThreadProjection>;
+  updateContinuityThread(value: unknown): Promise<ContinuityThreadProjection>;
+  listContinuityThreads(value: unknown): Promise<ContinuityOverviewProjection>;
+  resolveContinuityThread(value: unknown): Promise<ContinuityThreadProjection>;
+  dismissContinuityThread(value: unknown): Promise<ContinuityThreadProjection>;
+  runContinuityReview(value: unknown): Promise<ContinuityReviewResult>;
+  listContinuityReviewCandidates(
+    value: unknown,
+  ): Promise<ContinuityReviewCandidateList>;
+  updateContinuityReviewItem(value: unknown): Promise<ContinuityReviewCandidate>;
+  decideContinuityReviewItem(value: unknown): Promise<ContinuityReviewDecisionResult>;
+  createCharacterKnowledge(value: unknown): Promise<CharacterKnowledgeProjection>;
+  updateCharacterKnowledge(value: unknown): Promise<CharacterKnowledgeProjection>;
+  supersedeCharacterKnowledge(value: unknown): Promise<CharacterKnowledgeProjection>;
+  retireCharacterKnowledge(value: unknown): Promise<CharacterKnowledgeProjection>;
+  listCharacterKnowledge(value: unknown): Promise<CharacterKnowledgeListProjection>;
+  projectPovCharacterKnowledge(value: unknown): Promise<PovKnowledgeContextProjection>;
+  listAssistantEntityContextPolicies(value: unknown): Promise<AssistantEntityContextPolicyList>;
+  saveAssistantEntityContextPolicy(value: unknown): Promise<AssistantEntityContextPolicyProjection>;
+  planAssistantContext(value: unknown): Promise<AssistantContextPlanProjection>;
+  listAssistantContextManifests(value: unknown): Promise<AssistantContextManifestList>;
+  listAssistantContextActivities(value: unknown): Promise<AssistantContextActivityList>;
+  generateNarrativeDigest(value: unknown): Promise<NarrativeDigestResult>;
+  generateSceneNarrativeDigest(value: unknown): Promise<NarrativeDigestResult>;
+  runAutomaticSceneAnalysis(value: unknown): Promise<AutomaticSceneAnalysisResult>;
+  listSceneAnalysisRuns(value: unknown): Promise<SceneAnalysisRunListProjection>;
+  listNarrativeDigests(value: unknown): Promise<NarrativeDigestListProjection>;
+  regenerateNarrativeDigest(value: unknown): Promise<NarrativeDigestResult>;
   runCharacterExtraction(value: unknown): Promise<CharacterExtractionResult>;
   listCharacterExtractionCandidates(
     value: unknown,
@@ -828,6 +1002,7 @@ type ApplicationRuntime = {
   createWorkSnapshot(value: unknown): Promise<WorkSnapshotProjection>;
   listWorkSnapshots(value: unknown): Promise<WorkSnapshotListProjection>;
   compareWorkSnapshot(value: unknown): Promise<WorkSnapshotComparisonProjection>;
+  planWorkSnapshotSceneSelection(value: unknown): Promise<WorkSnapshotSceneSelectionPlan>;
   getManuscriptPreflightSettings(
     value: unknown,
   ): Promise<ManuscriptPreflightSettingsProjection>;
@@ -837,6 +1012,9 @@ type ApplicationRuntime = {
   prepareManuscriptTextExport(
     value: unknown,
   ): Promise<ExportManuscriptTextCommand>;
+  prepareCanonicalMarkdownExport(
+    value: unknown,
+  ): Promise<PreparedCanonicalMarkdownExport>;
   getBackupStatus(): Promise<LocalWorkspaceBackupStatusProjection>;
   createBackupBundle(bundlePath: string): Promise<LocalWorkspaceBackupSummary>;
   restoreBackupBundle(
@@ -1259,7 +1437,7 @@ async function registerApplicationHandlers(): Promise<void> {
     }
   });
   const uiPreferencesStore = await openNodeUiPreferencesStore({
-    rootDirectoryPath: path.join(app.getPath("userData"), "ui-preferences-v1"),
+    rootDirectoryPath: path.join(app.getPath("userData"), "ui-preferences-v2"),
   });
   const chatGptOAuthStore = await openNodeChatGptOAuthStore({
     rootDirectoryPath: path.join(app.getPath("userData"), "chatgpt-oauth-v1"),
@@ -1393,6 +1571,19 @@ async function registerApplicationHandlers(): Promise<void> {
       createReceiptId: () => entityId<"ConnectorReceipt">(randomUUID()),
       now: () => new Date().toISOString(),
     });
+    const chatGptContextConnector = assistantConnectorProfile.connectors.find(
+      (entry) => entry.connectorKind === chatGptOAuthProfile.providerId,
+    );
+    if (
+      chatGptContextConnector === undefined ||
+      !chatGptContextConnector.capabilities.includes("canon.review") ||
+      !chatGptContextConnector.capabilities.includes("continuity.review") ||
+      !chatGptContextConnector.capabilities.includes("narrative.digest")
+    ) {
+      throw new Error(
+        `Assistant connector manifest is missing Canon/Continuity/NarrativeDigest context budget: ${chatGptOAuthProfile.providerId}`,
+      );
+    }
     const localRuntime: LocalWorkspaceRuntime =
       await openLocalWorkspaceRuntime({
         rootDirectoryPath:
@@ -1519,6 +1710,24 @@ async function registerApplicationHandlers(): Promise<void> {
           isConnected: () => chatGptOAuthStore.getStatus().connected,
           execute: ({ paragraphs }) =>
             chatGptCodexClient.extractCharacters(paragraphs),
+        }),
+        canonReview: Object.freeze({
+          destinationId: chatGptOAuthProfile.providerId,
+          contextTokenBudget: chatGptContextConnector.contextTokenBudget,
+          isConnected: () => chatGptOAuthStore.getStatus().connected,
+          execute: (input) => chatGptCodexClient.reviewCanon(input),
+        }),
+        continuityReview: Object.freeze({
+          destinationId: chatGptOAuthProfile.providerId,
+          contextTokenBudget: chatGptContextConnector.contextTokenBudget,
+          isConnected: () => chatGptOAuthStore.getStatus().connected,
+          execute: (input) => chatGptCodexClient.reviewContinuity(input),
+        }),
+        narrativeDigest: Object.freeze({
+          destinationId: chatGptOAuthProfile.providerId,
+          contextTokenBudget: chatGptContextConnector.contextTokenBudget,
+          isConnected: () => chatGptOAuthStore.getStatus().connected,
+          execute: (input) => chatGptCodexClient.generateNarrativeDigest(input),
         }),
         characterGeneration: Object.freeze({
           destinationId: chatGptOAuthProfile.providerId,
@@ -1712,10 +1921,22 @@ async function registerApplicationHandlers(): Promise<void> {
         localRuntime.listSceneOverrides(value),
       listSceneProjection: (value) =>
         localRuntime.listSceneProjection(value),
+      listSceneCanonContexts: (value) =>
+        localRuntime.listSceneCanonContexts(value),
+      finalizeSceneCanonCheck: (value) =>
+        localRuntime.finalizeSceneCanonCheck(value),
       updateSceneRuleSet: (value) =>
         localRuntime.updateSceneRuleSet(value),
       setSceneEventOverride: (value) =>
         localRuntime.setSceneEventOverride(value),
+      rebindSceneMetadata: (value) =>
+        localRuntime.rebindSceneMetadata(value),
+      prepareSceneDeletion: (value) =>
+        localRuntime.prepareSceneDeletion(value),
+      deleteScene: (value) => localRuntime.deleteScene(value),
+      listSceneTrash: (value) => localRuntime.listSceneTrash(value),
+      restoreSceneTrash: (value) => localRuntime.restoreSceneTrash(value),
+      undoSceneDeletion: (value) => localRuntime.undoSceneDeletion(value),
       runSceneExtraction: (value) =>
         localRuntime.runSceneExtraction(value),
       listSceneExtractionCandidates: (value) =>
@@ -1751,6 +1972,14 @@ async function registerApplicationHandlers(): Promise<void> {
         localRuntime.recordFragmentUse(value),
       retireFragment: (value) =>
         localRuntime.retireFragment(value),
+      createManuscriptAnnotation: (value) =>
+        localRuntime.createManuscriptAnnotation(value),
+      listManuscriptAnnotations: (value) =>
+        localRuntime.listManuscriptAnnotations(value),
+      updateManuscriptAnnotation: (value) =>
+        localRuntime.updateManuscriptAnnotation(value),
+      retireManuscriptAnnotation: (value) =>
+        localRuntime.retireManuscriptAnnotation(value),
       createCharacter: (value) =>
         localRuntime.createCharacter(value),
       listCharacters: (value) =>
@@ -1799,6 +2028,16 @@ async function registerApplicationHandlers(): Promise<void> {
         localRuntime.listPublishingPartners(value),
       updatePublishingPartner: (value) =>
         localRuntime.updatePublishingPartner(value),
+      createPublishingFormTemplate: (value) =>
+        localRuntime.createPublishingFormTemplate(value),
+      listPublishingFormTemplates: (value) =>
+        localRuntime.listPublishingFormTemplates(value),
+      updatePublishingFormTemplate: (value) =>
+        localRuntime.updatePublishingFormTemplate(value),
+      listPublishingFormResponses: (value) =>
+        localRuntime.listPublishingFormResponses(value),
+      savePublishingFormResponse: (value) =>
+        localRuntime.savePublishingFormResponse(value),
       createPublishingSubmission: (value) =>
         localRuntime.createPublishingSubmission(value),
       listPublishingSubmissions: (value) =>
@@ -1975,6 +2214,10 @@ async function registerApplicationHandlers(): Promise<void> {
         localRuntime.getWorkMusicSettings(value),
       saveWorkMusicSettings: (value) =>
         localRuntime.saveWorkMusicSettings(value),
+      getWorkSceneAnalysisSettings: (value) =>
+        localRuntime.getWorkSceneAnalysisSettings(value),
+      saveWorkSceneAnalysisSettings: (value) =>
+        localRuntime.saveWorkSceneAnalysisSettings(value),
       getWorkInspirationSettings: (value) =>
         localRuntime.getWorkInspirationSettings(value),
       saveWorkInspirationSettings: (value) =>
@@ -2008,6 +2251,68 @@ async function registerApplicationHandlers(): Promise<void> {
         localRuntime.runAssistantVocabularySuggestion(value),
       runAssistantExternalSettingReview: (value) =>
         localRuntime.runAssistantExternalSettingReview(value),
+      runCanonReview: (value) =>
+        localRuntime.runCanonReview(value),
+      listCanonReviewCandidates: (value) =>
+        localRuntime.listCanonReviewCandidates(value),
+      updateCanonReviewItem: (value) =>
+        localRuntime.updateCanonReviewItem(value),
+      resolveCanonReviewItemTarget: (value) =>
+        localRuntime.resolveCanonReviewItemTarget(value),
+      decideCanonReviewItem: (value) =>
+        localRuntime.decideCanonReviewItem(value),
+      createContinuityThread: (value) =>
+        localRuntime.createContinuityThread(value),
+      updateContinuityThread: (value) =>
+        localRuntime.updateContinuityThread(value),
+      listContinuityThreads: (value) =>
+        localRuntime.listContinuityThreads(value),
+      resolveContinuityThread: (value) =>
+        localRuntime.resolveContinuityThread(value),
+      dismissContinuityThread: (value) =>
+        localRuntime.dismissContinuityThread(value),
+      runContinuityReview: (value) =>
+        localRuntime.runContinuityReview(value),
+      listContinuityReviewCandidates: (value) =>
+        localRuntime.listContinuityReviewCandidates(value),
+      updateContinuityReviewItem: (value) =>
+        localRuntime.updateContinuityReviewItem(value),
+      decideContinuityReviewItem: (value) =>
+        localRuntime.decideContinuityReviewItem(value),
+      createCharacterKnowledge: (value) =>
+        localRuntime.createCharacterKnowledge(value),
+      updateCharacterKnowledge: (value) =>
+        localRuntime.updateCharacterKnowledge(value),
+      supersedeCharacterKnowledge: (value) =>
+        localRuntime.supersedeCharacterKnowledge(value),
+      retireCharacterKnowledge: (value) =>
+        localRuntime.retireCharacterKnowledge(value),
+      listCharacterKnowledge: (value) =>
+        localRuntime.listCharacterKnowledge(value),
+      projectPovCharacterKnowledge: (value) =>
+        localRuntime.projectPovCharacterKnowledge(value),
+      listAssistantEntityContextPolicies: (value) =>
+        localRuntime.listAssistantEntityContextPolicies(value),
+      saveAssistantEntityContextPolicy: (value) =>
+        localRuntime.saveAssistantEntityContextPolicy(value),
+      planAssistantContext: (value) =>
+        localRuntime.planAssistantContext(value),
+      listAssistantContextManifests: (value) =>
+        localRuntime.listAssistantContextManifests(value),
+      listAssistantContextActivities: (value) =>
+        localRuntime.listAssistantContextActivities(value),
+      generateNarrativeDigest: (value) =>
+        localRuntime.generateNarrativeDigest(value),
+      generateSceneNarrativeDigest: (value) =>
+        localRuntime.generateSceneNarrativeDigest(value),
+      runAutomaticSceneAnalysis: (value) =>
+        localRuntime.runAutomaticSceneAnalysis(value),
+      listSceneAnalysisRuns: (value) =>
+        localRuntime.listSceneAnalysisRuns(value),
+      listNarrativeDigests: (value) =>
+        localRuntime.listNarrativeDigests(value),
+      regenerateNarrativeDigest: (value) =>
+        localRuntime.regenerateNarrativeDigest(value),
       runCharacterExtraction: (value) =>
         localRuntime.runCharacterExtraction(value),
       listCharacterExtractionCandidates: (value) =>
@@ -2036,12 +2341,16 @@ async function registerApplicationHandlers(): Promise<void> {
         localRuntime.listWorkSnapshots(value),
       compareWorkSnapshot: (value) =>
         localRuntime.compareWorkSnapshot(value),
+      planWorkSnapshotSceneSelection: (value) =>
+        localRuntime.planWorkSnapshotSceneSelection(value),
       getManuscriptPreflightSettings: (value) =>
         localRuntime.getManuscriptPreflightSettings(value),
       saveManuscriptPreflightSettings: (value) =>
         localRuntime.saveManuscriptPreflightSettings(value),
       prepareManuscriptTextExport: (value) =>
         localRuntime.prepareManuscriptTextExport(value),
+      prepareCanonicalMarkdownExport: (value) =>
+        localRuntime.prepareCanonicalMarkdownExport(value),
       getBackupStatus: () =>
         localRuntime.getBackupStatus(),
       createBackupBundle: (bundlePath) =>
@@ -2398,6 +2707,16 @@ async function registerApplicationHandlers(): Promise<void> {
           "Scene projection is unavailable in a configured manuscript runtime",
         );
       },
+      listSceneCanonContexts: async (value) => {
+        const command=parseListSceneCanonContextsCommand(value);
+        return parseSceneCanonContextListProjection({
+          schemaVersion:1,workId:command.workId,contexts:[],
+        });
+      },
+      finalizeSceneCanonCheck: async (value) => {
+        parseFinalizeSceneCanonCheckCommand(value);
+        throw new Error("Scene Canon check finalization is unavailable in a configured manuscript runtime");
+      },
       updateSceneRuleSet: async (value) => {
         parseUpdateSceneRuleSetCommand(value);
         throw new Error(
@@ -2408,6 +2727,42 @@ async function registerApplicationHandlers(): Promise<void> {
         parseSetSceneEventOverrideCommand(value);
         throw new Error(
           "Scene event overrides are unavailable in a configured manuscript runtime",
+        );
+      },
+      rebindSceneMetadata: async (value) => {
+        parseRebindSceneMetadataCommand(value);
+        throw new Error(
+          "Scene metadata binding is unavailable in a configured manuscript runtime",
+        );
+      },
+      prepareSceneDeletion: async (value) => {
+        parsePrepareSceneDeletionCommand(value);
+        throw new Error(
+          "Scene deletion is unavailable in a configured manuscript runtime",
+        );
+      },
+      deleteScene: async (value) => {
+        parseDeleteSceneCommand(value);
+        throw new Error(
+          "Scene deletion is unavailable in a configured manuscript runtime",
+        );
+      },
+      listSceneTrash: async (value) => {
+        parseListSceneTrashCommand(value);
+        throw new Error(
+          "Scene trash is unavailable in a configured manuscript runtime",
+        );
+      },
+      restoreSceneTrash: async (value) => {
+        parseRestoreSceneTrashCommand(value);
+        throw new Error(
+          "Scene restore is unavailable in a configured manuscript runtime",
+        );
+      },
+      undoSceneDeletion: async (value) => {
+        parseUndoSceneDeletionCommand(value);
+        throw new Error(
+          "Scene deletion undo is unavailable in a configured manuscript runtime",
         );
       },
       runSceneExtraction: async () => {
@@ -2534,6 +2889,32 @@ async function registerApplicationHandlers(): Promise<void> {
       retireFragment: async () => {
         throw new Error(
           "Fragment retirement is unavailable in a configured manuscript runtime",
+        );
+      },
+      createManuscriptAnnotation: async () => {
+        throw new Error(
+          "Manuscript annotations are unavailable in a configured manuscript runtime",
+        );
+      },
+      listManuscriptAnnotations: async (value) => {
+        const command = parseListManuscriptAnnotationsCommand(value);
+        if (!workspaceCatalog.works.some((work) => work.workId === command.workId)) {
+          throw new Error(`Unknown Work: ${command.workId}`);
+        }
+        return parseManuscriptAnnotationListProjection({
+          schemaVersion: 1,
+          workId: command.workId,
+          annotations: [],
+        });
+      },
+      updateManuscriptAnnotation: async () => {
+        throw new Error(
+          "Manuscript annotations are unavailable in a configured manuscript runtime",
+        );
+      },
+      retireManuscriptAnnotation: async () => {
+        throw new Error(
+          "Manuscript annotations are unavailable in a configured manuscript runtime",
         );
       },
       createCharacter: async () => {
@@ -2689,6 +3070,35 @@ async function registerApplicationHandlers(): Promise<void> {
       updatePublishingPartner: async () => {
         throw new Error(
           "Publishing partner update is unavailable in a configured manuscript runtime",
+        );
+      },
+      createPublishingFormTemplate: async () => {
+        throw new Error(
+          "Publishing form template creation is unavailable in a configured manuscript runtime",
+        );
+      },
+      listPublishingFormTemplates: async (value) => {
+        parseListPublishingFormTemplatesCommand(value);
+        return parsePublishingFormTemplateListProjection({
+          schemaVersion: 1,
+          templates: [],
+        });
+      },
+      updatePublishingFormTemplate: async () => {
+        throw new Error(
+          "Publishing form template update is unavailable in a configured manuscript runtime",
+        );
+      },
+      listPublishingFormResponses: async (value) => {
+        parseListPublishingFormResponsesCommand(value);
+        return parsePublishingFormResponseListProjection({
+          schemaVersion: 1,
+          responses: [],
+        });
+      },
+      savePublishingFormResponse: async () => {
+        throw new Error(
+          "Publishing form response storage is unavailable in a configured manuscript runtime",
         );
       },
       createPublishingSubmission: async () => {
@@ -3393,6 +3803,22 @@ async function registerApplicationHandlers(): Promise<void> {
           "Work music settings persistence is unavailable in a configured manuscript runtime",
         );
       },
+      getWorkSceneAnalysisSettings: async (value) => {
+        const command = parseGetWorkSceneAnalysisSettingsCommand(value);
+        if (
+          !workspaceCatalog.works.some(
+            (work) => work.workId === command.workId,
+          )
+        ) {
+          throw new Error(`Unknown Work: ${command.workId}`);
+        }
+        return createDefaultWorkSceneAnalysisSettingsProjection(command.workId);
+      },
+      saveWorkSceneAnalysisSettings: async () => {
+        throw new Error(
+          "Work scene analysis settings persistence is unavailable in a configured manuscript runtime",
+        );
+      },
       getWorkInspirationSettings: async (value) => {
         const command = parseGetWorkInspirationSettingsCommand(value);
         if (
@@ -3479,6 +3905,196 @@ async function registerApplicationHandlers(): Promise<void> {
       runAssistantExternalSettingReview: async () => {
         throw new Error(
           "Assistant external setting review is unavailable in a configured manuscript runtime",
+        );
+      },
+      runCanonReview: async () => {
+        throw new Error(
+          "Canon review is unavailable in a configured manuscript runtime",
+        );
+      },
+      listCanonReviewCandidates: async (value) => {
+        const command = parseListCanonReviewCandidatesCommand(value);
+        return parseCanonReviewCandidateList({
+          schemaVersion: 1,
+          workId: command.workId,
+          candidates: [],
+        });
+      },
+      updateCanonReviewItem: async () => {
+        throw new Error(
+          "Canon review editing is unavailable in a configured manuscript runtime",
+        );
+      },
+      resolveCanonReviewItemTarget: async () => {
+        throw new Error(
+          "Canon review target resolution is unavailable in a configured manuscript runtime",
+        );
+      },
+      decideCanonReviewItem: async () => {
+        throw new Error(
+          "Canon review decisions are unavailable in a configured manuscript runtime",
+        );
+      },
+      createContinuityThread: async () => {
+        throw new Error(
+          "Continuity creation is unavailable in a configured manuscript runtime",
+        );
+      },
+      updateContinuityThread: async () => {
+        throw new Error(
+          "Continuity editing is unavailable in a configured manuscript runtime",
+        );
+      },
+      listContinuityThreads: async (value) => {
+        const command = parseListContinuityThreadsCommand(value);
+        return parseContinuityOverviewProjection({
+          schemaVersion: 1,
+          workId: command.workId,
+          threads: [],
+          projectedSources: [],
+        });
+      },
+      resolveContinuityThread: async () => {
+        throw new Error(
+          "Continuity resolution is unavailable in a configured manuscript runtime",
+        );
+      },
+      dismissContinuityThread: async () => {
+        throw new Error(
+          "Continuity dismissal is unavailable in a configured manuscript runtime",
+        );
+      },
+      runContinuityReview: async () => {
+        throw new Error(
+          "Continuity review is unavailable in a configured manuscript runtime",
+        );
+      },
+      listContinuityReviewCandidates: async (value) => {
+        const command = parseListContinuityReviewCandidatesCommand(value);
+        return parseContinuityReviewCandidateList({
+          schemaVersion: 1,
+          workId: command.workId,
+          candidates: [],
+        });
+      },
+      updateContinuityReviewItem: async () => {
+        throw new Error(
+          "Continuity review editing is unavailable in a configured manuscript runtime",
+        );
+      },
+      decideContinuityReviewItem: async () => {
+        throw new Error(
+          "Continuity review decisions are unavailable in a configured manuscript runtime",
+        );
+      },
+      createCharacterKnowledge: async () => {
+        throw new Error(
+          "CharacterKnowledge creation is unavailable in a configured manuscript runtime",
+        );
+      },
+      updateCharacterKnowledge: async () => {
+        throw new Error(
+          "CharacterKnowledge editing is unavailable in a configured manuscript runtime",
+        );
+      },
+      supersedeCharacterKnowledge: async () => {
+        throw new Error(
+          "CharacterKnowledge supersession is unavailable in a configured manuscript runtime",
+        );
+      },
+      retireCharacterKnowledge: async () => {
+        throw new Error(
+          "CharacterKnowledge retirement is unavailable in a configured manuscript runtime",
+        );
+      },
+      listCharacterKnowledge: async (value) => {
+        const command = parseListCharacterKnowledgeCommand(value);
+        return parseCharacterKnowledgeListProjection({
+          schemaVersion: 1,
+          workId: command.workId,
+          entries: [],
+        });
+      },
+      projectPovCharacterKnowledge: async (value) => {
+        const command = parseProjectPovKnowledgeCommand(value);
+        return parsePovKnowledgeContextProjection({
+          schemaVersion: 1,
+          workId: command.workId,
+          characterId: command.characterId,
+          objectiveFacts: [],
+          povKnown: [],
+          povFalseBeliefs: [],
+          povUnavailable: [],
+        });
+      },
+      listAssistantEntityContextPolicies: async (value) => {
+        const command = parseListAssistantEntityContextPoliciesCommand(value);
+        return parseAssistantEntityContextPolicyList({
+          schemaVersion: 1,
+          workId: command.workId,
+          policies: [],
+        });
+      },
+      saveAssistantEntityContextPolicy: async () => {
+        throw new Error(
+          "Assistant context policy is unavailable in a configured manuscript runtime",
+        );
+      },
+      planAssistantContext: async () => {
+        throw new Error(
+          "Assistant context planning is unavailable in a configured manuscript runtime",
+        );
+      },
+      listAssistantContextManifests: async (value) => {
+        const command = parseListAssistantContextManifestsCommand(value);
+        return parseAssistantContextManifestList({
+          schemaVersion: 1,
+          workId: command.workId,
+          manifests: [],
+        });
+      },
+      listAssistantContextActivities: async (value) => {
+        const command = parseListAssistantContextActivitiesCommand(value);
+        return parseAssistantContextActivityList({
+          schemaVersion: 1,
+          workId: command.workId,
+          activities: [],
+        });
+      },
+      generateNarrativeDigest: async () => {
+        throw new Error(
+          "NarrativeDigest generation is unavailable in a configured manuscript runtime",
+        );
+      },
+      generateSceneNarrativeDigest: async () => {
+        throw new Error(
+          "Scene NarrativeDigest generation is unavailable in a configured manuscript runtime",
+        );
+      },
+      runAutomaticSceneAnalysis: async () => {
+        throw new Error(
+          "Automatic Scene analysis is unavailable in a configured manuscript runtime",
+        );
+      },
+      listSceneAnalysisRuns: async (value) => {
+        const command = parseListSceneAnalysisRunsCommand(value);
+        return {
+          schemaVersion: 1,
+          workId: command.workId,
+          runs: [],
+        };
+      },
+      listNarrativeDigests: async (value) => {
+        const command = parseListNarrativeDigestsCommand(value);
+        return parseNarrativeDigestListProjection({
+          schemaVersion: 1,
+          workId: command.workId,
+          digests: [],
+        });
+      },
+      regenerateNarrativeDigest: async () => {
+        throw new Error(
+          "NarrativeDigest regeneration is unavailable in a configured manuscript runtime",
         );
       },
       runCharacterExtraction: async () => {
@@ -3590,6 +4206,10 @@ async function registerApplicationHandlers(): Promise<void> {
           "WorkSnapshot comparison is unavailable in a configured manuscript runtime",
         );
       },
+      planWorkSnapshotSceneSelection: async (value) => {
+        parsePlanWorkSnapshotSceneSelectionCommand(value);
+        throw new Error("WorkSnapshot Scene selection planning is unavailable in a configured manuscript runtime");
+      },
       getManuscriptPreflightSettings: async (value) => {
         const command = parseGetManuscriptPreflightSettingsCommand(value);
         if (
@@ -3626,6 +4246,15 @@ async function registerApplicationHandlers(): Promise<void> {
           );
         }
         return command;
+      },
+      prepareCanonicalMarkdownExport: async (value) => {
+        const command = parseExportCanonicalMarkdownCommand(value);
+        if (!workspaceCatalog.works.some((work) => work.workId === command.workId)) {
+          throw new Error(`Unknown Work: ${command.workId}`);
+        }
+        throw new Error(
+          "Canonical Markdown export is unavailable in a configured manuscript runtime",
+        );
       },
       getBackupStatus: async () => ({
         schemaVersion: 1,
@@ -3790,6 +4419,34 @@ async function registerApplicationHandlers(): Promise<void> {
       foreshadowPoint: foreshadowPointProfile,
       musicSettings: musicSettingsProfile,
       youtubeMusic: youtubeMusicProfile,
+    },
+    canonicalMarkdownExport: async (input) => {
+      const prepared = await applicationRuntime.prepareCanonicalMarkdownExport(input);
+      const owner = mainWindow;
+      if (owner === null) throw new Error("Main window is unavailable");
+      const configuredRoot = process.env.EUM_STUDIO_CANONICAL_MARKDOWN_EXPORT_ROOT_PATH;
+      const baseDirectoryPath = configuredRoot ?? (await dialog.showOpenDialog(owner, {
+        title: "별빛 Markdown 내보낼 폴더 선택",
+        buttonLabel: "이 폴더에 내보내기",
+        properties: ["openDirectory", "createDirectory"],
+      })).filePaths[0];
+      if (baseDirectoryPath === undefined) {
+        return { schemaVersion: 1, status: "cancelled" } as const;
+      }
+      const receipt = await exportNodeCanonicalMarkdownBundle({
+        baseDirectoryPath,
+        bundle: prepared,
+      });
+      return {
+        schemaVersion: 1,
+        status: "completed",
+        directoryName: receipt.directoryName,
+        fileCount: receipt.fileCount,
+        byteLength: receipt.byteLength,
+        sourceManifestHash: receipt.sourceManifestHash,
+        bundleManifestHash: receipt.bundleManifestHash,
+        entityCounts: prepared.entityCounts,
+      } as const;
     },
     activityExportRecords: async (command) => {
       const prepared = await applicationRuntime.prepareWorkRecordsExport(
@@ -4087,6 +4744,157 @@ async function registerApplicationHandlers(): Promise<void> {
   });
 }
 
+function describeDesktopFailure(reason: unknown): string {
+  return reason instanceof Error && reason.message.trim().length > 0
+    ? reason.message
+    : "알 수 없는 데스크톱 오류";
+}
+
+function quitAfterDesktopFailure(
+  title: string,
+  reason: unknown,
+): void {
+  if (applicationIsQuitting) return;
+  applicationIsQuitting = true;
+  const detail = describeDesktopFailure(reason);
+  console.error(`[eum-studio desktop] ${title}: ${detail}`);
+  try {
+    dialog.showErrorBox(
+      "이음 스튜디오",
+      `${title}\n\n${detail}\n\n앱을 다시 실행하면 마지막으로 저장된 원고에서 복구합니다.`,
+    );
+  } finally {
+    app.quit();
+  }
+}
+
+function activateMainWindow(window: BrowserWindow): void {
+  if (window.isMinimized()) window.restore();
+  if (shouldShowMainWindow(process.env.EUM_STUDIO_WINDOW_VISIBILITY)) {
+    window.show();
+    window.focus();
+  }
+}
+
+function waitForRendererReload(window: BrowserWindow): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const webContents = window.webContents;
+    let settled = false;
+    const cleanup = () => {
+      webContents.removeListener("did-finish-load", handleLoaded);
+      webContents.removeListener("did-fail-load", handleFailedLoad);
+      webContents.removeListener("render-process-gone", handleRendererGone);
+      webContents.removeListener("destroyed", handleDestroyed);
+    };
+    const finish = (reason?: unknown) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (reason === undefined) resolve();
+      else reject(reason);
+    };
+    const handleLoaded = () => finish();
+    const handleFailedLoad = (
+      _event: Electron.Event,
+      errorCode: number,
+      errorDescription: string,
+      _validatedUrl: string,
+      isMainFrame: boolean,
+    ) => {
+      if (!isMainFrame || errorCode === -3) return;
+      finish(new Error(
+        `Renderer reload failed (${errorCode}): ${errorDescription}`,
+      ));
+    };
+    const handleRendererGone = (
+      _event: Electron.Event,
+      details: Electron.RenderProcessGoneDetails,
+    ) => finish(new Error(
+      `Renderer exited again during recovery (${details.reason}, ${details.exitCode})`,
+    ));
+    const handleDestroyed = () => finish(new Error(
+      "Renderer was destroyed during recovery",
+    ));
+
+    webContents.once("did-finish-load", handleLoaded);
+    webContents.on("did-fail-load", handleFailedLoad);
+    webContents.once("render-process-gone", handleRendererGone);
+    webContents.once("destroyed", handleDestroyed);
+    try {
+      webContents.reload();
+    } catch (reason) {
+      finish(reason);
+    }
+  });
+}
+
+function scheduleRendererRecovery(
+  window: BrowserWindow,
+  failure: Readonly<{ reason: string; exitCode: number }>,
+): void {
+  if (!shouldRecoverMainWindowRenderer({
+    failedWindowIsCurrent: mainWindow === window,
+    isQuitting: applicationIsQuitting || allowMainWindowClose,
+    recoveryInProgress: rendererRecoveryPromise !== null,
+    windowDestroyed: window.isDestroyed(),
+    webContentsDestroyed: window.webContents.isDestroyed(),
+  })) return;
+
+  const recovery = waitForRendererReload(window).then(() => {
+    if (mainWindow === window && !window.isDestroyed()) {
+      pendingCloseRequest = null;
+      allowMainWindowClose = false;
+      activateMainWindow(window);
+    }
+  });
+  rendererRecoveryPromise = recovery;
+  void recovery.then(
+    () => undefined,
+    (reason) => quitAfterDesktopFailure(
+      `화면 프로세스를 복구하지 못했습니다 (${failure.reason}, ${failure.exitCode})`,
+      reason,
+    ),
+  ).finally(() => {
+    if (rendererRecoveryPromise === recovery) rendererRecoveryPromise = null;
+  });
+}
+
+async function activateOrCreateMainWindow(): Promise<void> {
+  if (
+    applicationIsQuitting ||
+    !app.isReady() ||
+    !applicationHandlersRegistered
+  ) return;
+  const window = mainWindow;
+  if (
+    window !== null &&
+    canActivateMainWindow({
+      windowDestroyed: window.isDestroyed(),
+      webContentsDestroyed: window.webContents.isDestroyed(),
+      rendererCrashed: !window.webContents.isDestroyed() &&
+        window.webContents.isCrashed(),
+    })
+  ) {
+    activateMainWindow(window);
+    return;
+  }
+  if (
+    window !== null &&
+    !window.isDestroyed() &&
+    !window.webContents.isDestroyed() &&
+    window.webContents.isCrashed()
+  ) {
+    scheduleRendererRecovery(window, { reason: "second-instance", exitCode: 0 });
+    return;
+  }
+
+  const replacement = await createMainWindow();
+  if (window !== null && !window.isDestroyed()) {
+    window.destroy();
+  }
+  activateMainWindow(replacement);
+}
+
 async function createMainWindow(): Promise<BrowserWindow> {
   const preloadPath = path.join(__dirname, "../preload/index.js");
   const rendererFile = path.join(
@@ -4139,6 +4947,9 @@ async function createMainWindow(): Promise<BrowserWindow> {
       event.preventDefault();
     }
   });
+  window.webContents.on("render-process-gone", (_event, details) => {
+    scheduleRendererRecovery(window, details);
+  });
   window.once("ready-to-show", () => {
     if (shouldShowMainWindow(process.env.EUM_STUDIO_WINDOW_VISIBILITY)) {
       window.show();
@@ -4182,32 +4993,76 @@ async function createMainWindow(): Promise<BrowserWindow> {
     );
   });
 
-  if (configuredRendererUrl === undefined) {
-    await window.loadFile(rendererFile);
-  } else {
-    await window.loadURL(configuredRendererUrl);
+  try {
+    if (configuredRendererUrl === undefined) {
+      await window.loadFile(rendererFile);
+    } else {
+      await window.loadURL(configuredRendererUrl);
+    }
+  } catch (reason) {
+    allowMainWindowClose = true;
+    if (!window.isDestroyed()) window.destroy();
+    if (mainWindow === window) {
+      mainWindow = null;
+      configuredRendererTarget = null;
+      pendingCloseRequest = null;
+      allowMainWindowClose = false;
+    }
+    throw reason;
+  }
+  if (
+    !window.isDestroyed() &&
+    !window.isVisible() &&
+    shouldShowMainWindow(process.env.EUM_STUDIO_WINDOW_VISIBILITY)
+  ) {
+    activateMainWindow(window);
   }
 
   return window;
 }
 
-app.enableSandbox();
+if (shouldDisableHardwareAcceleration(
+  process.env.EUM_STUDIO_HARDWARE_ACCELERATION,
+)) {
+  app.disableHardwareAcceleration();
+}
+if (process.env.EUM_STUDIO_DISABLE_SANDBOX !== "1") {
+  app.enableSandbox();
+}
 
-app.whenReady().then(async () => {
-  await registerApplicationHandlers();
-  mainWindow = await createMainWindow();
-
-  app.on("activate", async () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      mainWindow = await createMainWindow();
-    }
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  applicationIsQuitting = true;
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    void activateOrCreateMainWindow().catch((reason) => {
+      quitAfterDesktopFailure("앱 창을 다시 열지 못했습니다.", reason);
+    });
   });
-});
+  void app.whenReady().then(async () => {
+    await registerApplicationHandlers();
+    applicationHandlersRegistered = true;
+    mainWindow = await createMainWindow();
+
+    app.on("activate", () => {
+      void activateOrCreateMainWindow().catch((reason) => {
+        quitAfterDesktopFailure("앱 창을 다시 열지 못했습니다.", reason);
+      });
+    });
+  }).catch((reason) => {
+    quitAfterDesktopFailure("앱을 시작하지 못했습니다.", reason);
+  });
+}
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit();
   }
+});
+
+app.on("before-quit", () => {
+  applicationIsQuitting = true;
 });
 
 app.on("will-quit", () => {

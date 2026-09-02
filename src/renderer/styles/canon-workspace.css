@@ -1,0 +1,1127 @@
+.studio-app-shell .canon-workspace {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  color: var(--starlight-text-primary, var(--eum-text));
+  background: var(--starlight-primary, var(--eum-canvas));
+}
+
+.narrative-digest-panel {
+  display: grid;
+  gap: 1rem;
+  min-height: 0;
+  padding: 1rem;
+}
+
+.narrative-digest-heading,
+.narrative-digest-history > header,
+.narrative-digest-card > header,
+.narrative-digest-card > footer {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.narrative-digest-heading h2,
+.narrative-digest-history h3 {
+  margin: 0;
+}
+
+.narrative-digest-principle {
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.narrative-digest-layout {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(16rem, 0.75fr) minmax(20rem, 1.25fr);
+  min-height: 0;
+}
+
+.narrative-digest-form,
+.narrative-digest-history,
+.narrative-digest-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.75rem;
+}
+
+.narrative-digest-form,
+.narrative-digest-history {
+  display: grid;
+  align-content: start;
+  gap: 0.9rem;
+  padding: 1rem;
+}
+
+.narrative-digest-form fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.narrative-digest-form legend,
+.narrative-digest-form > label {
+  display: grid;
+  font-weight: 650;
+  gap: 0.4rem;
+}
+
+.narrative-digest-scope-options,
+.narrative-digest-document-options {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.5rem;
+}
+
+.narrative-digest-scope-options label,
+.narrative-digest-document-options label {
+  align-items: center;
+  display: flex;
+  gap: 0.45rem;
+}
+
+.narrative-digest-card {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.9rem;
+}
+
+.narrative-digest-card.is-stale {
+  border-color: var(--status-warning, #b7791f);
+}
+
+.narrative-digest-card small,
+.narrative-digest-card footer,
+.narrative-digest-history > header > span {
+  color: var(--text-secondary);
+}
+
+.narrative-digest-card header > div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.narrative-digest-stale {
+  color: var(--status-warning, #b7791f);
+  font-weight: 700;
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .narrative-digest-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.studio-app-shell .canon-workspace-header {
+  display: flex;
+  min-width: 0;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--starlight-border, var(--eum-line));
+  background: var(--starlight-secondary, var(--eum-panel));
+}
+
+.studio-app-shell .canon-workspace-header h2,
+.studio-app-shell .canon-review-column h3 {
+  margin: 0;
+}
+
+.studio-app-shell .canon-workspace-header h2 {
+  margin-top: 2px;
+  font-size: 19px;
+  letter-spacing: -0.02em;
+}
+
+.studio-app-shell .canon-eyebrow {
+  display: block;
+  color: var(--starlight-text-secondary, var(--eum-text-muted));
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.studio-app-shell .canon-workspace-tabs {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--starlight-border, var(--eum-line));
+  border-radius: 9px;
+  background: var(--starlight-input, var(--eum-canvas-muted));
+}
+
+.studio-app-shell .canon-workspace-tabs button,
+.studio-app-shell .canon-markdown-export button,
+.studio-app-shell .canon-review-column button,
+.studio-app-shell .canon-permission button {
+  min-height: 30px;
+  border: 1px solid var(--starlight-border, var(--eum-line));
+  border-radius: 7px;
+  color: var(--starlight-text-primary, var(--eum-text));
+  background: var(--starlight-input, var(--eum-panel));
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.studio-app-shell .canon-markdown-export {
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+}
+
+.studio-app-shell .canon-markdown-export button {
+  padding: 0 10px;
+  white-space: nowrap;
+}
+
+.studio-app-shell .canon-markdown-export small {
+  color: var(--starlight-text-secondary, var(--eum-text-muted));
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.studio-app-shell .canon-workspace-tabs button {
+  min-width: 84px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.studio-app-shell .canon-workspace-tabs button.is-active,
+.studio-app-shell .canon-review-column button.is-selected,
+.studio-app-shell .canon-browser-list button[aria-pressed="true"] {
+  color: var(--starlight-button-text, #fff);
+  background: var(--starlight-button, var(--eum-accent));
+  border-color: var(--starlight-button, var(--eum-accent));
+}
+
+.studio-app-shell .canon-workspace :is(button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--starlight-caret, var(--eum-accent));
+  outline-offset: 2px;
+}
+
+.studio-app-shell .canon-workspace button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.studio-app-shell .canon-feedback,
+.studio-app-shell .canon-permission {
+  margin: 0;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--starlight-border, var(--eum-line));
+  color: var(--starlight-text-primary, var(--eum-text));
+  background: var(--starlight-secondary, var(--eum-panel));
+  font-size: 11px;
+}
+
+.studio-app-shell .canon-feedback.is-error,
+.studio-app-shell .canon-warning {
+  color: var(--eum-danger, #a53636);
+}
+
+.studio-app-shell .canon-permission {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--eum-accent-soft, rgba(77, 106, 255, 0.1));
+}
+
+.studio-app-shell .canon-permission p {
+  margin: 0;
+}
+
+.studio-app-shell .canon-workspace-content {
+  min-width: 0;
+  min-height: 0;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.studio-app-shell .canon-review-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.72fr) minmax(360px, 1.35fr) minmax(260px, 0.9fr);
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.studio-app-shell .canon-browser-grid {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.58fr) minmax(280px, 0.9fr) minmax(360px, 1.3fr);
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  gap: 12px;
+}
+
+.studio-app-shell .canon-review-column {
+  min-width: 0;
+  min-height: 0;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid var(--starlight-border, var(--eum-line));
+  border-radius: 10px;
+  background: var(--starlight-secondary, var(--eum-panel));
+  scrollbar-gutter: stable;
+}
+
+.studio-app-shell .canon-review-column > header,
+.studio-app-shell .canon-browser-list > header,
+.studio-app-shell .canon-browser-detail > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.studio-app-shell .canon-review-column h3 {
+  margin-top: 2px;
+  font-size: 14px;
+}
+
+.studio-app-shell .canon-empty {
+  display: grid;
+  min-height: 120px;
+  place-items: center;
+  margin: 0;
+  color: var(--starlight-text-secondary, var(--eum-text-muted));
+  font-size: 11px;
+  text-align: center;
+}
+
+.studio-app-shell :is(.canon-candidate-list, .canon-item-list, .canon-field-change-list, .canon-evidence-list, .canon-browser-list ol) {
+  display: grid;
+  gap: 7px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.studio-app-shell .canon-candidate-list > li > button,
+.studio-app-shell .canon-browser-list li > button {
+  display: grid;
+  width: 100%;
+  min-height: 58px;
+  justify-items: start;
+  gap: 3px;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.studio-app-shell .canon-candidate-list button span,
+.studio-app-shell .canon-candidate-list button small,
+.studio-app-shell .canon-browser-list button span,
+.studio-app-shell .canon-browser-list button small {
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--starlight-text-secondary, var(--eum-text-muted));
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-app-shell .canon-candidate-list button.is-selected :is(span, small),
+.studio-app-shell .canon-browser-list button.is-selected :is(span, small) {
+  color: inherit;
+  opacity: 0.82;
+}
+
+.studio-app-shell .canon-item-list {
+  margin: 6px 0 2px 12px;
+  padding-left: 8px;
+  border-left: 1px solid var(--starlight-border, var(--eum-line));
+}
+
+.studio-app-shell .canon-item-list button {
+  display: grid;
+  width: 100%;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding-inline: 8px;
+  text-align: left;
+}
+
+.studio-app-shell .canon-item-list button[aria-current="true"] {
+  border-color: var(--eum-accent-border, var(--eum-accent));
+  background: var(--eum-accent-soft, rgba(77, 106, 255, 0.1));
+}
+
+.studio-app-shell .canon-kind-badge,
+.studio-app-shell .canon-status-badge {
+  display: inline-flex;
+  min-height: 21px;
+  align-items: center;
+  padding: 0 7px;
+  border: 1px solid var(--starlight-border, var(--eum-line));
+  border-radius: 999px;
+  color: var(--starlight-text-secondary, var(--eum-text-muted));
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.studio-app-shell .canon-status-badge.is-approved {
+  color: var(--eum-success, #24734c);
+}
+
+.studio-app-shell .canon-status-badge.is-rejected {
+  color: var(--eum-danger, #a53636);
+}
+
+.studio-app-shell .canon-review-reason,
+.studio-app-shell .canon-warning {
+  margin: 0 0 10px;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.studio-app-shell .canon-field-change {
+  padding: 10px;
+  border: 1px solid var(--starlight-border, var(--eum-line));
+  border-radius: 8px;
+  background: var(--starlight-primary, var(--eum-canvas));
+}
+
+.studio-app-shell .canon-field-change > header label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.studio-app-shell .canon-diff-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 9px 0;
+}
+
+.studio-app-shell .canon-diff-values > div,
+.studio-app-shell .canon-record-fields > div {
+  min-width: 0;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--starlight-input, var(--eum-canvas-muted));
+}
+
+.studio-app-shell .canon-diff-values dt,
+.studio-app-shell .canon-record-fields dt {
+  margin-bottom: 4px;
+  color: var(--starlight-text-secondary, var(--eum-text-muted));
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.studio-app-shell .canon-diff-values dd,
+.studio-app-shell .canon-record-fields dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.studio-app-shell .canon-field-change form,
+.studio-app-shell .canon-target-resolver,
+.studio-app-shell .canon-browser-filter {
+  display: grid;
+  gap: 8px;
+}
+
+.studio-app-shell .canon-field-change form label,
+.studio-app-shell .canon-target-resolver label,
+.studio-app-shell .canon-browser-filter label {
+  display: grid;
+  gap: 4px;
+  color: var(--starlight-text-secondary, var(--eum-text-muted));
+  font-size: 10px;
+}
+
+.studio-app-shell .canon-workspace :is(input, select, textarea) {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--starlight-border, var(--eum-line));
+  border-radius: 6px;
+  color: var(--starlight-text-primary, var(--eum-text));
+  background: var(--starlight-input, var(--eum-canvas));
+  font: inherit;
+  font-size: 11px;
+}
+
+.studio-app-shell .canon-workspace :is(input, select) {
+  min-height: 31px;
+  padding: 0 8px;
+}
+
+.studio-app-shell .canon-workspace textarea {
+  min-height: 54px;
+  padding: 7px 8px;
+  resize: vertical;
+}
+
+.studio-app-shell .canon-decision-actions {
+  position: sticky;
+  bottom: -12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px 0;
+  margin-top: 10px;
+  background: var(--starlight-secondary, var(--eum-panel));
+}
+
+.studio-app-shell .canon-decision-actions button.is-primary {
+  color: var(--starlight-button-text, #fff);
+  border-color: var(--starlight-button, var(--eum-accent));
+  background: var(--starlight-button, var(--eum-accent));
+}
+
+.studio-app-shell .canon-evidence-list li {
+  padding: 10px;
+  border: 1px solid var(--starlight-border, var(--eum-line));
+  border-radius: 8px;
+  background: var(--starlight-primary, var(--eum-canvas));
+}
+
+.studio-app-shell .canon-evidence-list li > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--starlight-text-secondary, var(--eum-text-muted));
+  font-size: 10px;
+}
+
+.studio-app-shell .canon-evidence-list blockquote {
+  padding: 8px 0 8px 10px;
+  margin: 8px 0;
+  border-left: 2px solid var(--eum-accent, #586ee0);
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.studio-app-shell .canon-browser-counts,
+.studio-app-shell .canon-record-fields {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+
+.studio-app-shell .canon-browser-counts > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px;
+  border-bottom: 1px solid var(--starlight-border, var(--eum-line));
+  font-size: 11px;
+}
+
+.studio-app-shell .canon-browser-counts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+}
+
+@media (max-width: 1120px) {
+  .studio-app-shell .canon-workspace-content {
+    overflow: auto;
+  }
+
+  .studio-app-shell .canon-review-grid,
+  .studio-app-shell .canon-browser-grid {
+    min-width: 840px;
+  }
+}
+
+.studio-app-shell .continuity-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.studio-app-shell .continuity-radar {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 9px;
+  padding: 12px 12px 0;
+}
+
+.studio-app-shell .continuity-radar-heading,
+.studio-app-shell .continuity-radar-signals > header,
+.studio-app-shell .continuity-radar-lanes > header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.studio-app-shell .continuity-radar-heading h3,
+.studio-app-shell .continuity-radar-body h4 {
+  margin: 0;
+}
+
+.studio-app-shell .continuity-radar-heading > p,
+.studio-app-shell .continuity-radar-signals > header > span,
+.studio-app-shell .continuity-radar-lanes > header > span {
+  margin: 0;
+  color: var(--starlight-text-secondary, var(--eum-text-muted));
+  font-size: 10px;
+}
+
+.studio-app-shell .continuity-radar-metrics {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 7px;
+  margin: 0;
+}
+
+.studio-app-shell .continuity-radar-metrics > div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid var(--starlight-border, var(--eum-line));
+  border-radius: 8px;
+  background: var(--starlight-secondary, var(--eum-panel));
+}
+
+.studio-app-shell .continuity-radar-metrics > div.is-attention {
+  border-color: color-mix(in srgb, var(--status-warning, #b7791f) 60%, var(--starlight-border, var(--eum-line)));
+  background: color-mix(in srgb, var(--status-warning, #b7791f) 9%, var(--starlight-secondary, var(--eum-panel)));
+}
+
+.studio-app-shell .continuity-radar-metrics dt {
+  color: var(--starlight-text-secondary, var(--eum-text-muted));
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.studio-app-shell .continuity-radar-metrics dd {
+  margin: 0;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.studio-app-shell .continuity-radar-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(220px, 0.75fr);
+  gap: 8px;
+  min-height: 0;
+}
+
+.studio-app-shell .continuity-radar-signals,
+.studio-app-shell .continuity-radar-lanes {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--starlight-border, var(--eum-line));
+  border-radius: 9px;
+  background: var(--starlight-primary, var(--eum-canvas));
+}
+
+.studio-app-shell .continuity-radar-signals > ol,
+.studio-app-shell .continuity-radar-lanes > ol {
+  display: grid;
+  gap: 5px;
+  max-height: 112px;
+  padding: 0;
+  margin: 7px 0 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.studio-app-shell .continuity-radar-signals li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-left: 3px solid var(--starlight-border, var(--eum-line));
+  border-radius: 6px;
+  background: var(--starlight-secondary, var(--eum-panel));
+}
+
+.studio-app-shell .continuity-radar-signals li.is-broken-evidence,
+.studio-app-shell .continuity-radar-signals li.is-missing-evidence {
+  border-left-color: var(--status-warning, #b7791f);
+}
+
+.studio-app-shell .continuity-radar-signals li.is-needs-review-evidence {
+  border-left-color: var(--starlight-button, var(--eum-accent));
+}
+
+.studio-app-shell .continuity-radar-signals li > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.studio-app-shell .continuity-radar-signals li > div > span,
+.studio-app-shell .continuity-radar-signals li small,
+.studio-app-shell .continuity-radar-lanes li span,
+.studio-app-shell .continuity-radar-lanes li small {
+  color: var(--starlight-text-secondary, var(--eum-text-muted));
+  font-size: 9px;
+}
+
+.studio-app-shell .continuity-radar-signals li strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-app-shell .continuity-radar-signals nav {
+  display: flex;
+  gap: 5px;
+}
+
+.studio-app-shell .continuity-radar-signals button {
+  min-height: 26px;
+  padding: 4px 7px;
+  font-size: 9px;
+}
+
+.studio-app-shell .continuity-radar-lanes li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  padding: 5px 2px;
+  border-bottom: 1px solid var(--starlight-border, var(--eum-line));
+}
+
+.studio-app-shell .continuity-radar-lanes li small {
+  grid-column: 1 / -1;
+}
+
+.studio-app-shell .continuity-main-grid {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(230px, 0.78fr) minmax(310px, 1.05fr) minmax(300px, 1fr);
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px;
+}
+
+.studio-app-shell .continuity-main-grid > * {
+  min-width: 0;
+  overflow: auto;
+}
+
+.studio-app-shell .continuity-list-column > header,
+.studio-app-shell .continuity-candidate-review > header,
+.studio-app-shell .continuity-thread-detail > header,
+.studio-app-shell .continuity-composer > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.studio-app-shell .continuity-candidate-review > header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.studio-app-shell .continuity-ai-guidance {
+  margin: 8px 0 10px;
+  color: var(--starlight-text-secondary, var(--eum-text-muted));
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.studio-app-shell .continuity-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  margin: 10px 0;
+}
+
+.studio-app-shell .continuity-filters select {
+  grid-column: 1 / -1;
+}
+
+.studio-app-shell .continuity-filters button[aria-pressed="true"] {
+  color: var(--starlight-button-text, #fff);
+  border-color: var(--starlight-button, var(--eum-accent));
+  background: var(--starlight-button, var(--eum-accent));
+}
+
+.studio-app-shell .continuity-record-list,
+.studio-app-shell .continuity-history ol,
+.studio-app-shell .continuity-candidate-layout > ol {
+  display: grid;
+  gap: 7px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.studio-app-shell .continuity-record-list > li > button,
+.studio-app-shell .continuity-source-card {
+  display: grid;
+  width: 100%;
+  gap: 4px;
+  padding: 10px;
+  text-align: left;
+}
+
+.studio-app-shell .continuity-record-list span,
+.studio-app-shell .continuity-source-card > span {
+  color: var(--starlight-text-secondary, var(--eum-text-muted));
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+}
+
+.studio-app-shell .continuity-source-card {
+  border: 1px dashed var(--starlight-border, var(--eum-line));
+  border-radius: 8px;
+  background: var(--starlight-primary, var(--eum-canvas));
+}
+
+.studio-app-shell .continuity-source-card p {
+  margin: 0;
+  color: var(--starlight-text-secondary, var(--eum-text-muted));
+  font-size: 10px;
+  white-space: pre-wrap;
+}
+
+.studio-app-shell .continuity-detail-column,
+.studio-app-shell .continuity-review-column {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.studio-app-shell .continuity-composer,
+.studio-app-shell .continuity-thread-detail,
+.studio-app-shell .continuity-candidate-review > article,
+.studio-app-shell .continuity-candidate-layout > article {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--starlight-border, var(--eum-line));
+}
+
+.studio-app-shell .continuity-composer form,
+.studio-app-shell .continuity-thread-detail form,
+.studio-app-shell .continuity-candidate-review form {
+  display: grid;
+  gap: 8px;
+}
+
+.studio-app-shell .continuity-composer label,
+.studio-app-shell .continuity-thread-detail label,
+.studio-app-shell .continuity-candidate-review label {
+  display: grid;
+  gap: 4px;
+  color: var(--starlight-text-secondary, var(--eum-text-muted));
+  font-size: 10px;
+}
+
+.studio-app-shell .continuity-selection-evidence {
+  padding: 9px;
+  border: 1px solid color-mix(in srgb, var(--eum-accent) 40%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--eum-accent) 8%, transparent);
+}
+
+.studio-app-shell .continuity-selection-evidence blockquote {
+  margin: 7px 0;
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+
+.studio-app-shell .continuity-subject-selector,
+.studio-app-shell .continuity-decision fieldset {
+  display: grid;
+  gap: 5px;
+  max-height: 124px;
+  padding: 8px;
+  margin: 0;
+  overflow: auto;
+  border: 1px solid var(--starlight-border, var(--eum-line));
+  border-radius: 7px;
+}
+
+.studio-app-shell .continuity-subject-selector label,
+.studio-app-shell .continuity-decision fieldset label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.studio-app-shell .continuity-subject-selector input,
+.studio-app-shell .continuity-decision fieldset input {
+  width: auto;
+  min-height: auto;
+}
+
+.studio-app-shell .continuity-history li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3px 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--starlight-border, var(--eum-line));
+  font-size: 10px;
+}
+
+.studio-app-shell .continuity-history li small {
+  grid-column: 1 / -1;
+}
+
+.studio-app-shell .continuity-close-actions > div,
+.studio-app-shell .continuity-decision {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.studio-app-shell .continuity-decision fieldset {
+  flex: 1 0 100%;
+}
+
+.studio-app-shell .continuity-candidate-layout {
+  display: grid;
+  gap: 10px;
+}
+
+.studio-app-shell .continuity-candidate-layout > ol button {
+  display: grid;
+  width: 100%;
+  gap: 3px;
+  padding: 7px;
+  text-align: left;
+}
+
+@media (max-width: 1120px) {
+  .studio-app-shell .continuity-radar-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .studio-app-shell .continuity-radar-body {
+    grid-template-columns: minmax(520px, 1fr) minmax(220px, 0.55fr);
+  }
+
+  .studio-app-shell .continuity-main-grid {
+    min-width: 920px;
+  }
+}
+
+.studio-app-shell .character-knowledge-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.studio-app-shell .character-knowledge-grid {
+  flex: 1 1 auto;
+  grid-template-columns: minmax(210px, 0.8fr) minmax(330px, 1.35fr) minmax(250px, 1fr);
+  height: auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.studio-app-shell .knowledge-selection-composer {
+  flex: 0 1 42%;
+  min-height: 0;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, var(--eum-accent) 45%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--eum-accent) 8%, transparent);
+}
+
+.studio-app-shell .knowledge-selection-composer > header,
+.studio-app-shell .knowledge-list-column > header,
+.studio-app-shell .knowledge-detail-column > header,
+.studio-app-shell .knowledge-pov-column > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.studio-app-shell .knowledge-selection-composer blockquote {
+  margin: 8px 0;
+  white-space: pre-wrap;
+}
+
+.studio-app-shell .knowledge-selection-composer form,
+.studio-app-shell .knowledge-edit-form,
+.studio-app-shell .knowledge-retire-form,
+.studio-app-shell .knowledge-pov-column form,
+.studio-app-shell .knowledge-filter-form {
+  display: grid;
+  gap: 8px;
+}
+
+.studio-app-shell .knowledge-selection-composer label,
+.studio-app-shell .knowledge-edit-form label,
+.studio-app-shell .knowledge-retire-form label,
+.studio-app-shell .knowledge-pov-column label {
+  display: grid;
+  gap: 4px;
+  color: var(--starlight-text-secondary, var(--eum-text-muted));
+  font-size: 10px;
+}
+
+.studio-app-shell .knowledge-reference-options {
+  display: grid;
+  gap: 5px;
+  max-height: 128px;
+  padding: 8px;
+  margin: 0;
+  overflow: auto;
+  border: 1px solid var(--starlight-border, var(--eum-line));
+  border-radius: 7px;
+}
+
+.studio-app-shell .knowledge-reference-options label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.studio-app-shell .knowledge-reference-options input {
+  width: auto;
+  min-height: auto;
+}
+
+.studio-app-shell .knowledge-status-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.studio-app-shell .knowledge-status-grid > div,
+.studio-app-shell .knowledge-lineage,
+.studio-app-shell .knowledge-edit-form,
+.studio-app-shell .knowledge-retire-form,
+.studio-app-shell .knowledge-pov-column > section {
+  padding: 9px;
+  border: 1px solid var(--starlight-border, var(--eum-line));
+  border-radius: 8px;
+}
+
+.studio-app-shell .knowledge-status-grid dt,
+.studio-app-shell .knowledge-status-grid dd {
+  margin: 0;
+  font-size: 10px;
+}
+
+.studio-app-shell .knowledge-pov-column ul {
+  padding-left: 18px;
+  margin: 5px 0 0;
+}
+
+@media (max-width: 1120px) {
+  .studio-app-shell .character-knowledge-grid {
+    min-width: 940px;
+  }
+}
+
+.studio-app-shell .assistant-context-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.studio-app-shell .assistant-context-grid {
+  flex: 1 1 auto;
+  grid-template-columns: minmax(270px, 0.9fr) minmax(330px, 1.1fr) minmax(300px, 1fr);
+  height: auto;
+}
+
+.studio-app-shell .context-policy-list,
+.studio-app-shell .context-plan-result ol,
+.studio-app-shell .context-activity-column ol {
+  display: grid;
+  gap: 7px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.studio-app-shell .context-policy-list li,
+.studio-app-shell .context-plan-result li,
+.studio-app-shell .context-activity-column li {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--starlight-border, var(--eum-line));
+  border-radius: 7px;
+}
+
+.studio-app-shell .context-policy-list li {
+  grid-template-columns: minmax(0, 1fr) minmax(120px, auto);
+  align-items: center;
+}
+
+.studio-app-shell .context-policy-list li > div,
+.studio-app-shell .context-plan-result li,
+.studio-app-shell .context-activity-column li {
+  min-width: 0;
+}
+
+.studio-app-shell .context-policy-list small,
+.studio-app-shell .context-plan-result small,
+.studio-app-shell .context-activity-column small {
+  display: block;
+  color: var(--starlight-text-secondary, var(--eum-text-muted));
+  overflow-wrap: anywhere;
+}
+
+.studio-app-shell .context-plan-column form {
+  display: grid;
+  gap: 8px;
+}
+
+.studio-app-shell .context-plan-column form label {
+  display: grid;
+  gap: 4px;
+  font-size: 10px;
+}
+
+.studio-app-shell .context-over-budget {
+  padding: 10px;
+  margin-top: 10px;
+  border: 1px solid var(--eum-danger, #a53636);
+  border-radius: 8px;
+  color: var(--eum-danger, #a53636);
+}
+
+@media (max-width: 1120px) {
+  .studio-app-shell .assistant-context-grid {
+    min-width: 960px;
+  }
+}

@@ -10,5 +10,7 @@ export function pickVersionRuntime(runtime: VersionIpcRuntime): VersionIpcRuntim
     createWorkSnapshot: (command) => runtime.createWorkSnapshot(command),
     listWorkSnapshots: (command) => runtime.listWorkSnapshots(command),
     compareWorkSnapshot: (command) => runtime.compareWorkSnapshot(command),
+    planWorkSnapshotSceneSelection: (command) =>
+      runtime.planWorkSnapshotSceneSelection(command),
   });
 }

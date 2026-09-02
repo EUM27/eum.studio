@@ -35,6 +35,7 @@ import {
   decideCharacterExtractionItemRecord,
   decideCharacterGenerationItemRecord,
   grantCharacterExtractionPermissionRecord,
+  loadCanonicalCharacterRecords,
   retireCharacterRecord,
   retireCharacterRelationRecord,
   runCharacterExtractionRecord,
@@ -193,6 +194,27 @@ export function useCharactersController(input: Readonly<{
     input.workLoadId,
     input.workspace,
   ]);
+
+  const refreshCanonicalRecords = useCallback(async (): Promise<boolean> => {
+    const activeWorkId = input.activeWorkId;
+    if (activeWorkId === null) return false;
+    try {
+      const projection = await loadCanonicalCharacterRecords({
+        activeWorkId,
+        client: input.client,
+      });
+      setCharacters(projection.characters);
+      setCharacterRelations(projection.relations);
+      setSelectedCharacterId((current) =>
+        reconcileSelectedCharacter(current, projection.characters)
+      );
+      setCharacterActionError(null);
+      return true;
+    } catch {
+      setCharacterActionError(CHARACTER_MESSAGES.loadFailed);
+      return false;
+    }
+  }, [input.activeWorkId, input.client]);
 
   const createCharacter = useCallback(
     async (draft: CharacterDraftInput) => {
@@ -830,6 +852,7 @@ export function useCharactersController(input: Readonly<{
     characterGenerationCandidates,
     characterGenerationActionState,
     characterGenerationActionError,
+    refreshCanonicalRecords,
     createCharacter,
     updateCharacter,
     retireCharacter,

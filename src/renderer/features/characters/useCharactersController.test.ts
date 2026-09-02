@@ -25,6 +25,7 @@ import {
   decideCharacterExtractionItemRecord,
   decideCharacterGenerationItemRecord,
   grantCharacterExtractionPermissionRecord,
+  loadCanonicalCharacterRecords,
   retireCharacterRecord,
   retireCharacterRelationRecord,
   runCharacterExtractionRecord,
@@ -336,6 +337,22 @@ function deferred<T>() {
 }
 
 describe("characters controller helpers", () => {
+  it("reloads the authoritative Character and relation projections together", async () => {
+    const characters = [character("reload")];
+    const relations = [relation("reload")];
+    const client = {
+      list: vi.fn(async () => ({ schemaVersion: 1 as const, workId, characters })),
+      listRelations: vi.fn(async () => ({
+        schemaVersion: 1 as const,
+        workId,
+        relations,
+      })),
+    } as Pick<CharactersClient, "list" | "listRelations">;
+
+    await expect(loadCanonicalCharacterRecords({ activeWorkId: workId, client }))
+      .resolves.toEqual({ characters, relations });
+  });
+
   it("delays null reset and publishes the five-way load only after every read", async () => {
     let scheduled: (() => void) | null = null;
     const cancel = vi.fn();

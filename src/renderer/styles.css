@@ -1312,6 +1312,35 @@ select {
   font-size: 0.75rem;
 }
 
+.preflight-open-error.is-dismissible {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.preflight-open-error.is-dismissible > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.preflight-open-error-dismiss {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.35rem;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.preflight-open-error-dismiss:hover {
+  background: rgb(141 65 65 / 10%);
+}
+
 .manuscript-preflight-backdrop {
   z-index: 30;
 }

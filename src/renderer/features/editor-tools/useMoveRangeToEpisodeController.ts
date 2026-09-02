@@ -16,6 +16,20 @@ import type { EntityId } from "../../../domain/writing";
 import type { ManuscriptEditorHandle } from "../../editor/ManuscriptEditor";
 import type { ManuscriptDurableSaveQueue } from "../../persistence/manuscript-durable-save-queue";
 
+export function isMoveRangeUndoCurrent(input: Readonly<{
+  move: MoveRangeToEpisodeReceipt;
+  sourceRevisionId: EntityId<"DocumentRevision">;
+  targetRevisionId: EntityId<"DocumentRevision">;
+}>): boolean {
+  return input.sourceRevisionId === input.move.sourceRevisionId &&
+    input.targetRevisionId === input.move.targetRevisionId;
+}
+
+export function isMoveRangeNotUndoableError(error: unknown): boolean {
+  return error instanceof Error &&
+    error.message.includes("Episode range move is not undoable:");
+}
+
 export function useMoveRangeToEpisodeController(input: Readonly<{
   activeDocument: ManuscriptDocumentSource | null;
   documents: readonly ManuscriptDocumentSource[];
@@ -48,6 +62,13 @@ export function useMoveRangeToEpisodeController(input: Readonly<{
   useEffect(() => {
     lastMoveRef.current = lastMove;
   }, [lastMove]);
+  const clearActionError = useCallback(() => {
+    setActionError(null);
+  }, []);
+  const discardLastMove = useCallback(() => {
+    lastMoveRef.current = null;
+    setLastMove(null);
+  }, []);
   const moveHereToNextEpisode = useCallback(async (): Promise<void> => {
     const current = inputRef.current;
     const source = current.activeDocument;
@@ -175,6 +196,9 @@ export function useMoveRangeToEpisodeController(input: Readonly<{
       lastMoveRef.current = null;
       setLastMove(null);
     } catch (error) {
+      if (isMoveRangeNotUndoableError(error)) {
+        discardLastMove();
+      }
       setActionError(
         error instanceof Error
           ? error.message
@@ -184,20 +208,44 @@ export function useMoveRangeToEpisodeController(input: Readonly<{
       actionStateRef.current = "idle";
       setActionState("idle");
     }
-  }, []);
+  }, [discardLastMove]);
 
   const requestUndoLastMove = useCallback((): boolean => {
-    if (lastMoveRef.current === null || actionStateRef.current !== "idle") {
+    const move = lastMoveRef.current;
+    if (move === null || actionStateRef.current !== "idle") {
+      return false;
+    }
+    const current = inputRef.current;
+    const queue = current.durableSaveQueueRef.current;
+    const source = current.documents.find(
+      (document) => document.documentId === move.sourceEpisodeId,
+    );
+    const target = current.documents.find(
+      (document) => document.documentId === move.targetEpisodeId,
+    );
+    if (
+      queue !== null &&
+      source !== undefined &&
+      target !== undefined &&
+      !isMoveRangeUndoCurrent({
+        move,
+        sourceRevisionId: queue.getCurrentRevisionId(source.documentId),
+        targetRevisionId: queue.getCurrentRevisionId(target.documentId),
+      })
+    ) {
+      discardLastMove();
+      clearActionError();
       return false;
     }
     void undoLastMove();
     return true;
-  }, [undoLastMove]);
+  }, [clearActionError, discardLastMove, undoLastMove]);
 
   return {
     actionError,
     actionState,
     canMoveToNextEpisode: input.activeDocument !== null,
+    clearActionError,
     lastMove,
     moveHereToNextEpisode,
     requestUndoLastMove,

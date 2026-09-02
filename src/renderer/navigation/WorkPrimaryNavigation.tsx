@@ -3,6 +3,7 @@ import type { WorkSection } from "./studio-location";
 const WORK_SECTION_LABELS: Readonly<Record<WorkSection, string>> = Object.freeze({
   write: "쓰기",
   structure: "구조",
+  canon: "별빛",
   review: "검토",
   operations: "운영",
 });

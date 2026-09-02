@@ -50,6 +50,13 @@ import type {
   UpdatePublishingMailCandidateCommand,
 } from "../../application/publishing/publishing-mail-candidate-contract";
 import type {
+  CreatePublishingFormTemplateCommand,
+  PublishingFormResponseProjection,
+  PublishingFormTemplateProjection,
+  SavePublishingFormResponseCommand,
+  UpdatePublishingFormTemplateCommand,
+} from "../../application/publishing/publishing-form-contract";
+import type {
   PublishingMailConnectionProjection,
   PublishingMailSyncResult,
 } from "../../application/publishing/publishing-mail-connection-contract";
@@ -68,6 +75,7 @@ import { PublishingSubmissionCsvImportPanel } from "./PublishingSubmissionCsvImp
 import { PublishingMailCandidatePanel } from "./PublishingMailCandidatePanel";
 import { PublishingResearchPanel } from "./PublishingResearchPanel";
 import { PublishingAssistantPanel } from "./PublishingAssistantPanel";
+import { PublishingFormWorkspace } from "./PublishingFormWorkspace";
 import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
 export type PublishingPartnerDialogActionState =
@@ -101,7 +109,10 @@ export type PublishingPartnerDialogActionState =
   | "previewing-research"
   | "approving-research"
   | "running-assistant"
-  | "approving-assistant";
+  | "approving-assistant"
+  | "creating-form-template"
+  | "updating-form-template"
+  | "saving-form-response";
 
 export type PublishingPartnerDraft = Omit<
   CreatePublishingPartnerCommand,
@@ -1518,7 +1529,7 @@ export function PublishingPartnerDialog(input: {
   readonly contracts: readonly PublishingContractProjection[];
   readonly assistantConnections?: readonly AssistantConnectionProjection[];
   readonly error: string | null;
-  readonly initialSection?: "submissions" | "partners" | "contracts" | "publications" | "settlements" | "payments" | "sources" | "research" | "assistant" | "imports" | "mail";
+  readonly initialSection?: "submissions" | "partners" | "forms" | "contracts" | "publications" | "settlements" | "payments" | "sources" | "research" | "assistant" | "imports" | "mail";
   readonly onClose: () => void;
   readonly onCreate: (draft: PublishingPartnerDraft) => void;
   readonly onCreateContract: (draft: PublishingContractDraft) => void;
@@ -1575,6 +1586,23 @@ export function PublishingPartnerDialog(input: {
     localTime: string | null,
   ) => void;
   readonly onCreateSubmission: (draft: PublishingSubmissionDraft) => void;
+  readonly onCreateFormTemplate?: (
+    draft: Omit<CreatePublishingFormTemplateCommand, "schemaVersion">,
+  ) => void;
+  readonly onUpdateFormTemplate?: (
+    template: PublishingFormTemplateProjection,
+    changes: Omit<
+      UpdatePublishingFormTemplateCommand,
+      "schemaVersion" | "templateId" | "expectedRevision"
+    >,
+  ) => void;
+  readonly onSaveFormResponse?: (
+    draft: Omit<
+      SavePublishingFormResponseCommand,
+      "schemaVersion" | "expectedRevision"
+    >,
+    current: PublishingFormResponseProjection | null,
+  ) => void;
   readonly onSelect: (partnerId: string | null) => void;
   readonly onSelectContract: (contractId: string | null) => void;
   readonly onSelectPublication: (publicationId: string | null) => void;
@@ -1607,6 +1635,8 @@ export function PublishingPartnerDialog(input: {
     changes: UpdatePublishingPaymentCommand["changes"],
   ) => void;
   readonly partners: readonly PublishingPartnerProjection[];
+  readonly formTemplates?: readonly PublishingFormTemplateProjection[];
+  readonly formResponses?: readonly PublishingFormResponseProjection[];
   readonly mailCandidates?: readonly PublishingMailCandidateProjection[];
   readonly mailConnection?: PublishingMailConnectionProjection | null;
   readonly mailSchedule?: PublishingMailScheduleProjection | null;
@@ -1627,7 +1657,7 @@ export function PublishingPartnerDialog(input: {
   readonly works: WorkspaceCatalogProjection["works"];
 }) {
   const [section, setSection] = useState<
-    "submissions" | "partners" | "contracts" | "publications" | "settlements" | "payments" | "sources" | "research" | "assistant" | "imports" | "mail"
+    "submissions" | "partners" | "forms" | "contracts" | "publications" | "settlements" | "payments" | "sources" | "research" | "assistant" | "imports" | "mail"
   >(
     input.initialSection ?? "submissions",
   );
@@ -1647,7 +1677,7 @@ export function PublishingPartnerDialog(input: {
       case "settlements":
         return candidate === "settlements" || candidate === "payments";
       default:
-        return candidate === "submissions" || candidate === "partners";
+        return candidate === "submissions" || candidate === "partners" || candidate === "forms";
     }
   };
   const selectedPartner = input.partners.find(
@@ -1832,6 +1862,18 @@ export function PublishingPartnerDialog(input: {
                 투고처 원장
               </button>
               <button
+                aria-pressed={section === "forms"}
+                disabled={busy}
+                hidden={!sectionAllowed("forms")}
+                onClick={() => {
+                  setSection("forms");
+                  setQuery("");
+                }}
+                type="button"
+              >
+                투고 양식
+              </button>
+              <button
                 aria-pressed={section === "contracts"}
                 disabled={busy}
                 hidden={!sectionAllowed("contracts")}
@@ -2010,6 +2052,26 @@ export function PublishingPartnerDialog(input: {
               input.onSaveMailSchedule?.(enabled, localTime)}
             submissions={input.submissions}
           />
+        ) : section === "forms" ? (
+          input.onCreateFormTemplate === undefined ||
+          input.onUpdateFormTemplate === undefined ||
+          input.onSaveFormResponse === undefined ? (
+            <p className="publishing-partner-error" role="alert">
+              투고 양식 기능을 연결하지 못했습니다.
+            </p>
+          ) : (
+            <PublishingFormWorkspace
+              actionState={input.actionState}
+              onCreateTemplate={input.onCreateFormTemplate}
+              onSaveResponse={input.onSaveFormResponse}
+              onUpdateTemplate={input.onUpdateFormTemplate}
+              partners={input.partners}
+              responses={input.formResponses ?? []}
+              templates={input.formTemplates ?? []}
+              workScopeId={workScopeId}
+              works={input.works}
+            />
+          )
         ) : section === "partners" ? (
           <div className="publishing-partner-body">
             <section aria-label="투고처 목록" className="publishing-partner-list">

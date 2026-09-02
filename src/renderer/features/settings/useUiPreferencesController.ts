@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { StudioBridge } from "../../../application/contracts/studio-bridge";
 import {
-  DEFAULT_FOCUS_MODE_PREFERENCES,
-  type FocusModePreferences,
+  DEFAULT_MANUSCRIPT_FOCUS_PREFERENCES,
+  type ManuscriptFocusPreferences,
   type UiPreferencesProjection,
 } from "../../../application/settings/ui-preferences";
 import {
@@ -12,6 +12,7 @@ import {
   STARLIGHT_THEME_STORAGE_KEY,
   type StarlightThemeKey,
 } from "../../theme/starlight-theme";
+import { MANUSCRIPT_FOCUS_CURSOR_VIEWPORT_STORAGE_KEY } from "./manuscript-focus-storage";
 
 export function useUiPreferencesController(input: Readonly<{
   bodyClassList: Pick<DOMTokenList, "add" | "remove">;
@@ -19,52 +20,52 @@ export function useUiPreferencesController(input: Readonly<{
     StudioBridge["settings"],
     "getUiPreferences" | "saveUiPreferences"
   >;
-  storage: Pick<Storage, "getItem" | "setItem">;
+  storage: Pick<Storage, "getItem" | "removeItem" | "setItem">;
 }>) {
   const [theme, setTheme] = useState(() =>
     parseStarlightThemeKey(
       input.storage.getItem(STARLIGHT_THEME_STORAGE_KEY),
     )
   );
-  const [focusModePreferences, setFocusModePreferences] =
-    useState<FocusModePreferences>(() => {
+  const [manuscriptFocusPreferences, setManuscriptFocusPreferences] =
+    useState<ManuscriptFocusPreferences>(() => {
       const storedPosition = Number(
-        input.storage.getItem("eum_focus_typewriter_position_percent"),
+        input.storage.getItem(MANUSCRIPT_FOCUS_CURSOR_VIEWPORT_STORAGE_KEY),
       );
       return Number.isFinite(storedPosition) && storedPosition > 0
         ? Object.freeze({
-            ...DEFAULT_FOCUS_MODE_PREFERENCES,
-            typewriterPositionPercent: storedPosition,
+            ...DEFAULT_MANUSCRIPT_FOCUS_PREFERENCES,
+            cursorViewportPercent: storedPosition,
           })
-        : DEFAULT_FOCUS_MODE_PREFERENCES;
+        : DEFAULT_MANUSCRIPT_FOCUS_PREFERENCES;
     });
   const themeRef = useRef(theme);
-  const focusModePreferencesRef = useRef(focusModePreferences);
+  const manuscriptFocusPreferencesRef = useRef(manuscriptFocusPreferences);
   const uiPreferencesRef = useRef<UiPreferencesProjection>({
-    schemaVersion: 1,
+    schemaVersion: 2,
     revision: 0,
     themeKey: theme,
-    focusMode: focusModePreferences,
+    manuscriptFocus: manuscriptFocusPreferences,
   });
   const uiPreferencesSaveChainRef = useRef(Promise.resolve());
   const [uiPreferencesReady, setUiPreferencesReady] = useState(false);
 
   const persistUiPreferences = useCallback((
     nextTheme: StarlightThemeKey,
-    nextFocusMode: FocusModePreferences,
+    nextManuscriptFocus: ManuscriptFocusPreferences,
   ) => {
     input.storage.setItem(STARLIGHT_THEME_STORAGE_KEY, nextTheme);
     input.storage.setItem(
-      "eum_ui_preferences_v1",
-      JSON.stringify({ themeKey: nextTheme, focusMode: nextFocusMode }),
+      "eum_ui_preferences_v2",
+      JSON.stringify({ themeKey: nextTheme, manuscriptFocus: nextManuscriptFocus }),
     );
     const execution = uiPreferencesSaveChainRef.current.then(async () => {
       const current = uiPreferencesRef.current;
       const saved = await input.client.saveUiPreferences({
-        schemaVersion: 1,
+        schemaVersion: 2,
         expectedRevision: current.revision,
         themeKey: nextTheme,
-        focusMode: nextFocusMode,
+        manuscriptFocus: nextManuscriptFocus,
       });
       uiPreferencesRef.current = saved;
     });
@@ -77,14 +78,14 @@ export function useUiPreferencesController(input: Readonly<{
   const changeTheme = useCallback((nextTheme: StarlightThemeKey) => {
     themeRef.current = nextTheme;
     setTheme(nextTheme);
-    persistUiPreferences(nextTheme, focusModePreferencesRef.current);
+    persistUiPreferences(nextTheme, manuscriptFocusPreferencesRef.current);
   }, [persistUiPreferences]);
-  const changeFocusModePreferences = useCallback((
-    nextFocusMode: FocusModePreferences,
+  const changeManuscriptFocusPreferences = useCallback((
+    nextManuscriptFocus: ManuscriptFocusPreferences,
   ) => {
-    focusModePreferencesRef.current = nextFocusMode;
-    setFocusModePreferences(nextFocusMode);
-    persistUiPreferences(themeRef.current, nextFocusMode);
+    manuscriptFocusPreferencesRef.current = nextManuscriptFocus;
+    setManuscriptFocusPreferences(nextManuscriptFocus);
+    persistUiPreferences(themeRef.current, nextManuscriptFocus);
   }, [persistUiPreferences]);
 
   useEffect(() => {
@@ -96,16 +97,16 @@ export function useUiPreferencesController(input: Readonly<{
         if (projection.revision === 0) {
           persistUiPreferences(
             themeRef.current,
-            focusModePreferencesRef.current,
+            manuscriptFocusPreferencesRef.current,
           );
           setUiPreferencesReady(true);
           return;
         }
         const restoredTheme = parseStarlightThemeKey(projection.themeKey);
         themeRef.current = restoredTheme;
-        focusModePreferencesRef.current = projection.focusMode;
+        manuscriptFocusPreferencesRef.current = projection.manuscriptFocus;
         setTheme(restoredTheme);
-        setFocusModePreferences(projection.focusMode);
+        setManuscriptFocusPreferences(projection.manuscriptFocus);
         input.storage.setItem(STARLIGHT_THEME_STORAGE_KEY, restoredTheme);
         setUiPreferencesReady(true);
       },
@@ -128,9 +129,9 @@ export function useUiPreferencesController(input: Readonly<{
 
   return {
     theme,
-    focusModePreferences,
+    manuscriptFocusPreferences,
     uiPreferencesReady,
     changeTheme,
-    changeFocusModePreferences,
+    changeManuscriptFocusPreferences,
   };
 }

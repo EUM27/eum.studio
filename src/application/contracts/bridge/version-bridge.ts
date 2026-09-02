@@ -26,6 +26,12 @@ import {
   type CompareWorkSnapshotCommand,
   type WorkSnapshotComparisonProjection,
 } from "../../revisions/work-snapshot-comparison";
+import {
+  parsePlanWorkSnapshotSceneSelectionCommand,
+  parseWorkSnapshotSceneSelectionPlan,
+  type PlanWorkSnapshotSceneSelectionCommand,
+  type WorkSnapshotSceneSelectionPlan,
+} from "../../revisions/work-snapshot-scene-plan";
 
 export const VERSION_LIST_DOCUMENT_REVISIONS_CHANNEL =
   "studio:version:list-document-revisions";
@@ -39,6 +45,8 @@ export const VERSION_LIST_WORK_SNAPSHOTS_CHANNEL =
   "studio:version:list-work-snapshots";
 export const VERSION_COMPARE_WORK_SNAPSHOT_CHANNEL =
   "studio:version:compare-work-snapshot";
+export const VERSION_PLAN_WORK_SNAPSHOT_SCENES_CHANNEL =
+  "studio:version:plan-work-snapshot-scenes";
 
 export type VersionBridgeChannel =
   | typeof VERSION_LIST_DOCUMENT_REVISIONS_CHANNEL
@@ -46,19 +54,24 @@ export type VersionBridgeChannel =
   | typeof VERSION_RESTORE_DOCUMENT_REVISION_CHANNEL
   | typeof VERSION_CREATE_WORK_SNAPSHOT_CHANNEL
   | typeof VERSION_LIST_WORK_SNAPSHOTS_CHANNEL
-  | typeof VERSION_COMPARE_WORK_SNAPSHOT_CHANNEL;
+  | typeof VERSION_COMPARE_WORK_SNAPSHOT_CHANNEL
+  | typeof VERSION_PLAN_WORK_SNAPSHOT_SCENES_CHANNEL;
 
 export type VersionBridgePayload =
   | ListDocumentRevisionsCommand
   | RestoreDocumentRevisionCommand
   | CreateWorkSnapshotCommand
   | ListWorkSnapshotsCommand
-  | CompareWorkSnapshotCommand;
+  | CompareWorkSnapshotCommand
+  | PlanWorkSnapshotSceneSelectionCommand;
 
 export type VersionBridge = Readonly<{
   compareWorkSnapshot: (
     command: CompareWorkSnapshotCommand,
   ) => Promise<WorkSnapshotComparisonProjection>;
+  planWorkSnapshotScenes: (
+    command: PlanWorkSnapshotSceneSelectionCommand,
+  ) => Promise<WorkSnapshotSceneSelectionPlan>;
   listDocumentRevisions: (
     command: ListDocumentRevisionsCommand,
   ) => Promise<DocumentRevisionListProjection>;
@@ -91,6 +104,11 @@ export function createVersionBridge(invoke: VersionBridgeInvoke): VersionBridge 
       } catch {
         throw new Error("Invalid WorkSnapshot comparison");
       }
+    },
+    planWorkSnapshotScenes: async (input) => {
+      const command=parsePlanWorkSnapshotSceneSelectionCommand(input);
+      const value=await invoke(VERSION_PLAN_WORK_SNAPSHOT_SCENES_CHANNEL,command);
+      try{return parseWorkSnapshotSceneSelectionPlan(value);}catch{throw new Error("Invalid WorkSnapshot Scene selection plan");}
     },
     listDocumentRevisions: async (input) => {
       const command = parseListDocumentRevisionsCommand(input);

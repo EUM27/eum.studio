@@ -223,6 +223,15 @@
   -webkit-app-region: no-drag;
 }
 
+.studio-app-shell .app-topbar-music .music-mini-player input {
+  -webkit-app-region: no-drag;
+}
+
+.studio-app-shell .app-topbar-music .music-mini-video-panel,
+.studio-app-shell .app-topbar-music .music-library-dialog {
+  -webkit-app-region: no-drag;
+}
+
 .studio-app-shell .music-mini-controls button,
 .studio-app-shell .music-mini-entry-actions button,
 .studio-app-shell .music-mini-volume button {
@@ -750,6 +759,112 @@
 .plot-board-view-switch button:disabled {
   cursor: default;
   opacity: 0.45;
+}
+
+.publishing-form-workspace {
+  min-height: 0;
+}
+
+.publishing-form-workspace > .publishing-partner-detail {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  overflow: auto;
+}
+
+.publishing-form-workspace > .publishing-partner-list > button {
+  width: 100%;
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.7rem;
+  border: 1px solid var(--eum-line);
+  border-radius: 0.55rem;
+  color: var(--eum-text);
+  background: var(--eum-panel);
+  font: inherit;
+  text-align: left;
+}
+
+.publishing-form-workspace > .publishing-partner-list > button[aria-pressed="true"] {
+  border-color: var(--eum-accent);
+}
+
+.publishing-form-template-editor,
+.publishing-form-response-editor,
+.publishing-form-empty-state {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.publishing-form-editor-heading,
+.publishing-form-section-card > header,
+.publishing-form-field-row,
+.publishing-form-field-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.publishing-form-editor-heading,
+.publishing-form-section-card > header {
+  justify-content: space-between;
+}
+
+.publishing-form-editor-heading > div {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.publishing-form-section-list,
+.publishing-form-field-list,
+.publishing-form-response-fields {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.publishing-form-section-card,
+.publishing-form-response-section,
+.publishing-form-response-shell {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.8rem;
+  border: 1px solid var(--eum-line);
+  border-radius: 0.65rem;
+  background: var(--eum-panel);
+}
+
+.publishing-form-field-card {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.65rem;
+  border: 1px solid var(--eum-line);
+  border-radius: 0.5rem;
+}
+
+.publishing-form-field-row > label,
+.publishing-form-response-fields > label,
+.publishing-form-response-shell > label {
+  display: grid;
+  flex: 1 1 0;
+  gap: 0.25rem;
+}
+
+.publishing-form-required-field {
+  display: flex !important;
+  flex: 0 0 auto !important;
+  align-items: center;
+}
+
+.publishing-form-stale-note {
+  margin: 0;
+  color: var(--eum-accent-text);
+}
+
+@media (max-width: 860px) {
+  .publishing-form-field-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 
 

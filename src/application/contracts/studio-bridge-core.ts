@@ -67,6 +67,7 @@ import {
   STRUCTURE_CREATE_ANCHORLESS_EVENT_CHANNEL,
   STRUCTURE_CREATE_EVENT_BLOCK_CHANNEL,
   STRUCTURE_CREATE_SCENE_OVERRIDE_CHANNEL,
+  STRUCTURE_DELETE_SCENE_CHANNEL,
   STRUCTURE_RELOCATE_SCENE_SEGMENT_CHANNEL,
   STRUCTURE_DECIDE_SCENE_EXTRACTION_ANNOTATION_CHANNEL,
   STRUCTURE_DECIDE_SCENE_EXTRACTION_BOUNDARY_CHANNEL,
@@ -78,8 +79,14 @@ import {
   STRUCTURE_LIST_SCENE_EXTRACTION_CANDIDATES_CHANNEL,
   STRUCTURE_LIST_SCENE_OVERRIDES_CHANNEL,
   STRUCTURE_LIST_SCENE_PROJECTION_CHANNEL,
+  STRUCTURE_LIST_SCENE_CANON_CONTEXTS_CHANNEL,
+  STRUCTURE_FINALIZE_SCENE_CANON_CHECK_CHANNEL,
+  STRUCTURE_LIST_SCENE_TRASH_CHANNEL,
   STRUCTURE_MOVE_EVENT_BLOCK_CHANNEL,
   STRUCTURE_PREPARE_SCENE_DRAFT_INSERTION_CHANNEL,
+  STRUCTURE_PREPARE_SCENE_DELETION_CHANNEL,
+  STRUCTURE_REBIND_SCENE_METADATA_CHANNEL,
+  STRUCTURE_RESTORE_SCENE_TRASH_CHANNEL,
   STRUCTURE_REPLACE_EVENT_SOURCE_CHANNEL,
   STRUCTURE_RETIRE_EVENT_SOURCE_CHANNEL,
   STRUCTURE_RUN_SCENE_DRAFT_CHANNEL,
@@ -87,6 +94,7 @@ import {
   STRUCTURE_SET_SCENE_EVENT_OVERRIDE_CHANNEL,
   STRUCTURE_UPDATE_SCENE_DRAFT_CANDIDATE_CHANNEL,
   STRUCTURE_UPDATE_SCENE_RULE_SET_CHANNEL,
+  STRUCTURE_UNDO_SCENE_DELETION_CHANNEL,
   createStructureBridge,
   type StructureBridge,
   type StructureBridgePayload,
@@ -116,6 +124,16 @@ export {
   type FragmentBridgePayload,
   type FragmentsBridge,
 } from "./bridge/fragments-bridge";
+import {
+  createManuscriptAnnotationsBridge,
+  MANUSCRIPT_ANNOTATION_CREATE_CHANNEL,
+  MANUSCRIPT_ANNOTATION_LIST_CHANNEL,
+  MANUSCRIPT_ANNOTATION_RETIRE_CHANNEL,
+  MANUSCRIPT_ANNOTATION_UPDATE_CHANNEL,
+  type ManuscriptAnnotationsBridge,
+  type ManuscriptAnnotationsBridgePayload,
+} from "./bridge/manuscript-annotations-bridge";
+export * from "./bridge/manuscript-annotations-bridge";
 import {
   createForeshadowingBridge,
   FORESHADOW_CREATE_LINE_CHANNEL,
@@ -164,6 +182,68 @@ import {
 } from "./bridge/characters-bridge";
 export * from "./bridge/characters-bridge";
 import {
+  CANON_MARKDOWN_EXPORT_CHANNEL,
+  CANON_REVIEW_DECIDE_CHANNEL,
+  CANON_REVIEW_LIST_CHANNEL,
+  CANON_REVIEW_RESOLVE_TARGET_CHANNEL,
+  CANON_REVIEW_RUN_CHANNEL,
+  CANON_REVIEW_UPDATE_ITEM_CHANNEL,
+  createCanonBridge,
+  type CanonBridge,
+  type CanonBridgePayload,
+} from "./bridge/canon-bridge";
+export * from "./bridge/canon-bridge";
+import {
+  CONTINUITY_CREATE_CHANNEL,
+  CONTINUITY_DISMISS_CHANNEL,
+  CONTINUITY_LIST_CHANNEL,
+  CONTINUITY_RESOLVE_CHANNEL,
+  CONTINUITY_REVIEW_DECIDE_CHANNEL,
+  CONTINUITY_REVIEW_LIST_CHANNEL,
+  CONTINUITY_REVIEW_RUN_CHANNEL,
+  CONTINUITY_REVIEW_UPDATE_ITEM_CHANNEL,
+  CONTINUITY_UPDATE_CHANNEL,
+  createContinuityBridge,
+  type ContinuityBridge,
+  type ContinuityBridgePayload,
+} from "./bridge/continuity-bridge";
+export * from "./bridge/continuity-bridge";
+import {
+  CHARACTER_KNOWLEDGE_CREATE_CHANNEL,
+  CHARACTER_KNOWLEDGE_LIST_CHANNEL,
+  CHARACTER_KNOWLEDGE_POV_CHANNEL,
+  CHARACTER_KNOWLEDGE_RETIRE_CHANNEL,
+  CHARACTER_KNOWLEDGE_SUPERSEDE_CHANNEL,
+  CHARACTER_KNOWLEDGE_UPDATE_CHANNEL,
+  createCharacterKnowledgeBridge,
+  type CharacterKnowledgeBridge,
+  type CharacterKnowledgeBridgePayload,
+} from "./bridge/character-knowledge-bridge";
+export * from "./bridge/character-knowledge-bridge";
+import {
+  CONTEXT_ACTIVITIES_LIST_CHANNEL,
+  CONTEXT_MANIFESTS_LIST_CHANNEL,
+  CONTEXT_PLAN_CHANNEL,
+  CONTEXT_POLICY_LIST_CHANNEL,
+  CONTEXT_POLICY_SAVE_CHANNEL,
+  createContextPlannerBridge,
+  type ContextPlannerBridge,
+  type ContextPlannerBridgePayload,
+} from "./bridge/context-planner-bridge";
+export * from "./bridge/context-planner-bridge";
+import {
+  NARRATIVE_DIGEST_GENERATE_CHANNEL,
+  NARRATIVE_DIGEST_GENERATE_SCENE_CHANNEL,
+  NARRATIVE_DIGEST_LIST_SCENE_ANALYSIS_RUNS_CHANNEL,
+  NARRATIVE_DIGEST_LIST_CHANNEL,
+  NARRATIVE_DIGEST_REGENERATE_CHANNEL,
+  NARRATIVE_DIGEST_RUN_SCENE_ANALYSIS_CHANNEL,
+  createNarrativeDigestBridge,
+  type NarrativeDigestBridge,
+  type NarrativeDigestBridgePayload,
+} from "./bridge/narrative-digest-bridge";
+export * from "./bridge/narrative-digest-bridge";
+import {
   createLoreBridge,
   LORE_CANDIDATE_APPROVE_CHANNEL,
   LORE_CANDIDATE_CREATE_CHANNEL,
@@ -192,6 +272,11 @@ import {
   PUBLISHING_CONTRACT_LIST_CHANNEL,
   PUBLISHING_CONTRACT_UPDATE_CHANNEL,
   PUBLISHING_EVIDENCE_SET_LINKS_CHANNEL,
+  PUBLISHING_FORM_RESPONSE_LIST_CHANNEL,
+  PUBLISHING_FORM_RESPONSE_SAVE_CHANNEL,
+  PUBLISHING_FORM_TEMPLATE_CREATE_CHANNEL,
+  PUBLISHING_FORM_TEMPLATE_LIST_CHANNEL,
+  PUBLISHING_FORM_TEMPLATE_UPDATE_CHANNEL,
   PUBLISHING_MAIL_CANDIDATE_LINK_CHANNEL,
   PUBLISHING_MAIL_CANDIDATE_LIST_CHANNEL,
   PUBLISHING_MAIL_CANDIDATE_REVIEW_CHANNEL,
@@ -324,6 +409,8 @@ import {
   MUSIC_SETTINGS_GET_WORK_CHANNEL,
   MUSIC_SETTINGS_PROFILE_CHANNEL,
   MUSIC_SETTINGS_SAVE_WORK_CHANNEL,
+  SCENE_ANALYSIS_SETTINGS_GET_WORK_CHANNEL,
+  SCENE_ANALYSIS_SETTINGS_SAVE_WORK_CHANNEL,
   UI_PREFERENCES_GET_CHANNEL,
   UI_PREFERENCES_SAVE_CHANNEL,
   YOUTUBE_MUSIC_CONNECTION_SAVE_CHANNEL,
@@ -347,6 +434,7 @@ import {
 export * from "./bridge/music-playback-bridge";
 import {
   VERSION_COMPARE_WORK_SNAPSHOT_CHANNEL,
+  VERSION_PLAN_WORK_SNAPSHOT_SCENES_CHANNEL,
   VERSION_CREATE_WORK_SNAPSHOT_CHANNEL,
   VERSION_LIST_DOCUMENT_REVISIONS_CHANNEL,
   VERSION_LIST_WORK_SNAPSHOTS_CHANNEL,
@@ -377,7 +465,13 @@ export type StudioBridge = PublishingBridge & {
   workspace: WorkspaceBridge;
   structure: StructureBridge;
   fragments: FragmentsBridge;
+  manuscriptAnnotations: ManuscriptAnnotationsBridge;
   characters: CharactersBridge;
+  canon: CanonBridge;
+  continuity: ContinuityBridge;
+  characterKnowledge: CharacterKnowledgeBridge;
+  contextPlanner: ContextPlannerBridge;
+  narrativeDigest: NarrativeDigestBridge;
   loreEntries: LoreEntriesBridge;
   loreCandidates: LoreCandidatesBridge;
   loreForeshadowLinks: LoreForeshadowLinksBridge;
@@ -452,11 +546,19 @@ export type BridgeInvoke = (
     | typeof STRUCTURE_LIST_EVENT_BLOCKS_CHANNEL
     | typeof STRUCTURE_LIST_EVENT_RAIL_CHANNEL
     | typeof STRUCTURE_CREATE_SCENE_OVERRIDE_CHANNEL
+    | typeof STRUCTURE_DELETE_SCENE_CHANNEL
     | typeof STRUCTURE_RELOCATE_SCENE_SEGMENT_CHANNEL
     | typeof STRUCTURE_LIST_SCENE_OVERRIDES_CHANNEL
     | typeof STRUCTURE_LIST_SCENE_PROJECTION_CHANNEL
+    | typeof STRUCTURE_LIST_SCENE_CANON_CONTEXTS_CHANNEL
+    | typeof STRUCTURE_FINALIZE_SCENE_CANON_CHECK_CHANNEL
+    | typeof STRUCTURE_LIST_SCENE_TRASH_CHANNEL
     | typeof STRUCTURE_UPDATE_SCENE_RULE_SET_CHANNEL
     | typeof STRUCTURE_SET_SCENE_EVENT_OVERRIDE_CHANNEL
+    | typeof STRUCTURE_REBIND_SCENE_METADATA_CHANNEL
+    | typeof STRUCTURE_PREPARE_SCENE_DELETION_CHANNEL
+    | typeof STRUCTURE_RESTORE_SCENE_TRASH_CHANNEL
+    | typeof STRUCTURE_UNDO_SCENE_DELETION_CHANNEL
     | typeof STRUCTURE_RUN_SCENE_EXTRACTION_CHANNEL
     | typeof STRUCTURE_LIST_SCENE_EXTRACTION_CANDIDATES_CHANNEL
     | typeof STRUCTURE_DECIDE_SCENE_EXTRACTION_BOUNDARY_CHANNEL
@@ -471,6 +573,10 @@ export type BridgeInvoke = (
     | typeof FRAGMENT_CAPTURE_CHANNEL
     | typeof FRAGMENT_LIST_CHANNEL
     | typeof FRAGMENT_UPDATE_CHANNEL
+    | typeof MANUSCRIPT_ANNOTATION_CREATE_CHANNEL
+    | typeof MANUSCRIPT_ANNOTATION_LIST_CHANNEL
+    | typeof MANUSCRIPT_ANNOTATION_UPDATE_CHANNEL
+    | typeof MANUSCRIPT_ANNOTATION_RETIRE_CHANNEL
     | typeof FRAGMENT_RECORD_USE_CHANNEL
     | typeof FRAGMENT_RETIRE_CHANNEL
     | typeof CHARACTER_CREATE_CHANNEL
@@ -488,6 +594,38 @@ export type BridgeInvoke = (
     | typeof CHARACTER_GENERATION_RUN_CHANNEL
     | typeof CHARACTER_GENERATION_LIST_CHANNEL
     | typeof CHARACTER_GENERATION_DECIDE_CHANNEL
+    | typeof CANON_REVIEW_RUN_CHANNEL
+    | typeof CANON_REVIEW_LIST_CHANNEL
+    | typeof CANON_REVIEW_UPDATE_ITEM_CHANNEL
+    | typeof CANON_REVIEW_RESOLVE_TARGET_CHANNEL
+    | typeof CANON_REVIEW_DECIDE_CHANNEL
+    | typeof CANON_MARKDOWN_EXPORT_CHANNEL
+    | typeof CONTINUITY_CREATE_CHANNEL
+    | typeof CONTINUITY_UPDATE_CHANNEL
+    | typeof CONTINUITY_LIST_CHANNEL
+    | typeof CONTINUITY_RESOLVE_CHANNEL
+    | typeof CONTINUITY_DISMISS_CHANNEL
+    | typeof CONTINUITY_REVIEW_RUN_CHANNEL
+    | typeof CONTINUITY_REVIEW_LIST_CHANNEL
+    | typeof CONTINUITY_REVIEW_UPDATE_ITEM_CHANNEL
+    | typeof CONTINUITY_REVIEW_DECIDE_CHANNEL
+    | typeof CHARACTER_KNOWLEDGE_CREATE_CHANNEL
+    | typeof CHARACTER_KNOWLEDGE_UPDATE_CHANNEL
+    | typeof CHARACTER_KNOWLEDGE_SUPERSEDE_CHANNEL
+    | typeof CHARACTER_KNOWLEDGE_RETIRE_CHANNEL
+    | typeof CHARACTER_KNOWLEDGE_LIST_CHANNEL
+    | typeof CHARACTER_KNOWLEDGE_POV_CHANNEL
+    | typeof CONTEXT_POLICY_LIST_CHANNEL
+    | typeof CONTEXT_POLICY_SAVE_CHANNEL
+    | typeof CONTEXT_PLAN_CHANNEL
+    | typeof CONTEXT_MANIFESTS_LIST_CHANNEL
+    | typeof CONTEXT_ACTIVITIES_LIST_CHANNEL
+    | typeof NARRATIVE_DIGEST_GENERATE_CHANNEL
+    | typeof NARRATIVE_DIGEST_GENERATE_SCENE_CHANNEL
+    | typeof NARRATIVE_DIGEST_LIST_CHANNEL
+    | typeof NARRATIVE_DIGEST_REGENERATE_CHANNEL
+    | typeof NARRATIVE_DIGEST_RUN_SCENE_ANALYSIS_CHANNEL
+    | typeof NARRATIVE_DIGEST_LIST_SCENE_ANALYSIS_RUNS_CHANNEL
     | typeof LORE_ENTRY_CREATE_CHANNEL
     | typeof LORE_ENTRY_LIST_CHANNEL
     | typeof LORE_ENTRY_UPDATE_CHANNEL
@@ -539,6 +677,11 @@ export type BridgeInvoke = (
     | typeof PUBLISHING_MAIL_CONNECTION_DISCONNECT_CHANNEL
     | typeof PUBLISHING_MAIL_SCHEDULE_STATUS_CHANNEL
     | typeof PUBLISHING_MAIL_SCHEDULE_SAVE_CHANNEL
+    | typeof PUBLISHING_FORM_TEMPLATE_CREATE_CHANNEL
+    | typeof PUBLISHING_FORM_TEMPLATE_LIST_CHANNEL
+    | typeof PUBLISHING_FORM_TEMPLATE_UPDATE_CHANNEL
+    | typeof PUBLISHING_FORM_RESPONSE_LIST_CHANNEL
+    | typeof PUBLISHING_FORM_RESPONSE_SAVE_CHANNEL
     | typeof PLOT_CREATE_CHANNEL
     | typeof PLOT_LIST_CHANNEL
     | typeof PLOT_DEFAULT_BOARD_CHANNEL
@@ -610,6 +753,8 @@ export type BridgeInvoke = (
     | typeof MUSIC_SETTINGS_PROFILE_CHANNEL
     | typeof MUSIC_SETTINGS_GET_WORK_CHANNEL
     | typeof MUSIC_SETTINGS_SAVE_WORK_CHANNEL
+    | typeof SCENE_ANALYSIS_SETTINGS_GET_WORK_CHANNEL
+    | typeof SCENE_ANALYSIS_SETTINGS_SAVE_WORK_CHANNEL
     | typeof INSPIRATION_SETTINGS_GET_WORK_CHANNEL
     | typeof INSPIRATION_SETTINGS_SAVE_WORK_CHANNEL
     | typeof YOUTUBE_MUSIC_CONNECTION_STATUS_CHANNEL
@@ -626,6 +771,7 @@ export type BridgeInvoke = (
     | typeof VERSION_CREATE_WORK_SNAPSHOT_CHANNEL
     | typeof VERSION_LIST_WORK_SNAPSHOTS_CHANNEL
     | typeof VERSION_COMPARE_WORK_SNAPSHOT_CHANNEL
+    | typeof VERSION_PLAN_WORK_SNAPSHOT_SCENES_CHANNEL
     | typeof BACKUP_GET_STATUS_CHANNEL
     | typeof BACKUP_CREATE_CHANNEL
     | typeof BACKUP_RESTORE_CHANNEL
@@ -636,7 +782,13 @@ export type BridgeInvoke = (
     | StructureBridgePayload
     | MusicPlaybackBridgePayload
     | FragmentBridgePayload
+    | ManuscriptAnnotationsBridgePayload
     | CharactersBridgePayload
+    | CanonBridgePayload
+    | ContinuityBridgePayload
+    | CharacterKnowledgeBridgePayload
+    | ContextPlannerBridgePayload
+    | NarrativeDigestBridgePayload
     | LoreBridgePayload
     | PublishingBridgePayload
     | PlotsBridgePayload
@@ -651,9 +803,15 @@ export type BridgeInvoke = (
 
 export type StudioBridgeCapabilities = Readonly<{
   fragments?: FragmentsBridge;
+  manuscriptAnnotations?: ManuscriptAnnotationsBridge;
   foreshadowing?: ForeshadowingBridge;
   activity?: ActivityBridge;
   characters?: CharactersBridge;
+  canon?: CanonBridge;
+  continuity?: ContinuityBridge;
+  characterKnowledge?: CharacterKnowledgeBridge;
+  contextPlanner?: ContextPlannerBridge;
+  narrativeDigest?: NarrativeDigestBridge;
   lore?: LoreBridge;
   assistant?: AssistantBridge;
   settings?: SettingsBridge;
@@ -685,7 +843,16 @@ export function createStudioBridge(
     workspace: capabilities.workspace ?? createWorkspaceBridge(invoke),
     structure: capabilities.structure ?? createStructureBridge(invoke),
     fragments: capabilities.fragments ?? createFragmentsBridge(invoke),
+    manuscriptAnnotations:
+      capabilities.manuscriptAnnotations ??
+      createManuscriptAnnotationsBridge(invoke),
     characters: capabilities.characters ?? createCharactersBridge(invoke),
+    canon: capabilities.canon ?? createCanonBridge(invoke),
+    continuity: capabilities.continuity ?? createContinuityBridge(invoke),
+    characterKnowledge:
+      capabilities.characterKnowledge ?? createCharacterKnowledgeBridge(invoke),
+    contextPlanner: capabilities.contextPlanner ?? createContextPlannerBridge(invoke),
+    narrativeDigest: capabilities.narrativeDigest ?? createNarrativeDigestBridge(invoke),
     loreEntries: lore.loreEntries,
     loreCandidates: lore.loreCandidates,
     loreForeshadowLinks: lore.loreForeshadowLinks,

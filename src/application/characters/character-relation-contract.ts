@@ -20,6 +20,8 @@ export type UpdateCharacterRelationCommand = {
   readonly relationId: EntityId<"CharacterRelation">;
   readonly expectedRevision: number;
   readonly changes: Readonly<{
+    readonly fromCharacterId?: EntityId<"Character">;
+    readonly toCharacterId?: EntityId<"Character">;
     readonly kind?: string;
     readonly description?: string;
   }>;
@@ -195,7 +197,11 @@ export function parseUpdateCharacterRelationCommand(
   schema(input, label);
   const changesLabel = `${label}.changes`;
   const changesInput = record(input.changes, changesLabel);
-  optionalFields(changesInput, ["kind", "description"], changesLabel);
+  optionalFields(
+    changesInput,
+    ["fromCharacterId", "toCharacterId", "kind", "description"],
+    changesLabel,
+  );
   if (Object.keys(changesInput).length === 0) {
     throw new Error(`${changesLabel} must contain at least one field`);
   }
@@ -205,6 +211,24 @@ export function parseUpdateCharacterRelationCommand(
     relationId: id<"CharacterRelation">(input, "relationId", label),
     expectedRevision: revision(input, "expectedRevision", label),
     changes: Object.freeze({
+      ...(Object.hasOwn(changesInput, "fromCharacterId")
+        ? {
+            fromCharacterId: id<"Character">(
+              changesInput,
+              "fromCharacterId",
+              changesLabel,
+            ),
+          }
+        : {}),
+      ...(Object.hasOwn(changesInput, "toCharacterId")
+        ? {
+            toCharacterId: id<"Character">(
+              changesInput,
+              "toCharacterId",
+              changesLabel,
+            ),
+          }
+        : {}),
       ...(Object.hasOwn(changesInput, "kind")
         ? { kind: nonEmptyString(changesInput, "kind", changesLabel) }
         : {}),

@@ -14,6 +14,7 @@ export type CreateSceneOverrideCommand = {
   readonly schemaVersion: 1;
   readonly workId: EntityId<"Work">;
   readonly documentId: EntityId<"Document">;
+  readonly expectedDocumentRevisionId: EntityId<"DocumentRevision">;
   readonly selection: {
     readonly anchor: number;
     readonly head: number;
@@ -167,6 +168,7 @@ export function parseCreateSceneOverrideCommand(
       "schemaVersion",
       "workId",
       "documentId",
+      "expectedDocumentRevisionId",
       "selection",
       "exactQuote",
       "operation",
@@ -182,6 +184,11 @@ export function parseCreateSceneOverrideCommand(
     schemaVersion: 1,
     workId: id<"Work">(input, "workId", label),
     documentId: id<"Document">(input, "documentId", label),
+    expectedDocumentRevisionId: id<"DocumentRevision">(
+      input,
+      "expectedDocumentRevisionId",
+      label,
+    ),
     selection: Object.freeze({
       anchor: integer(selection, "anchor", selectionLabel),
       head: integer(selection, "head", selectionLabel),

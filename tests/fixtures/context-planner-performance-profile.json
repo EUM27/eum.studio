@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "fixtureUse": "Measurement-only fixture. Counts and timings are not product limits or user-data defaults.",
+  "measurement": {
+    "candidateCount": 1000,
+    "requiredCount": 10,
+    "withheldCount": 100,
+    "tokenBudget": 750,
+    "iterationCount": 20
+  }
+}

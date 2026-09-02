@@ -342,3 +342,71 @@
   border-bottom: 1px solid var(--eum-line);
 }
 
+.studio-app-shell .snapshot-scene-plan {
+  border-top: 1px solid var(--eum-line);
+  display: grid;
+  gap: 10px;
+  padding-block: 14px 18px;
+}
+
+.studio-app-shell .snapshot-scene-plan > header,
+.studio-app-shell .snapshot-scene-plan > footer {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.studio-app-shell .snapshot-scene-plan h3,
+.studio-app-shell .snapshot-scene-plan h4,
+.studio-app-shell .snapshot-scene-plan p {
+  margin: 0;
+}
+
+.studio-app-shell .snapshot-scene-plan > ul {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.studio-app-shell .snapshot-scene-plan > ul > li {
+  border: 1px solid var(--eum-line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.studio-app-shell .snapshot-scene-plan label,
+.studio-app-shell .snapshot-scene-plan label > span {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.studio-app-shell .snapshot-scene-columns {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.studio-app-shell .snapshot-scene-columns > section,
+.studio-app-shell .snapshot-scene-columns article {
+  display: grid;
+  gap: 5px;
+}
+
+.studio-app-shell .snapshot-scene-columns > section {
+  background: var(--eum-surface-soft);
+  border-radius: 7px;
+  padding: 9px;
+}
+
+@media (max-width: 760px) {
+  .studio-app-shell .snapshot-scene-columns {
+    grid-template-columns: 1fr;
+  }
+}
+

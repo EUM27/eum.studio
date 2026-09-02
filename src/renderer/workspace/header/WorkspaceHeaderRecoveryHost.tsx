@@ -12,6 +12,7 @@ import type { WorkspaceRecoveryApplyState } from "../session/workspace-session-s
 import type { WorkspaceRuntimeState } from "../session/workspace-session-state";
 import type { useWorkspaceNavigationState } from "../navigation/useWorkspaceNavigationController";
 import type { useScheduleController } from "../../features/schedule/useScheduleController";
+import type { WorkSection } from "../../navigation/studio-location";
 
 function ManuscriptCount(input: {
   readonly telemetryStore: ManuscriptTelemetryStore;
@@ -61,7 +62,7 @@ export function WorkspaceHeaderRecoveryHost(input: Readonly<{
   activeWorkId: WorkspaceWorkSummary["workId"] | null;
   commands: Readonly<{
     cancelWorkTitleEdit: () => void;
-    changeSection: (section: "write" | "structure" | "review" | "operations") => void;
+    changeSection: (section: WorkSection) => void;
     changeTitleEditValue: (value: string) => void;
     onReturnToWorks: (() => void) | undefined;
     renameActiveWork: () => Promise<unknown>;
@@ -89,7 +90,7 @@ export function WorkspaceHeaderRecoveryHost(input: Readonly<{
   workReturnLocation: ReturnType<
     typeof useWorkspaceNavigationState
   >["workReturnLocation"];
-  workSection: "write" | "structure" | "review" | "operations";
+  workSection: WorkSection;
   workspaceActionState: string;
 }>) {
   const activity = input.controllers.activity;
@@ -147,9 +148,11 @@ export function WorkspaceHeaderRecoveryHost(input: Readonly<{
               ? (input.activeDocumentLabel ?? "원고")
               : input.workSection === "structure"
                 ? "구조"
-                : input.workSection === "review"
-                  ? "검토"
-                  : "운영"
+                : input.workSection === "canon"
+                  ? "별빛"
+                  : input.workSection === "review"
+                    ? "검토"
+                    : "운영"
           }
           headingTestId={
             input.workSection === "write" ? "manuscript-title" : undefined
@@ -164,7 +167,9 @@ export function WorkspaceHeaderRecoveryHost(input: Readonly<{
                   label:
                     input.workReturnLocation.section === "review"
                       ? "검토로 돌아가기"
-                      : "구조로 돌아가기",
+                      : input.workReturnLocation.section === "canon"
+                        ? "별빛으로 돌아가기"
+                        : "구조로 돌아가기",
                   onClick: input.commands.returnToPreviousWorkLocation,
                 }
               : undefined

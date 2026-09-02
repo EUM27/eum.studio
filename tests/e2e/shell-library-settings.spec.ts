@@ -43,10 +43,6 @@ test("uses one collapsible left sidebar without stretching main controls", async
       "data-ui-model",
       "eum-studio-desktop",
     );
-    await expect(page.locator(".studio-app-shell")).toHaveAttribute(
-      "data-visual-model",
-      "novela",
-    );
     await expect(page.locator(".app-shell")).toHaveCount(0);
     await expect(page.locator(".library-home")).toHaveAttribute(
       "data-layout",

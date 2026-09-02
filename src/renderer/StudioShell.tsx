@@ -53,6 +53,9 @@ export function StudioRoot() {
     bodyClassList: document.body.classList,
     storage: Object.freeze({
       getItem: (key: string) => window.localStorage.getItem(key),
+      removeItem: (key: string) => {
+        window.localStorage.removeItem(key);
+      },
       setItem: (key: string, value: string) => {
         window.localStorage.setItem(key, value);
       },
@@ -60,10 +63,10 @@ export function StudioRoot() {
   }));
   const {
     theme,
-    focusModePreferences,
+    manuscriptFocusPreferences,
     uiPreferencesReady,
     changeTheme,
-    changeFocusModePreferences,
+    changeManuscriptFocusPreferences,
   } = useUiPreferencesController({
     bodyClassList: uiPreferencesPorts.bodyClassList,
     client: window.eumStudio.settings,
@@ -124,6 +127,7 @@ export function StudioRoot() {
     appSettingsProjection,
     musicSettingsProfile,
     workMusicSettingsProjection,
+    workSceneAnalysisSettingsProjection,
     youtubeMusicConnectionStatus,
     chatGptOAuthStatus,
     chatGptOAuthLoginState,
@@ -395,14 +399,20 @@ export function StudioRoot() {
                 eventRailHost={eventRailHost}
                 musicPlayerHost={musicPlayerHost}
                 musicSettingsRevision={workMusicSettingsProjection?.revision ?? 0}
+                sceneAnalysisSettingsRevision={
+                  workSceneAnalysisSettingsProjection?.revision ?? 0
+                }
+                sceneAnalysisEnabled={
+                  workSceneAnalysisSettingsProjection?.settings.enabled ?? null
+                }
                 onCatalogChange={acceptCatalog}
                 onOpenPublishing={publishingController.openPublishingPartners}
                 onOpenSettings={openAppSettings}
                 onReturnToWorks={returnToMain}
                 onResumePreviewChange={acceptResumePreview}
                 onScheduleChange={refreshSchedule}
-                focusModePreferences={focusModePreferences}
-                onFocusModePreferencesChange={changeFocusModePreferences}
+                manuscriptFocusPreferences={manuscriptFocusPreferences}
+                onManuscriptFocusPreferencesChange={changeManuscriptFocusPreferences}
                 onThemeChange={changeTheme}
                 scheduleSettingsRevision={appSettingsScheduleRevision}
                 theme={theme}
@@ -455,11 +465,13 @@ export function StudioRoot() {
           key={[
             appSettingsProjection?.revision ?? "loading",
             workMusicSettingsProjection?.revision ?? "no-work",
+            workSceneAnalysisSettingsProjection?.revision ?? "no-scene-analysis",
             youtubeMusicConnectionStatus?.revision ?? "no-youtube",
             chatGptOAuthStatus?.revision ?? "no-chatgpt",
           ].join(":")}
           musicProfile={musicSettingsProfile}
           musicProjection={workMusicSettingsProjection}
+          sceneAnalysisProjection={workSceneAnalysisSettingsProjection}
           onClose={closeAppSettings}
           onSave={saveAppSettings}
           onRemoveYouTubeApiKey={removeYouTubeMusicConnection}

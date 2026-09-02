@@ -25,7 +25,7 @@ import {
   type ManuscriptEditorHandle,
 } from "./editor/ManuscriptEditor";
 import { useWorkspaceStructureKernel } from "./features/structure/useWorkspaceStructureKernel";
-import { useFocusModeController } from "./features/activity/useFocusModeController";
+import { useManuscriptFocusController } from "./features/activity/useManuscriptFocusController";
 import { useResumeCheckpointController } from "./workspace/session/useResumeCheckpointController";
 import { useStartupRecoveryController } from "./workspace/session/useStartupRecoveryController";
 import { useWorkspaceCloseController } from "./workspace/session/useWorkspaceCloseController";
@@ -37,7 +37,7 @@ import { useWorkspaceLayoutController } from "./workspace/layout/useWorkspaceLay
 import {
   type StarlightThemeKey,
 } from "./theme/starlight-theme";
-import type { FocusModePreferences } from "../application/settings/ui-preferences";
+import type { ManuscriptFocusPreferences } from "../application/settings/ui-preferences";
 import { ManuscriptTelemetryStore } from "./editor/manuscript-telemetry-store";
 import {
   RuntimeBootstrapController,
@@ -90,9 +90,9 @@ type AppProps = {
   readonly onResumePreviewChange?: (
     preview: ManuscriptResumePreview | null,
   ) => void;
-  readonly focusModePreferences?: FocusModePreferences;
-  readonly onFocusModePreferencesChange?: (
-    preferences: FocusModePreferences,
+  readonly manuscriptFocusPreferences?: ManuscriptFocusPreferences;
+  readonly onManuscriptFocusPreferencesChange?: (
+    preferences: ManuscriptFocusPreferences,
   ) => void;
   readonly onOpenSettings?: () => void;
   readonly onOpenPublishing?: (
@@ -102,6 +102,8 @@ type AppProps = {
   readonly onReturnToWorks?: () => void;
   readonly onScheduleChange?: () => void;
   readonly scheduleSettingsRevision?: number;
+  readonly sceneAnalysisSettingsRevision?: number;
+  readonly sceneAnalysisEnabled?: boolean | null;
   readonly onThemeChange?: (theme: StarlightThemeKey) => void;
   readonly theme?: StarlightThemeKey;
   readonly youtubeMusicConnectionStatus?: YouTubeMusicConnectionStatus | null;
@@ -112,11 +114,11 @@ export function WorkspaceRoot({
     documentRailHost,
     embedded = false,
     eventRailHost,
-    focusModePreferences,
+    manuscriptFocusPreferences,
     musicSettingsRevision = 0,
     musicPlayerHost,
     onCatalogChange,
-    onFocusModePreferencesChange,
+    onManuscriptFocusPreferencesChange,
     onOpenPublishing,
     onOpenSettings,
     onReturnToWorks,
@@ -124,6 +126,8 @@ export function WorkspaceRoot({
     onScheduleChange,
     onThemeChange,
     scheduleSettingsRevision = 0,
+    sceneAnalysisSettingsRevision = 0,
+    sceneAnalysisEnabled = null,
     theme = "light-mode",
     youtubeMusicConnectionStatus = null,
   }: AppProps) {
@@ -152,9 +156,9 @@ export function WorkspaceRoot({
   } = usePersistenceCoordinator();
   const activeWritingSessionRef =
     useRef<WritingSessionProjection | undefined>(undefined);
-  const focusModeOwnedWritingSessionIdRef =
+  const manuscriptFocusOwnedWritingSessionIdRef =
     useRef<EntityId<"WritingSession"> | null>(null);
-  const focusModeSessionPendingRef = useRef<Promise<void>>(Promise.resolve());
+  const manuscriptFocusSessionPendingRef = useRef<Promise<void>>(Promise.resolve());
   const [documentNavigator] = useState(() => new DocumentNavigator());
   const documentNavigationWorkspaceRef =
     useRef<DocumentNavigationWorkspaceSnapshot>(
@@ -198,33 +202,36 @@ export function WorkspaceRoot({
   const {
     workspaceSurface,
   } = workspaceNavigationState;
-  const focusModeStorage = useMemo(() => Object.freeze({
+  const manuscriptFocusStorage = useMemo(() => Object.freeze({
     getItem: (key: string) => window.localStorage.getItem(key),
+    removeItem: (key: string) => {
+      window.localStorage.removeItem(key);
+    },
     setItem: (key: string, value: string) => {
       window.localStorage.setItem(key, value);
     },
   }), []);
-  const focusModeControllerInput = useMemo(() => Object.freeze({
-    ...(focusModePreferences === undefined
+  const manuscriptFocusControllerInput = useMemo(() => Object.freeze({
+    ...(manuscriptFocusPreferences === undefined
       ? {}
-      : { initialPreferences: focusModePreferences }),
-    ...(onFocusModePreferencesChange === undefined
+      : { initialPreferences: manuscriptFocusPreferences }),
+    ...(onManuscriptFocusPreferencesChange === undefined
       ? {}
-      : { onPreferencesChange: onFocusModePreferencesChange }),
-    storage: focusModeStorage,
+      : { onPreferencesChange: onManuscriptFocusPreferencesChange }),
+    storage: manuscriptFocusStorage,
   }), [
-    focusModePreferences,
-    focusModeStorage,
-    onFocusModePreferencesChange,
+    manuscriptFocusPreferences,
+    manuscriptFocusStorage,
+    onManuscriptFocusPreferencesChange,
   ]);
-  const focusModeController = useFocusModeController(
-    focusModeControllerInput,
+  const manuscriptFocusController = useManuscriptFocusController(
+    manuscriptFocusControllerInput,
   );
   const {
-    focusMode,
-    toggleFocusMode,
-    exitFocusMode,
-  } = focusModeController;
+    manuscriptFocusActive,
+    toggleManuscriptFocus,
+    exitManuscriptFocus,
+  } = manuscriptFocusController;
 
   const structureKernel = useWorkspaceStructureKernel({
     client: {
@@ -251,13 +258,19 @@ export function WorkspaceRoot({
   const readDocumentStateForResume = useCallback((
     document: ManuscriptDocumentSource,
   ) => manuscriptEditorRef.current?.readDocumentState(document), []);
+  const getCurrentRevisionIdForResume = useCallback(
+    (documentId: EntityId<"Document">) =>
+      durableSaveQueueRef.current?.getCurrentRevisionId(documentId) ?? null,
+    [durableSaveQueueRef],
+  );
   const resumeCheckpointControllerInput = useMemo(() => ({
     client: window.eumStudio.workspace,
+    getCurrentRevisionId: getCurrentRevisionIdForResume,
     readDocumentState: readDocumentStateForResume,
     resumeCheckpoint: runtime.status === "ready"
       ? runtime.resumeCheckpoint
       : null,
-  }), [readDocumentStateForResume, runtime]);
+  }), [getCurrentRevisionIdForResume, readDocumentStateForResume, runtime]);
   const {
     captureResume: captureResumeForDocument,
     captureResumeAndLoadCatalog,
@@ -268,6 +281,12 @@ export function WorkspaceRoot({
       persistDocumentRegularly({
         queue: durableSaveQueueRef.current,
         document,
+        waitForCompositionEnd: (currentDocument) =>
+          manuscriptEditorRef.current?.waitForDocumentCompositionEnd(
+            currentDocument,
+          ) ?? Promise.reject(new Error(
+            `The active editor state is unavailable for ${currentDocument.documentId}`,
+          )),
         captureResume: captureResumeForDocument,
       }),
     [captureResumeForDocument, durableSaveQueueRef],
@@ -307,13 +326,17 @@ export function WorkspaceRoot({
   const {
     installRuntimeProjection,
   } = runtimeProjectionController;
+  const loadRuntimeProjection = useCallback(
+    () => runtimeBootstrapController.load(),
+    [runtimeBootstrapController],
+  );
   const reloadRuntimeAfterEpisodeMove = useCallback(async (
     preferredDocumentId: EntityId<"Document">,
   ): Promise<void> => {
-    const projection = await runtimeBootstrapController.load();
+    const projection = await loadRuntimeProjection();
     installRuntimeProjection(projection, preferredDocumentId);
     onCatalogChange?.(projection.catalog);
-  }, [installRuntimeProjection, onCatalogChange, runtimeBootstrapController]);
+  }, [installRuntimeProjection, loadRuntimeProjection, onCatalogChange]);
   const getCloseQueue = useCallback(
     () => durableSaveQueueRef.current,
     [durableSaveQueueRef],
@@ -331,8 +354,8 @@ export function WorkspaceRoot({
     activeWritingSessionRef,
     captureResume: captureResumeForDocument,
     editorClient: window.eumStudio.editor,
-    focusModeOwnedWritingSessionIdRef,
-    focusModeSessionPendingRef,
+    manuscriptFocusOwnedWritingSessionIdRef,
+    manuscriptFocusSessionPendingRef,
     getQueue: getCloseQueue,
     runtime: runtime.status === "ready"
       ? Object.freeze({
@@ -373,13 +396,13 @@ export function WorkspaceRoot({
     activeWorkId,
     activityRefs: {
       activeWritingSessionRef,
-      focusModeOwnedWritingSessionIdRef,
-      focusModeSessionPendingRef,
+      manuscriptFocusOwnedWritingSessionIdRef,
+      manuscriptFocusSessionPendingRef,
     },
     captureResumeForDocument,
     client: window.eumStudio,
     controllers: {
-      focus: focusModeController,
+      manuscriptFocus: manuscriptFocusController,
       layout: workspaceLayoutController,
       lifecycle: workspaceLifecycle,
       navigation: workspaceNavigationState,
@@ -419,6 +442,9 @@ export function WorkspaceRoot({
     publishResumePreview,
     activeWorkDocumentIds,
     charactersController,
+    canonReviewController,
+    continuityController,
+    characterKnowledgeController,
     loreController,
   } = coreFeatureKernel;
   const storyFeatureKernel = useWorkspaceStoryFeatureKernel({
@@ -435,6 +461,8 @@ export function WorkspaceRoot({
     },
     persistDocument,
     reloadRuntimeAfterEpisodeMove,
+    sceneAnalysisEnabled,
+    sceneAnalysisSettingsRevision,
     structureKernel,
     telemetryStore,
   });
@@ -450,13 +478,13 @@ export function WorkspaceRoot({
   } = storyFeatureKernel;
   useEffect(() => {
     if (workspaceSurface !== "manuscript" || activeForwardWriting !== null) return;
-    const handleFocusModeShortcut = (event: KeyboardEvent) => {
+    const handleManuscriptFocusShortcut = (event: KeyboardEvent) => {
       const toggleShortcut =
         event.key === "Enter" &&
         event.ctrlKey &&
         event.shiftKey &&
         !event.altKey;
-      const exitShortcut = event.key === "Escape" && focusMode;
+      const exitShortcut = event.key === "Escape" && manuscriptFocusActive;
       if (
         (!toggleShortcut && !exitShortcut) ||
         event.defaultPrevented ||
@@ -468,32 +496,28 @@ export function WorkspaceRoot({
       }
       event.preventDefault();
       if (exitShortcut) {
-        exitFocusMode();
+        exitManuscriptFocus();
       } else {
-        toggleFocusMode();
+        toggleManuscriptFocus();
       }
     };
-    window.addEventListener("keydown", handleFocusModeShortcut);
+    window.addEventListener("keydown", handleManuscriptFocusShortcut);
     return () => {
-      window.removeEventListener("keydown", handleFocusModeShortcut);
+      window.removeEventListener("keydown", handleManuscriptFocusShortcut);
     };
   }, [
     activeForwardWriting,
-    exitFocusMode,
-    focusMode,
-    toggleFocusMode,
+    exitManuscriptFocus,
+    manuscriptFocusActive,
+    toggleManuscriptFocus,
     workspaceSurface,
   ]);
 
-  const loadRuntimeForRecovery = useCallback(
-    () => runtimeBootstrapController.load(),
-    [runtimeBootstrapController],
-  );
   const startupRecoveryControllerInput = useMemo(() => Object.freeze({
     applyClient: window.eumStudio.editor,
     applyState: recoveryApplyState,
     installRuntime: installRuntimeProjection,
-    loadRuntime: loadRuntimeForRecovery,
+    loadRuntime: loadRuntimeProjection,
     runtime: runtime.status === "ready"
       ? Object.freeze({
           activeDocumentId: runtime.activeDocumentId,
@@ -503,7 +527,7 @@ export function WorkspaceRoot({
     setApplyState: setRecoveryApplyState,
   }), [
     installRuntimeProjection,
-    loadRuntimeForRecovery,
+    loadRuntimeProjection,
     recoveryApplyState,
     runtime,
     setRecoveryApplyState,
@@ -581,10 +605,13 @@ export function WorkspaceRoot({
     captureResumeForDocument,
     controllers: {
       assistant: assistantController,
+      canon: canonReviewController,
+      continuity: continuityController,
+      characterKnowledge: characterKnowledgeController,
       characters: charactersController,
       eventState: eventWorkspaceState,
       foreshadow: foreshadowController,
-      focus: focusModeController,
+      manuscriptFocus: manuscriptFocusController,
       fragments: fragmentsController,
       lore: loreController,
       plotState: plotWorkspaceState,
@@ -631,7 +658,7 @@ export function WorkspaceRoot({
       activeWork={activeWork}
       activeWorkId={activeWorkId}
       controllers={{
-        focus: focusModeController,
+        manuscriptFocus: manuscriptFocusController,
         layout: workspaceLayoutController,
         lifecycle: workspaceLifecycle,
         navigationState: workspaceNavigationState,

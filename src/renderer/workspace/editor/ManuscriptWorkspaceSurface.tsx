@@ -4,20 +4,22 @@ import { X } from "lucide-react";
 
 import type { ManuscriptDocumentSource } from "../../../application/editor/manuscript-document-profile";
 import type { SceneProjectionList } from "../../../application/structure/scene-projection";
-import { FocusModeToolbar, type FocusModeToolbarProps } from "../../editor/FocusModeToolbar";
+import { ManuscriptFocusToolbar, type ManuscriptFocusToolbarProps } from "../../editor/ManuscriptFocusToolbar";
 import {
   ManuscriptEditor,
   type ManuscriptEditorHandle,
 } from "../../editor/ManuscriptEditor";
 import { ManuscriptTelemetryStore } from "../../editor/manuscript-telemetry-store";
 import type { useActivityController } from "../../features/activity/useActivityController";
+import type { useManuscriptAnnotationsController } from "../../features/annotations/useManuscriptAnnotationsController";
 import type { useEditorToolsController } from "../../features/editor-tools/useEditorToolsController";
 import type { useMoveRangeToEpisodeController } from "../../features/editor-tools/useMoveRangeToEpisodeController";
-import type { useFocusModeController } from "../../features/activity/useFocusModeController";
+import type { useManuscriptFocusController } from "../../features/activity/useManuscriptFocusController";
 import type { useEventWorkspaceController } from "../../features/structure/useEventWorkspaceController";
 import type { useSceneWorkspaceController } from "../../features/structure/useSceneWorkspaceController";
 import type { useLoreCueController } from "../../features/lore/useLoreCueController";
 import type { useReadingLayoutController } from "../session/useReadingLayoutController";
+import type { useAutomaticSceneAnalysisController } from "../../features/analysis/useAutomaticSceneAnalysisController";
 import type { WorkspaceRuntimeState } from "../session/workspace-session-state";
 
 type ReadyWorkspaceRuntime = Extract<
@@ -25,8 +27,8 @@ type ReadyWorkspaceRuntime = Extract<
   Readonly<{ status: "ready" }>
 >;
 
-function FocusModeToolbarWithTelemetry(
-  input: Omit<FocusModeToolbarProps, "currentDocumentCharacterCount"> & {
+function ManuscriptFocusToolbarWithTelemetry(
+  input: Omit<ManuscriptFocusToolbarProps, "currentDocumentCharacterCount"> & {
     readonly telemetryStore: ManuscriptTelemetryStore;
   },
 ) {
@@ -36,7 +38,7 @@ function FocusModeToolbarWithTelemetry(
     telemetryStore.getStatisticsSnapshot,
   );
   return (
-    <FocusModeToolbar
+    <ManuscriptFocusToolbar
       {...toolbar}
       currentDocumentCharacterCount={statistics.characterCount}
     />
@@ -57,22 +59,28 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
   callbacks: ManuscriptCallbacks;
   controllers: Readonly<{
     activity: ReturnType<typeof useActivityController>;
+    annotations: ReturnType<typeof useManuscriptAnnotationsController>;
     editorTools: ReturnType<typeof useEditorToolsController>;
     episodeMove: ReturnType<typeof useMoveRangeToEpisodeController>;
     event: ReturnType<typeof useEventWorkspaceController>;
-    focus: ReturnType<typeof useFocusModeController>;
+    manuscriptFocus: ReturnType<typeof useManuscriptFocusController>;
     loreCue: ReturnType<typeof useLoreCueController>;
     readingLayout: ReturnType<typeof useReadingLayoutController>;
     scene: ReturnType<typeof useSceneWorkspaceController>;
   }>;
   editorRef: RefObject<ManuscriptEditorHandle | null>;
-  focusStatus: Readonly<{
+  automaticSceneAnalysis: ReturnType<typeof useAutomaticSceneAnalysisController>;
+  manuscriptFocusStatus: Readonly<{
     forwardWriting: string | null;
     pomodoro: string | null;
     save: string;
     timer: string | null;
   }>;
   loreEntries: ComponentProps<typeof ManuscriptEditor>["loreEntries"];
+  onCanonReview: ComponentProps<typeof ManuscriptEditor>["onCanonReview"];
+  onContinuityManual: ComponentProps<typeof ManuscriptEditor>["onContinuityManual"];
+  onContinuityReview: ComponentProps<typeof ManuscriptEditor>["onContinuityReview"];
+  onCharacterKnowledge: ComponentProps<typeof ManuscriptEditor>["onCharacterKnowledge"];
   navigation: Readonly<{
     activateDocument: (documentId: string) => void;
     closeDocumentTab: (documentId: string) => void;
@@ -91,8 +99,13 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
     callbacks,
     controllers,
     editorRef,
-    focusStatus,
+    automaticSceneAnalysis,
+    manuscriptFocusStatus,
     loreEntries,
+    onCanonReview,
+    onContinuityManual,
+    onContinuityReview,
+    onCharacterKnowledge,
     navigation,
     openDocuments,
     runtime,
@@ -103,13 +116,27 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
     workspaceSurface,
   } = input;
   const activity = controllers.activity;
+  const annotations = controllers.annotations;
   const editorTools = controllers.editorTools;
   const episodeMove = controllers.episodeMove;
   const event = controllers.event;
-  const focus = controllers.focus;
+  const manuscriptFocus = controllers.manuscriptFocus;
   const loreCue = controllers.loreCue;
   const readingLayout = controllers.readingLayout;
   const scene = controllers.scene;
+  const annotationRanges = useMemo(
+    () => annotations.activeDocumentAnnotations.flatMap(
+      (annotation) => annotation.range === null
+        ? []
+        : [{
+            annotationId: annotation.annotationId,
+            from: annotation.range.from,
+            to: annotation.range.to,
+            tags: annotation.tags,
+          }],
+    ),
+    [annotations.activeDocumentAnnotations],
+  );
   const manuscriptSceneRanges = useMemo(() => {
     if (activeDocument === null || sceneProjection === null) return [];
     return sceneProjection.scenes
@@ -135,10 +162,10 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
       className="manuscript-workspace-surface"
       hidden={workspaceSurface !== "manuscript"}
     >
-      {focus.focusMode && runtime !== null && activeDocument !== null && (
-        <FocusModeToolbarWithTelemetry
-          contentWidthPx={focus.focusContentWidthPx}
-          currentBlockHighlight={focus.focusCurrentBlockHighlight}
+      {manuscriptFocus.manuscriptFocusActive && runtime !== null && activeDocument !== null && (
+        <ManuscriptFocusToolbarWithTelemetry
+          manuscriptWidthPx={manuscriptFocus.manuscriptFocusWidthPx}
+          highlightCurrentParagraph={manuscriptFocus.highlightCurrentParagraph}
           exitLabel={
             editorTools.activeForwardWriting === null
               ? "집중 화면 종료"
@@ -147,27 +174,27 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
           modeLabel={
             editorTools.activeForwardWriting === null ? null : "수정금지 집필"
           }
-          modeStatus={focusStatus.forwardWriting}
-          onContentWidthChange={focus.changeFocusContentWidth}
-          onCurrentBlockHighlightChange={focus.changeFocusCurrentBlockHighlight}
+          modeStatus={manuscriptFocusStatus.forwardWriting}
+          onManuscriptWidthChange={manuscriptFocus.changeManuscriptFocusWidth}
+          onHighlightCurrentParagraphChange={manuscriptFocus.changeCurrentParagraphHighlight}
           onExit={() => {
             if (editorTools.activeForwardWriting === null) {
-              focus.exitFocusMode();
+              manuscriptFocus.exitManuscriptFocus();
             } else {
               editorTools.stopForwardWriting();
             }
           }}
-          onTypewriterModeChange={focus.changeFocusTypewriterMode}
-          onTypewriterPositionChange={focus.changeFocusTypewriterPosition}
-          onZoomChange={focus.changeFocusZoom}
+          onCursorFollowChange={manuscriptFocus.changeCursorFollow}
+          onCursorViewportChange={manuscriptFocus.changeCursorViewport}
+          onTextScaleChange={manuscriptFocus.changeManuscriptTextScale}
           pomodoroPhase={activity.activePomodoroPhase?.phase ?? null}
-          pomodoroStatus={focusStatus.pomodoro}
-          saveStatus={focusStatus.save}
-          timerStatus={focusStatus.timer}
+          pomodoroStatus={manuscriptFocusStatus.pomodoro}
+          saveStatus={manuscriptFocusStatus.save}
+          timerStatus={manuscriptFocusStatus.timer}
           telemetryStore={telemetryStore}
-          typewriterMode={focus.focusTypewriterMode}
-          typewriterPositionPercent={focus.focusTypewriterPositionPercent}
-          zoomPercent={focus.focusZoomPercent}
+          cursorFollowEnabled={manuscriptFocus.cursorFollowEnabled}
+          cursorViewportPercent={manuscriptFocus.cursorViewportPercent}
+          textScalePercent={manuscriptFocus.manuscriptFocusTextScalePercent}
         />
       )}
       {runtime !== null && activeDocument !== null && (
@@ -226,17 +253,18 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
         <ManuscriptEditor
           accessibleName="원고"
           activeDocument={activeDocument}
+          annotationRanges={annotationRanges}
           formattingProfile={runtime.formattingProfile}
-          {...(focus.focusMode && workspaceSurface === "manuscript"
+          {...(manuscriptFocus.manuscriptFocusActive && workspaceSurface === "manuscript"
             ? {
-                focusPresentation: {
+                manuscriptFocus: {
                   active: true,
-                  contentWidthPx: focus.focusContentWidthPx,
-                  currentBlockHighlight: focus.focusCurrentBlockHighlight,
-                  typewriterMode: focus.focusTypewriterMode,
-                  typewriterPositionPercent:
-                    focus.focusTypewriterPositionPercent,
-                  zoomPercent: focus.focusZoomPercent,
+                  manuscriptWidthPx: manuscriptFocus.manuscriptFocusWidthPx,
+                  highlightCurrentParagraph: manuscriptFocus.highlightCurrentParagraph,
+                  cursorFollowEnabled: manuscriptFocus.cursorFollowEnabled,
+                  cursorViewportPercent:
+                    manuscriptFocus.cursorViewportPercent,
+                  textScalePercent: manuscriptFocus.manuscriptFocusTextScalePercent,
                 },
               }
             : {})}
@@ -254,6 +282,10 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
           canMoveToNextEpisode={episodeMove.canMoveToNextEpisode}
           orderedDocuments={activeWorkDocuments}
           onBlur={activity.handleDocumentBlur}
+          onCanonReview={onCanonReview}
+          onContinuityManual={onContinuityManual}
+          onContinuityReview={onContinuityReview}
+          onCharacterKnowledge={onCharacterKnowledge}
           onAddEvent={event.openContextEventDialog}
           onAddScene={() => {
             void scene.createSceneBoundary();
@@ -289,11 +321,15 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
           onOpenAnalysis={editorTools.openManuscriptAnalysis}
           onOpenPreflight={editorTools.openManuscriptPreflight}
           onTransaction={callbacks.onTransaction}
-          onUndoExternal={episodeMove.requestUndoLastMove}
+          onUndoExternal={() =>
+            scene.requestUndoLastSceneDeletion() ||
+            episodeMove.requestUndoLastMove()
+          }
           readOnly={
             runtime.startupRecovery.status !== "clean" ||
             workspaceActionState === "setting-document-completion" ||
-            episodeMove.actionState !== "idle"
+            episodeMove.actionState !== "idle" ||
+            scene.sceneActionState !== "idle"
           }
           ref={editorRef}
           resumeLocation={
@@ -310,6 +346,39 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
           {editorTools.preflightActionError}
         </p>
       )}
+      <div className="automatic-scene-analysis-status">
+        <span aria-hidden="true">자동 장면 분석</span>
+        <p
+          aria-label="자동 장면 분석 상태"
+          aria-live="polite"
+          className="automatic-scene-analysis-status-text"
+        >
+          {automaticSceneAnalysis.error ?? (
+            !automaticSceneAnalysis.enabled
+              ? "꺼짐"
+              : automaticSceneAnalysis.state === "idle"
+                ? "켜짐"
+                : automaticSceneAnalysis.state === "running"
+                  ? "분석 중"
+                  : automaticSceneAnalysis.state === "skipped-disconnected"
+                    ? "연결되지 않아 건너뜀"
+                    : automaticSceneAnalysis.state === "permission-required"
+                      ? "권한 필요"
+                      : automaticSceneAnalysis.state === "stale"
+                        ? "원본 변경으로 건너뜀"
+                        : "분석 실패"
+          )}
+        </p>
+        {automaticSceneAnalysis.canRetry && (
+          <button
+            disabled={automaticSceneAnalysis.state === "running"}
+            onClick={automaticSceneAnalysis.retry}
+            type="button"
+          >
+            다시 시도
+          </button>
+        )}
+      </div>
       {editorTools.manuscriptTextImportError !== null &&
         editorTools.manuscriptTextImport === null && (
           <p className="preflight-open-error" role="alert">
@@ -322,9 +391,18 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
         </p>
       )}
       {episodeMove.actionError !== null && (
-        <p className="preflight-open-error" role="alert">
-          {episodeMove.actionError}
-        </p>
+        <div className="preflight-open-error is-dismissible" role="alert">
+          <span>{episodeMove.actionError}</span>
+          <button
+            aria-label="회차 이동 오류 닫기"
+            className="preflight-open-error-dismiss"
+            onClick={episodeMove.clearActionError}
+            title="닫기"
+            type="button"
+          >
+            <X aria-hidden="true" size={14} />
+          </button>
+        </div>
       )}
     </div>
   );

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   parseManuscriptDocumentProfile,
@@ -23,7 +23,10 @@ import {
 import type { usePersistenceCoordinator } from "../session/usePersistenceCoordinator";
 import type { useWorkspaceSession } from "../session/useWorkspaceSession";
 import type { useWorkspaceNavigationState } from "../navigation/useWorkspaceNavigationController";
-import { prepareWorkspaceForMainThroughPorts } from "./WorkspaceLifecycleCoordinator";
+import {
+  LatestWorkspaceActivationLane,
+  prepareWorkspaceForMainThroughPorts,
+} from "./WorkspaceLifecycleCoordinator";
 import type { WorkspaceController } from "./WorkspaceController";
 import { useWorkspaceCommandsController } from "./useWorkspaceCommandsController";
 import type { useWorkspaceLifecycle } from "./useWorkspaceLifecycle";
@@ -107,6 +110,9 @@ export function useWorkspaceDocumentController(input: Readonly<{
     setRuntime,
   } = input.session;
   const controller = input.workspaceController;
+  const [documentActivationLane] = useState(
+    () => new LatestWorkspaceActivationLane(),
+  );
 
   const installCreatedDocument = useCallback(
       async (
@@ -411,25 +417,24 @@ export function useWorkspaceDocumentController(input: Readonly<{
           .map((document) => document.documentId);
         const currentActiveDocumentId =
           runtime.activeDocumentId ?? selectedDocument.documentId;
-        void activateWorkspaceLocation({
-          schemaVersion: 1,
-          workId: selectedDocument.workId,
-          documentId: selectedDocument.documentId,
-        })
-          .then(() => {
-            setDocumentTabSession((current) =>
-              openWorkspaceSessionDocumentTab({
-                session: current,
-                workId: selectedDocument.workId,
-                orderedDocumentIds,
-                activeDocumentId: currentActiveDocumentId,
-                documentId: selectedDocument.documentId,
-              }),
-            );
-          })
-          .catch(() => undefined);
+        void documentActivationLane.enqueue(async () => {
+          await activateWorkspaceLocation({
+            schemaVersion: 1,
+            workId: selectedDocument.workId,
+            documentId: selectedDocument.documentId,
+          });
+          setDocumentTabSession((current) =>
+            openWorkspaceSessionDocumentTab({
+              session: current,
+              workId: selectedDocument.workId,
+              orderedDocumentIds,
+              activeDocumentId: currentActiveDocumentId,
+              documentId: selectedDocument.documentId,
+            }),
+          );
+        }).catch(() => undefined);
       },
-      [activateWorkspaceLocation, runtime, setDocumentTabSession],
+      [activateWorkspaceLocation, documentActivationLane, runtime, setDocumentTabSession],
     );
   
   const openDocumentFromSchedule = useCallback(

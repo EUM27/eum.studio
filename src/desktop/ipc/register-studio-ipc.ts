@@ -6,11 +6,21 @@ import type {
   ExportWorkRecordsCommand,
   ExportWorkRecordsResult,
 } from "../../application/activity/work-records-export";
+import type {
+  ExportCanonicalMarkdownCommand,
+  ExportCanonicalMarkdownResult,
+} from "../../application/export/canonical-markdown-export";
 import type { ApplicationRuntimes } from "../runtime/create-application-runtimes";
 import { registerActivityIpc } from "./register-activity-ipc";
 import { registerForeshadowingIpc } from "./register-foreshadowing-ipc";
 import { registerFragmentsIpc } from "./register-fragments-ipc";
+import { registerManuscriptAnnotationsIpc } from "./register-manuscript-annotations-ipc";
 import { registerCharactersIpc } from "./register-characters-ipc";
+import { registerCanonIpc } from "./register-canon-ipc";
+import { registerContinuityIpc } from "./register-continuity-ipc";
+import { registerCharacterKnowledgeIpc } from "./register-character-knowledge-ipc";
+import { registerContextPlannerIpc } from "./register-context-planner-ipc";
+import { registerNarrativeDigestIpc } from "./register-narrative-digest-ipc";
 import { registerScheduleIpc } from "./register-schedule-ipc";
 import { registerQuickToolsIpc } from "./register-quick-tools-ipc";
 import { registerLoreIpc } from "./register-lore-ipc";
@@ -88,6 +98,9 @@ export function registerStudioIpc(input: Readonly<{
   activityExportRecords: (
     command: ExportWorkRecordsCommand,
   ) => Promise<ExportWorkRecordsResult>;
+  canonicalMarkdownExport: (
+    command: ExportCanonicalMarkdownCommand,
+  ) => Promise<ExportCanonicalMarkdownResult>;
   assistant: Readonly<{
     getOAuthStatus: () => ChatGptOAuthConnectionStatus | Promise<ChatGptOAuthConnectionStatus>;
     startOAuthLogin: () => ChatGptOAuthConnectionStatus | Promise<ChatGptOAuthConnectionStatus>;
@@ -174,6 +187,32 @@ export function registerStudioIpc(input: Readonly<{
     authorizeSender: input.authorizeSender,
     runtime: input.runtimes.characters,
   });
+  registerCanonIpc({
+    ipcMain: input.ipcMain,
+    authorizeSender: input.authorizeSender,
+    runtime: input.runtimes.canon,
+    exportMarkdown: input.canonicalMarkdownExport,
+  });
+  registerContinuityIpc({
+    ipcMain: input.ipcMain,
+    authorizeSender: input.authorizeSender,
+    runtime: input.runtimes.continuity,
+  });
+  registerCharacterKnowledgeIpc({
+    ipcMain: input.ipcMain,
+    authorizeSender: input.authorizeSender,
+    runtime: input.runtimes.characterKnowledge,
+  });
+  registerContextPlannerIpc({
+    ipcMain: input.ipcMain,
+    authorizeSender: input.authorizeSender,
+    runtime: input.runtimes.contextPlanner,
+  });
+  registerNarrativeDigestIpc({
+    ipcMain: input.ipcMain,
+    authorizeSender: input.authorizeSender,
+    runtime: input.runtimes.narrativeDigest,
+  });
   registerEditorIpc({
     ipcMain: input.ipcMain,
     authorizeSender: input.authorizeSender,
@@ -194,6 +233,11 @@ export function registerStudioIpc(input: Readonly<{
     authorizeSender: input.authorizeSender,
     runtime: input.runtimes.fragments,
     profile: input.profiles.fragment,
+  });
+  registerManuscriptAnnotationsIpc({
+    ipcMain: input.ipcMain,
+    authorizeSender: input.authorizeSender,
+    runtime: input.runtimes.manuscriptAnnotations,
   });
   registerLoreIpc({
     ipcMain: input.ipcMain,

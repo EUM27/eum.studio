@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "fixtureUse": "Measurement-only fixture. Counts and timings are not product limits or user-data defaults.",
+  "environment": {
+    "platform": "win32",
+    "architecture": "x64",
+    "node": "v24.13.0"
+  },
+  "rowCounts": {
+    "documents": 500,
+    "eventBlocks": 400,
+    "characters": 400,
+    "characterRelations": 400,
+    "loreEntries": 400,
+    "continuityThreads": 400,
+    "characterKnowledge": 400,
+    "totalCanonicalSources": 2400
+  },
+  "timings": {
+    "sourceManifestHashMs": {
+      "raw": [
+        2.6306999999999903,
+        1.8024000000000058,
+        2.0500000000000114,
+        1.605799999999988,
+        1.7582999999999913,
+        1.3526999999999987,
+        1.8161999999999807,
+        1.400199999999984,
+        1.376199999999983,
+        1.3824000000000183,
+        1.360900000000015,
+        1.4359999999999786,
+        1.3278999999999996,
+        1.5727999999999724,
+        1.3472000000000435,
+        1.5686000000000035,
+        1.348099999999988,
+        1.3400999999999499,
+        1.295500000000004,
+        1.3145999999999844
+      ],
+      "p50": 1.3824000000000183,
+      "p95": 2.0500000000000114
+    },
+    "staleProjectionWithRehashMs": {
+      "raw": [
+        1.6894999999999811,
+        1.9687999999999874,
+        1.4712000000000103,
+        1.6932999999999936,
+        1.4385000000000048,
+        1.3871000000000038,
+        1.7530999999999608,
+        1.4160999999999717,
+        1.578800000000001,
+        1.4019999999999868,
+        1.6739999999999782,
+        1.4701000000000022,
+        1.38839999999999,
+        1.3695999999999913,
+        1.3640000000000327,
+        1.3623999999999796,
+        1.354600000000005,
+        1.5400000000000205,
+        1.3168000000000006,
+        1.312599999999975
+      ],
+      "p50": 1.4160999999999717,
+      "p95": 1.7530999999999608
+    }
+  },
+  "deterministicHash": true,
+  "changedDocumentRevisionProjectsStale": true,
+  "databaseBytes": {
+    "measured": false,
+    "growth": null,
+    "reason": "pure-application-harness"
+  },
+  "rendererCommitCount": {
+    "measured": false,
+    "value": null,
+    "reason": "application-harness"
+  }
+}
