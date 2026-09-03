@@ -198,4 +198,41 @@ describe("canon review contract", () => {
       createdAt: "2026-08-29T00:00:00.000Z",
     })).toThrow(/kind/u);
   });
+
+  it("parses CharacterKnowledge as a field-level review target", () => {
+    const parsed = parseCanonReviewCandidate({
+      ...candidate,
+      items: [{
+        ...candidate.items[0],
+        targetHint: "윤서는 북문이 열린다고 안다.",
+        target: {
+          kind: "character-knowledge",
+          operation: "update",
+          knowledgeId: "knowledge-1",
+          expectedRevision: 2,
+        },
+        fieldChanges: [{
+          field: "stance",
+          before: "suspects",
+          after: "knows",
+          selected: true,
+        }],
+      }],
+    });
+
+    expect(parsed.items[0]?.target).toEqual({
+      kind: "character-knowledge",
+      operation: "update",
+      knowledgeId: "knowledge-1",
+      expectedRevision: 2,
+    });
+    expect(parseRunCanonReviewCommand({
+      schemaVersion: 1,
+      requestId: "request-knowledge",
+      workId: "work-1",
+      conversationId: "conversation-1",
+      sourceRange: candidate.sourceRange,
+      requestedTargetKinds: ["character-knowledge"],
+    }).requestedTargetKinds).toEqual(["character-knowledge"]);
+  });
 });

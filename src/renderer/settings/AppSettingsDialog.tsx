@@ -201,7 +201,7 @@ export function AppSettingsDialog({
                         setWorkSceneAnalysisEnabled(event.currentTarget.checked)}
                       type="checkbox"
                     />
-                    <span>장면 전환·분할·회차 전환 시 분석 요약과 별빛 후보 저장</span>
+                    <span>장면 전환·분할·회차 전환 시 요약과 작품 정보·연속성 후보 생성</span>
                   </label>
                   <p>
                     GPT 연결 중에만 실행합니다. 요약은 장면 이력으로 저장하고,

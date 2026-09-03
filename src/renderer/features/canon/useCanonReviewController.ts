@@ -357,14 +357,14 @@ export function useCanonReviewController(input: Readonly<{
         if (activeWorkIdRef.current !== workId) return result;
       }
       const feedback = {
-        applied: "선택한 변경을 별빛에 반영했습니다.",
+        applied: "선택한 변경을 작품 정보에 반영했습니다.",
         "nothing-selected": "선택된 변경 필드가 없습니다.",
         rejected: "변경 제안을 기각했습니다.",
         "source-stale": "근거 원문의 저장 버전이 달라져 반영하지 않았습니다.",
-        "target-stale": "별빛 대상이 변경되어 반영하지 않았습니다.",
-        "target-unresolved": "먼저 반영할 별빛 대상을 지정해 주세요.",
+        "target-stale": "대상 정보가 변경되어 반영하지 않았습니다.",
+        "target-unresolved": "먼저 반영할 작품 정보 대상을 지정해 주세요.",
         "inference-requires-user-authorship": "추론 제안은 사용자가 내용을 직접 확인하고 수정한 뒤 승인할 수 있습니다.",
-        "possible-duplicate": "같은 별빛일 수 있는 항목이 있어 대상을 먼저 확인해 주세요.",
+        "possible-duplicate": "같은 작품 정보일 수 있는 항목이 있어 대상을 먼저 확인해 주세요.",
       } as const;
       if (
         result.status === "applied" ||

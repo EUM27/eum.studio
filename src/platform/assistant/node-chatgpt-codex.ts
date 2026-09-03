@@ -44,6 +44,7 @@ import {
   type CanonReviewExecution,
 } from "../../application/canon/canon-review-model-output";
 import { CANON_REVIEW_PROMPT_VERSION } from "../../application/canon/canon-review-contract";
+import { CANON_ENTITY_KINDS } from "../../application/canon/canon-entity-ref";
 import {
   parseContinuityReviewModelPayload,
   type ContinuityReviewConnectorInput,
@@ -56,6 +57,12 @@ import {
   type NarrativeDigestConnectorExecution,
   type NarrativeDigestConnectorInput,
 } from "../../application/continuity/narrative-digest-contract";
+import {
+  SCENE_INFORMATION_UPDATE_PROMPT_VERSION,
+  parseSceneInformationUpdateExecution,
+  type SceneInformationUpdateConnectorInput,
+  type SceneInformationUpdateExecution,
+} from "../../application/continuity/scene-information-update-contract";
 import type {
   ChatGptOAuthConnectionStore,
   ChatGptOAuthTokens,
@@ -275,7 +282,12 @@ const CANON_REVIEW_SCHEMA = Object.freeze({
         properties: {
           targetKind: {
             type: "string",
-            enum: ["character", "character-relation", "lore-entry"],
+            enum: [
+              "character",
+              "character-relation",
+              "lore-entry",
+              "character-knowledge",
+            ],
           },
           targetHint: { type: "string", minLength: 1 },
           operationHint: {
@@ -316,6 +328,11 @@ const CANON_REVIEW_SCHEMA = Object.freeze({
                     "content",
                     "category",
                     "enabled",
+                    "characterId",
+                    "statement",
+                    "stance",
+                    "truthStatus",
+                    "aboutRefKeys",
                   ],
                 },
                 value: {
@@ -357,6 +374,7 @@ const CANON_REVIEW_INSTRUCTIONS = [
   "For create proposals, return every field required by that target kind without inventing a value.",
   "Use targetHint for local matching; choose unresolved when the target is ambiguous.",
   "For relation endpoints, use only character IDs present in characterReferences.",
+  "For CharacterKnowledge, use only supplied character IDs and canonical kind:id reference keys. A changed stance or truth status is a superseding state candidate, never an in-place fact rewrite.",
   "Do not invent an entity ID, relation, fact, or field outside the supplied input.",
   "Every proposal must cite one or more verbatim quotes that occur exactly once in the referenced paragraph.",
   "Return fields as an array of unique field/value objects and JSON matching the provided schema.",
@@ -524,6 +542,71 @@ function parseNarrativeDigestWirePayload(value: unknown): Readonly<{ text: strin
     throw new Error("ChatGPT NarrativeDigest response fields do not match the schema");
   }
   return Object.freeze({ text: payload.text.trim() });
+}
+
+const SCENE_INFORMATION_UPDATE_SCHEMA = Object.freeze({
+  type: "object",
+  additionalProperties: false,
+  required: ["digest", "canon", "continuity", "reviewedEntities"],
+  properties: {
+    digest: NARRATIVE_DIGEST_SCHEMA,
+    canon: CANON_REVIEW_SCHEMA,
+    continuity: CONTINUITY_REVIEW_SCHEMA,
+    reviewedEntities: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["entity", "outcome", "reason"],
+        properties: {
+          entity: {
+            type: "object",
+            additionalProperties: false,
+            required: ["kind", "id"],
+            properties: {
+              kind: { type: "string", enum: [...CANON_ENTITY_KINDS] },
+              id: { type: "string", minLength: 1 },
+            },
+          },
+          outcome: {
+            type: "string",
+            enum: ["changed", "unchanged", "insufficient-evidence"],
+          },
+          reason: { type: "string", minLength: 1 },
+        },
+      },
+    },
+  },
+});
+
+const SCENE_INFORMATION_UPDATE_INSTRUCTIONS = [
+  "Analyze one already-durable manuscript scene once and return one integrated information-update result.",
+  "The digest is a derived summary. Canon and continuity entries are unapproved candidates. Never claim to have changed the manuscript or any canonical record.",
+  "Use only the supplied scene paragraphs, canonical sources, character references, and subject references. Never invent an entity ID.",
+  "Canon proposals may cover Character, CharacterRelation, LoreEntry, and CharacterKnowledge. Return only lasting changes supported by exact evidence; do not propose deletion or retirement.",
+  "A CharacterKnowledge proposal must distinguish the character stance from objective truth. A changed stance or truth status proposes a superseding state.",
+  "Continuity proposals contain only unresolved state that must persist into later writing and must not duplicate an existing PlotThread, ForeshadowLine, or long-term Character goal.",
+  "Every proposal cites a verbatim quote that appears exactly once in its paragraph. Mark uncertain interpretation as model-inference.",
+  "For every supplied canonical source that was actually evaluated, emit one reviewedEntities row with changed, unchanged, or insufficient-evidence. Do not emit applied or success states.",
+  "Return JSON matching the provided schema, with no markdown or explanation.",
+].join("\n");
+
+function parseSceneInformationUpdateWirePayload(value: unknown) {
+  const payload = record(value, "Scene information update response");
+  const expected = new Set(["digest", "canon", "continuity", "reviewedEntities"]);
+  if (
+    Object.keys(payload).length !== expected.size ||
+    Object.keys(payload).some((field) => !expected.has(field)) ||
+    !Array.isArray(payload.reviewedEntities)
+  ) {
+    throw new Error("Scene information update response fields do not match the schema");
+  }
+  return Object.freeze({
+    digest: parseNarrativeDigestWirePayload(payload.digest),
+    canon: parseCanonReviewWirePayload(payload.canon),
+    continuity: parseContinuityReviewModelPayload(payload.continuity),
+    reviewedEntities: payload.reviewedEntities,
+  });
 }
 
 const CHARACTER_GENERATION_SCHEMA = Object.freeze({
@@ -801,6 +884,9 @@ export function createNodeChatGptCodexClient(input: {
   generateNarrativeDigest(
     input: NarrativeDigestConnectorInput,
   ): Promise<NarrativeDigestConnectorExecution>;
+  updateSceneInformation(
+    input: SceneInformationUpdateConnectorInput,
+  ): Promise<SceneInformationUpdateExecution>;
   extractCharacters(
     paragraphs: readonly CharacterExtractionParagraph[],
   ): Promise<ChatGptCharacterExtractionExecution>;
@@ -1114,6 +1200,39 @@ export function createNodeChatGptCodexClient(input: {
         modelId: input.profile.upstream.model,
         promptVersion: NARRATIVE_DIGEST_PROMPT_VERSION,
         text: payload.text,
+      });
+    },
+
+    async updateSceneInformation(
+      updateInput: SceneInformationUpdateConnectorInput,
+    ): Promise<SceneInformationUpdateExecution> {
+      const payload = parseSceneInformationUpdateWirePayload(
+        await requestStructuredAssistantPayload({
+          formatName: "eum_scene_information_update",
+          schema: SCENE_INFORMATION_UPDATE_SCHEMA,
+          instructions: SCENE_INFORMATION_UPDATE_INSTRUCTIONS,
+          payload: Object.freeze({
+            scope: updateInput.digest.scope,
+            sourceManifest: updateInput.digest.sourceManifest,
+            documents: updateInput.digest.documents,
+            sceneSource: updateInput.digest.sceneSource,
+            canonicalSources: updateInput.digest.canonicalSources,
+            requestedTargetKinds: updateInput.canon.requestedTargetKinds,
+            paragraphs: updateInput.canon.paragraphs.map((paragraph) => ({
+              id: paragraph.paragraphId,
+              text: paragraph.text,
+            })),
+            characterReferences: updateInput.canon.characterReferences,
+            subjectReferences: updateInput.continuity.subjectReferences,
+          }),
+          errorLabel: "ChatGPT Scene information update",
+        }),
+      );
+      return parseSceneInformationUpdateExecution({
+        providerId: input.profile.providerId,
+        modelId: input.profile.upstream.model,
+        promptVersion: SCENE_INFORMATION_UPDATE_PROMPT_VERSION,
+        ...payload,
       });
     },
 

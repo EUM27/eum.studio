@@ -7,6 +7,7 @@ import {
 } from "../../application/anchors/create-anchor";
 import {
   CANON_CHARACTER_FIELDS,
+  CANON_CHARACTER_KNOWLEDGE_FIELDS,
   CANON_CHARACTER_RELATION_FIELDS,
   CANON_LORE_ENTRY_FIELDS,
   CANON_REVIEW_PROMPT_VERSION,
@@ -31,6 +32,11 @@ import {
   type RunCanonReviewCommand,
   type UpdateCanonReviewItemCommand,
 } from "../../application/canon/canon-review-contract";
+import {
+  CANON_ENTITY_KINDS,
+  canonEntityRefKey,
+  parseCanonEntityRef,
+} from "../../application/canon/canon-entity-ref";
 import {
   createCanonReviewParagraphs,
   parseCanonReviewExecution,
@@ -83,6 +89,7 @@ export type PreparedCanonReview = Readonly<{
   command: RunCanonReviewCommand;
   contextReceiptId: EntityId<"AssistantContextReceipt">;
   manuscript: string;
+  connectorInput: CanonReviewConnectorInput;
   execute(): Promise<CanonReviewExecution>;
 }>;
 
@@ -196,7 +203,8 @@ function targetId(item: CanonReviewItem): string | null {
   if (item.target.operation !== "update") return null;
   if (item.target.kind === "character") return item.target.characterId;
   if (item.target.kind === "character-relation") return item.target.relationId;
-  return item.target.loreEntryId;
+  if (item.target.kind === "lore-entry") return item.target.loreEntryId;
+  return item.target.knowledgeId;
 }
 
 function expectedTargetRevision(item: CanonReviewItem): number | null {
@@ -331,7 +339,53 @@ function readSources(
       }),
     });
   });
-  return Object.freeze([...characters, ...relations, ...lore]);
+  const referenceRows = database.prepare(`
+    SELECT knowledge_id AS "knowledgeId", entity_kind AS "entityKind",
+      entity_id AS "entityId", order_index AS "orderIndex"
+    FROM character_knowledge_entity_refs
+    WHERE work_id = ? ORDER BY knowledge_id, order_index
+  `).all(workId);
+  const referencesByKnowledge = new Map<string, string[]>();
+  for (const row of referenceRows) {
+    const label = "Canon CharacterKnowledge reference row";
+    const knowledgeId = requiredString(row, "knowledgeId", label);
+    const key = canonEntityRefKey(parseCanonEntityRef({
+      kind: requiredString(row, "entityKind", label),
+      id: requiredString(row, "entityId", label),
+    }, label));
+    const references = referencesByKnowledge.get(knowledgeId) ?? [];
+    references.push(key);
+    referencesByKnowledge.set(knowledgeId, references);
+  }
+  const knowledge = database.prepare(`
+    SELECT id, revision, work_id AS "workId", character_id AS "characterId",
+      statement, stance, truth_status AS "truthStatus", status,
+      updated_at AS "updatedAt"
+    FROM character_knowledge WHERE work_id = ? ORDER BY id
+  `).all(workId).map((row) => {
+    const label = "Canon CharacterKnowledge row";
+    const id = requiredString(row, "id", label);
+    const status = requiredString(row, "status", label);
+    return Object.freeze({
+      kind: "character-knowledge" as const,
+      id,
+      revision: integerValue(row, "revision", label),
+      workId: requiredString(row, "workId", label),
+      retiredAt: status === "active"
+        ? null
+        : requiredString(row, "updatedAt", label),
+      fields: Object.freeze({
+        characterId: requiredString(row, "characterId", label),
+        statement: requiredString(row, "statement", label),
+        stance: requiredString(row, "stance", label),
+        truthStatus: requiredString(row, "truthStatus", label),
+        aboutRefKeys: Object.freeze([
+          ...(referencesByKnowledge.get(id) ?? []),
+        ]),
+      }),
+    });
+  });
+  return Object.freeze([...characters, ...relations, ...lore, ...knowledge]);
 }
 
 function readPendingFieldChanges(
@@ -432,7 +486,10 @@ function targetProjection(row: Record<string, unknown>) {
   if (kind === "character-relation") {
     return { kind, operation, relationId: storedTargetId, expectedRevision };
   }
-  return { kind, operation, loreEntryId: storedTargetId, expectedRevision };
+  if (kind === "lore-entry") {
+    return { kind, operation, loreEntryId: storedTargetId, expectedRevision };
+  }
+  return { kind, operation, knowledgeId: storedTargetId, expectedRevision };
 }
 
 function projectCandidate(
@@ -663,11 +720,20 @@ function activeDuplicateIds(
         : []
     ));
   }
+  if (item.target.kind === "character-relation") {
+    return Object.freeze(sources.flatMap((source) =>
+      source.kind === "character-relation" && source.retiredAt === null &&
+          source.fields.fromCharacterId === fields.fromCharacterId &&
+          source.fields.toCharacterId === fields.toCharacterId &&
+          source.fields.kind === fields.kind
+        ? [source.id]
+        : []
+    ));
+  }
   return Object.freeze(sources.flatMap((source) =>
-    source.kind === "character-relation" && source.retiredAt === null &&
-        source.fields.fromCharacterId === fields.fromCharacterId &&
-        source.fields.toCharacterId === fields.toCharacterId &&
-        source.fields.kind === fields.kind
+    source.kind === "character-knowledge" && source.retiredAt === null &&
+        source.fields.characterId === fields.characterId &&
+        source.fields.statement === fields.statement
       ? [source.id]
       : []
   ));
@@ -680,7 +746,70 @@ function entityRef(kind: CanonReviewItem["target"]["kind"], id: string): CanonEn
   if (kind === "character-relation") {
     return Object.freeze({ kind, id: entityId<"CharacterRelation">(id) });
   }
-  return Object.freeze({ kind, id: entityId<"LoreEntry">(id) });
+  if (kind === "lore-entry") {
+    return Object.freeze({ kind, id: entityId<"LoreEntry">(id) });
+  }
+  return Object.freeze({ kind, id: entityId<"CharacterKnowledge">(id) });
+}
+
+function knowledgeRefRecords(values: readonly string[]) {
+  return Object.freeze(values.map((value, orderIndex) => {
+    const separator = value.indexOf(":");
+    if (separator <= 0 || separator === value.length - 1) {
+      throw new Error(`Canon CharacterKnowledge reference is invalid: ${value}`);
+    }
+    const ref = parseCanonEntityRef({
+      kind: value.slice(0, separator),
+      id: value.slice(separator + 1),
+    }, "Canon CharacterKnowledge reference");
+    return Object.freeze({
+      entityKind: ref.kind,
+      entityId: ref.id,
+      orderIndex,
+    });
+  }));
+}
+
+function assertOwnedKnowledgeRefs(
+  database: CanonSqliteDatabase,
+  workId: EntityId<"Work">,
+  characterId: string,
+  refs: readonly Readonly<{
+    entityKind: string;
+    entityId: string;
+    orderIndex: number;
+  }>[],
+): void {
+  if (database.prepare(`
+    SELECT id FROM characters
+    WHERE work_id = ? AND id = ? AND retired_at IS NULL
+  `).all(workId, characterId).length !== 1) {
+    throw new Error(`Canon CharacterKnowledge character is outside Work: ${characterId}`);
+  }
+  const tables: Readonly<Record<(typeof CANON_ENTITY_KINDS)[number], string>> = {
+    character: "characters",
+    "character-relation": "character_relations",
+    "lore-entry": "lore_entries",
+    "event-block": "event_blocks",
+    "plot-thread": "plot_threads",
+    "foreshadow-line": "foreshadow_lines",
+    scene: "scene_identities",
+    "continuity-thread": "continuity_threads",
+    "character-knowledge": "character_knowledge",
+  };
+  for (const ref of refs) {
+    const kind = ref.entityKind as (typeof CANON_ENTITY_KINDS)[number];
+    const table = tables[kind];
+    if (
+      table === undefined ||
+      database.prepare(`SELECT id FROM ${table} WHERE work_id = ? AND id = ?`)
+        .all(workId, ref.entityId).length !== 1
+    ) {
+      throw new Error(
+        `Canon CharacterKnowledge reference is outside Work: ${ref.entityKind}:${ref.entityId}`,
+      );
+    }
+  }
 }
 
 function requiredField<T extends CanonFieldValue>(
@@ -796,16 +925,18 @@ export function createLocalCanonService(input: Readonly<{
             aliases: source.fields.aliases,
           })]
         : []);
+    const connectorInput = Object.freeze({
+      requestId: command.requestId,
+      requestedTargetKinds: command.requestedTargetKinds,
+      paragraphs,
+      characterReferences: Object.freeze(characterReferences),
+    });
     return Object.freeze({
       command,
       contextReceiptId: access.receipt.receiptId,
       manuscript,
-      execute: () => connector.execute(Object.freeze({
-        requestId: command.requestId,
-        requestedTargetKinds: command.requestedTargetKinds,
-        paragraphs,
-        characterReferences: Object.freeze(characterReferences),
-      })),
+      connectorInput,
+      execute: () => connector.execute(connectorInput),
     });
   };
 
@@ -1123,7 +1254,9 @@ export function createLocalCanonService(input: Readonly<{
         ? CANON_CHARACTER_FIELDS
         : item.target.kind === "character-relation"
           ? CANON_CHARACTER_RELATION_FIELDS
-          : CANON_LORE_ENTRY_FIELDS;
+          : item.target.kind === "lore-entry"
+            ? CANON_LORE_ENTRY_FIELDS
+            : CANON_CHARACTER_KNOWLEDGE_FIELDS;
       if (expectedFields.some((field) => !selected.some((change) => change.field === field))) {
         throw new Error("Canon create approval requires every canonical field");
       }
@@ -1159,7 +1292,9 @@ export function createLocalCanonService(input: Readonly<{
         receipt,
       });
     }
-    const targetIdentity = currentSource?.id ?? createId();
+    const targetIdentity = item.target.kind === "character-knowledge"
+      ? createId()
+      : currentSource?.id ?? createId();
     const nextFields = applySelectedChanges(currentSource, effective);
     if (item.target.kind === "character-relation") {
       const activeCharacters = new Set(sources.flatMap((source) =>
@@ -1207,8 +1342,12 @@ export function createLocalCanonService(input: Readonly<{
       return Object.freeze({ evidence, anchorId, anchor });
     });
     const target = entityRef(item.target.kind, targetIdentity);
-    const targetRevisionBefore = currentSource?.revision ?? null;
-    const targetRevisionAfter = currentSource === null ? 1 : currentSource.revision + 1;
+    const targetRevisionBefore = item.target.kind === "character-knowledge"
+      ? null
+      : currentSource?.revision ?? null;
+    const targetRevisionAfter = item.target.kind === "character-knowledge"
+      ? 1
+      : currentSource === null ? 1 : currentSource.revision + 1;
     const receipt = createDecisionReceipt({
       candidate,
       item,
@@ -1303,7 +1442,7 @@ export function createLocalCanonService(input: Readonly<{
             updatedAt: decidedAt,
             ...values,
           });
-        } else {
+        } else if (item.target.kind === "lore-entry") {
           const values = {
             title: requiredField<string>(nextFields, "title", "string"),
             content: requiredField<string>(nextFields, "content", "string"),
@@ -1344,6 +1483,96 @@ export function createLocalCanonService(input: Readonly<{
             ],
             changedAt: decidedAt,
           });
+        } else {
+          const characterId = requiredField<string>(
+            nextFields,
+            "characterId",
+            "string",
+          );
+          const statement = requiredField<string>(
+            nextFields,
+            "statement",
+            "string",
+          );
+          const stance = requiredField<string>(nextFields, "stance", "string");
+          const truthStatus = requiredField<string>(
+            nextFields,
+            "truthStatus",
+            "string",
+          );
+          const aboutRefs = knowledgeRefRecords(requiredField<readonly string[]>(
+            nextFields,
+            "aboutRefKeys",
+            "array",
+          ));
+          assertOwnedKnowledgeRefs(
+            input.database,
+            candidate.workId,
+            characterId,
+            aboutRefs,
+          );
+          if (currentSource !== null) {
+            transaction.write({
+              kind: "characterKnowledgeStatus",
+              id: currentSource.id,
+              workId: candidate.workId,
+              expectedRevision: currentSource.revision,
+              status: "superseded",
+              supersededByKnowledgeId: targetIdentity,
+              retiredReason: null,
+              updatedAt: decidedAt,
+            });
+          }
+          transaction.write({
+            kind: "characterKnowledge",
+            id: targetIdentity,
+            schemaVersion: 1,
+            revision: 1,
+            createdAt: decidedAt,
+            updatedAt: decidedAt,
+            workId: candidate.workId,
+            characterId,
+            statement,
+            stance,
+            truthStatus,
+            status: "active",
+            supersedesKnowledgeId: currentSource?.id ?? null,
+            supersededByKnowledgeId: null,
+            retiredReason: null,
+            aboutRefs,
+          });
+          if (currentSource !== null) {
+            transaction.write({
+              kind: "characterKnowledgeTransition",
+              id: createId(),
+              schemaVersion: 1,
+              workId: candidate.workId,
+              knowledgeId: currentSource.id,
+              transitionKind: "superseded",
+              revisionBefore: currentSource.revision,
+              revisionAfter: currentSource.revision + 1,
+              successorKnowledgeId: targetIdentity,
+              reason: "정보 변화 후보 승인",
+              evidenceAnchorIds: anchors.map((entry) => entry.anchorId),
+              createdAt: decidedAt,
+            });
+          }
+          transaction.write({
+            kind: "characterKnowledgeTransition",
+            id: createId(),
+            schemaVersion: 1,
+            workId: candidate.workId,
+            knowledgeId: targetIdentity,
+            transitionKind: "created",
+            revisionBefore: null,
+            revisionAfter: 1,
+            successorKnowledgeId: null,
+            reason: currentSource === null
+              ? "정보 변화 후보 승인"
+              : `${currentSource.id} 대체`,
+            evidenceAnchorIds: anchors.map((entry) => entry.anchorId),
+            createdAt: decidedAt,
+          });
         }
         for (const entry of anchors) {
           transaction.write(anchorRecord(candidate.workId, entry.anchor));
@@ -1373,6 +1602,22 @@ export function createLocalCanonService(input: Readonly<{
               loreEntryId: targetIdentity,
               sourceDocumentId: entry.evidence.documentId,
               sourceAnchorId: entry.anchorId,
+              createdAt: decidedAt,
+            });
+          } else if (item.target.kind === "character-knowledge") {
+            transaction.write({
+              kind: "characterKnowledgeEvidence",
+              id: createId(),
+              schemaVersion: 1,
+              workId: candidate.workId,
+              knowledgeId: targetIdentity,
+              sourceDocumentId: entry.evidence.documentId,
+              sourceDocumentRevisionId: entry.evidence.documentRevisionId,
+              sourceFrom: entry.evidence.from,
+              sourceTo: entry.evidence.to,
+              exactText: entry.evidence.exactText,
+              anchorId: entry.anchorId,
+              orderIndex: anchors.indexOf(entry),
               createdAt: decidedAt,
             });
           }

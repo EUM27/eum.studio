@@ -100,6 +100,7 @@ export type PreparedContinuityReview = Readonly<{
   manuscript: string;
   paragraphs: readonly ContinuityReviewParagraph[];
   subjectReferences: readonly ContinuityReviewSubjectReference[];
+  connectorInput: ContinuityReviewConnectorInput;
   execute(): Promise<ContinuityReviewExecution>;
 }>;
 
@@ -1176,17 +1177,19 @@ export function createLocalContinuityService(input: Readonly<{
       command.workId,
       manuscript,
     );
+    const connectorInput = Object.freeze({
+      requestedRange: command.sourceRange,
+      paragraphs,
+      subjectReferences,
+    });
     return Object.freeze({
       command,
       contextReceiptId: access.receipt.receiptId,
       manuscript,
       paragraphs,
       subjectReferences,
-      execute: () => connector.execute(Object.freeze({
-        requestedRange: command.sourceRange,
-        paragraphs,
-        subjectReferences,
-      })),
+      connectorInput,
+      execute: () => connector.execute(connectorInput),
     });
   };
 

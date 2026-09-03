@@ -28,6 +28,7 @@ export async function executeAutomaticSceneAnalysis(input: Readonly<{
   persistDocument(document:ManuscriptDocumentSource):Promise<void>;
   refreshDigests():Promise<unknown>;
   refreshCanonCandidates():Promise<unknown>;
+  refreshContinuityCandidates():Promise<unknown>;
   refreshSceneProjection(workId:EntityId<"Work">):Promise<SceneProjectionList>;
   structureClient:Pick<StudioBridge["structure"],"finalizeSceneCanonCheck">;
 }>):Promise<AutomaticSceneAnalysisExecutionStatus>{
@@ -62,6 +63,7 @@ export async function executeAutomaticSceneAnalysis(input: Readonly<{
     schemaVersion:1,
     digestRequestId:entityId<"NarrativeDigestRequest">(crypto.randomUUID()),
     canonRequestId:entityId<"CanonReviewRequest">(crypto.randomUUID()),
+    continuityRequestId:entityId<"ContinuityReviewRequest">(crypto.randomUUID()),
     workId:exact.workId,
     conversationId:input.conversationId,
     sceneId:finalized.sceneId,
@@ -81,7 +83,11 @@ export async function executeAutomaticSceneAnalysis(input: Readonly<{
     if("digest" in result)await input.refreshDigests();
     return "stale";
   }
-  await Promise.all([input.refreshDigests(),input.refreshCanonCandidates()]);
+  await Promise.all([
+    input.refreshDigests(),
+    input.refreshCanonCandidates(),
+    input.refreshContinuityCandidates(),
+  ]);
   if(result.status==="lore-failed"){
     throw new Error(result.run.lastError??"별빛 검토를 저장하지 못했습니다.");
   }

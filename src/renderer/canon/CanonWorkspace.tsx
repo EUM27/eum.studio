@@ -21,6 +21,7 @@ import {
   type ContinuitySubjectOption,
 } from "./ContinuityPanel";
 import type { ContinuityProjectedSource } from "../../application/continuity/continuity-thread-contract";
+import type { CharacterKnowledgeProjection } from "../../application/continuity/character-knowledge-contract";
 import {
   CharacterKnowledgePanel,
   type CharacterKnowledgePanelController,
@@ -102,10 +103,11 @@ const TAB_LABELS: Readonly<Record<CanonTab, string>> = Object.freeze({
   context: "문맥·활동",
 });
 
-const KIND_LABELS: Readonly<Record<CanonRecordKind, string>> = Object.freeze({
+const KIND_LABELS: Readonly<Record<CanonReviewItem["target"]["kind"], string>> = Object.freeze({
   character: "인물",
   "character-relation": "인물 관계",
   "lore-entry": "별빛",
+  "character-knowledge": "인물 지식",
 });
 
 const FIELD_LABELS: Readonly<Record<string, string>> = Object.freeze({
@@ -127,6 +129,11 @@ const FIELD_LABELS: Readonly<Record<string, string>> = Object.freeze({
   content: "내용",
   category: "분류",
   enabled: "활성",
+  characterId: "대상 인물",
+  statement: "지식·믿음 내용",
+  stance: "인물의 인식",
+  truthStatus: "객관적 사실 여부",
+  aboutRefKeys: "관련 정보",
 });
 
 function displayValue(value: CanonFieldValue | null): string {
@@ -401,6 +408,7 @@ function targetRevision(input: Readonly<{
   characters: readonly CharacterProjection[];
   id: string;
   item: CanonReviewItem;
+  knowledgeEntries: readonly CharacterKnowledgeProjection[];
   loreEntries: readonly LoreEntryProjection[];
   relations: readonly CharacterRelationProjection[];
 }>): number | null {
@@ -410,12 +418,16 @@ function targetRevision(input: Readonly<{
   if (input.item.target.kind === "character-relation") {
     return input.relations.find((entry) => entry.relationId === input.id)?.revision ?? null;
   }
-  return input.loreEntries.find((entry) => entry.loreEntryId === input.id)?.revision ?? null;
+  if (input.item.target.kind === "lore-entry") {
+    return input.loreEntries.find((entry) => entry.loreEntryId === input.id)?.revision ?? null;
+  }
+  return input.knowledgeEntries.find((entry) => entry.knowledgeId === input.id)?.revision ?? null;
 }
 
 function ReviewDiff(input: Readonly<{
   characters: readonly CharacterProjection[];
   controller: CanonWorkspaceController;
+  knowledgeEntries: readonly CharacterKnowledgeProjection[];
   loreEntries: readonly LoreEntryProjection[];
   relations: readonly CharacterRelationProjection[];
 }>) {
@@ -456,7 +468,7 @@ function ReviewDiff(input: Readonly<{
       <p className="canon-review-reason">{item.reason}</p>
       {item.assertionBasis === "model-inference" && (
         <p className="canon-warning" role="note">
-          모델 추론 제안은 그대로 승인할 수 없습니다. 내용을 직접 확인한 뒤 기각하거나 새 별빛으로 작성해 주세요.
+          모델 추론 제안은 그대로 승인할 수 없습니다. 내용을 직접 확인한 뒤 기각하거나 관리 화면에서 직접 작성해 주세요.
         </p>
       )}
       {item.target.operation === "unresolved" && (
@@ -464,7 +476,7 @@ function ReviewDiff(input: Readonly<{
           <label>
             <span>반영 대상</span>
             <select name="target">
-              <option value="create">새 별빛 만들기</option>
+              <option value="create">새 기록 만들기</option>
               {item.target.matchingTargetIds.map((id) => (
                 <option key={id} value={`update:${id}`}>{id}</option>
               ))}
@@ -776,6 +788,7 @@ export function CanonWorkspace(input: Readonly<{
             <ReviewDiff
               characters={input.characters}
               controller={input.controller}
+              knowledgeEntries={input.characterKnowledgeController.entries}
               loreEntries={input.loreEntries}
               relations={input.relations}
             />

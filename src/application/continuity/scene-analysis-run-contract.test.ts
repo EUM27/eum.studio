@@ -13,6 +13,7 @@ describe("automatic Scene analysis run contract", () => {
       schemaVersion: 1,
       digestRequestId: "digest-request-1",
       canonRequestId: "canon-request-1",
+      continuityRequestId: "continuity-request-1",
       workId: "work-1",
       conversationId: "conversation-1",
       sceneId: "scene-1",
@@ -27,6 +28,7 @@ describe("automatic Scene analysis run contract", () => {
       schemaVersion: 1,
       digestRequestId: entityId<"NarrativeDigestRequest">("digest-request-1"),
       canonRequestId: entityId<"CanonReviewRequest">("canon-request-1"),
+      continuityRequestId: entityId<"ContinuityReviewRequest">("continuity-request-1"),
       workId: entityId<"Work">("work-1"),
       conversationId: entityId<"AssistantConversation">("conversation-1"),
       sceneId: entityId<"Scene">("scene-1"),
@@ -55,6 +57,7 @@ describe("automatic Scene analysis run contract", () => {
       sourceFingerprint: "fingerprint-1",
       trigger: "scene-transition",
       attemptCount: 1,
+      informationUpdate: null,
       createdAt: "2026-08-30T00:00:00.000Z",
       updatedAt: "2026-08-30T00:01:00.000Z",
     };

@@ -709,12 +709,20 @@ export function useWorkspaceCoreFeatureKernel(input: Readonly<{
     const {
       refreshCanonicalRecords: refreshCharacterCanonicalRecords,
     } = charactersController;
+    const characterKnowledgeController = useCharacterKnowledgeController({
+      activeWorkId,
+      client: input.client.characterKnowledge,
+      workLoadId: activeWorkId,
+    });
+    const refreshCharacterKnowledge = characterKnowledgeController.refresh;
     const refreshCanonicalRecords = useCallback(async () => {
       await Promise.all([
         refreshCharacterCanonicalRecords(),
         refreshCanonicalEntries(),
+        refreshCharacterKnowledge(),
       ]);
     }, [
+      refreshCharacterKnowledge,
       refreshCanonicalEntries,
       refreshCharacterCanonicalRecords,
     ]);
@@ -731,11 +739,6 @@ export function useWorkspaceCoreFeatureKernel(input: Readonly<{
       assistantClient: input.client.assistant,
       client: input.client.continuity,
       conversationId: assistantConversationId,
-      workLoadId: activeWorkId,
-    });
-    const characterKnowledgeController = useCharacterKnowledgeController({
-      activeWorkId,
-      client: input.client.characterKnowledge,
       workLoadId: activeWorkId,
     });
     const contextPlannerController = useContextPlannerController({

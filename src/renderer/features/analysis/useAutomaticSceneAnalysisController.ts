@@ -35,6 +35,7 @@ export function useAutomaticSceneAnalysisController(input: Readonly<{
   documents: readonly ManuscriptDocumentSource[];
   persistDocument(document: ManuscriptDocumentSource): Promise<void>;
   refreshDigests(): Promise<unknown>;
+  refreshContinuityCandidates(): Promise<unknown>;
   refreshSceneProjection(workId: EntityId<"Work">): Promise<SceneProjectionList>;
   sceneProjection: SceneProjectionList | null;
   settingsClient: Pick<StudioBridge["settings"],"getWorkSceneAnalysis">;
@@ -114,6 +115,7 @@ export function useAutomaticSceneAnalysisController(input: Readonly<{
         persistDocument:current.persistDocument,
         refreshDigests:current.refreshDigests,
         refreshCanonCandidates:current.canonReviewController.refreshCandidates,
+        refreshContinuityCandidates:current.refreshContinuityCandidates,
         refreshSceneProjection:current.refreshSceneProjection,
         structureClient:current.structureClient,
       });

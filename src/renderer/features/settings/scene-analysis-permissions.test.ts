@@ -20,9 +20,13 @@ describe("automatic Scene analysis permissions",()=>{
       },
       createConversationId:()=>entityId<"AssistantConversation">("conversation-1"),
     });
-    expect(grantContextPermission).toHaveBeenCalledOnce();
+    expect(grantContextPermission).toHaveBeenCalledTimes(2);
     expect(grantContextPermission).toHaveBeenCalledWith(expect.objectContaining({
       capability:"canon.review",destinationId:"provider-1",duration:"work",
+      localScope:"scene",externalScope:"scene",conversationId:null,
+    }));
+    expect(grantContextPermission).toHaveBeenCalledWith(expect.objectContaining({
+      capability:"continuity.review",destinationId:"provider-1",duration:"work",
       localScope:"scene",externalScope:"scene",conversationId:null,
     }));
   });

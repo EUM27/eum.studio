@@ -50,6 +50,21 @@ const lore = {
   },
 } as const satisfies CanonReviewSourceSnapshot;
 
+const knowledge = {
+  kind: "character-knowledge",
+  id: "knowledge-1",
+  revision: 2,
+  workId: "work-1",
+  retiredAt: null,
+  fields: {
+    characterId: "character-1",
+    statement: "북문은 열릴지도 모른다.",
+    stance: "suspects",
+    truthStatus: "unknown",
+    aboutRefKeys: ["lore-entry:lore-1"],
+  },
+} as const satisfies CanonReviewSourceSnapshot;
+
 function payload(proposals: readonly Record<string, unknown>[]) {
   return parseCanonReviewModelPayload({ proposals });
 }
@@ -324,5 +339,42 @@ describe("canon review planner", () => {
       itemIdFactory: { create: () => "item-1" },
       evidenceIdFactory: { create: () => "evidence-1" },
     })).toThrow(/not requested/i);
+  });
+
+  it("plans a CharacterKnowledge supersession candidate against the active statement", () => {
+    const result = planCanonReviewItems({
+      workId: "work-1",
+      sourceRange,
+      manuscript: "윤서는 북문이 열린다는 사실을 직접 확인했다.",
+      payload: payload([{
+        targetKind: "character-knowledge",
+        targetHint: "북문은 열릴지도 모른다.",
+        operationHint: "update",
+        assertionBasis: "explicit-evidence",
+        reason: "추측이 직접 확인된 지식으로 바뀌었다.",
+        fields: {
+          statement: "북문은 열린다.",
+          stance: "knows",
+          truthStatus: "true",
+        },
+        evidence: [{ paragraphId: "p1", quote: "직접 확인" }],
+      }]),
+      sources: [character, lore, knowledge],
+      pendingFieldChanges: [],
+      itemIdFactory: { create: () => "item-knowledge" },
+      evidenceIdFactory: { create: () => "evidence-knowledge" },
+    });
+
+    expect(result[0]?.target).toEqual({
+      kind: "character-knowledge",
+      operation: "update",
+      knowledgeId: "knowledge-1",
+      expectedRevision: 2,
+    });
+    expect(result[0]?.fieldChanges).toEqual([
+      { field: "statement", before: "북문은 열릴지도 모른다.", after: "북문은 열린다.", selected: true },
+      { field: "stance", before: "suspects", after: "knows", selected: true },
+      { field: "truthStatus", before: "unknown", after: "true", selected: true },
+    ]);
   });
 });

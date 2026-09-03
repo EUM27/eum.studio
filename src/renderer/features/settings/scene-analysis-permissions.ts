@@ -9,6 +9,7 @@ import { entityId,type EntityId } from "../../../domain/writing";
 const AUTOMATIC_SCENE_ANALYSIS_CAPABILITIES = Object.freeze([
   "narrative.digest",
   "canon.review",
+  "continuity.review",
 ] satisfies readonly AssistantCapability[]);
 
 export async function ensureWorkSceneAnalysisPermissions(input:Readonly<{

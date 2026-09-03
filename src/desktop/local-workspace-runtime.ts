@@ -1,7 +1,4 @@
-import {
-  createHash,
-  randomUUID,
-} from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
@@ -189,6 +186,7 @@ import {
   type RevokeAssistantContextPermissionCommand,
 } from "../application/assistant/assistant-context-state";
 import {
+  CANON_REVIEW_PROMPT_VERSION,
   parseDecideCanonReviewItemCommand,
   parseListCanonReviewCandidatesCommand,
   parseResolveCanonReviewItemTargetCommand,
@@ -204,6 +202,7 @@ import type {
   CanonReviewExecution,
 } from "../application/canon/canon-review-model-output";
 import {
+  CONTINUITY_REVIEW_PROMPT_VERSION,
   parseDecideContinuityReviewItemCommand,
   parseListContinuityReviewCandidatesCommand,
   parseRunContinuityReviewCommand,
@@ -1184,6 +1183,9 @@ import {
   migrateLocalWorkspacePublishingFormsIfNeeded,
 } from "./local-workspace-publishing-form-migration";
 import {
+  migrateLocalWorkspaceSceneInformationUpdateIfNeeded,
+} from "./local-workspace-scene-information-update-migration";
+import {
   createLocalCanonService,
   type LocalCanonService,
 } from "./canon/local-canon-runtime";
@@ -1206,6 +1208,7 @@ import {
 } from "./continuity/local-narrative-digest-runtime";
 import { listLocalSceneCanonContexts } from "./continuity/local-scene-canon-context";
 import {
+  NARRATIVE_DIGEST_PROMPT_VERSION,
   parseGenerateNarrativeDigestCommand,
   parseGenerateSceneNarrativeDigestCommand,
   parseListNarrativeDigestsCommand,
@@ -1226,6 +1229,12 @@ import {
   type SceneAnalysisRunListProjection,
   type SceneAnalysisRunProjection,
 } from "../application/continuity/scene-analysis-run-contract";
+import {
+  assertSceneInformationReviewedEntityScope,
+  parseSceneInformationUpdateExecution,
+  type SceneInformationUpdateConnectorInput,
+  type SceneInformationUpdateExecution,
+} from "../application/continuity/scene-information-update-contract";
 
 type NodeSqliteStatement = {
   all(
@@ -2336,6 +2345,13 @@ export type LocalWorkspaceRuntimeOptions = {
     ) => Promise<ContinuityReviewExecution>;
   }>;
   readonly narrativeDigest?: NarrativeDigestConnector;
+  readonly sceneInformationUpdate?: Readonly<{
+    destinationId: string;
+    isConnected: () => boolean;
+    execute: (
+      input: SceneInformationUpdateConnectorInput,
+    ) => Promise<SceneInformationUpdateExecution>;
+  }>;
   readonly characterExtraction?: Readonly<{
     destinationId: string;
     isConnected: () => boolean;
@@ -2403,7 +2419,7 @@ export type LocalWorkspaceRuntimeOptions = {
   readonly backupProfile: LocalWorkspaceBackupProfile;
 };
 
-export const LOCAL_WORKSPACE_LEDGER_SCHEMA_VERSION = 25;
+export const LOCAL_WORKSPACE_LEDGER_SCHEMA_VERSION = 26;
 export const LOCAL_WORKSPACE_LEDGER_CHECKSUM_IDENTITY =
   "eum-studio-ledger-sha256-v1";
 export const LOCAL_WORKSPACE_MANUSCRIPT_CODEC_IDENTITY =
@@ -8019,6 +8035,12 @@ class DefaultLocalWorkspaceRuntime
         status: "disabled",
       });
     }
+    if (this.#options.sceneInformationUpdate !== undefined) {
+      return this.#runIntegratedSceneInformationUpdateSerially(
+        command,
+        this.#options.sceneInformationUpdate,
+      );
+    }
     const digestResult = await this.generateSceneNarrativeDigest({
       schemaVersion: 1,
       requestId: command.digestRequestId,
@@ -8142,6 +8164,323 @@ class DefaultLocalWorkspaceRuntime
       digest,
       run,
     });
+  }
+
+  async #runIntegratedSceneInformationUpdateSerially(
+    command: RunAutomaticSceneAnalysisCommand,
+    connector: NonNullable<LocalWorkspaceRuntimeOptions["sceneInformationUpdate"]>,
+  ): Promise<AutomaticSceneAnalysisResult> {
+    if (!connector.isConnected()) {
+      return parseAutomaticSceneAnalysisResult({
+        schemaVersion: 1,
+        status: "login-required",
+      });
+    }
+    const digestPrepared = await this.#narrativeDigestService.prepareScene({
+      schemaVersion: 1,
+      requestId: command.digestRequestId,
+      workId: command.workId,
+      conversationId: command.conversationId,
+      sceneId: command.sceneId,
+      sourceRange: command.sourceRange,
+      trigger: command.trigger,
+    }, { reuseExisting: true });
+    if ("result" in digestPrepared) {
+      const result = digestPrepared.result;
+      if (result.status === "login-required") {
+        return parseAutomaticSceneAnalysisResult(result);
+      }
+      if (result.status === "permission-required") {
+        return parseAutomaticSceneAnalysisResult(result);
+      }
+      if (result.status === "context-rejected") {
+        return parseAutomaticSceneAnalysisResult(result);
+      }
+      throw new Error("Scene information update digest preparation is unavailable");
+    }
+    if (digestPrepared.existingDigest !== null) {
+      const existingRun = this.#ensureSceneAnalysisRunSerially(
+        digestPrepared.existingDigest,
+      );
+      if (existingRun.informationUpdate?.status === "complete") {
+        return parseAutomaticSceneAnalysisResult({
+          schemaVersion: 1,
+          status: "unchanged",
+          digest: digestPrepared.existingDigest,
+          run: existingRun,
+        });
+      }
+    }
+
+    const canonConnector = this.#options.canonReview;
+    const continuityConnector = this.#options.continuityReview;
+    if (
+      canonConnector === undefined || continuityConnector === undefined ||
+      !canonConnector.isConnected() || !continuityConnector.isConnected()
+    ) {
+      return parseAutomaticSceneAnalysisResult({
+        schemaVersion: 1,
+        status: "login-required",
+      });
+    }
+    if (
+      connector.destinationId !== canonConnector.destinationId ||
+      connector.destinationId !== continuityConnector.destinationId
+    ) {
+      throw new Error("Scene information update destinations do not match");
+    }
+
+    const canonCommand = parseRunCanonReviewCommand({
+      schemaVersion: 1,
+      requestId: command.canonRequestId,
+      workId: command.workId,
+      conversationId: command.conversationId,
+      sourceRange: command.sourceRange,
+      requestedTargetKinds: [
+        "character",
+        "character-relation",
+        "lore-entry",
+        "character-knowledge",
+      ],
+    });
+    const canonPrepared = this.#canonService.prepareReview(canonCommand);
+    if ("result" in canonPrepared) {
+      const result = canonPrepared.result;
+      if (result.status === "login-required") {
+        return parseAutomaticSceneAnalysisResult({
+          schemaVersion: 1,
+          status: "login-required",
+        });
+      }
+      if (result.status === "permission-required") {
+        return parseAutomaticSceneAnalysisResult(result);
+      }
+      if (result.status === "context-rejected") {
+        return parseAutomaticSceneAnalysisResult(result);
+      }
+      throw new Error("Scene information update Canon preparation is unavailable");
+    }
+    const continuityCommand = parseRunContinuityReviewCommand({
+      schemaVersion: 1,
+      requestId: command.continuityRequestId,
+      workId: command.workId,
+      conversationId: command.conversationId,
+      sourceRange: command.sourceRange,
+    });
+    const continuityPrepared = this.#continuityService.prepareReview(
+      continuityCommand,
+    );
+    if ("result" in continuityPrepared) {
+      const result = continuityPrepared.result;
+      if (result.status === "login-required") {
+        return parseAutomaticSceneAnalysisResult({
+          schemaVersion: 1,
+          status: "login-required",
+        });
+      }
+      if (result.status === "permission-required") {
+        return parseAutomaticSceneAnalysisResult(result);
+      }
+      if (result.status === "context-rejected") {
+        return parseAutomaticSceneAnalysisResult(result);
+      }
+      throw new Error("Scene information update Continuity preparation is unavailable");
+    }
+
+    const prepareActivity = async (
+      capability: "canon.review" | "continuity.review",
+      receiptId: EntityId<"AssistantContextReceipt">,
+      tokenBudget: number,
+    ) => {
+      const startedAt = new Date().toISOString();
+      const planStarted = Date.now();
+      const plan = this.#contextPlanner.plan({
+        schemaVersion: 1,
+        workId: command.workId,
+        capability,
+        sourceRange: command.sourceRange,
+        sceneId: command.sceneId,
+        povCharacterId: null,
+        userQuery: "",
+        tokenBudget,
+      });
+      const planDurationMs = Date.now() - planStarted;
+      if (plan.status === "required-context-over-budget") {
+        throw new Error(
+          `required-context-over-budget: ${plan.requiredTokenCount}/${plan.tokenBudget}`,
+        );
+      }
+      const manifestStarted = Date.now();
+      const manifest = await this.#contextPlanner.recordManifest({
+        workId: command.workId,
+        receiptId,
+        plan,
+      });
+      return Object.freeze({
+        startedAt,
+        planDurationMs,
+        manifestPersistDurationMs: Date.now() - manifestStarted,
+        manifest,
+      });
+    };
+    const canonActivity = await prepareActivity(
+      "canon.review",
+      canonPrepared.contextReceiptId,
+      canonConnector.contextTokenBudget,
+    );
+    const continuityActivity = await prepareActivity(
+      "continuity.review",
+      continuityPrepared.contextReceiptId,
+      continuityConnector.contextTokenBudget,
+    );
+    const canonParagraphs = canonPrepared.connectorInput.paragraphs;
+    const continuityParagraphs = continuityPrepared.connectorInput.paragraphs;
+    if (
+      canonParagraphs.length !== continuityParagraphs.length ||
+      canonParagraphs.some((paragraph, index) => {
+        const continuityParagraph = continuityParagraphs[index];
+        return continuityParagraph === undefined ||
+          paragraph.paragraphId !== continuityParagraph.paragraphId ||
+          paragraph.from !== continuityParagraph.from ||
+          paragraph.to !== continuityParagraph.to ||
+          paragraph.text !== continuityParagraph.text;
+      })
+    ) {
+      throw new Error("Scene information update paragraph inputs disagree");
+    }
+
+    const connectorStarted = Date.now();
+    const execution = parseSceneInformationUpdateExecution(
+      await connector.execute(Object.freeze({
+        digest: digestPrepared.connectorInput,
+        canon: canonPrepared.connectorInput,
+        continuity: continuityPrepared.connectorInput,
+      })),
+    );
+    const suppliedEntityKeys = [
+      ...digestPrepared.connectorInput.canonicalSources.map((source) =>
+        `${source.kind}:${source.id}`
+      ),
+      ...canonPrepared.connectorInput.characterReferences.map((reference) =>
+        `character:${reference.characterId}`
+      ),
+      ...continuityPrepared.connectorInput.subjectReferences.map((reference) =>
+        `${reference.entity.kind}:${reference.entity.id}`
+      ),
+    ];
+    assertSceneInformationReviewedEntityScope(
+      execution.reviewedEntities,
+      suppliedEntityKeys,
+    );
+    const connectorDurationMs = Date.now() - connectorStarted;
+    const recording = this.#createPending.then(async () => {
+      await this.#savePending;
+      const digestResult = await this.#narrativeDigestService.recordPrepared(
+        digestPrepared,
+        {
+          providerId: execution.providerId,
+          modelId: execution.modelId,
+          promptVersion: NARRATIVE_DIGEST_PROMPT_VERSION,
+          text: execution.digest.text,
+        },
+        connectorDurationMs,
+      );
+      if (
+        digestResult.status !== "generated" &&
+        digestResult.status !== "unchanged"
+      ) {
+        throw new Error("Integrated Scene information digest was not recorded");
+      }
+      const digest = digestResult.digest;
+      let run = this.#ensureSceneAnalysisRunSerially(digest);
+
+      const canonPersistStarted = Date.now();
+      const canonResult = await this.#canonService.recordReview(canonPrepared, {
+        providerId: execution.providerId,
+        modelId: execution.modelId,
+        promptVersion: CANON_REVIEW_PROMPT_VERSION,
+        payload: execution.canon,
+      });
+      const canonPersistDurationMs = Date.now() - canonPersistStarted;
+      if (canonResult.status === "candidate") {
+        run = this.#recordSceneAnalysisLoreStatusSerially(
+          run,
+          "candidate",
+          canonResult.candidate.candidateId,
+          null,
+        );
+      } else if (canonResult.status === "no-change" && run.loreStatus !== "candidate") {
+        run = this.#recordSceneAnalysisLoreStatusSerially(
+          run,
+          "no-change",
+          null,
+          null,
+        );
+      }
+
+      const continuityPersistStarted = Date.now();
+      const continuityResult = await this.#continuityService.recordReview(
+        continuityPrepared,
+        {
+          providerId: execution.providerId,
+          modelId: execution.modelId,
+          promptVersion: CONTINUITY_REVIEW_PROMPT_VERSION,
+          payload: execution.continuity,
+        },
+      );
+      const continuityPersistDurationMs = Date.now() - continuityPersistStarted;
+      await this.#contextPlanner.recordActivity({
+        workId: command.workId,
+        receiptId: canonPrepared.contextReceiptId,
+        manifestId: canonActivity.manifest.manifestId,
+        providerId: execution.providerId,
+        modelId: execution.modelId,
+        startedAt: canonActivity.startedAt,
+        completedAt: new Date().toISOString(),
+        stageDurationsMs: {
+          plan: canonActivity.planDurationMs,
+          authorize: 0,
+          connector: 0,
+          persist: canonActivity.manifestPersistDurationMs + canonPersistDurationMs,
+        },
+        candidateCount: canonResult.status === "candidate"
+          ? canonResult.candidate.items.length
+          : 0,
+      });
+      await this.#contextPlanner.recordActivity({
+        workId: command.workId,
+        receiptId: continuityPrepared.contextReceiptId,
+        manifestId: continuityActivity.manifest.manifestId,
+        providerId: execution.providerId,
+        modelId: execution.modelId,
+        startedAt: continuityActivity.startedAt,
+        completedAt: new Date().toISOString(),
+        stageDurationsMs: {
+          plan: continuityActivity.planDurationMs,
+          authorize: 0,
+          connector: 0,
+          persist: continuityActivity.manifestPersistDurationMs +
+            continuityPersistDurationMs,
+        },
+        candidateCount: continuityResult.status === "candidate"
+          ? continuityResult.candidate.items.length
+          : 0,
+      });
+      run = this.#createSceneInformationUpdateBatchSerially({
+        run,
+        execution,
+        canonResult,
+        continuityResult,
+      });
+      return parseAutomaticSceneAnalysisResult({
+        schemaVersion: 1,
+        status: "completed",
+        digest,
+        run,
+      });
+    });
+    this.#createPending = recording.then(() => undefined, () => undefined);
+    return recording;
   }
 
   listSceneAnalysisRuns(value: unknown): Promise<SceneAnalysisRunListProjection> {
@@ -9055,6 +9394,65 @@ class DefaultLocalWorkspaceRuntime
         "Scene analysis run row",
       ),
       lastError: row.lastError ?? null,
+      informationUpdate: row.batchId === null || row.batchId === undefined
+        ? null
+        : {
+            schemaVersion: 1,
+            batchId: readRequiredString(
+              row,
+              "batchId",
+              "Scene information update batch row",
+            ),
+            revision: readRequiredInteger(
+              row,
+              "batchRevision",
+              "Scene information update batch row",
+            ),
+            packetHash: readRequiredString(
+              row,
+              "packetHash",
+              "Scene information update batch row",
+            ),
+            previousPacketHash: row.previousPacketHash ?? null,
+            providerId: readRequiredString(
+              row,
+              "batchProviderId",
+              "Scene information update batch row",
+            ),
+            modelId: readRequiredString(
+              row,
+              "batchModelId",
+              "Scene information update batch row",
+            ),
+            promptVersion: readRequiredString(
+              row,
+              "batchPromptVersion",
+              "Scene information update batch row",
+            ),
+            canonCandidateId: row.batchCanonCandidateId ?? null,
+            continuityCandidateId: row.batchContinuityCandidateId ?? null,
+            status: readRequiredString(
+              row,
+              "batchStatus",
+              "Scene information update batch row",
+            ),
+            lastError: row.batchLastError ?? null,
+            reviewedEntities: JSON.parse(readRequiredString(
+              row,
+              "reviewedEntitiesJson",
+              "Scene information update batch row",
+            )),
+            createdAt: readRequiredString(
+              row,
+              "batchCreatedAt",
+              "Scene information update batch row",
+            ),
+            updatedAt: readRequiredString(
+              row,
+              "batchUpdatedAt",
+              "Scene information update batch row",
+            ),
+          },
       createdAt: readRequiredString(row, "createdAt", "Scene analysis run row"),
       updatedAt: readRequiredString(row, "updatedAt", "Scene analysis run row"),
     });
@@ -9068,22 +9466,38 @@ class DefaultLocalWorkspaceRuntime
     }
     const runs = this.#database.prepare(`
       SELECT
-        id AS "runId",
-        revision,
-        work_id AS "workId",
-        scene_id AS "sceneId",
-        digest_id AS "digestId",
-        source_fingerprint AS "sourceFingerprint",
-        trigger_kind AS "trigger",
-        lore_status AS "loreStatus",
-        canon_candidate_id AS "canonCandidateId",
-        attempt_count AS "attemptCount",
-        last_error AS "lastError",
-        created_at AS "createdAt",
-        updated_at AS "updatedAt"
-      FROM scene_analysis_runs
-      WHERE work_id=?
-      ORDER BY updated_at DESC,id DESC
+        run.id AS "runId",
+        run.revision,
+        run.work_id AS "workId",
+        run.scene_id AS "sceneId",
+        run.digest_id AS "digestId",
+        run.source_fingerprint AS "sourceFingerprint",
+        run.trigger_kind AS "trigger",
+        run.lore_status AS "loreStatus",
+        run.canon_candidate_id AS "canonCandidateId",
+        run.attempt_count AS "attemptCount",
+        run.last_error AS "lastError",
+        run.created_at AS "createdAt",
+        run.updated_at AS "updatedAt",
+        batch.id AS "batchId",
+        batch.revision AS "batchRevision",
+        batch.packet_hash AS "packetHash",
+        batch.previous_packet_hash AS "previousPacketHash",
+        batch.provider_id AS "batchProviderId",
+        batch.model_id AS "batchModelId",
+        batch.prompt_version AS "batchPromptVersion",
+        batch.canon_candidate_id AS "batchCanonCandidateId",
+        batch.continuity_candidate_id AS "batchContinuityCandidateId",
+        batch.status AS "batchStatus",
+        batch.last_error AS "batchLastError",
+        batch.reviewed_entities_json AS "reviewedEntitiesJson",
+        batch.created_at AS "batchCreatedAt",
+        batch.updated_at AS "batchUpdatedAt"
+      FROM scene_analysis_runs AS run
+      LEFT JOIN scene_information_update_batches AS batch
+        ON batch.work_id=run.work_id AND batch.scene_analysis_run_id=run.id
+      WHERE run.work_id=?
+      ORDER BY run.updated_at DESC,run.id DESC
     `).all(workId).map((row) => this.#projectSceneAnalysisRunRow(row));
     return parseSceneAnalysisRunListProjection({
       schemaVersion: 1,
@@ -9171,6 +9585,89 @@ class DefaultLocalWorkspaceRuntime
     );
     if (projection === undefined) {
       throw new Error(`Updated Scene analysis run disappeared: ${current.runId}`);
+    }
+    return projection;
+  }
+
+  #createSceneInformationUpdateBatchSerially(input: Readonly<{
+    run: SceneAnalysisRunProjection;
+    execution: SceneInformationUpdateExecution;
+    canonResult: CanonReviewResult;
+    continuityResult: ContinuityReviewResult;
+  }>): SceneAnalysisRunProjection {
+    if (input.run.informationUpdate !== null) return input.run;
+    const execution = parseSceneInformationUpdateExecution(input.execution);
+    const previous = this.#database.prepare(`
+      SELECT packet_hash AS "packetHash"
+      FROM scene_information_update_batches
+      WHERE work_id=? AND scene_id=?
+      ORDER BY created_at DESC,id DESC LIMIT 1
+    `).all(input.run.workId, input.run.sceneId)[0];
+    const previousPacketHash = previous === undefined
+      ? null
+      : readRequiredString(
+          previous,
+          "packetHash",
+          "Previous Scene information update batch row",
+        );
+    const payloadJson = JSON.stringify({
+      digest: execution.digest,
+      canon: execution.canon,
+      continuity: execution.continuity,
+      reviewedEntities: execution.reviewedEntities,
+    });
+    const packetHash = createHash("sha256").update(JSON.stringify([
+      input.run.sourceFingerprint,
+      previousPacketHash,
+      execution.promptVersion,
+      payloadJson,
+    ])).digest("hex");
+    const canonCandidateId = input.canonResult.status === "candidate"
+      ? input.canonResult.candidate.candidateId
+      : null;
+    const continuityCandidateId = input.continuityResult.status === "candidate"
+      ? input.continuityResult.candidate.candidateId
+      : null;
+    const batchId = entityId<"SceneInformationUpdateBatch">(randomUUID());
+    const createdAt = new Date().toISOString();
+    this.#database.prepare(`
+      INSERT INTO scene_information_update_batches (
+        id,schema_version,revision,work_id,scene_analysis_run_id,scene_id,
+        source_fingerprint,packet_hash,previous_packet_hash,provider_id,
+        model_id,prompt_version,payload_json,reviewed_entities_json,digest_id,
+        canon_candidate_id,continuity_candidate_id,status,last_error,
+        created_at,updated_at
+      ) VALUES (
+        ?,1,1,?,?,?,
+        ?,?,?,?,
+        ?,?,?,?,?,
+        ?,?,'complete',NULL,
+        ?,?
+      )
+    `).run(
+      batchId,
+      input.run.workId,
+      input.run.runId,
+      input.run.sceneId,
+      input.run.sourceFingerprint,
+      packetHash,
+      previousPacketHash,
+      execution.providerId,
+      execution.modelId,
+      execution.promptVersion,
+      payloadJson,
+      JSON.stringify(execution.reviewedEntities),
+      input.run.digestId,
+      canonCandidateId,
+      continuityCandidateId,
+      createdAt,
+      createdAt,
+    );
+    const projection = this.#listSceneAnalysisRunsSerially(input.run.workId).runs.find(
+      (run) => run.runId === input.run.runId,
+    );
+    if (projection === undefined) {
+      throw new Error(`Created Scene information update batch disappeared: ${batchId}`);
     }
     return projection;
   }
@@ -30681,6 +31178,9 @@ export async function openLocalWorkspaceRuntime(
     profiles.ledgerProfile,
   );
   await migrateLocalWorkspacePublishingFormsIfNeeded(
+    profiles.ledgerProfile,
+  );
+  await migrateLocalWorkspaceSceneInformationUpdateIfNeeded(
     profiles.ledgerProfile,
   );
   const ledger = await openNodeSqliteLedger(profiles.ledgerProfile);

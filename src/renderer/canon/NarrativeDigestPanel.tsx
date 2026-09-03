@@ -1,6 +1,7 @@
 import { useMemo,useState } from "react";
 
 import type { CharacterProjection } from "../../application/characters/character-contract";
+import type { SceneAnalysisRunProjection } from "../../application/continuity/scene-analysis-run-contract";
 import type { NarrativeDigestSceneSource,NarrativeDigestScope } from "../../application/continuity/narrative-digest-manifest";
 import type { EntityId } from "../../domain/writing";
 import type { useNarrativeDigestController } from "../features/digest/useNarrativeDigestController";
@@ -28,6 +29,19 @@ const LORE_STATUS_LABELS = Object.freeze({
   "context-rejected":"별빛 원본 변경",
   failed:"별빛 실패",
 });
+
+function sceneAnalysisSummary(run: SceneAnalysisRunProjection|undefined): string {
+  if (run===undefined) return "";
+  const update=run.informationUpdate;
+  if (update===null) return ` · ${LORE_STATUS_LABELS[run.loreStatus]}`;
+  const changedCount=update.reviewedEntities.filter((entry)=>entry.outcome==="changed").length;
+  const status=update.status==="complete"?"통합 정보 갱신 완료"
+    :update.status==="partial"?"통합 정보 갱신 일부 저장"
+    :"통합 정보 갱신 실패";
+  const canon=update.canonCandidateId===null?"작품 정보 변경 없음":"작품 정보 후보 있음";
+  const continuity=update.continuityCandidateId===null?"연속성 변경 없음":"연속성 후보 있음";
+  return ` · ${status} · 검토 ${update.reviewedEntities.length}건(변화 ${changedCount}건) · ${canon} · ${continuity}`;
+}
 
 function scopeSummary(scope: NarrativeDigestScope,documents: ReadonlyMap<string,string>,characters: ReadonlyMap<string,string>,sceneSource: NarrativeDigestSceneSource|null): string {
   if (scope.kind==="work") return "작품 전체";
@@ -76,7 +90,7 @@ export function NarrativeDigestPanel(input: Readonly<{
         <fieldset><legend>포함할 회차</legend><div className="narrative-digest-document-options">{input.documents.map((document)=><label key={document.documentId}><input checked={selectedDocuments.includes(document.documentId)} onChange={(event)=>setSelectedDocuments((current)=>event.target.checked?[...current,document.documentId]:current.filter((id)=>id!==document.documentId))} type="checkbox"/>{document.label}</label>)}</div></fieldset>
         <button disabled={!canGenerate||input.controller.actionState!=="idle"} type="submit">{input.controller.actionState==="generating"?"생성 중…":"이 범위로 생성"}</button>
       </form>
-      <section aria-label="이야기 흐름 이력" className="narrative-digest-history"><header><h3>생성 이력</h3><span>{input.controller.digests.length}개</span></header>{input.controller.digests.length===0?<p className="canon-empty">아직 생성한 이야기 흐름이 없습니다.</p>:input.controller.digests.map((digest)=>{const run=sceneAnalysisRuns.get(digest.digestId);return <article className={digest.integrity==="stale"?"narrative-digest-card is-stale":"narrative-digest-card"} key={digest.digestId}><header><div><strong>{scopeSummary(digest.scope,documentLabels,characterLabels,digest.sceneSource)}</strong><small>{new Date(digest.createdAt).toLocaleString("ko-KR")}</small></div><span>{digest.integrity==="current"?"현재":"원본 변경"}</span></header>{digest.integrity==="stale"&&<p className="narrative-digest-stale">원본 변경 후 다시 생성 필요</p>}<p>{digest.text}</p><footer><span>{digest.scope.kind==="scene"?`장면 분석 · ${SCENE_TRIGGER_LABELS[digest.sceneSource?.trigger??"manual"]}${run===undefined?"":` · ${LORE_STATUS_LABELS[run.loreStatus]}`}`:`${digest.sourceManifest.documents.length}개 회차`} · {digest.providerId} / {digest.modelId}</span>{digest.integrity==="stale"&&digest.scope.kind!=="scene"&&<button disabled={input.controller.actionState!=="idle"} onClick={()=>void input.controller.regenerate(digest)} type="button">현재 원본으로 다시 생성</button>}</footer></article>;})}</section>
+      <section aria-label="이야기 흐름 이력" className="narrative-digest-history"><header><h3>생성 이력</h3><span>{input.controller.digests.length}개</span></header>{input.controller.digests.length===0?<p className="canon-empty">아직 생성한 이야기 흐름이 없습니다.</p>:input.controller.digests.map((digest)=>{const run=sceneAnalysisRuns.get(digest.digestId);return <article className={digest.integrity==="stale"?"narrative-digest-card is-stale":"narrative-digest-card"} key={digest.digestId}><header><div><strong>{scopeSummary(digest.scope,documentLabels,characterLabels,digest.sceneSource)}</strong><small>{new Date(digest.createdAt).toLocaleString("ko-KR")}</small></div><span>{digest.integrity==="current"?"현재":"원본 변경"}</span></header>{digest.integrity==="stale"&&<p className="narrative-digest-stale">원본 변경 후 다시 생성 필요</p>}<p>{digest.text}</p><footer><span>{digest.scope.kind==="scene"?`장면 분석 · ${SCENE_TRIGGER_LABELS[digest.sceneSource?.trigger??"manual"]}${sceneAnalysisSummary(run)}`:`${digest.sourceManifest.documents.length}개 회차`} · {digest.providerId} / {digest.modelId}</span>{digest.integrity==="stale"&&digest.scope.kind!=="scene"&&<button disabled={input.controller.actionState!=="idle"} onClick={()=>void input.controller.regenerate(digest)} type="button">현재 원본으로 다시 생성</button>}</footer></article>;})}</section>
     </div>
   </section>;
 }

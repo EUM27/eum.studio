@@ -56,11 +56,41 @@ export type NarrativeDigestConnector = Readonly<{
   execute(input: NarrativeDigestConnectorInput): Promise<NarrativeDigestConnectorExecution>;
 }>;
 
+export type PreparedNarrativeDigest = Readonly<{
+  workId: EntityId<"Work">;
+  scope: NarrativeDigestScope;
+  sceneSource: NarrativeDigestSceneSource | null;
+  sourceManifest: NarrativeDigestSourceManifest;
+  sourceManifestHash: string;
+  existingDigest: NarrativeDigestProjection | null;
+  contextReceiptId: EntityId<"AssistantContextReceipt">;
+  contextManifestId: EntityId<"AssistantContextManifest">;
+  connectorInput: NarrativeDigestConnectorInput;
+  startedAt: string;
+  planDurationMs: number;
+  authorizeDurationMs: number;
+  manifestDurationMs: number;
+  execute(): Promise<NarrativeDigestConnectorExecution>;
+}>;
+
+export type PrepareNarrativeDigestResult =
+  | Readonly<{ result: NarrativeDigestResult }>
+  | PreparedNarrativeDigest;
+
 export type LocalNarrativeDigestService = Readonly<{
   generate(command: GenerateNarrativeDigestCommand): Promise<NarrativeDigestResult>;
   generateScene(command: GenerateSceneNarrativeDigestCommand): Promise<NarrativeDigestResult>;
   regenerate(command: RegenerateNarrativeDigestCommand): Promise<NarrativeDigestResult>;
   list(command: ListNarrativeDigestsCommand): NarrativeDigestListProjection;
+  prepareScene(
+    command: GenerateSceneNarrativeDigestCommand,
+    options?: Readonly<{ reuseExisting?: boolean }>,
+  ): Promise<PrepareNarrativeDigestResult>;
+  recordPrepared(
+    prepared: PreparedNarrativeDigest,
+    execution: NarrativeDigestConnectorExecution,
+    connectorDurationMs?: number,
+  ): Promise<NarrativeDigestResult>;
 }>;
 
 function required(row: Record<string, unknown>, field: string, label: string): string {
@@ -388,61 +418,82 @@ export function createLocalNarrativeDigestService(input: Readonly<{
     });
   };
 
-  const generatePrepared = async (command: Readonly<{
+  const prepareGenerated = async (command: Readonly<{
     requestId: EntityId<"NarrativeDigestRequest">;
     workId: EntityId<"Work">;
     conversationId: EntityId<"AssistantConversation">;
     scope: NarrativeDigestScope;
     documentIds: readonly EntityId<"Document">[];
     sceneSource: NarrativeDigestSceneSource | null;
-  }>): Promise<NarrativeDigestResult> => {
+  }>, options: Readonly<{
+    reuseExisting?: boolean;
+  }> = {}): Promise<PrepareNarrativeDigestResult> => {
     assertWork(input.database,command.workId);
     assertScope(input.database,command.workId,command.scope);
     const connector = input.connector;
     if (connector === undefined || !connector.isConnected()) {
-      return parseNarrativeDigestResult({ schemaVersion: 1,status: "login-required" });
+      return Object.freeze({
+        result: parseNarrativeDigestResult({
+          schemaVersion: 1,
+          status: "login-required",
+        }),
+      });
     }
     const resolved = documentsFor(command.workId,command.documentIds);
     if (!("documents" in resolved)) {
-      return parseNarrativeDigestResult({ schemaVersion: 1,status: "context-rejected",...resolved.rejected });
+      return Object.freeze({
+        result: parseNarrativeDigestResult({
+          schemaVersion: 1,
+          status: "context-rejected",
+          ...resolved.rejected,
+        }),
+      });
     }
     if (command.sceneSource !== null) {
       const target = resolved.documents.find(
         (document) => document.documentId === command.sceneSource?.documentId,
       );
       if (target === undefined) {
-        return parseNarrativeDigestResult({
-          schemaVersion: 1,
-          status: "context-rejected",
-          reason: "source-unavailable",
-          documentId: command.sceneSource.documentId,
+        return Object.freeze({
+          result: parseNarrativeDigestResult({
+            schemaVersion: 1,
+            status: "context-rejected",
+            reason: "source-unavailable",
+            documentId: command.sceneSource.documentId,
+          }),
         });
       }
       if (target.currentRevisionId !== command.sceneSource.documentRevisionId) {
-        return parseNarrativeDigestResult({
-          schemaVersion: 1,
-          status: "context-rejected",
-          reason: "stale-context",
-          documentId: target.documentId,
+        return Object.freeze({
+          result: parseNarrativeDigestResult({
+            schemaVersion: 1,
+            status: "context-rejected",
+            reason: "stale-context",
+            documentId: target.documentId,
+          }),
         });
       }
       if (command.sceneSource.to > target.text.length) {
-        return parseNarrativeDigestResult({
-          schemaVersion: 1,
-          status: "context-rejected",
-          reason: "invalid-range",
-          documentId: target.documentId,
+        return Object.freeze({
+          result: parseNarrativeDigestResult({
+            schemaVersion: 1,
+            status: "context-rejected",
+            reason: "invalid-range",
+            documentId: target.documentId,
+          }),
         });
       }
       if (
         checksum(target.text.slice(command.sceneSource.from, command.sceneSource.to)) !==
           command.sceneSource.textHash
       ) {
-        return parseNarrativeDigestResult({
-          schemaVersion: 1,
-          status: "context-rejected",
-          reason: "stale-context",
-          documentId: target.documentId,
+        return Object.freeze({
+          result: parseNarrativeDigestResult({
+            schemaVersion: 1,
+            status: "context-rejected",
+            reason: "stale-context",
+            documentId: target.documentId,
+          }),
         });
       }
     }
@@ -465,16 +516,22 @@ export function createLocalNarrativeDigestService(input: Readonly<{
       checksum,
       command.sceneSource,
     );
+    let existingDigest: NarrativeDigestProjection | null = null;
     if (command.sceneSource !== null) {
       const existing = readRows(command.workId).find(
         (candidate) => candidate.sceneSourceFingerprint === sourceManifestHash,
       );
       if (existing !== undefined) {
-        return parseNarrativeDigestResult({
-          schemaVersion: 1,
-          status: "unchanged",
-          digest: projection(existing),
-        });
+        existingDigest = projection(existing);
+        if (options.reuseExisting !== true) {
+          return Object.freeze({
+            result: parseNarrativeDigestResult({
+              schemaVersion: 1,
+              status: "unchanged",
+              digest: existingDigest,
+            }),
+          });
+        }
       }
     }
     const canonicalSources = sourcesFrom(command.workId,sourceManifest);
@@ -509,15 +566,16 @@ export function createLocalNarrativeDigestService(input: Readonly<{
     });
     const authorizeDuration = Math.max(0,measureNow()-authorizeStarted);
     if (!access.allowed) {
-      return access.reason === "permission-required"
-        ? parseNarrativeDigestResult({ schemaVersion: 1,status: "permission-required",missing: access.missing,destinationId: connector.destinationId })
-        : parseNarrativeDigestResult({ schemaVersion: 1,status: "context-rejected",reason: access.reason,documentId: access.documentId });
+      return Object.freeze({
+        result: access.reason === "permission-required"
+          ? parseNarrativeDigestResult({ schemaVersion: 1,status: "permission-required",missing: access.missing,destinationId: connector.destinationId })
+          : parseNarrativeDigestResult({ schemaVersion: 1,status: "context-rejected",reason: access.reason,documentId: access.documentId }),
+      });
     }
     const manifestStarted = measureNow();
     const contextManifest = await input.contextPlanner.recordManifest({ workId: command.workId,receiptId: access.receipt.receiptId,plan });
     const manifestDuration = Math.max(0,measureNow()-manifestStarted);
-    const connectorStarted = measureNow();
-    const execution = parseNarrativeDigestConnectorExecution(await connector.execute(Object.freeze({
+    const connectorInput = Object.freeze({
       requestId: command.requestId,
       scope: command.scope,
       sourceManifest,
@@ -536,99 +594,157 @@ export function createLocalNarrativeDigestService(input: Readonly<{
       }))),
       sceneSource: command.sceneSource,
       canonicalSources,
-    })));
-    const connectorDuration = Math.max(0,measureNow()-connectorStarted);
+    });
+    return Object.freeze({
+      workId: command.workId,
+      scope: command.scope,
+      sceneSource: command.sceneSource,
+      sourceManifest,
+      sourceManifestHash,
+      existingDigest,
+      contextReceiptId: access.receipt.receiptId,
+      contextManifestId: contextManifest.manifestId,
+      connectorInput,
+      startedAt,
+      planDurationMs: planDuration,
+      authorizeDurationMs: authorizeDuration,
+      manifestDurationMs: manifestDuration,
+      execute: () => connector.execute(connectorInput),
+    });
+  };
+
+  const recordPrepared = async (
+    prepared: PreparedNarrativeDigest,
+    rawExecution: NarrativeDigestConnectorExecution,
+    connectorDurationMs = 0,
+  ): Promise<NarrativeDigestResult> => {
+    const execution = parseNarrativeDigestConnectorExecution(rawExecution);
     const persistStarted = measureNow();
-    const digestId = entityId<"NarrativeDigest">(createId());
+    const digestId = prepared.existingDigest?.digestId ??
+      entityId<"NarrativeDigest">(createId());
     const createdAt = now();
-    const columns = scopeColumns(command.scope);
-    await input.ledger.transaction(async (transaction) => {
-      transaction.write({
+    const columns = scopeColumns(prepared.scope);
+    if (prepared.existingDigest === null) {
+      await input.ledger.transaction(async (transaction) => {
+        transaction.write({
         kind: "narrativeDigest",
         id: digestId,
         schemaVersion: 1,
-        workId: command.workId,
-        scopeKind: command.scope.kind,
-        scopeDocumentId: command.sceneSource?.documentId ?? columns.documentId,
+        workId: prepared.workId,
+        scopeKind: prepared.scope.kind,
+        scopeDocumentId: prepared.sceneSource?.documentId ?? columns.documentId,
         scopeSceneId: columns.sceneId,
         scopeFirstCharacterId: columns.firstCharacterId,
         scopeSecondCharacterId: columns.secondCharacterId,
-        sourceManifest,
-        sourceManifestHash,
+        sourceManifest: prepared.sourceManifest,
+        sourceManifestHash: prepared.sourceManifestHash,
         text: execution.text.trim(),
         providerId: execution.providerId.trim(),
         modelId: execution.modelId.trim(),
         promptVersion: execution.promptVersion,
-        contextReceiptId: access.receipt.receiptId,
+        contextReceiptId: prepared.contextReceiptId,
         createdAt,
-        documents: sourceManifest.documents.map((document,index) => ({ ...document,orderIndex: index })),
-        sceneSource: command.sceneSource === null
+        documents: prepared.sourceManifest.documents.map((document,index) => ({ ...document,orderIndex: index })),
+        sceneSource: prepared.sceneSource === null
           ? null
           : {
-              ...command.sceneSource,
-              sourceFingerprint: sourceManifestHash,
+              ...prepared.sceneSource,
+              sourceFingerprint: prepared.sourceManifestHash,
             },
+        });
       });
-    });
+    }
     const persistDuration = Math.max(0,measureNow()-persistStarted);
     await input.contextPlanner.recordActivity({
-      workId: command.workId,
-      receiptId: access.receipt.receiptId,
-      manifestId: contextManifest.manifestId,
+      workId: prepared.workId,
+      receiptId: prepared.contextReceiptId,
+      manifestId: prepared.contextManifestId,
       providerId: execution.providerId,
       modelId: execution.modelId,
-      startedAt,
+      startedAt: prepared.startedAt,
       completedAt: now(),
       stageDurationsMs: {
-        plan: planDuration,
-        authorize: authorizeDuration,
-        connector: connectorDuration,
-        persist: manifestDuration+persistDuration,
+        plan: prepared.planDurationMs,
+        authorize: prepared.authorizeDurationMs,
+        connector: connectorDurationMs,
+        persist: prepared.manifestDurationMs+persistDuration,
       },
       candidateCount: 0,
     });
-    const row = readRows(command.workId).find((candidate) => candidate.digestId === digestId);
+    const row = readRows(prepared.workId).find((candidate) => candidate.digestId === digestId);
     if (row === undefined) throw new Error(`Generated NarrativeDigest disappeared: ${digestId}`);
-    return parseNarrativeDigestResult({ schemaVersion: 1,status: "generated",digest: projection(row) });
+    return parseNarrativeDigestResult({
+      schemaVersion: 1,
+      status: prepared.existingDigest === null ? "generated" : "unchanged",
+      digest: projection(row),
+    });
+  };
+
+  const generatePrepared = async (command: Readonly<{
+    requestId: EntityId<"NarrativeDigestRequest">;
+    workId: EntityId<"Work">;
+    conversationId: EntityId<"AssistantConversation">;
+    scope: NarrativeDigestScope;
+    documentIds: readonly EntityId<"Document">[];
+    sceneSource: NarrativeDigestSceneSource | null;
+  }>): Promise<NarrativeDigestResult> => {
+    const prepared = await prepareGenerated(command);
+    if ("result" in prepared) return prepared.result;
+    const connectorStarted = measureNow();
+    const execution = await prepared.execute();
+    return recordPrepared(
+      prepared,
+      execution,
+      Math.max(0,measureNow()-connectorStarted),
+    );
   };
 
   const generate = (command: GenerateNarrativeDigestCommand) =>
     generatePrepared({ ...command, sceneSource: null });
 
-  const generateScene = (
+  const prepareScene = (
     command: GenerateSceneNarrativeDigestCommand,
-  ): Promise<NarrativeDigestResult> => {
+    options: Readonly<{ reuseExisting?: boolean }> = {},
+  ): Promise<PrepareNarrativeDigestResult> => {
     const target = input.getDocument(command.sourceRange.documentId);
     if (target === undefined) {
-      return Promise.resolve(parseNarrativeDigestResult({
-        schemaVersion: 1,
-        status: "context-rejected",
-        reason: "source-unavailable",
-        documentId: command.sourceRange.documentId,
+      return Promise.resolve(Object.freeze({
+        result: parseNarrativeDigestResult({
+          schemaVersion: 1,
+          status: "context-rejected",
+          reason: "source-unavailable",
+          documentId: command.sourceRange.documentId,
+        }),
       }));
     }
     if (target.workId !== command.workId) {
-      return Promise.resolve(parseNarrativeDigestResult({
-        schemaVersion: 1,
-        status: "context-rejected",
-        reason: "outside-work",
-        documentId: command.sourceRange.documentId,
+      return Promise.resolve(Object.freeze({
+        result: parseNarrativeDigestResult({
+          schemaVersion: 1,
+          status: "context-rejected",
+          reason: "outside-work",
+          documentId: command.sourceRange.documentId,
+        }),
       }));
     }
     if (target.currentRevisionId !== command.sourceRange.documentRevisionId) {
-      return Promise.resolve(parseNarrativeDigestResult({
-        schemaVersion: 1,
-        status: "context-rejected",
-        reason: "stale-context",
-        documentId: command.sourceRange.documentId,
+      return Promise.resolve(Object.freeze({
+        result: parseNarrativeDigestResult({
+          schemaVersion: 1,
+          status: "context-rejected",
+          reason: "stale-context",
+          documentId: command.sourceRange.documentId,
+        }),
       }));
     }
     if (command.sourceRange.to > target.text.length) {
-      return Promise.resolve(parseNarrativeDigestResult({
-        schemaVersion: 1,
-        status: "context-rejected",
-        reason: "invalid-range",
-        documentId: command.sourceRange.documentId,
+      return Promise.resolve(Object.freeze({
+        result: parseNarrativeDigestResult({
+          schemaVersion: 1,
+          status: "context-rejected",
+          reason: "invalid-range",
+          documentId: command.sourceRange.documentId,
+        }),
       }));
     }
     const sceneSource = parseNarrativeDigestSceneSource({
@@ -640,14 +756,28 @@ export function createLocalNarrativeDigestService(input: Readonly<{
       textHash: checksum(target.text.slice(command.sourceRange.from, command.sourceRange.to)),
       trigger: command.trigger,
     });
-    return generatePrepared({
+    return prepareGenerated({
       requestId: command.requestId,
       workId: command.workId,
       conversationId: command.conversationId,
       scope: Object.freeze({ kind: "scene", sceneId: command.sceneId }),
       documentIds: Object.freeze([command.sourceRange.documentId]),
       sceneSource,
-    });
+    }, options);
+  };
+
+  const generateScene = async (
+    command: GenerateSceneNarrativeDigestCommand,
+  ): Promise<NarrativeDigestResult> => {
+    const prepared = await prepareScene(command);
+    if ("result" in prepared) return prepared.result;
+    const connectorStarted = measureNow();
+    const execution = await prepared.execute();
+    return recordPrepared(
+      prepared,
+      execution,
+      Math.max(0,measureNow()-connectorStarted),
+    );
   };
 
   const regenerate = async (command: RegenerateNarrativeDigestCommand): Promise<NarrativeDigestResult> => {
@@ -682,5 +812,12 @@ export function createLocalNarrativeDigestService(input: Readonly<{
     });
   };
 
-  return Object.freeze({ generate,generateScene,regenerate,list });
+  return Object.freeze({
+    generate,
+    generateScene,
+    regenerate,
+    list,
+    prepareScene,
+    recordPrepared,
+  });
 }

@@ -15,6 +15,7 @@ export const CANON_TARGET_KINDS = [
   "character",
   "character-relation",
   "lore-entry",
+  "character-knowledge",
 ] as const;
 
 export const CANON_CHARACTER_FIELDS = [
@@ -45,15 +46,26 @@ export const CANON_LORE_ENTRY_FIELDS = [
   "enabled",
 ] as const;
 
+export const CANON_CHARACTER_KNOWLEDGE_FIELDS = [
+  "characterId",
+  "statement",
+  "stance",
+  "truthStatus",
+  "aboutRefKeys",
+] as const;
+
 export type CanonTargetKind = (typeof CANON_TARGET_KINDS)[number];
 export type CanonCharacterField = (typeof CANON_CHARACTER_FIELDS)[number];
 export type CanonCharacterRelationField =
   (typeof CANON_CHARACTER_RELATION_FIELDS)[number];
 export type CanonLoreEntryField = (typeof CANON_LORE_ENTRY_FIELDS)[number];
+export type CanonCharacterKnowledgeField =
+  (typeof CANON_CHARACTER_KNOWLEDGE_FIELDS)[number];
 export type CanonFieldName =
   | CanonCharacterField
   | CanonCharacterRelationField
-  | CanonLoreEntryField;
+  | CanonLoreEntryField
+  | CanonCharacterKnowledgeField;
 export type CanonFieldValue = string | boolean | readonly string[];
 export type CanonAssertionBasis = "explicit-evidence" | "model-inference";
 
@@ -65,7 +77,8 @@ export type CanonEntityRef = Extract<
 type CanonCreateTarget =
   | Readonly<{ kind: "character"; operation: "create" }>
   | Readonly<{ kind: "character-relation"; operation: "create" }>
-  | Readonly<{ kind: "lore-entry"; operation: "create" }>;
+  | Readonly<{ kind: "lore-entry"; operation: "create" }>
+  | Readonly<{ kind: "character-knowledge"; operation: "create" }>;
 
 type CanonUpdateTarget =
   | Readonly<{
@@ -85,6 +98,12 @@ type CanonUpdateTarget =
       operation: "update";
       loreEntryId: EntityId<"LoreEntry">;
       expectedRevision: number;
+    }>
+  | Readonly<{
+      kind: "character-knowledge";
+      operation: "update";
+      knowledgeId: EntityId<"CharacterKnowledge">;
+      expectedRevision: number;
     }>;
 
 type CanonUnresolvedTarget =
@@ -102,6 +121,11 @@ type CanonUnresolvedTarget =
       kind: "lore-entry";
       operation: "unresolved";
       matchingTargetIds: readonly EntityId<"LoreEntry">[];
+    }>
+  | Readonly<{
+      kind: "character-knowledge";
+      operation: "unresolved";
+      matchingTargetIds: readonly EntityId<"CharacterKnowledge">[];
     }>;
 
 export type CanonReviewTarget =
@@ -401,7 +425,8 @@ function targetKind(value: unknown, label: string): CanonTargetKind {
 function fieldsForTarget(kind: CanonTargetKind): readonly CanonFieldName[] {
   if (kind === "character") return CANON_CHARACTER_FIELDS;
   if (kind === "character-relation") return CANON_CHARACTER_RELATION_FIELDS;
-  return CANON_LORE_ENTRY_FIELDS;
+  if (kind === "lore-entry") return CANON_LORE_ENTRY_FIELDS;
+  return CANON_CHARACTER_KNOWLEDGE_FIELDS;
 }
 
 function parseFieldName(value: unknown, label: string): CanonFieldName {
@@ -409,6 +434,7 @@ function parseFieldName(value: unknown, label: string): CanonFieldName {
     ...CANON_CHARACTER_FIELDS,
     ...CANON_CHARACTER_RELATION_FIELDS,
     ...CANON_LORE_ENTRY_FIELDS,
+    ...CANON_CHARACTER_KNOWLEDGE_FIELDS,
   ];
   if (typeof value !== "string" || !allFields.includes(value)) {
     throw new Error(`${label} is unsupported`);
@@ -421,15 +447,30 @@ function parseFieldValue(
   field: CanonFieldName,
   label: string,
 ): CanonFieldValue {
-  if (field === "aliases") return stringArray(value, label);
+  if (field === "aliases" || field === "aboutRefKeys") {
+    return stringArray(value, label);
+  }
   if (field === "enabled") {
     if (typeof value !== "boolean") throw new Error(`${label} must be boolean`);
     return value;
   }
   if (typeof value !== "string") throw new Error(`${label} must be a string`);
   if (
+    field === "stance" &&
+    !["knows", "believes", "suspects", "denies", "unaware"].includes(value)
+  ) {
+    throw new Error(`${label} is an unsupported CharacterKnowledge stance`);
+  }
+  if (
+    field === "truthStatus" &&
+    !["true", "false", "unknown"].includes(value)
+  ) {
+    throw new Error(`${label} is an unsupported CharacterKnowledge truth status`);
+  }
+  if (
     (field === "name" || field === "title" || field === "kind" ||
-      field === "fromCharacterId" || field === "toCharacterId") &&
+      field === "fromCharacterId" || field === "toCharacterId" ||
+      field === "characterId" || field === "statement") &&
     value.trim().length === 0
   ) {
     throw new Error(`${label} must be non-empty`);
@@ -527,11 +568,20 @@ function parseTarget(value: unknown, label: string): CanonReviewTarget {
       expectedRevision: positiveInteger(input, "expectedRevision", label),
     });
   }
-  exact(input, ["kind", "operation", "loreEntryId", "expectedRevision"], label);
+  if (kind === "lore-entry") {
+    exact(input, ["kind", "operation", "loreEntryId", "expectedRevision"], label);
+    return Object.freeze({
+      kind,
+      operation: "update",
+      loreEntryId: identifier<"LoreEntry">(input, "loreEntryId", label),
+      expectedRevision: positiveInteger(input, "expectedRevision", label),
+    });
+  }
+  exact(input, ["kind", "operation", "knowledgeId", "expectedRevision"], label);
   return Object.freeze({
     kind,
     operation: "update",
-    loreEntryId: identifier<"LoreEntry">(input, "loreEntryId", label),
+    knowledgeId: identifier<"CharacterKnowledge">(input, "knowledgeId", label),
     expectedRevision: positiveInteger(input, "expectedRevision", label),
   });
 }

@@ -116,13 +116,15 @@ describe("automatic Scene analysis selection",()=>{
     const runSceneAnalysis=vi.fn(async()=>({status:"completed"} as never));
     const refreshDigests=vi.fn(async()=>undefined);
     const refreshCanonCandidates=vi.fn(async()=>true);
+    const refreshContinuityCandidates=vi.fn(async()=>true);
     const base={
       requestedScene,trigger:"scene-transition" as const,
       activeWorkId:entityId<"Work">("work-1"),
       assistantClient:{getChatGptOAuthStatus},
       conversationId:entityId<"AssistantConversation">("conversation-1"),
       digestClient:{runSceneAnalysis},documents:[document],persistDocument,
-      refreshDigests,refreshCanonCandidates,refreshSceneProjection,
+      refreshDigests,refreshCanonCandidates,refreshContinuityCandidates,
+      refreshSceneProjection,
       structureClient:{finalizeSceneCanonCheck},
     };
     await expect(executeAutomaticSceneAnalysis({...base,enabled:false}))
@@ -136,6 +138,7 @@ describe("automatic Scene analysis selection",()=>{
       sourceRange:expect.objectContaining({from:0,to:5}),
     }));
     expect(refreshCanonCandidates).toHaveBeenCalledOnce();
+    expect(refreshContinuityCandidates).toHaveBeenCalledOnce();
   });
 
   it("does not touch the manuscript or model while disconnected",async()=>{
@@ -150,7 +153,8 @@ describe("automatic Scene analysis selection",()=>{
       conversationId:entityId<"AssistantConversation">("conversation-1"),
       digestClient:{runSceneAnalysis:runSceneAnalysis as never},
       documents:[],persistDocument,
-      refreshDigests:vi.fn(),refreshCanonCandidates:vi.fn(),refreshSceneProjection:vi.fn(),
+      refreshDigests:vi.fn(),refreshCanonCandidates:vi.fn(),
+      refreshContinuityCandidates:vi.fn(),refreshSceneProjection:vi.fn(),
       structureClient:{finalizeSceneCanonCheck:vi.fn()},
     })).resolves.toBe("skipped-disconnected");
     expect(persistDocument).not.toHaveBeenCalled();

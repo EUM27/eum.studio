@@ -8,11 +8,30 @@
 
 현재 storage 결정: [POC-3 SQLite·blob·backup 결정](docs/poc-3-storage-decisions.md)
 
-마지막 갱신: 2026-09-02
+마지막 갱신: 2026-09-04
 
 ## 현재 Gate
 
-`출판사별 투고 정보 입력 양식 — 기본 템플릿·출판사별 사본·작품별 작성값 구현·검증 완료`
+`통합 작품 정보 변화 묶음 — 장면 1회 분석·후보 승인·재시작 복원 구현·검증 완료`
+
+### 2026-09-04 통합 작품 정보 변화 묶음
+
+- [x] 현재 자동 장면 분석의 exact `DocumentRevision`·stable `sceneId`·source manifest를 하나의 정보 변화 묶음 입력으로 고정했다.
+- [x] 한 번의 provider 실행에서 이야기 요약, 인물·관계·별빛 필드 변화, 열린 연속성, 인물 지식·믿음 제안을 strict schema로 받는다. 별도 이야기 요약·정본·연속성 connector는 이 경로에서 호출하지 않는다.
+- [x] 인물·관계·별빛·연속성·인물 지식은 승인 전 Candidate로만 저장하고 정규 원본·원고를 자동 수정하지 않는다. 인물 지식 업데이트 승인은 기존 행을 덮어쓰지 않고 successor를 생성한다.
+- [x] 같은 source fingerprint의 완료 batch는 재전송하지 않고, source/target revision 또는 scene lineage가 달라진 후보는 기존 stale 계약으로 차단한다. scene별 이전 packet hash도 다음 batch에 연결한다.
+- [x] 유효한 제안은 기존 종류별 검토 화면에서 편집·승인·기각한다. malformed 전체 응답과 입력에 없던 entity 검토는 저장 전에 거부하고, 무변경은 Candidate를 꾸며내지 않은 채 entity별 `unchanged` 결과로 보존한다.
+- [x] 기존 수동 정본·연속성·인물 지식·이야기 흐름 경로와 기능 OFF·연결 끊김 무실행 계약을 보존했다.
+- [x] schema 25→26 이주와 신규 schema 26 생성, focused 계약·runtime·migration·bridge·renderer, 전체 정적/단위/통합/build, production Electron 통합 후보 생성·승인·재시작 복원을 검증했다.
+
+현재 증거:
+
+- schema 26의 `scene_information_update_batches`는 source fingerprint·packet lineage·정규화된 결과·검토 entity·정본/연속성 Candidate ID를 저장하며 update/delete trigger로 불변을 강제한다. 25→26 migration definition checksum은 `e563f95e41a40ec2b977688c1f4e9eb99374480d3cc8c155ecf1a176decb9743`이고, 기존 Candidate·결정 receipt와 foreign key를 보존하는 non-empty fixture가 통과했다.
+- focused 12개 파일 41개와 local workspace runtime·migration 108개가 통과했다. 전체 `npm run test:run`은 335개 파일·1,210개 통과·기존 1개 skip이며, `npm run lint`, 네 TypeScript project, production Electron/preload/renderer build, architecture check/report가 통과했다.
+- 격리된 production Electron에서 장면 2개에 통합 요청 2회, 별도 요약·정본·연속성 요청 0회, 통합 batch 2개, 정본 Candidate 1개, 연속성 Candidate 1개를 확인했다. 승인 전 정본 불변, 인물 지식 1건 승인, 완전 종료·재실행 뒤 batch·승인 지식 복원, foreign key 위반 0건이 통과했다.
+- 기본 standalone 설치본과 실사용 DB는 종료·교체·수정하지 않았다. 격리 후보 `out/eum-studio-win-x64-scene-information-candidate`는 788 files·376,687,134 bytes이며 `file://`·packaged main·typed bridge·빈 작업공간 bootstrap·renderer 강제 종료 복구·두 번째 인스턴스 exit 0을 통과했다.
+
+이전 현재 Gate: `출판사별 투고 정보 입력 양식 — 기본 템플릿·출판사별 사본·작품별 작성값 구현·검증 완료`
 
 ### 2026-09-02 출판사별 투고 정보 입력 양식
 

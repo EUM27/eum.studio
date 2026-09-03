@@ -215,6 +215,7 @@ export function useWorkspaceStoryFeatureKernel(input: Readonly<{
       documents: activeWorkDocuments,
       persistDocument,
       refreshDigests: narrativeDigestController.refresh,
+      refreshContinuityCandidates: continuityController.refresh,
       refreshSceneProjection,
       sceneProjection,
       settingsClient: input.client.settings,

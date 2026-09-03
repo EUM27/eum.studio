@@ -128,4 +128,30 @@ describe("canon review model output", () => {
       evidenceIdFactory: { create: () => "evidence-1" },
     })).toThrow(/unknown paragraph/i);
   });
+
+  it("parses complete CharacterKnowledge creation fields", () => {
+    expect(parseCanonReviewModelPayload({
+      proposals: [{
+        targetKind: "character-knowledge",
+        targetHint: "윤서는 북문이 열린다고 안다.",
+        operationHint: "create",
+        assertionBasis: "explicit-evidence",
+        reason: "윤서가 사실을 직접 확인한다.",
+        fields: {
+          characterId: "character-1",
+          statement: "북문은 새벽에 열린다.",
+          stance: "knows",
+          truthStatus: "true",
+          aboutRefKeys: ["lore-entry:lore-1"],
+        },
+        evidence: [{ paragraphId: "p1", quote: "정식 기록관" }],
+      }],
+    }).proposals[0]?.fields).toEqual({
+      characterId: "character-1",
+      statement: "북문은 새벽에 열린다.",
+      stance: "knows",
+      truthStatus: "true",
+      aboutRefKeys: ["lore-entry:lore-1"],
+    });
+  });
 });

@@ -29,7 +29,8 @@ describe("createPreloadNarrativeDigestBridge", () => {
     })).resolves.toEqual({schemaVersion:1,status:"login-required"});
     await expect(bridge.runSceneAnalysis({
       schemaVersion:1,digestRequestId:"digest-request-1" as never,
-      canonRequestId:"canon-request-1" as never,workId:"work-1" as never,
+      canonRequestId:"canon-request-1" as never,
+      continuityRequestId:"continuity-request-1" as never,workId:"work-1" as never,
       conversationId:"conversation-1" as never,sceneId:"scene-1" as never,
       sourceRange:{documentId:"document-1" as never,documentRevisionId:"revision-1" as never,from:0,to:1},
       trigger:"scene-transition",

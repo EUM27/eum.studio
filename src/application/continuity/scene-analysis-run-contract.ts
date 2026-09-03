@@ -12,6 +12,11 @@ import {
   parseNarrativeDigestSceneTrigger,
   type NarrativeDigestSceneTrigger,
 } from "./narrative-digest-manifest";
+import {
+  SCENE_INFORMATION_UPDATE_PROMPT_VERSION,
+  parseSceneInformationReviewedEntities,
+  type SceneInformationReviewedEntity,
+} from "./scene-information-update-contract";
 
 export const SCENE_ANALYSIS_LORE_STATUSES = [
   "pending",
@@ -26,6 +31,24 @@ export const SCENE_ANALYSIS_LORE_STATUSES = [
 export type SceneAnalysisLoreStatus =
   (typeof SCENE_ANALYSIS_LORE_STATUSES)[number];
 
+export type SceneInformationUpdateBatchProjection = Readonly<{
+  schemaVersion: 1;
+  batchId: EntityId<"SceneInformationUpdateBatch">;
+  revision: number;
+  packetHash: string;
+  previousPacketHash: string | null;
+  providerId: string;
+  modelId: string;
+  promptVersion: typeof SCENE_INFORMATION_UPDATE_PROMPT_VERSION;
+  canonCandidateId: EntityId<"CanonReviewCandidate"> | null;
+  continuityCandidateId: EntityId<"ContinuityReviewCandidate"> | null;
+  status: "complete" | "partial" | "failed";
+  lastError: string | null;
+  reviewedEntities: readonly SceneInformationReviewedEntity[];
+  createdAt: string;
+  updatedAt: string;
+}>;
+
 export type SceneAnalysisRunProjection = Readonly<{
   schemaVersion: 1;
   runId: EntityId<"SceneAnalysisRun">;
@@ -39,6 +62,7 @@ export type SceneAnalysisRunProjection = Readonly<{
   canonCandidateId: EntityId<"CanonReviewCandidate"> | null;
   attemptCount: number;
   lastError: string | null;
+  informationUpdate: SceneInformationUpdateBatchProjection | null;
   createdAt: string;
   updatedAt: string;
 }>;
@@ -53,6 +77,7 @@ export type RunAutomaticSceneAnalysisCommand = Readonly<{
   schemaVersion: 1;
   digestRequestId: EntityId<"NarrativeDigestRequest">;
   canonRequestId: EntityId<"CanonReviewRequest">;
+  continuityRequestId: EntityId<"ContinuityReviewRequest">;
   workId: EntityId<"Work">;
   conversationId: EntityId<"AssistantConversation">;
   sceneId: EntityId<"Scene">;
@@ -145,6 +170,80 @@ function instant(value: unknown, label: string): string {
   return parsed;
 }
 
+function parseInformationUpdate(
+  value: unknown,
+  label: string,
+): SceneInformationUpdateBatchProjection | null {
+  if (value === null) return null;
+  const input = record(value, label);
+  exact(input, [
+    "schemaVersion",
+    "batchId",
+    "revision",
+    "packetHash",
+    "previousPacketHash",
+    "providerId",
+    "modelId",
+    "promptVersion",
+    "canonCandidateId",
+    "continuityCandidateId",
+    "status",
+    "lastError",
+    "reviewedEntities",
+    "createdAt",
+    "updatedAt",
+  ], label);
+  schema(input, label);
+  if (input.promptVersion !== SCENE_INFORMATION_UPDATE_PROMPT_VERSION) {
+    throw new Error(`${label}.promptVersion is unsupported`);
+  }
+  if (
+    input.status !== "complete" && input.status !== "partial" &&
+    input.status !== "failed"
+  ) throw new Error(`${label}.status is unsupported`);
+  const lastError = input.lastError === null
+    ? null
+    : text(input.lastError, `${label}.lastError`);
+  if ((input.status === "complete") !== (lastError === null)) {
+    throw new Error(`${label}.lastError disagrees with status`);
+  }
+  return Object.freeze({
+    schemaVersion: 1,
+    batchId: id<"SceneInformationUpdateBatch">(
+      input.batchId,
+      `${label}.batchId`,
+    ),
+    revision: integer(input.revision, `${label}.revision`, 1),
+    packetHash: text(input.packetHash, `${label}.packetHash`),
+    previousPacketHash: input.previousPacketHash === null
+      ? null
+      : text(input.previousPacketHash, `${label}.previousPacketHash`),
+    providerId: text(input.providerId, `${label}.providerId`),
+    modelId: text(input.modelId, `${label}.modelId`),
+    promptVersion: SCENE_INFORMATION_UPDATE_PROMPT_VERSION,
+    canonCandidateId: input.canonCandidateId === null
+      ? null
+      : id<"CanonReviewCandidate">(
+          input.canonCandidateId,
+          `${label}.canonCandidateId`,
+        ),
+    continuityCandidateId: input.continuityCandidateId === null
+      ? null
+      : id<"ContinuityReviewCandidate">(
+          input.continuityCandidateId,
+          `${label}.continuityCandidateId`,
+        ),
+    status: input.status,
+    lastError,
+    reviewedEntities: parseSceneInformationReviewedEntities(
+      input.reviewedEntities,
+      `${label}.reviewedEntities`,
+    ),
+    createdAt: instant(input.createdAt, `${label}.createdAt`),
+    updatedAt: instant(input.updatedAt, `${label}.updatedAt`),
+  });
+}
+
 function permissionMissing(value: unknown, label: string) {
   if (
     !Array.isArray(value) ||
@@ -175,6 +274,7 @@ export function parseRunAutomaticSceneAnalysisCommand(
     "schemaVersion",
     "digestRequestId",
     "canonRequestId",
+    "continuityRequestId",
     "workId",
     "conversationId",
     "sceneId",
@@ -191,6 +291,10 @@ export function parseRunAutomaticSceneAnalysisCommand(
     canonRequestId: id<"CanonReviewRequest">(
       input.canonRequestId,
       `${label}.canonRequestId`,
+    ),
+    continuityRequestId: id<"ContinuityReviewRequest">(
+      input.continuityRequestId,
+      `${label}.continuityRequestId`,
     ),
     workId: id<"Work">(input.workId, `${label}.workId`),
     conversationId: id<"AssistantConversation">(
@@ -234,6 +338,7 @@ export function parseSceneAnalysisRunProjection(
     "canonCandidateId",
     "attemptCount",
     "lastError",
+    "informationUpdate",
     "createdAt",
     "updatedAt",
   ], label);
@@ -271,6 +376,10 @@ export function parseSceneAnalysisRunProjection(
     canonCandidateId,
     attemptCount: integer(input.attemptCount, `${label}.attemptCount`, 0),
     lastError,
+    informationUpdate: parseInformationUpdate(
+      input.informationUpdate,
+      `${label}.informationUpdate`,
+    ),
     createdAt: instant(input.createdAt, `${label}.createdAt`),
     updatedAt: instant(input.updatedAt, `${label}.updatedAt`),
   });

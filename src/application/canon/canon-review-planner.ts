@@ -2,6 +2,7 @@ import { entityId } from "../../domain/writing";
 import type { AssistantContextRange } from "../assistant/assistant-context-permission";
 import {
   CANON_CHARACTER_FIELDS,
+  CANON_CHARACTER_KNOWLEDGE_FIELDS,
   CANON_CHARACTER_RELATION_FIELDS,
   CANON_LORE_ENTRY_FIELDS,
   type CanonFieldChange,
@@ -68,10 +69,26 @@ export type CanonLoreEntrySourceSnapshot = Readonly<{
   }>;
 }>;
 
+export type CanonCharacterKnowledgeSourceSnapshot = Readonly<{
+  kind: "character-knowledge";
+  id: string;
+  revision: number;
+  workId: string;
+  retiredAt: string | null;
+  fields: Readonly<{
+    characterId: string;
+    statement: string;
+    stance: string;
+    truthStatus: string;
+    aboutRefKeys: readonly string[];
+  }>;
+}>;
+
 export type CanonReviewSourceSnapshot =
   | CanonCharacterSourceSnapshot
   | CanonCharacterRelationSourceSnapshot
-  | CanonLoreEntrySourceSnapshot;
+  | CanonLoreEntrySourceSnapshot
+  | CanonCharacterKnowledgeSourceSnapshot;
 
 export type CanonPendingFieldChange = Readonly<{
   sourceDocumentRevisionId: string;
@@ -84,14 +101,16 @@ export type CanonPendingFieldChange = Readonly<{
 function fieldsForKind(kind: CanonTargetKind): readonly CanonFieldName[] {
   if (kind === "character") return CANON_CHARACTER_FIELDS;
   if (kind === "character-relation") return CANON_CHARACTER_RELATION_FIELDS;
-  return CANON_LORE_ENTRY_FIELDS;
+  if (kind === "lore-entry") return CANON_LORE_ENTRY_FIELDS;
+  return CANON_CHARACTER_KNOWLEDGE_FIELDS;
 }
 
 function updateTargetId(target: CanonReviewTarget): string | null {
   if (target.operation !== "update") return null;
   if (target.kind === "character") return target.characterId;
   if (target.kind === "character-relation") return target.relationId;
-  return target.loreEntryId;
+  if (target.kind === "lore-entry") return target.loreEntryId;
+  return target.knowledgeId;
 }
 
 export function canonReviewTargetIdentity(
@@ -164,6 +183,17 @@ function matchLoreEntries(
   ).sort((left, right) => left.id.localeCompare(right.id)));
 }
 
+function matchCharacterKnowledge(
+  proposal: CanonReviewModelProposal,
+  sources: readonly CanonReviewSourceSnapshot[],
+): readonly CanonCharacterKnowledgeSourceSnapshot[] {
+  return Object.freeze(sources.filter(
+    (source): source is CanonCharacterKnowledgeSourceSnapshot =>
+      source.kind === "character-knowledge" &&
+      (source.id === proposal.targetHint || source.fields.statement === proposal.targetHint),
+  ).sort((left, right) => left.id.localeCompare(right.id)));
+}
+
 function matchRelations(
   proposal: CanonReviewModelProposal,
   sources: readonly CanonReviewSourceSnapshot[],
@@ -206,7 +236,8 @@ function matchingSources(
   if (proposal.targetKind === "character-relation") {
     return matchRelations(proposal, sources);
   }
-  return matchLoreEntries(proposal, sources);
+  if (proposal.targetKind === "lore-entry") return matchLoreEntries(proposal, sources);
+  return matchCharacterKnowledge(proposal, sources);
 }
 
 function targetForProposal(
@@ -234,10 +265,18 @@ function targetForProposal(
         expectedRevision: source.revision,
       });
     }
+    if (source.kind === "lore-entry") {
+      return Object.freeze({
+        kind: source.kind,
+        operation: "update",
+        loreEntryId: entityId<"LoreEntry">(source.id),
+        expectedRevision: source.revision,
+      });
+    }
     return Object.freeze({
       kind: source.kind,
       operation: "update",
-      loreEntryId: entityId<"LoreEntry">(source.id),
+      knowledgeId: entityId<"CharacterKnowledge">(source.id),
       expectedRevision: source.revision,
     });
   }
@@ -286,6 +325,23 @@ function assertRelationEndpoints(
   }
 }
 
+function assertKnowledgeCharacter(
+  proposal: CanonReviewModelProposal,
+  sources: readonly CanonReviewSourceSnapshot[],
+): void {
+  if (proposal.targetKind !== "character-knowledge") return;
+  const characterId = proposal.fields.characterId;
+  if (characterId === undefined) return;
+  if (
+    typeof characterId !== "string" ||
+    !sources.some((source) =>
+      source.kind === "character" && source.retiredAt === null && source.id === characterId
+    )
+  ) {
+    throw new Error(`Canon CharacterKnowledge character is unavailable: ${String(characterId)}`);
+  }
+}
+
 function pendingIdentity(change: CanonPendingFieldChange): string {
   return JSON.stringify([
     change.sourceDocumentRevisionId,
@@ -324,6 +380,7 @@ export function planCanonReviewItems(input: Readonly<{
       );
     }
     assertRelationEndpoints(proposal, sources);
+    assertKnowledgeCharacter(proposal, sources);
     const matches = matchingSources(proposal, sources);
     const target = targetForProposal(proposal, matches);
     const targetIdentity = canonReviewTargetIdentity(target, proposal.targetHint);
@@ -397,10 +454,18 @@ function resolvedUpdateTarget(
       expectedRevision: source.revision,
     });
   }
+  if (source.kind === "lore-entry") {
+    return Object.freeze({
+      kind: source.kind,
+      operation: "update",
+      loreEntryId: entityId<"LoreEntry">(source.id),
+      expectedRevision: source.revision,
+    });
+  }
   return Object.freeze({
     kind: source.kind,
     operation: "update",
-    loreEntryId: entityId<"LoreEntry">(source.id),
+    knowledgeId: entityId<"CharacterKnowledge">(source.id),
     expectedRevision: source.revision,
   });
 }

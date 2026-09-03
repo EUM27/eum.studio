@@ -169,5 +169,15 @@ export const CANON_REVIEW_SCHEMA_STATEMENTS = Object.freeze([
   `,
 ]);
 
+const CURRENT_CANON_TARGET_KINDS =
+  "target_kind IN ('character', 'character-relation', 'lore-entry', 'character-knowledge')";
+
+export const CURRENT_CANON_REVIEW_SCHEMA_STATEMENTS = Object.freeze(
+  CANON_REVIEW_SCHEMA_STATEMENTS.map((statement) => statement.replace(
+    "target_kind IN ('character', 'character-relation', 'lore-entry')",
+    CURRENT_CANON_TARGET_KINDS,
+  )),
+);
+
 export const CANON_REVIEW_SCHEMA_SQL =
-  `${CANON_REVIEW_SCHEMA_STATEMENTS.join(";\n")};\n`;
+  `${CURRENT_CANON_REVIEW_SCHEMA_STATEMENTS.join(";\n")};\n`;

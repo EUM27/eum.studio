@@ -2,6 +2,7 @@ import { entityId, type EntityId } from "../../domain/writing";
 import type { AssistantContextRange } from "../assistant/assistant-context-permission";
 import {
   CANON_CHARACTER_FIELDS,
+  CANON_CHARACTER_KNOWLEDGE_FIELDS,
   CANON_CHARACTER_RELATION_FIELDS,
   CANON_LORE_ENTRY_FIELDS,
   CANON_REVIEW_PROMPT_VERSION,
@@ -110,7 +111,8 @@ function allowedFields(targetKind: CanonTargetKind): readonly CanonFieldName[] {
   if (targetKind === "character-relation") {
     return CANON_CHARACTER_RELATION_FIELDS;
   }
-  return CANON_LORE_ENTRY_FIELDS;
+  if (targetKind === "lore-entry") return CANON_LORE_ENTRY_FIELDS;
+  return CANON_CHARACTER_KNOWLEDGE_FIELDS;
 }
 
 function fieldValue(
@@ -118,14 +120,36 @@ function fieldValue(
   field: CanonFieldName,
   label: string,
 ): CanonFieldValue {
-  if (field === "aliases") return stringArray(value, label);
+  if (field === "aliases" || field === "aboutRefKeys") {
+    return stringArray(value, label);
+  }
   if (field === "enabled") {
     if (typeof value !== "boolean") throw new Error(`${label} must be boolean`);
     return value;
   }
   if (typeof value !== "string") throw new Error(`${label} must be a string`);
   if (
-    ["name", "title", "kind", "fromCharacterId", "toCharacterId"].includes(
+    field === "stance" &&
+    !["knows", "believes", "suspects", "denies", "unaware"].includes(value)
+  ) {
+    throw new Error(`${label} is an unsupported CharacterKnowledge stance`);
+  }
+  if (
+    field === "truthStatus" &&
+    !["true", "false", "unknown"].includes(value)
+  ) {
+    throw new Error(`${label} is an unsupported CharacterKnowledge truth status`);
+  }
+  if (
+    [
+      "name",
+      "title",
+      "kind",
+      "fromCharacterId",
+      "toCharacterId",
+      "characterId",
+      "statement",
+    ].includes(
       field,
     ) && value.trim().length === 0
   ) {

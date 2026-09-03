@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   parseManuscriptDocumentProfile,
@@ -177,6 +177,7 @@ function downgradeCharacterStorageToSchemaFiveFixture(
     PRAGMA foreign_keys = OFF;
     PRAGMA legacy_alter_table = ON;
     BEGIN IMMEDIATE;
+    DROP TABLE scene_information_update_batches;
     DROP TABLE narrative_digest_documents;
     DROP TABLE narrative_digests;
     DROP TABLE assistant_context_activities;
@@ -2692,14 +2693,14 @@ describe("local workspace runtime", () => {
       const audit = new DatabaseSync(profiles.databasePath, { readOnly: true });
       try {
         expect(audit.prepare("PRAGMA user_version").get()).toEqual({
-          user_version: 25,
+          user_version: 26,
         });
         expect(
           audit.prepare(`
             SELECT target_schema_version AS "targetSchemaVersion"
             FROM storage_ledger_identity
           `).get(),
-      ).toEqual({ targetSchemaVersion: 25 });
+      ).toEqual({ targetSchemaVersion: 26 });
         expect(audit.prepare(`
           SELECT COUNT(*) AS count
           FROM migration_receipts
@@ -2840,12 +2841,12 @@ describe("local workspace runtime", () => {
       const audit = new DatabaseSync(profiles.databasePath, { readOnly: true });
       try {
         expect(audit.prepare("PRAGMA user_version").get()).toEqual({
-          user_version: 25,
+          user_version: 26,
         });
         expect(audit.prepare(`
           SELECT target_schema_version AS "targetSchemaVersion"
           FROM storage_ledger_identity
-        `).get()).toEqual({ targetSchemaVersion: 25 });
+        `).get()).toEqual({ targetSchemaVersion: 26 });
         expect(audit.prepare(`
           SELECT COUNT(*) AS count
           FROM migration_receipts
@@ -9884,12 +9885,12 @@ describe("local workspace runtime", () => {
       const audit = new DatabaseSync(profiles.databasePath, { readOnly: true });
       try {
         expect(audit.prepare("PRAGMA user_version").get()).toEqual({
-          user_version: 25,
+          user_version: 26,
         });
         expect(audit.prepare(`
           SELECT target_schema_version AS "targetSchemaVersion"
           FROM storage_ledger_identity
-        `).get()).toEqual({ targetSchemaVersion: 25 });
+        `).get()).toEqual({ targetSchemaVersion: 26 });
         expect(audit.prepare(`
           SELECT COUNT(*) AS count
           FROM migration_receipts
@@ -14069,6 +14070,7 @@ describe("local workspace runtime", () => {
         schemaVersion: 1 as const,
         digestRequestId: entityId<"NarrativeDigestRequest">(randomUUID()),
         canonRequestId: entityId<"CanonReviewRequest">(randomUUID()),
+        continuityRequestId: entityId<"ContinuityReviewRequest">(randomUUID()),
         workId: created.workId,
         conversationId: entityId<"AssistantConversation">(randomUUID()),
         sceneId: finalized.sceneId,
@@ -14120,6 +14122,319 @@ describe("local workspace runtime", () => {
       } finally {
         audit.close();
       }
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("records one integrated Scene information update as review-only candidates", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-integrated-scene-information-"),
+    );
+    let characterId: EntityId<"Character"> | null = null;
+    let knowledgeId: EntityId<"CharacterKnowledge"> | null = null;
+    const narrativeExecute = vi.fn(async () => {
+      throw new Error("separate NarrativeDigest connector must not run");
+    });
+    const canonExecute = vi.fn(async () => {
+      throw new Error("separate Canon connector must not run");
+    });
+    const continuityExecute = vi.fn(async () => {
+      throw new Error("separate Continuity connector must not run");
+    });
+    const integratedExecute = vi.fn(async (input) => {
+      expect(input.canon.requestedTargetKinds).toEqual([
+        "character",
+        "character-relation",
+        "lore-entry",
+        "character-knowledge",
+      ]);
+      return {
+        providerId: "integrated-provider",
+        modelId: "integrated-model",
+        promptVersion: "eum-scene-information-update-v1" as const,
+        digest: { text: "윤서는 북문이 열린다는 사실을 확인했다." },
+        canon: {
+          proposals: [{
+            targetKind: "character-knowledge" as const,
+            targetHint: "북문은 열릴지도 모른다.",
+            operationHint: "update" as const,
+            assertionBasis: "explicit-evidence" as const,
+            reason: "인물이 직접 확인했다.",
+            fields: {
+              statement: "북문은 열린다.",
+              stance: "knows",
+              truthStatus: "true",
+            },
+            evidence: [{ paragraphId: "p1", quote: "직접 확인했다" }],
+          }],
+        },
+        continuity: {
+          proposals: [{
+            assertionBasis: "explicit-evidence" as const,
+            kind: "open-question" as const,
+            title: "북문을 연 사람",
+            note: "행위자는 아직 드러나지 않았다.",
+            subjectRefs: [{ kind: "character" as const, id: characterId! }],
+            reason: "행위자가 밝혀지지 않았다.",
+            evidence: [{ paragraphId: "p1", quote: "북문" }],
+          }],
+        },
+        reviewedEntities: [{
+          entity: { kind: "character-knowledge" as const, id: knowledgeId! },
+          outcome: "changed" as const,
+          reason: "추측이 확인된 지식으로 바뀌었다.",
+        }],
+      };
+    });
+    const options: LocalWorkspaceRuntimeOptions = {
+      ...createOptions(rootDirectoryPath),
+      narrativeDigest: {
+        destinationId: "integrated-provider",
+        contextTokenBudget: 10_000,
+        isConnected: () => true,
+        execute: narrativeExecute,
+      },
+      canonReview: {
+        destinationId: "integrated-provider",
+        contextTokenBudget: 10_000,
+        isConnected: () => true,
+        execute: canonExecute,
+      },
+      continuityReview: {
+        destinationId: "integrated-provider",
+        contextTokenBudget: 10_000,
+        isConnected: () => true,
+        execute: continuityExecute,
+      },
+      sceneInformationUpdate: {
+        destinationId: "integrated-provider",
+        isConnected: () => true,
+        execute: integratedExecute,
+      },
+    };
+    let runtime = await openLocalWorkspaceRuntime(options);
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "통합 정보 갱신",
+        firstDocumentTitle: "1화",
+      });
+      const character = await runtime.createCharacter({
+        schemaVersion: 1,
+        workId: created.workId,
+        name: "윤서",
+        aliases: [],
+        role: "기록자",
+        summary: "북문을 조사한다.",
+        appearance: "",
+        personality: "신중함",
+        speech: "",
+        goal: "북문의 비밀을 밝힌다.",
+        conflict: "",
+        note: "",
+      });
+      characterId = character.characterId;
+      const priorKnowledge = await runtime.createCharacterKnowledge({
+        schemaVersion: 1,
+        workId: created.workId,
+        characterId: character.characterId,
+        statement: "북문은 열릴지도 모른다.",
+        stance: "suspects",
+        truthStatus: "unknown",
+        aboutRefs: [],
+        evidenceRange: null,
+      });
+      knowledgeId = priorKnowledge.knowledgeId;
+      const manuscript = "윤서는 북문이 열린다는 사실을 직접 확인했다.";
+      const saved = await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: created.workId,
+        documentId: created.documentId,
+        baseRevisionId: created.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: manuscript.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: manuscript }],
+      }));
+      if (!("revisionId" in saved)) throw new Error("Expected durable Scene source");
+      const scene = (await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).scenes[0];
+      if (scene === undefined || scene.range === null) {
+        throw new Error("Expected resolved integrated Scene");
+      }
+      const finalized = await runtime.finalizeSceneCanonCheck({
+        schemaVersion: 1,
+        workId: created.workId,
+        sceneKey: scene.sceneKey,
+        documentId: scene.documentId,
+        documentRevisionId: scene.documentRevisionId,
+        from: scene.range.start,
+        to: scene.range.end,
+      });
+      for (const capability of [
+        "narrative.digest",
+        "canon.review",
+        "continuity.review",
+      ] as const) {
+        await runtime.grantAssistantContextPermission({
+          schemaVersion: 1,
+          workId: created.workId,
+          conversationId: null,
+          capability,
+          destinationId: "integrated-provider",
+          localScope: "scene",
+          externalScope: "scene",
+          duration: "work",
+        });
+      }
+      await runtime.saveWorkSceneAnalysisSettings({
+        schemaVersion: 1,
+        workId: created.workId,
+        expectedRevision: 0,
+        settings: { enabled: true },
+      });
+      const result = await runtime.runAutomaticSceneAnalysis({
+        schemaVersion: 1,
+        digestRequestId: entityId<"NarrativeDigestRequest">(randomUUID()),
+        canonRequestId: entityId<"CanonReviewRequest">(randomUUID()),
+        continuityRequestId: entityId<"ContinuityReviewRequest">(randomUUID()),
+        workId: created.workId,
+        conversationId: entityId<"AssistantConversation">(randomUUID()),
+        sceneId: finalized.sceneId,
+        sourceRange: finalized.sourceRange,
+        trigger: "scene-transition",
+      });
+
+      expect(result).toMatchObject({
+        status: "completed",
+        run: {
+          loreStatus: "candidate",
+          informationUpdate: {
+            status: "complete",
+            promptVersion: "eum-scene-information-update-v1",
+            reviewedEntities: [{ outcome: "changed" }],
+          },
+        },
+      });
+      expect(integratedExecute).toHaveBeenCalledOnce();
+      expect(narrativeExecute).not.toHaveBeenCalled();
+      expect(canonExecute).not.toHaveBeenCalled();
+      expect(continuityExecute).not.toHaveBeenCalled();
+      const immutableAudit = new DatabaseSync(
+        path.join(rootDirectoryPath, "workspace.sqlite3"),
+      );
+      try {
+        expect(() => immutableAudit.prepare(`
+          UPDATE scene_information_update_batches SET revision = revision + 1
+        `).run()).toThrow(/immutable/u);
+        expect(() => immutableAudit.prepare(`
+          DELETE FROM scene_information_update_batches
+        `).run()).toThrow(/immutable/u);
+      } finally {
+        immutableAudit.close();
+      }
+      const canonCandidates = await runtime.listCanonReviewCandidates({
+        schemaVersion: 1,
+        workId: created.workId,
+        status: "all",
+      });
+      expect(canonCandidates.candidates[0]?.items[0]?.target.kind)
+        .toBe("character-knowledge");
+      const continuityCandidates = await runtime.listContinuityReviewCandidates({
+        schemaVersion: 1,
+        workId: created.workId,
+        status: "all",
+      });
+      expect(continuityCandidates.candidates[0]?.items[0]?.draft.title)
+        .toBe("북문을 연 사람");
+      await expect(runtime.listCharacterKnowledge({
+        schemaVersion: 1,
+        workId: created.workId,
+        characterId: character.characterId,
+        status: "all",
+      })).resolves.toMatchObject({
+        entries: [{
+          knowledgeId: priorKnowledge.knowledgeId,
+          statement: "북문은 열릴지도 모른다.",
+          status: "active",
+        }],
+      });
+      await expect(runtime.listContinuityThreads({
+        schemaVersion: 1,
+        workId: created.workId,
+        status: "all",
+      })).resolves.toMatchObject({ threads: [] });
+
+      await expect(runtime.runAutomaticSceneAnalysis({
+        schemaVersion: 1,
+        digestRequestId: entityId<"NarrativeDigestRequest">(randomUUID()),
+        canonRequestId: entityId<"CanonReviewRequest">(randomUUID()),
+        continuityRequestId: entityId<"ContinuityReviewRequest">(randomUUID()),
+        workId: created.workId,
+        conversationId: entityId<"AssistantConversation">(randomUUID()),
+        sceneId: finalized.sceneId,
+        sourceRange: finalized.sourceRange,
+        trigger: "scene-transition",
+      })).resolves.toMatchObject({ status: "unchanged" });
+      expect(integratedExecute).toHaveBeenCalledOnce();
+
+      const candidate = canonCandidates.candidates[0]!;
+      const item = candidate.items[0]!;
+      const decision = await runtime.decideCanonReviewItem({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: candidate.candidateId,
+        expectedCandidateRevision: candidate.revision,
+        itemId: item.itemId,
+        decision: { kind: "approve" },
+      });
+      expect(decision).toMatchObject({ status: "applied" });
+      const knowledgeAfterApproval = await runtime.listCharacterKnowledge({
+        schemaVersion: 1,
+        workId: created.workId,
+        characterId: character.characterId,
+        status: "all",
+      });
+      expect(knowledgeAfterApproval.entries).toHaveLength(2);
+      const activeKnowledge = knowledgeAfterApproval.entries.find(
+        (entry) => entry.status === "active",
+      );
+      const supersededKnowledge = knowledgeAfterApproval.entries.find(
+        (entry) => entry.status === "superseded",
+      );
+      expect(activeKnowledge).toMatchObject({
+        statement: "북문은 열린다.",
+        stance: "knows",
+        truthStatus: "true",
+        supersedesKnowledgeId: priorKnowledge.knowledgeId,
+      });
+      expect(supersededKnowledge).toMatchObject({
+        knowledgeId: priorKnowledge.knowledgeId,
+        statement: "북문은 열릴지도 모른다.",
+        supersededByKnowledgeId: activeKnowledge?.knowledgeId,
+      });
+
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      await expect(runtime.listSceneAnalysisRuns({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).resolves.toMatchObject({
+        runs: [{ informationUpdate: { status: "complete" } }],
+      });
+      await expect(runtime.listCharacterKnowledge({
+        schemaVersion: 1,
+        workId: created.workId,
+        characterId: character.characterId,
+        status: "current",
+      })).resolves.toMatchObject({ entries: [{ statement: "북문은 열린다." }] });
     } finally {
       runtime.close();
       await rm(rootDirectoryPath, { recursive: true, force: true });

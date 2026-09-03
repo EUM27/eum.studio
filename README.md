@@ -4,19 +4,19 @@
 
 ## 현재 상태
 
-`자동 장면 분석 재시도·창 복구 standalone 설치 완료`
+`통합 작품 정보 변화 묶음 — 장면 1회 분석·후보 승인·재시작 복원 검증 완료`
 
-장면 자동 분석을 schema 24의 단계 원장으로 보강했다. 같은 장면 요약이 이미 저장됐더라도 별빛 검토가 대기·연결 필요·권한 필요·원본 변경·실패 상태면 요약을 다시 생성하지 않고 별빛 단계만 재시도한다. 완료된 별빛 Candidate ID 또는 무변경 결과, 시도 횟수와 실패 사유를 source fingerprint별로 보존하며, 자동 경로는 더 이상 수동 Canon 검토 UI controller의 pending 상태를 공유하지 않는다. 편집기 아래에는 현재 자동 분석 상태와 실패 후 `다시 시도`를 표시하고 이야기 흐름 이력에는 장면 전환·분할·회차 전환 및 별빛 단계 결과를 연결해 보여준다.
+자동 장면 분석은 stable `sceneId`, exact `DocumentRevision`·UTF-16 범위·본문 hash, 사용한 정본 revision을 하나의 source manifest로 고정한 뒤 제공자 요청 한 번으로 이야기 요약과 작품 정보·연속성 제안을 함께 받는다. 작품 정보 제안 범위는 Character·CharacterRelation·LoreEntry(별빛)·CharacterKnowledge이며, 연속성은 기존 ContinuityThread 검토 계약을 사용한다. 요약만 파생 기록으로 저장되고 나머지는 사용자가 편집·부분 승인·기각할 수 있는 Candidate이므로 원고나 정규 원본을 자동 수정하지 않는다.
 
-standalone 데스크톱은 startup 예외를 회수하고 단일 인스턴스로 동작한다. main window renderer가 종료되면 같은 BrowserWindow를 새 renderer process로 다시 불러오며, 두 번째 실행은 새 DB writer를 만들지 않고 기존 창을 활성화한다. `ready-to-show` 시점을 놓쳐도 renderer load 완료 뒤 창을 표시하는 fallback을 두었고, production Electron과 별도 standalone 패키지에서 renderer process kill→새 PID·UI 복구, 두 번째 실행 exit 0, 정상 닫기 뒤 process 0건을 검증했다.
+schema 26의 `scene_information_update_batches`는 source fingerprint, 현재 장면의 이전 packet hash, 정규화된 제공자 결과, 검토한 entity별 `changed | unchanged | insufficient-evidence`, 생성된 정본·연속성 Candidate ID를 불변으로 보존한다. 같은 source fingerprint의 완료 batch는 제공자에게 다시 보내지 않으며 원고 revision이나 정본 manifest가 바뀌면 별도 batch로 이어진다. 제공자가 입력으로 받지 않은 entity ID를 검토 결과에 넣으면 저장 전에 거부한다.
 
-검증된 새 패키지를 `out/eum-studio-win-x64`에 원자 교체했고 OneDrive 바탕화면 바로가기는 이 기본 경로를 연다. 실제 사용자 DB는 schema 24 migration receipt·작품 4개·회차 53개·FK 위반 0·quick check `ok`를 확인했다. 교체 전 DB와 구버전 package는 각각 `workspace-v1/codex-backups`와 `out/eum-studio-win-x64-previous-*`에 복구용으로 보존했다. 기존 process 0에서 바로가기를 한 번만 실행해 `이음 스튜디오` 창이 표시되는지 확인했고 정상 창 닫기 1초 뒤 package process 0건을 재검증했다.
+기존 schema 25 원장은 논리 checksum 검증을 포함한 25→26 migration으로 Candidate·결정 receipt를 보존하면서 CharacterKnowledge 대상을 추가한다. 신규 작업공간도 같은 26 구조로 생성된다. CharacterKnowledge 변경 승인은 기존 지식을 덮어쓰지 않고 새 successor를 만든 뒤 이전 지식을 superseded로 전환하며, exact 원문 Anchor·evidence·history·결정 receipt를 같은 승인 transaction에 기록한다.
 
-작품별 `장면 전환·분할·회차 전환 시 분석 요약과 별빛 후보 저장` 스위치를 추가했다. 기본값은 OFF이며, 사용자가 켜면서 작품 범위의 장면 읽기·전송 권한을 명시적으로 부여하고 실제 GPT 연결이 유지될 때만 실행한다. 나가는 장면 또는 분할된 각 장면의 stable `sceneId`, exact `DocumentRevision`·UTF-16 범위·본문 hash와 사용한 별빛 revision을 불변 이야기 요약에 봉인한다. 같은 source fingerprint는 다시 전송하지 않으며, 별빛 정보 변화는 `LoreEntry` 별빛을 자동 수정하지 않고 기존 필드별 Candidate 검토함에만 저장한다. schema 23 migration은 기존 schema 22 이야기 요약과 source manifest를 그대로 보존하면서 장면 source 원장과 작품별 스위치만 추가한다.
+작품별 `장면 전환·분할·회차 전환 시 요약과 작품 정보·연속성 후보 생성` 스위치는 기본 OFF다. 사용자가 켤 때 `narrative.digest`, `canon.review`, `continuity.review`의 작품 범위 장면 읽기·외부 전송 권한을 각각 명시적으로 부여하며, 기능 OFF 또는 GPT 연결 끊김에서는 통합 요청을 실행하지 않는다. 기존 수동 이야기 흐름·정본 검토·연속성 검토·인물 지식 관리 경로는 그대로 유지된다.
 
-기능 OFF·연결 끊김의 무실행 계약을 집중 검증했고, production Electron에서는 기능 ON 뒤 실제 장면 분할, 장면 요약 2개, 별빛 Candidate 1개, connector 요청 4개, SQLite 재조회와 FK 위반 0건을 검증했다. 기존 작품 별빛 Gate 0–8, 수동 장면 별빛 점검, 불변 이야기 흐름과 재실행 이력도 같은 최종 bundle에서 유지된다.
+focused 계약·runtime·migration·bridge·renderer 검증과 전체 lint·TypeScript·Vitest·production build·architecture 경계를 통과했다. 별도 임시 작업공간의 production Electron에서는 장면 분할 후 장면 2개에 통합 요청 2회만 실행되고 별도 요약·정본·연속성 요청은 0회임을 확인했다. 통합 batch 2개, 정본 Candidate 1개, 연속성 Candidate 1개가 저장됐고 승인 전 인물 지식 0개, 한 항목 승인 후 1개, 완전 종료·재실행 뒤 batch와 승인 지식 복원, foreign key 위반 0건을 확인했다.
 
-최종 standalone Windows 패키지는 `out/eum-studio-win-x64`에 원자 교체했으며 개발 서버 없이 `file://` renderer, packaged main, typed preload와 새 빈 작업실 bootstrap을 검증했다.
+이번 변경은 사용 중일 수 있는 기본 standalone 설치본과 실사용 DB를 교체하거나 쓰지 않았다. 격리 후보 `out/eum-studio-win-x64-scene-information-candidate`는 788 files·376,687,134 bytes이며 `file://` renderer, packaged main, typed bridge, 빈 작업공간 bootstrap, renderer 강제 종료 복구, 두 번째 인스턴스 exit 0을 통과했다.
 
 사용자가 지정한 `eum-studio-canon-continuity-independent-design.md`의 exact SHA-256을 승인 기능 설계 manifest에 등록했다. schema 16의 stable `sceneId` 선행 조건과 schema 17 Scene trash를 보존한 채 schema 18 별빛 원장을 추가했다. exact 원고 selection에서 Character·CharacterRelation·LoreEntry의 필드별 변경 Candidate를 만들고, 사용자가 필드를 편집·부분 승인·거절한 뒤에만 source/target revision을 재검증하여 별빛·Anchor·evidence·decision receipt를 한 SQLite transaction으로 갱신한다. production Electron 재실행, 승인 transaction 중 실제 process kill, stale source/target과 성능 fixture를 각각 독립 명령으로 재현할 수 있다.
 

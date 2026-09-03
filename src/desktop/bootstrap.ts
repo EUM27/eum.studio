@@ -1738,6 +1738,11 @@ async function registerApplicationHandlers(): Promise<void> {
           isConnected: () => chatGptOAuthStore.getStatus().connected,
           execute: (input) => chatGptCodexClient.generateNarrativeDigest(input),
         }),
+        sceneInformationUpdate: Object.freeze({
+          destinationId: chatGptOAuthProfile.providerId,
+          isConnected: () => chatGptOAuthStore.getStatus().connected,
+          execute: (input) => chatGptCodexClient.updateSceneInformation(input),
+        }),
         characterGeneration: Object.freeze({
           destinationId: chatGptOAuthProfile.providerId,
           isConnected: () => chatGptOAuthStore.getStatus().connected,

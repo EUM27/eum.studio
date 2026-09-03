@@ -99,7 +99,7 @@ describe("AppSettingsDialog", () => {
     expect(markup).toContain("정밀 선곡");
     expect(markup).toContain("처음부터 재생");
     expect(markup).toContain("매번 묻기");
-    expect(markup).toContain("장면 전환·분할·회차 전환 시 분석 요약과 별빛 후보 저장");
+    expect(markup).toContain("장면 전환·분할·회차 전환 시 요약과 작품 정보·연속성 후보 생성");
     expect(markup).toContain("후보 검토함에서 승인하기 전까지 별빛에 적용하지 않습니다");
     expect(markup).not.toContain("백업");
   });
