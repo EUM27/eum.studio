@@ -32,6 +32,41 @@ import { createInstalledEditorDocumentIdentity } from "./WorkspaceSessionStore";
 import type { useWorkspaceLayoutController } from "../layout/useWorkspaceLayoutController";
 import type { useWorkspaceSession } from "./useWorkspaceSession";
 
+export function replaceCatalogDocumentRevision(
+  catalog: WorkspaceCatalogProjection,
+  receipt: Readonly<{
+    workId: EntityId<"Work">;
+    documentId: EntityId<"Document">;
+    revisionId: EntityId<"DocumentRevision">;
+  }>,
+): WorkspaceCatalogProjection {
+  let matched = false;
+  const works = catalog.works.map((work) => {
+    if (work.workId !== receipt.workId) return work;
+    const documents = work.documents.map((document) => {
+      if (document.documentId !== receipt.documentId) return document;
+      matched = true;
+      return Object.freeze({
+        ...document,
+        currentRevisionId: receipt.revisionId,
+      });
+    });
+    return Object.freeze({
+      ...work,
+      documents: Object.freeze(documents),
+    });
+  });
+  if (!matched) {
+    throw new Error(
+      `Durable receipt is outside the workspace catalog: ${receipt.workId}/${receipt.documentId}`,
+    );
+  }
+  return Object.freeze({
+    ...catalog,
+    works: Object.freeze(works),
+  });
+}
+
 export function useWorkspaceRuntimeProjectionController(input: Readonly<{
   captureResumeAndLoadCatalog: ReturnType<
     typeof useResumeCheckpointController
@@ -173,11 +208,23 @@ export function useWorkspaceRuntimeProjectionController(input: Readonly<{
     const createDurableQueueBatchId = useCallback(() =>
       entityId<"ChangeBatch">(crypto.randomUUID()), []);
     const readDurableQueueNow = useCallback(() => new Date().toISOString(), []);
-    const installDurableQueueCatalog = useCallback((
-      catalog: WorkspaceCatalogProjection,
+    const installDurableQueueDocumentRevision = useCallback((
+      receipt: Readonly<{
+        workId: EntityId<"Work">;
+        documentId: EntityId<"Document">;
+        revisionId: EntityId<"DocumentRevision">;
+      }>,
     ) => {
       setRuntime((current) =>
-        current.status === "ready" ? { ...current, catalog } : current
+        current.status === "ready"
+          ? {
+              ...current,
+              catalog: replaceCatalogDocumentRevision(
+                current.catalog,
+                receipt,
+              ),
+            }
+          : current
       );
     }, [setRuntime]);
     const refreshScenesAfterDocumentSave = useCallback((
@@ -274,11 +321,10 @@ export function useWorkspaceRuntimeProjectionController(input: Readonly<{
           createBatchId: createDurableQueueBatchId,
           documentProfile,
           editorClient: input.client.editor,
-          installCatalog: installDurableQueueCatalog,
+          installDocumentRevision: installDurableQueueDocumentRevision,
           now: readDurableQueueNow,
           persistenceProfile,
           scheduler: durableQueueScheduler,
-          workspaceClient: input.client.workspace,
         });
         const catalogActiveDocument =
           catalog.activeDocumentId === null
@@ -322,7 +368,7 @@ export function useWorkspaceRuntimeProjectionController(input: Readonly<{
           activeDocumentId,
         });
       },
-      [createDurableQueueBatchId, durableQueueScheduler, input.client.editor, input.client.workspace, installDurableQueueCatalog, installDurableSaveQueue, readDurableQueueNow, refreshScenesAfterDocumentSave, setRuntime],
+      [createDurableQueueBatchId, durableQueueScheduler, input.client.editor, installDurableQueueDocumentRevision, installDurableSaveQueue, readDurableQueueNow, refreshScenesAfterDocumentSave, setRuntime],
     );
   
     useEffect(() => {

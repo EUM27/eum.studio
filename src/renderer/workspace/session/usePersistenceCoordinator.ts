@@ -6,7 +6,6 @@ import type { WorkContinuousReadingProgressProjection } from "../../../applicati
 import type { WorkManuscriptLayoutSettingsProjection } from "../../../application/editor/work-manuscript-layout-settings";
 import type { ContinuousReadingLocation } from "../../../application/editor/continuous-reading-progress";
 import type { ManuscriptPersistenceProfile } from "../../../application/persistence/manuscript-persistence-profile";
-import type { WorkspaceCatalogProjection } from "../../../application/workspace/workspace-contract";
 import type { EntityId } from "../../../domain/writing";
 import {
   ManuscriptDurableSaveQueue,
@@ -45,11 +44,14 @@ export function usePersistenceCoordinator() {
       StudioBridge["editor"],
       "saveDocumentChange" | "saveFormatting"
     >;
-    installCatalog: (catalog: WorkspaceCatalogProjection) => void;
+    installDocumentRevision: (receipt: Readonly<{
+      workId: EntityId<"Work">;
+      documentId: EntityId<"Document">;
+      revisionId: EntityId<"DocumentRevision">;
+    }>) => void;
     now: () => string;
     persistenceProfile: ManuscriptPersistenceProfile | null;
     scheduler: SaveQueueScheduler;
-    workspaceClient: Pick<StudioBridge["workspace"], "getCatalog">;
   }>) => {
     if (input.persistenceProfile === null) {
       durableSaveQueueRef.current = null;
@@ -104,15 +106,15 @@ export function usePersistenceCoordinator() {
           batch,
           editorStateJson,
         });
-        const catalog = await input.workspaceClient.getCatalog();
-        input.installCatalog(catalog);
+        if ("revisionId" in receipt) {
+          input.installDocumentRevision(receipt);
+        }
         input.afterDocumentChangeSaved(batch.workId);
         return receipt;
       },
       saveFormatting: async (command) => {
         const receipt = await input.editorClient.saveFormatting(command);
-        const catalog = await input.workspaceClient.getCatalog();
-        input.installCatalog(catalog);
+        input.installDocumentRevision(receipt);
         return receipt;
       },
       createBatchId: input.createBatchId,

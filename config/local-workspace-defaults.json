@@ -6,6 +6,11 @@
     "contextOffsetLength": 64
   },
   "anchorEvidenceChecksumAlgorithm": "sha256",
+  "manuscriptBatchingPolicy": {
+    "schemaVersion": 1,
+    "maxTransactionsPerBatch": 32,
+    "maxDelayMs": 450
+  },
   "activityPolicy": {
     "idleTimeout": 0,
     "navigationGrace": 0,

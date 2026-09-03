@@ -1584,6 +1584,19 @@ async function registerApplicationHandlers(): Promise<void> {
         `Assistant connector manifest is missing Canon/Continuity/NarrativeDigest context budget: ${chatGptOAuthProfile.providerId}`,
       );
     }
+    const localWorkspaceDefaults = parseLocalWorkspaceDefaults(
+      JSON.parse(
+        readFileSync(
+          process.env.EUM_STUDIO_LOCAL_WORKSPACE_DEFAULTS_PATH ??
+            path.join(
+              app.getAppPath(),
+              "config",
+              "local-workspace-defaults.json",
+            ),
+          "utf8",
+        ),
+      ),
+    );
     const localRuntime: LocalWorkspaceRuntime =
       await openLocalWorkspaceRuntime({
         rootDirectoryPath:
@@ -1593,11 +1606,7 @@ async function registerApplicationHandlers(): Promise<void> {
         locale: app.getLocale(),
         timezone:
           Intl.DateTimeFormat().resolvedOptions().timeZone,
-        batchingPolicy: parseManuscriptBatchingPolicy({
-          schemaVersion: 1,
-          maxTransactionsPerBatch: 1,
-          maxDelayMs: 0,
-        }),
+        batchingPolicy: localWorkspaceDefaults.manuscriptBatchingPolicy,
         formattingProfile,
         appSettingsProfile,
         musicSettingsProfile,
@@ -1778,19 +1787,7 @@ async function registerApplicationHandlers(): Promise<void> {
           });
         },
         emptyDocumentProfile: ephemeralDocumentProfile,
-        defaults: parseLocalWorkspaceDefaults(
-          JSON.parse(
-            readFileSync(
-              process.env.EUM_STUDIO_LOCAL_WORKSPACE_DEFAULTS_PATH ??
-                path.join(
-                  app.getAppPath(),
-                  "config",
-                  "local-workspace-defaults.json",
-                ),
-              "utf8",
-            ),
-          ),
-        ),
+        defaults: localWorkspaceDefaults,
         backupProfile: parseLocalWorkspaceBackupProfile(
           JSON.parse(
             readFileSync(
