@@ -33,6 +33,12 @@ import type { useSceneWorkspaceState } from "../../features/structure/useSceneWo
 import type { useWorkspaceLayoutController } from "../layout/useWorkspaceLayoutController";
 import type { usePersistenceCoordinator } from "../session/usePersistenceCoordinator";
 
+export function shouldPublishWorkspaceCursorPosition(
+  transaction: ManuscriptTransaction,
+): boolean {
+  return transaction.changes.length === 0;
+}
+
 export type SubmitCanonReviewSelectionResult = Readonly<{
   status:
     | "submitted"
@@ -186,9 +192,6 @@ export function useWorkspaceManuscriptActionsController(input: Readonly<{
     captureWorkspaceSelection: captureCharacterWorkspaceSelectionAction,
   } = input.controllers.characters;
   const {
-    recordForwardWritingStatistics,
-  } = input.controllers.editorTools;
-  const {
     captureFragment: captureFragmentAction,
     insertFragmentAtCursor: insertFragmentAtCursorAction,
     moveSelectionToFragment: moveSelectionToFragmentAction,
@@ -199,6 +202,9 @@ export function useWorkspaceManuscriptActionsController(input: Readonly<{
     createLoreEntry: createLoreEntryAction,
   } = input.controllers.lore;
   const {
+    hoveredLoreCue,
+    loreCueActionError,
+    pinnedLoreCue,
     resetLoreCue,
   } = input.controllers.loreCueState;
   const {
@@ -206,6 +212,8 @@ export function useWorkspaceManuscriptActionsController(input: Readonly<{
   } = input.controllers.manuscriptSearch;
   const {
     clearSceneContextForDocumentEdit,
+    sceneBoundaryNavigationPreviewTarget,
+    sceneExtractionSelection,
   } = input.controllers.sceneState;
   const {
     updateActiveManuscriptPosition,
@@ -566,7 +574,10 @@ export function useWorkspaceManuscriptActionsController(input: Readonly<{
         const selection = transaction.selection.ranges[
         transaction.selection.mainIndex
         ];
-        if (selection !== undefined) {
+        if (
+          selection !== undefined &&
+          shouldPublishWorkspaceCursorPosition(transaction)
+        ) {
           updateActiveManuscriptPosition(
             document.documentId,
             selection.head,
@@ -581,18 +592,30 @@ export function useWorkspaceManuscriptActionsController(input: Readonly<{
           return;
         }
         resumePausedPomodoroOnInput();
-        recordForwardWritingStatistics(document, statistics.characterCount);
-        resetLoreCue();
-        clearSceneContextForDocumentEdit(document);
+        if (
+          hoveredLoreCue !== null ||
+          pinnedLoreCue !== null ||
+          loreCueActionError !== null
+        ) {
+          resetLoreCue();
+        }
+        if (
+          sceneExtractionSelection?.documentId === document.documentId ||
+          (sceneBoundaryNavigationPreviewTarget?.workId === document.workId &&
+            sceneBoundaryNavigationPreviewTarget.documentId ===
+              document.documentId)
+        ) {
+          clearSceneContextForDocumentEdit(document);
+        }
+        handleDocumentEdited(document);
         const pending = durableSaveQueueRef.current?.record(
           document.documentId,
           transaction,
           { composing, editorStateJson },
         );
         void pending?.catch(() => undefined);
-        handleDocumentEdited(document);
       },
-      [clearSceneContextForDocumentEdit, durableSaveQueueRef, handleDocumentEdited, invalidateSearchResult, recordForwardWritingStatistics, resetLoreCue, resumePausedPomodoroOnInput, telemetryStore, updateActiveManuscriptPosition],
+      [clearSceneContextForDocumentEdit, durableSaveQueueRef, handleDocumentEdited, hoveredLoreCue, invalidateSearchResult, loreCueActionError, pinnedLoreCue, resetLoreCue, resumePausedPomodoroOnInput, sceneBoundaryNavigationPreviewTarget, sceneExtractionSelection, telemetryStore, updateActiveManuscriptPosition],
     );
   return {
     captureCharacterWorkspaceSelection,

@@ -20,6 +20,10 @@ import type { useSceneWorkspaceController } from "../../features/structure/useSc
 import type { useLoreCueController } from "../../features/lore/useLoreCueController";
 import type { useReadingLayoutController } from "../session/useReadingLayoutController";
 import type { useAutomaticSceneAnalysisController } from "../../features/analysis/useAutomaticSceneAnalysisController";
+import {
+  MANUSCRIPT_SAVE_STATE_LABELS,
+  type ManuscriptSaveStateStore,
+} from "../../persistence/manuscript-save-state-store";
 import type { WorkspaceRuntimeState } from "../session/workspace-session-state";
 
 type ReadyWorkspaceRuntime = Extract<
@@ -28,19 +32,62 @@ type ReadyWorkspaceRuntime = Extract<
 >;
 
 function ManuscriptFocusToolbarWithTelemetry(
-  input: Omit<ManuscriptFocusToolbarProps, "currentDocumentCharacterCount"> & {
+  input: Omit<
+    ManuscriptFocusToolbarProps,
+    "currentDocumentCharacterCount" | "modeStatus" | "saveStatus"
+  > & {
+    readonly activeDocumentId: ManuscriptDocumentSource["documentId"];
+    readonly forwardWriting: ReturnType<
+      typeof useEditorToolsController
+    >["activeForwardWriting"];
+    readonly recoveryStatus: ReadyWorkspaceRuntime["startupRecovery"]["status"];
+    readonly saveStateStore: ManuscriptSaveStateStore;
     readonly telemetryStore: ManuscriptTelemetryStore;
   },
 ) {
-  const { telemetryStore, ...toolbar } = input;
+  const {
+    activeDocumentId,
+    forwardWriting,
+    recoveryStatus,
+    saveStateStore,
+    telemetryStore,
+    ...toolbar
+  } = input;
   const statistics = useSyncExternalStore(
     telemetryStore.subscribeStatistics,
     telemetryStore.getStatisticsSnapshot,
   );
+  const saveStates = useSyncExternalStore(
+    saveStateStore.subscribe,
+    saveStateStore.getSnapshot,
+  );
+  const saveState = saveStates[activeDocumentId] ?? null;
+  const saveStatus = recoveryStatus === "recovery-pending"
+    ? "복구 적용 대기"
+    : recoveryStatus === "read-only-error"
+      ? "복구 확인 필요"
+      : saveState === null
+        ? "저장 경로 없음"
+        : MANUSCRIPT_SAVE_STATE_LABELS[saveState];
+  const writtenCharacters = forwardWriting === null
+    ? null
+    : Math.max(
+        0,
+        statistics.characterCount - forwardWriting.baselineCharacterCount,
+      );
+  const modeStatus = forwardWriting === null || writtenCharacters === null
+    ? null
+    : writtenCharacters >= forwardWriting.goalCharacters
+      ? `목표 달성 · ${writtenCharacters.toLocaleString()}자`
+      : `목표까지 ${(
+          forwardWriting.goalCharacters - writtenCharacters
+        ).toLocaleString()}자`;
   return (
     <ManuscriptFocusToolbar
       {...toolbar}
       currentDocumentCharacterCount={statistics.characterCount}
+      modeStatus={modeStatus}
+      saveStatus={saveStatus}
     />
   );
 }
@@ -71,9 +118,7 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
   editorRef: RefObject<ManuscriptEditorHandle | null>;
   automaticSceneAnalysis: ReturnType<typeof useAutomaticSceneAnalysisController>;
   manuscriptFocusStatus: Readonly<{
-    forwardWriting: string | null;
     pomodoro: string | null;
-    save: string;
     timer: string | null;
   }>;
   loreEntries: ComponentProps<typeof ManuscriptEditor>["loreEntries"];
@@ -87,6 +132,7 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
   }>;
   openDocuments: readonly ManuscriptDocumentSource[];
   runtime: ReadyWorkspaceRuntime | null;
+  saveStateStore: ManuscriptSaveStateStore;
   sceneProjection: SceneProjectionList | null;
   telemetryStore: ManuscriptTelemetryStore;
   titleEditTarget: string | null;
@@ -109,6 +155,7 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
     navigation,
     openDocuments,
     runtime,
+    saveStateStore,
     sceneProjection,
     telemetryStore,
     titleEditTarget,
@@ -164,6 +211,8 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
     >
       {manuscriptFocus.manuscriptFocusActive && runtime !== null && activeDocument !== null && (
         <ManuscriptFocusToolbarWithTelemetry
+          activeDocumentId={activeDocument.documentId}
+          forwardWriting={editorTools.activeForwardWriting}
           manuscriptWidthPx={manuscriptFocus.manuscriptFocusWidthPx}
           highlightCurrentParagraph={manuscriptFocus.highlightCurrentParagraph}
           exitLabel={
@@ -174,7 +223,6 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
           modeLabel={
             editorTools.activeForwardWriting === null ? null : "수정금지 집필"
           }
-          modeStatus={manuscriptFocusStatus.forwardWriting}
           onManuscriptWidthChange={manuscriptFocus.changeManuscriptFocusWidth}
           onHighlightCurrentParagraphChange={manuscriptFocus.changeCurrentParagraphHighlight}
           onExit={() => {
@@ -189,7 +237,8 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
           onTextScaleChange={manuscriptFocus.changeManuscriptTextScale}
           pomodoroPhase={activity.activePomodoroPhase?.phase ?? null}
           pomodoroStatus={manuscriptFocusStatus.pomodoro}
-          saveStatus={manuscriptFocusStatus.save}
+          recoveryStatus={runtime.startupRecovery.status}
+          saveStateStore={saveStateStore}
           timerStatus={manuscriptFocusStatus.timer}
           telemetryStore={telemetryStore}
           cursorFollowEnabled={manuscriptFocus.cursorFollowEnabled}

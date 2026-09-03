@@ -9,6 +9,10 @@ import type { WorkRecordsGoalsProjection } from "../../../application/activity/w
 import { entityId } from "../../../domain/writing";
 import type { ActivityWorkBundleClient } from "./activity-client";
 import { loadActivityWorkBundle } from "./activity-controller";
+import {
+  startAutomaticWritingSession,
+  stopAutomaticWritingSession,
+} from "./useActivityController";
 
 const workId = entityId<"Work">("work-activity-loader");
 
@@ -60,6 +64,58 @@ function deferred<T>() {
 }
 
 describe("activity Work bundle loader", () => {
+  it("starts and stops automatic writing activity without a document persistence gate", async () => {
+    const documentId = entityId<"Document">("document-automatic-session");
+    const sessionId = entityId<"WritingSession">("session-automatic");
+    const document = Object.freeze({
+      workId,
+      documentId,
+      documentRevisionId: entityId<"DocumentRevision">("revision-automatic"),
+      label: "자동 기록 문서",
+      initialText: "",
+    });
+    const started = Object.freeze({
+      ...activity,
+      activeSessionId: sessionId,
+      sessions: Object.freeze([Object.freeze({
+        schemaVersion: 1 as const,
+        sessionId,
+        workId,
+        documentId,
+        state: "active" as const,
+        startedAt: "2026-09-04T00:00:00.000Z",
+        endedAt: null,
+        activeDurationMs: 0,
+        startRevisionId: document.documentRevisionId,
+        endRevisionId: null,
+        characterDelta: null,
+        note: "",
+      })]),
+    }) satisfies WorkActivityProjection;
+    const client = {
+      startSession: vi.fn(async () => started),
+      stopSession: vi.fn(async () => activity),
+    };
+
+    await expect(startAutomaticWritingSession(client, document)).resolves.toBe(
+      started,
+    );
+    await expect(
+      stopAutomaticWritingSession(client, workId, sessionId),
+    ).resolves.toBe(activity);
+    expect(client.startSession).toHaveBeenCalledWith({
+      schemaVersion: 1,
+      workId,
+      documentId,
+      note: "",
+    });
+    expect(client.stopSession).toHaveBeenCalledWith({
+      schemaVersion: 1,
+      workId,
+      sessionId,
+    });
+  });
+
   it("calls the exact four queries once in order and returns their tuple identities", async () => {
     const order: string[] = [];
     const listWork = vi.fn(async () => {

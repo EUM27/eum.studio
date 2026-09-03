@@ -12,14 +12,12 @@ import {
   type ManuscriptEditorDocumentState,
 } from "../../../application/editor/manuscript-formatting";
 import type { WorkspaceCatalogProjection } from "../../../application/workspace/workspace-contract";
-import { entityId, type EntityId } from "../../../domain/writing";
+import { entityId } from "../../../domain/writing";
 import type {
   ManuscriptDocumentStateSummary,
 } from "../../editor/ManuscriptEditor";
 import { ManuscriptTelemetryStore } from "../../editor/manuscript-telemetry-store";
 import type { useLoreCueState } from "../../features/lore/useLoreCueController";
-import type { useSceneWorkspaceState } from "../../features/structure/useSceneWorkspaceController";
-import type { useStructureController } from "../../features/structure/useStructureController";
 import type { DocumentNavigationDocument } from "../navigation/document-target";
 import { DocumentNavigator } from "../navigation/DocumentNavigator";
 import {
@@ -31,41 +29,6 @@ import type { useResumeCheckpointController } from "./useResumeCheckpointControl
 import { createInstalledEditorDocumentIdentity } from "./WorkspaceSessionStore";
 import type { useWorkspaceLayoutController } from "../layout/useWorkspaceLayoutController";
 import type { useWorkspaceSession } from "./useWorkspaceSession";
-
-export function replaceCatalogDocumentRevision(
-  catalog: WorkspaceCatalogProjection,
-  receipt: Readonly<{
-    workId: EntityId<"Work">;
-    documentId: EntityId<"Document">;
-    revisionId: EntityId<"DocumentRevision">;
-  }>,
-): WorkspaceCatalogProjection {
-  let matched = false;
-  const works = catalog.works.map((work) => {
-    if (work.workId !== receipt.workId) return work;
-    const documents = work.documents.map((document) => {
-      if (document.documentId !== receipt.documentId) return document;
-      matched = true;
-      return Object.freeze({
-        ...document,
-        currentRevisionId: receipt.revisionId,
-      });
-    });
-    return Object.freeze({
-      ...work,
-      documents: Object.freeze(documents),
-    });
-  });
-  if (!matched) {
-    throw new Error(
-      `Durable receipt is outside the workspace catalog: ${receipt.workId}/${receipt.documentId}`,
-    );
-  }
-  return Object.freeze({
-    ...catalog,
-    works: Object.freeze(works),
-  });
-}
 
 export function useWorkspaceRuntimeProjectionController(input: Readonly<{
   captureResumeAndLoadCatalog: ReturnType<
@@ -90,15 +53,7 @@ export function useWorkspaceRuntimeProjectionController(input: Readonly<{
     "durableSaveQueueRef" | "installDurableSaveQueue"
   >;
   runtimeBootstrapController: RuntimeBootstrapController;
-  sceneState: Pick<
-    ReturnType<typeof useSceneWorkspaceState>,
-    "clearSceneActionError" | "reportSceneActionError"
-  >;
   session: Pick<ReturnType<typeof useWorkspaceSession>, "setRuntime">;
-  structure: Pick<
-    ReturnType<typeof useStructureController>,
-    "refreshSceneProjection"
-  >;
   telemetryStore: ManuscriptTelemetryStore;
 }>) {
   const {
@@ -121,15 +76,8 @@ export function useWorkspaceRuntimeProjectionController(input: Readonly<{
     installDurableSaveQueue,
   } = input.persistence;
   const {
-    clearSceneActionError,
-    reportSceneActionError,
-  } = input.sceneState;
-  const {
     setRuntime,
   } = input.session;
-  const {
-    refreshSceneProjection,
-  } = input.structure;
 
     const handleFormattingChange = useCallback(
       (
@@ -208,43 +156,6 @@ export function useWorkspaceRuntimeProjectionController(input: Readonly<{
     const createDurableQueueBatchId = useCallback(() =>
       entityId<"ChangeBatch">(crypto.randomUUID()), []);
     const readDurableQueueNow = useCallback(() => new Date().toISOString(), []);
-    const installDurableQueueDocumentRevision = useCallback((
-      receipt: Readonly<{
-        workId: EntityId<"Work">;
-        documentId: EntityId<"Document">;
-        revisionId: EntityId<"DocumentRevision">;
-      }>,
-    ) => {
-      setRuntime((current) =>
-        current.status === "ready"
-          ? {
-              ...current,
-              catalog: replaceCatalogDocumentRevision(
-                current.catalog,
-                receipt,
-              ),
-            }
-          : current
-      );
-    }, [setRuntime]);
-    const refreshScenesAfterDocumentSave = useCallback((
-      workId: EntityId<"Work">,
-    ) => {
-      void refreshSceneProjection(workId).then(
-        () => {
-          clearSceneActionError();
-        },
-        () => {
-          reportSceneActionError(
-            "저장된 원고 기준 장면 목록을 갱신하지 못했습니다.",
-          );
-        },
-      );
-    }, [
-      clearSceneActionError,
-      refreshSceneProjection,
-      reportSceneActionError,
-    ]);
   
     const installRuntimeProjection = useCallback(
       (
@@ -317,11 +228,9 @@ export function useWorkspaceRuntimeProjectionController(input: Readonly<{
           );
         }
         installDurableSaveQueue({
-          afterDocumentChangeSaved: refreshScenesAfterDocumentSave,
           createBatchId: createDurableQueueBatchId,
           documentProfile,
           editorClient: input.client.editor,
-          installDocumentRevision: installDurableQueueDocumentRevision,
           now: readDurableQueueNow,
           persistenceProfile,
           scheduler: durableQueueScheduler,
@@ -368,7 +277,7 @@ export function useWorkspaceRuntimeProjectionController(input: Readonly<{
           activeDocumentId,
         });
       },
-      [createDurableQueueBatchId, durableQueueScheduler, input.client.editor, installDurableQueueDocumentRevision, installDurableSaveQueue, readDurableQueueNow, refreshScenesAfterDocumentSave, setRuntime],
+      [createDurableQueueBatchId, durableQueueScheduler, input.client.editor, installDurableSaveQueue, readDurableQueueNow, setRuntime],
     );
   
     useEffect(() => {

@@ -36,21 +36,16 @@ import type { useStructureController } from "../features/structure/useStructureC
 import type { useVersionController } from "../features/version/useVersionController";
 import { MusicLibraryDialog } from "../music/MusicLibraryDialog";
 import { MusicMiniPlayer } from "../music/MusicMiniPlayer";
-import type { ManuscriptSaveState } from "../persistence/manuscript-durable-save-queue";
+import {
+  MANUSCRIPT_SAVE_STATE_LABELS,
+  type ManuscriptSaveStateStore,
+} from "../persistence/manuscript-save-state-store";
 import { WorkScheduleDashboard } from "../schedule/WorkScheduleDashboard";
 import type { StarlightThemeKey } from "../theme/starlight-theme";
 import { WorkspaceDialogHost } from "./dialogs/WorkspaceDialogHost";
 import type { useWorkspaceLayoutController } from "./layout/useWorkspaceLayoutController";
 import type { useReadingLayoutController } from "./session/useReadingLayoutController";
 import type { WorkspaceRuntimeState } from "./session/workspace-session-state";
-
-export const SAVE_STATE_LABELS: Readonly<Record<ManuscriptSaveState, string>> =
-  Object.freeze({
-    editing: "편집 중",
-    saving: "저장 중",
-    saved: "저장됨",
-    failed: "실패",
-  });
 
 function renderInHost(
   content: ReactNode,
@@ -59,6 +54,43 @@ function renderInHost(
   return host === null || host === undefined
     ? content
     : createPortal(content, host);
+}
+
+function WorkspaceSaveStatus(input: Readonly<{
+  activeDocumentId: ManuscriptDocumentSource["documentId"] | null;
+  embedded: boolean;
+  runtime: WorkspaceRuntimeState;
+  saveStateStore: ManuscriptSaveStateStore;
+}>) {
+  const saveStates = useSyncExternalStore(
+    input.saveStateStore.subscribe,
+    input.saveStateStore.getSnapshot,
+  );
+  const saveState = input.activeDocumentId === null
+    ? null
+    : saveStates[input.activeDocumentId] ?? null;
+  const label = input.runtime.status === "ready" &&
+      input.runtime.startupRecovery.status === "recovery-pending"
+    ? "복구 적용 대기"
+    : input.runtime.status === "ready" &&
+        input.runtime.startupRecovery.status === "read-only-error"
+      ? "복구 확인 필요"
+      : saveState === null
+        ? input.embedded
+          ? "저장 경로 없음"
+          : "영속 저장 미연결"
+        : MANUSCRIPT_SAVE_STATE_LABELS[saveState];
+  return (
+    <span
+      aria-live="polite"
+      className="save-status"
+      data-save-state={saveState ?? undefined}
+      data-testid="save-state"
+    >
+      {input.embedded && <span aria-hidden="true" className="save-dot" />}
+      {label}
+    </span>
+  );
 }
 
 function SessionFeedbackWithTelemetry(
@@ -84,7 +116,6 @@ export function WorkspaceStatusToolsHost(input: Readonly<{
   activeManuscriptPosition: ReturnType<
     typeof useWorkspaceLayoutController
   >["activeManuscriptPosition"];
-  activeSaveState: ManuscriptSaveState | null;
   activeWork: WorkspaceWorkSummary | null;
   activeWorkId: WorkspaceWorkSummary["workId"] | null;
   controllers: Readonly<{
@@ -126,6 +157,7 @@ export function WorkspaceStatusToolsHost(input: Readonly<{
     typeof WorkspaceDialogHost
   >["preflightProfile"];
   runtime: WorkspaceRuntimeState;
+  saveStateStore: ManuscriptSaveStateStore;
   scheduleClient: ComponentProps<typeof WorkScheduleDashboard>["client"];
   scheduleSettingsRevision: number;
   telemetryStore: ManuscriptTelemetryStore;
@@ -332,25 +364,12 @@ export function WorkspaceStatusToolsHost(input: Readonly<{
               settings={activity.dailyGoals}
             />
           )}
-        <span
-          aria-live="polite"
-          className="save-status"
-          data-save-state={input.activeSaveState ?? undefined}
-          data-testid="save-state"
-        >
-          {input.embedded && <span aria-hidden="true" className="save-dot" />}
-          {input.runtime.status === "ready" &&
-          input.runtime.startupRecovery.status === "recovery-pending"
-            ? "복구 적용 대기"
-            : input.runtime.status === "ready" &&
-                input.runtime.startupRecovery.status === "read-only-error"
-              ? "복구 확인 필요"
-              : input.activeSaveState === null
-                ? input.embedded
-                  ? "저장 경로 없음"
-                  : "영속 저장 미연결"
-                : SAVE_STATE_LABELS[input.activeSaveState]}
-        </span>
+        <WorkspaceSaveStatus
+          activeDocumentId={activeDocument?.documentId ?? null}
+          embedded={input.embedded}
+          runtime={input.runtime}
+          saveStateStore={input.saveStateStore}
+        />
         {!input.embedded && (
           <span>
             {input.runtime.status === "loading" && "런타임 확인 중"}

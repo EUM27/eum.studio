@@ -143,7 +143,7 @@ export function WorkspaceRoot({
     useRef<ManuscriptEditorHandle>(null);
   const {
     durableSaveQueueRef,
-    saveStates,
+    saveStateStore,
     installDurableSaveQueue,
     registerCreatedDocumentPersistence,
     continuousReadingProgressRef,
@@ -251,9 +251,6 @@ export function WorkspaceRoot({
     resetLoreCue,
     workStructureState,
     structureController,
-    refreshSceneProjection,
-    clearSceneActionError,
-    reportSceneActionError,
   } = structureKernel;
   const readDocumentStateForResume = useCallback((
     document: ManuscriptDocumentSource,
@@ -311,15 +308,8 @@ export function WorkspaceRoot({
       installDurableSaveQueue,
     },
     runtimeBootstrapController,
-    sceneState: {
-      clearSceneActionError,
-      reportSceneActionError,
-    },
     session: {
       setRuntime,
-    },
-    structure: {
-      refreshSceneProjection,
     },
     telemetryStore,
   });
@@ -420,7 +410,7 @@ export function WorkspaceRoot({
       continuousReadingPersistenceLane,
       continuousReadingProgressRef,
       durableSaveQueueRef,
-      saveStates,
+      saveStateStore,
       workManuscriptLayoutByWorkRef,
       workManuscriptLayoutChangeSequenceRef,
       workManuscriptLayoutLoadSequenceRef,

@@ -8,8 +8,8 @@
   "anchorEvidenceChecksumAlgorithm": "sha256",
   "manuscriptBatchingPolicy": {
     "schemaVersion": 1,
-    "maxTransactionsPerBatch": 32,
-    "maxDelayMs": 450
+    "maxTransactionsPerBatch": 1,
+    "maxDelayMs": 0
   },
   "activityPolicy": {
     "idleTimeout": 0,

@@ -9,17 +9,15 @@ import type { ManuscriptPersistenceProfile } from "../../../application/persiste
 import type { EntityId } from "../../../domain/writing";
 import {
   ManuscriptDurableSaveQueue,
-  type ManuscriptSaveState,
   type SaveQueueScheduler,
 } from "../../persistence/manuscript-durable-save-queue";
+import { ManuscriptSaveStateStore } from "../../persistence/manuscript-save-state-store";
 import { SerialPersistenceLane } from "./PersistenceCoordinator";
 
 export function usePersistenceCoordinator() {
   const durableSaveQueueRef =
     useRef<ManuscriptDurableSaveQueue | null>(null);
-  const [saveStates, setSaveStates] = useState<
-    Readonly<Record<string, ManuscriptSaveState>>
-  >({});
+  const [saveStateStore] = useState(() => new ManuscriptSaveStateStore());
   const continuousReadingProgressRef =
     useRef<WorkContinuousReadingProgressProjection | null>(null);
   const continuousReadingLocationRef =
@@ -37,25 +35,19 @@ export function usePersistenceCoordinator() {
   const workManuscriptLayoutChangeSequenceRef = useRef(0);
 
   const installDurableSaveQueue = useCallback((input: Readonly<{
-    afterDocumentChangeSaved: (workId: EntityId<"Work">) => void;
     createBatchId: () => EntityId<"ChangeBatch">;
     documentProfile: ManuscriptDocumentProfile;
     editorClient: Pick<
       StudioBridge["editor"],
       "saveDocumentChange" | "saveFormatting"
     >;
-    installDocumentRevision: (receipt: Readonly<{
-      workId: EntityId<"Work">;
-      documentId: EntityId<"Document">;
-      revisionId: EntityId<"DocumentRevision">;
-    }>) => void;
     now: () => string;
     persistenceProfile: ManuscriptPersistenceProfile | null;
     scheduler: SaveQueueScheduler;
   }>) => {
     if (input.persistenceProfile === null) {
       durableSaveQueueRef.current = null;
-      setSaveStates({});
+      saveStateStore.replace({});
       return;
     }
     const sequencesByDocument = new Map(
@@ -101,39 +93,27 @@ export function usePersistenceCoordinator() {
             `The editor state is unavailable for ${batch.documentId}`,
           );
         }
-        const receipt = await input.editorClient.saveDocumentChange({
+        return input.editorClient.saveDocumentChange({
           schemaVersion: 1,
           batch,
           editorStateJson,
         });
-        if ("revisionId" in receipt) {
-          input.installDocumentRevision(receipt);
-        }
-        input.afterDocumentChangeSaved(batch.workId);
-        return receipt;
       },
-      saveFormatting: async (command) => {
-        const receipt = await input.editorClient.saveFormatting(command);
-        input.installDocumentRevision(receipt);
-        return receipt;
-      },
+      saveFormatting: (command) => input.editorClient.saveFormatting(command),
       createBatchId: input.createBatchId,
       now: input.now,
       scheduler: input.scheduler,
       onStateChange: (documentId, state) => {
-        setSaveStates((current) => Object.freeze({
-          ...current,
-          [documentId]: state,
-        }));
+        saveStateStore.publish(documentId, state);
       },
     });
-    setSaveStates(Object.freeze(Object.fromEntries(
+    saveStateStore.replace(Object.freeze(Object.fromEntries(
       queueDocuments.map((document) => [
         document.documentId,
         "saved" as const,
       ]),
     )));
-  }, []);
+  }, [saveStateStore]);
 
   const registerCreatedDocumentPersistence = useCallback(async (
     input: Readonly<{
@@ -180,22 +160,18 @@ export function usePersistenceCoordinator() {
       baseRevisionId: createdDocument.documentRevisionId,
       nextSequence: sequence.nextSequence,
     });
-    setSaveStates((current) => Object.freeze({
-      ...current,
-      [createdDocument.documentId]: "saved" as const,
-    }));
+    saveStateStore.publish(createdDocument.documentId, "saved");
     return Object.freeze({
       createdDocument,
       documentProfile,
       persistenceProfile,
       resumeCheckpoint,
     });
-  }, []);
+  }, [saveStateStore]);
 
   return {
     durableSaveQueueRef,
-    saveStates,
-    setSaveStates,
+    saveStateStore,
     installDurableSaveQueue,
     registerCreatedDocumentPersistence,
     continuousReadingProgressRef,

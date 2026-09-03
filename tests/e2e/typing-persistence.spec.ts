@@ -15,7 +15,7 @@ async function removeTemporaryWorkspace(directory: string): Promise<void> {
   await rm(resolved, { recursive: true, force: true });
 }
 
-test("coalesces ordinary typing before materializing a durable revision", async () => {
+test("persists continuous typing and restores every character", async () => {
   const directory = await mkdtemp(
     path.join(tmpdir(), "eum-studio-typing-persistence-"),
   );
@@ -34,7 +34,7 @@ test("coalesces ordinary typing before materializing a durable revision", async 
     cwd: process.cwd(),
     env: runtimeEnvironment,
   });
-  const sample = randomUUID().replaceAll("-", "").slice(0, 8);
+  const sample = "ㅎ".repeat(40);
 
   try {
     let page = await electronApp.firstWindow();
@@ -71,12 +71,41 @@ test("coalesces ordinary typing before materializing a durable revision", async 
         revisionCount: revisions.revisions.length,
       };
     });
-    expect(before.profile?.batching.maxTransactionsPerBatch)
-      .toBeGreaterThan(1);
-    expect(before.profile?.batching.maxDelayMs).toBeGreaterThan(0);
+    expect(before.profile?.batching).toEqual({
+      schemaVersion: 1,
+      maxTransactionsPerBatch: 1,
+      maxDelayMs: 0,
+    });
 
     const manuscript = page.getByRole("textbox", { name: "원고" });
-    await manuscript.pressSequentially(sample, { delay: 20 });
+    await manuscript.click();
+    const inputLatenciesMs: number[] = [];
+    for (let index = 0; index < sample.length; index += 1) {
+      const startedAt = performance.now();
+      await page.keyboard.insertText(sample[index]!);
+      expect(await manuscript.textContent()).toBe(sample.slice(0, index + 1));
+      inputLatenciesMs.push(performance.now() - startedAt);
+    }
+    const sortedInputLatenciesMs = [...inputLatenciesMs].sort(
+      (left, right) => left - right,
+    );
+    const p95InputLatencyMs = sortedInputLatenciesMs[
+      Math.ceil(sortedInputLatenciesMs.length * 0.95) - 1
+    ]!;
+    const typingLatency = {
+      sampleLength: sample.length,
+      p50Ms: sortedInputLatenciesMs[Math.floor(
+        sortedInputLatenciesMs.length * 0.5,
+      )],
+      p95Ms: p95InputLatencyMs,
+      maxMs: sortedInputLatenciesMs.at(-1),
+    };
+    console.info(`[typing-latency] ${JSON.stringify(typingLatency)}`);
+    await test.info().attach("typing-latency.json", {
+      body: Buffer.from(JSON.stringify(typingLatency, null, 2)),
+      contentType: "application/json",
+    });
+    expect(p95InputLatencyMs).toBeLessThan(50);
     await expect(page.getByTestId("manuscript-character-count"))
       .toHaveText(String(sample.length));
     await expect(page.getByTestId("save-state")).toHaveText("저장됨");
@@ -92,7 +121,7 @@ test("coalesces ordinary typing before materializing a durable revision", async 
     });
     const revisionDelta = after.revisions.length - before.revisionCount;
     expect(revisionDelta).toBeGreaterThanOrEqual(1);
-    expect(revisionDelta).toBeLessThan(sample.length);
+    expect(revisionDelta).toBeLessThanOrEqual(sample.length);
     expect(after.revisions.find((revision) => revision.isCurrent)?.length)
       .toBe(sample.length);
 

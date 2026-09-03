@@ -114,7 +114,7 @@ export function useWorkspaceCoreFeatureKernel(input: Readonly<{
     | "continuousReadingPersistenceLane"
     | "continuousReadingProgressRef"
     | "durableSaveQueueRef"
-    | "saveStates"
+    | "saveStateStore"
     | "workManuscriptLayoutByWorkRef"
     | "workManuscriptLayoutChangeSequenceRef"
     | "workManuscriptLayoutLoadSequenceRef"
@@ -170,7 +170,7 @@ export function useWorkspaceCoreFeatureKernel(input: Readonly<{
     continuousReadingPersistenceLane,
     continuousReadingProgressRef,
     durableSaveQueueRef,
-    saveStates,
+    saveStateStore,
     workManuscriptLayoutByWorkRef,
     workManuscriptLayoutChangeSequenceRef,
     workManuscriptLayoutLoadSequenceRef,
@@ -618,12 +618,6 @@ export function useWorkspaceCoreFeatureKernel(input: Readonly<{
       activeDocument === undefined
         ? null
         : projectWorkspaceRails(railState, activeDocument.workId);
-    const activeSaveState =
-      runtime.status === "ready" &&
-      runtime.persistenceProfile !== null &&
-      activeDocument !== undefined
-        ? (saveStates[activeDocument.documentId] ?? null)
-        : null;
     const pomodoroMusicControllerInput = useMemo(() => ({
       listSceneMusicQueueCandidates,
       playMusicQueue,
@@ -786,7 +780,7 @@ export function useWorkspaceCoreFeatureKernel(input: Readonly<{
     openDocuments,
     activeWorkEventBlocks,
     railProjection,
-    activeSaveState,
+    saveStateStore,
     activityController,
     pomodoro,
     activityClock,

@@ -57,6 +57,35 @@ export type ActivityCoordinationRefs = Readonly<{
   manuscriptFocusSessionPendingRef: MutableRefObject<Promise<void>>;
 }>;
 
+type AutomaticWritingSessionClient = Pick<
+  StudioBridge["activity"],
+  "startSession" | "stopSession"
+>;
+
+export function startAutomaticWritingSession(
+  client: AutomaticWritingSessionClient,
+  document: ManuscriptDocumentSource,
+): Promise<WorkActivityProjection> {
+  return client.startSession({
+    schemaVersion: 1,
+    workId: document.workId,
+    documentId: document.documentId,
+    note: "",
+  });
+}
+
+export function stopAutomaticWritingSession(
+  client: AutomaticWritingSessionClient,
+  workId: EntityId<"Work">,
+  sessionId: EntityId<"WritingSession">,
+): Promise<WorkActivityProjection> {
+  return client.stopSession({
+    schemaVersion: 1,
+    workId,
+    sessionId,
+  });
+}
+
 export function useActivityController(input: Readonly<{
   activeWorkId: EntityId<"Work"> | null;
   client: StudioBridge["activity"];
@@ -109,6 +138,9 @@ export function useActivityController(input: Readonly<{
   const [activityClock, setActivityClock] = useState(() => Date.now());
 
   const editingDocumentKeyRef = useRef<string | null>(null);
+  const deferredAutomaticActivityRef =
+    useRef<WorkActivityProjection | null>(null);
+  const deferredAutomaticActivityErrorRef = useRef<string | null>(null);
   const writingSessionTransitionPendingRef = useRef(false);
   const manuscriptFocusActiveRef = useRef(input.manuscriptFocusActive);
   const manuscriptFocusSessionTransitionPendingRef = useRef(false);
@@ -287,6 +319,7 @@ export function useActivityController(input: Readonly<{
           projection.sessions.find(
             (session) => session.sessionId === projection.activeSessionId,
           );
+        deferredAutomaticActivityRef.current = null;
         setWorkActivity(projection);
         return projection;
       } catch {
@@ -324,6 +357,7 @@ export function useActivityController(input: Readonly<{
           projection.sessions.find(
             (entry) => entry.sessionId === projection.activeSessionId,
           );
+        deferredAutomaticActivityRef.current = null;
         setWorkActivity(projection);
         return projection;
       } catch {
@@ -403,27 +437,69 @@ export function useActivityController(input: Readonly<{
       }
       writingSessionTransitionPendingRef.current = true;
       void (async () => {
-        if (currentWritingSession !== undefined) {
-          await stopWritingSession(currentWritingSession, document);
+        try {
+          if (currentWritingSession !== undefined) {
+            const stoppedProjection = await stopAutomaticWritingSession(
+              input.client,
+              document.workId,
+              currentWritingSession.sessionId,
+            );
+            activeWritingSessionRef.current =
+              stoppedProjection.sessions.find(
+                (session) =>
+                  session.sessionId === stoppedProjection.activeSessionId,
+              );
+            deferredAutomaticActivityRef.current = stoppedProjection;
+          }
+          if (editingDocumentKeyRef.current !== documentKey) return;
+          const projection = await startAutomaticWritingSession(
+            input.client,
+            document,
+          );
+          activeWritingSessionRef.current =
+            projection.sessions.find(
+              (session) => session.sessionId === projection.activeSessionId,
+            );
+          deferredAutomaticActivityRef.current = projection;
+          deferredAutomaticActivityErrorRef.current = null;
+          if (
+            editingDocumentKeyRef.current === documentKey ||
+            projection.activeSessionId === null
+          ) {
+            return;
+          }
+          const startedSession = projection.sessions.find(
+            (session) => session.sessionId === projection.activeSessionId,
+          );
+          if (startedSession === undefined) return;
+          const stoppedProjection = await stopAutomaticWritingSession(
+            input.client,
+            document.workId,
+            startedSession.sessionId,
+          );
+          activeWritingSessionRef.current =
+            stoppedProjection.sessions.find(
+              (session) =>
+                session.sessionId === stoppedProjection.activeSessionId,
+            );
+          deferredAutomaticActivityRef.current = stoppedProjection;
+        } catch {
+          deferredAutomaticActivityErrorRef.current =
+            "작업 기록을 시작하지 못했습니다.";
         }
-        if (editingDocumentKeyRef.current !== documentKey) return;
-        const projection = await startWritingSession(document);
-        if (
-          projection === null ||
-          editingDocumentKeyRef.current === documentKey ||
-          projection.activeSessionId === null
-        ) {
-          return;
-        }
-        const startedSession = projection.sessions.find(
-          (session) => session.sessionId === projection.activeSessionId,
-        );
-        await stopWritingSession(startedSession, document);
       })().finally(() => {
         writingSessionTransitionPendingRef.current = false;
+        if (editingDocumentKeyRef.current === null) {
+          const projection = deferredAutomaticActivityRef.current;
+          deferredAutomaticActivityRef.current = null;
+          if (projection !== null) setWorkActivity(projection);
+          const error = deferredAutomaticActivityErrorRef.current;
+          deferredAutomaticActivityErrorRef.current = null;
+          if (error !== null) setActivityActionError(error);
+        }
       });
     },
-    [activeWritingSessionRef, startWritingSession, stopWritingSession],
+    [activeWritingSessionRef, input.client],
   );
 
   const handleDocumentBlur = useCallback(
@@ -432,6 +508,9 @@ export function useActivityController(input: Readonly<{
       if (editingDocumentKeyRef.current === documentKey) {
         editingDocumentKeyRef.current = null;
       }
+      const deferredError = deferredAutomaticActivityErrorRef.current;
+      deferredAutomaticActivityErrorRef.current = null;
+      if (deferredError !== null) setActivityActionError(deferredError);
       const currentWritingSession =
         activeWritingSessionRef.current;
       if (input.manuscriptFocusActive) {

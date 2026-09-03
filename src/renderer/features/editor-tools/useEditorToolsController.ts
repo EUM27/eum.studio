@@ -21,7 +21,6 @@ type ForwardWritingState = Readonly<{
   goalCharacters: number;
   protectedLength: number;
   baselineCharacterCount: number;
-  writtenCharacters: number;
 }>;
 
 type PendingManuscriptPreflight = Readonly<{
@@ -92,26 +91,6 @@ export function useEditorToolsController(input: Readonly<{
       ? forwardWriting
       : null;
 
-  const recordForwardWritingStatistics = useCallback((
-    document: ManuscriptDocumentSource,
-    characterCount: number,
-  ) => {
-    setForwardWriting((current) => {
-      if (
-        current === null ||
-        current.workId !== document.workId ||
-        current.documentId !== document.documentId
-      ) return current;
-      const writtenCharacters = Math.max(
-        0,
-        characterCount - current.baselineCharacterCount,
-      );
-      return writtenCharacters === current.writtenCharacters
-        ? current
-        : { ...current, writtenCharacters };
-    });
-  }, []);
-
   const openForwardWritingDialog = useCallback(() => {
     setShowForwardWritingDialog(true);
   }, []);
@@ -133,7 +112,6 @@ export function useEditorToolsController(input: Readonly<{
       goalCharacters,
       protectedLength: manuscript.length,
       baselineCharacterCount: summary.statistics.characterCount,
-      writtenCharacters: 0,
     });
     input.editor.setManuscriptFocusActive(true);
     setShowForwardWritingDialog(false);
@@ -369,7 +347,6 @@ export function useEditorToolsController(input: Readonly<{
     manuscriptTextImportError,
     pendingManuscriptPreflight,
     preflightActionError,
-    recordForwardWritingStatistics,
     openForwardWritingDialog,
     closeForwardWritingDialog,
     startForwardWriting,

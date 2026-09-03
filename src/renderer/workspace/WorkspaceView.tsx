@@ -48,10 +48,7 @@ import type { useWorkspaceCoreFeatureKernel } from "./useWorkspaceCoreFeatureKer
 import type { useWorkspaceStoryFeatureKernel } from "./useWorkspaceStoryFeatureKernel";
 import { WorkOperationsWorkspace, type WorkOperationsSection } from "./WorkOperationsWorkspace";
 import { WorkspaceFeatureSurfaceHost } from "./WorkspaceFeatureSurfaceHost";
-import {
-  SAVE_STATE_LABELS,
-  WorkspaceStatusToolsHost,
-} from "./WorkspaceStatusToolsHost";
+import { WorkspaceStatusToolsHost } from "./WorkspaceStatusToolsHost";
 
 function formatTimerDuration(durationMs: number): string {
   const totalSeconds = Math.max(0, Math.floor(durationMs / 1_000));
@@ -203,7 +200,7 @@ export function WorkspaceView(input: Readonly<{
     openDocuments,
     activeWorkEventBlocks,
     railProjection,
-    activeSaveState,
+    saveStateStore,
     activityController,
     pomodoro,
     activityClock,
@@ -740,25 +737,6 @@ export function WorkspaceView(input: Readonly<{
             ? remainingTimerMs(activePomodoroPhase.deadlineAt, activityClock)
             : activePomodoroPhase.remainingDurationMs,
         );
-    const focusSaveStatus =
-      runtime.status === "ready" &&
-      runtime.startupRecovery.status === "recovery-pending"
-        ? "복구 적용 대기"
-        : runtime.status === "ready" &&
-            runtime.startupRecovery.status === "read-only-error"
-          ? "복구 확인 필요"
-          : activeSaveState === null
-            ? "저장 경로 없음"
-            : SAVE_STATE_LABELS[activeSaveState];
-    const focusForwardWritingStatus = activeForwardWriting === null
-      ? null
-      : activeForwardWriting.writtenCharacters >= activeForwardWriting.goalCharacters
-        ? `목표 달성 · ${activeForwardWriting.writtenCharacters.toLocaleString()}자`
-        : `목표까지 ${(
-            activeForwardWriting.goalCharacters -
-            activeForwardWriting.writtenCharacters
-          ).toLocaleString()}자`;
-  
     return (
       <section
         aria-label="원고 작업실"
@@ -943,9 +921,7 @@ export function WorkspaceView(input: Readonly<{
                 }}
                 editorRef={manuscriptEditorRef}
                 manuscriptFocusStatus={{
-                  forwardWriting: focusForwardWritingStatus,
                   pomodoro: focusPomodoroStatus,
-                  save: focusSaveStatus,
                   timer: focusPomodoroTimerText,
                 }}
                 loreEntries={activeWorkLoreEntries}
@@ -959,6 +935,7 @@ export function WorkspaceView(input: Readonly<{
                 }}
                 openDocuments={openDocuments}
                 runtime={runtime.status === "ready" ? runtime : null}
+                saveStateStore={saveStateStore}
                 sceneProjection={
                   input.structureKernel.sceneProjection?.workId === activeWorkId
                     ? input.structureKernel.sceneProjection
@@ -1096,7 +1073,6 @@ export function WorkspaceView(input: Readonly<{
           <WorkspaceStatusToolsHost
             activeDocument={activeDocument ?? null}
             activeManuscriptPosition={activeManuscriptPosition}
-            activeSaveState={activeSaveState}
             activeWork={activeWork ?? null}
             activeWorkId={activeWorkId}
             controllers={{
@@ -1136,6 +1112,7 @@ export function WorkspaceView(input: Readonly<{
               runtime.status === "ready" ? runtime.preflightProfile : null
             }
             runtime={runtime}
+            saveStateStore={saveStateStore}
             scheduleClient={scheduleClient}
             scheduleSettingsRevision={scheduleSettingsRevision}
             telemetryStore={telemetryStore}

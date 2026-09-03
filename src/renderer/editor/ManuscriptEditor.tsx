@@ -109,6 +109,7 @@ import {
   type ManuscriptTextStatistics,
 } from "./manuscript-text-statistics";
 import {
+  activeManuscriptFormattingEqual,
   createManuscriptFormattingExtension,
   readActiveManuscriptFormatting,
   readManuscriptEditorDocumentState,
@@ -502,6 +503,20 @@ export const ManuscriptEditor = forwardRef<
         formattingProfile.defaults.letterSpacingEm,
       paragraphAlignment: "left",
     }));
+  const activeFormattingRef = useRef(activeFormatting);
+  activeFormattingRef.current = activeFormatting;
+  const publishActiveFormatting = (
+    nextFormatting: ActiveManuscriptFormatting,
+  ) => {
+    if (activeManuscriptFormattingEqual(
+      activeFormattingRef.current,
+      nextFormatting,
+    )) {
+      return;
+    }
+    activeFormattingRef.current = nextFormatting;
+    setActiveFormatting(nextFormatting);
+  };
   const [additionalToolsVisible, setAdditionalToolsVisible] = useState(false);
   const [colorMenu, setColorMenu] = useState<"text" | "highlight" | null>(null);
   const [contextMenu, setContextMenu] = useState<Readonly<{
@@ -1092,9 +1107,11 @@ export const ManuscriptEditor = forwardRef<
                 );
               }
             }
-            setActiveFormatting(
-              readActiveManuscriptFormatting(update.state, formattingProfile),
+            const nextFormatting = readActiveManuscriptFormatting(
+              update.state,
+              formattingProfile,
             );
+            publishActiveFormatting(nextFormatting);
             publishSelectionEvidence(
               update.state,
             );
@@ -1243,9 +1260,11 @@ export const ManuscriptEditor = forwardRef<
             document,
             summarizeState(view.state),
           );
-          setActiveFormatting(
-            readActiveManuscriptFormatting(view.state, formattingProfile),
+          const nextFormatting = readActiveManuscriptFormatting(
+            view.state,
+            formattingProfile,
           );
+          publishActiveFormatting(nextFormatting);
           publishSelectionEvidence(
             view.state,
           );
@@ -1297,9 +1316,11 @@ export const ManuscriptEditor = forwardRef<
         view.dispatch({ effects: nextSnapshot.scrollSnapshot });
       }
       notifyDocumentActivated(document, summarizeState(view.state));
-      setActiveFormatting(
-        readActiveManuscriptFormatting(view.state, formattingProfile),
+      const nextFormatting = readActiveManuscriptFormatting(
+        view.state,
+        formattingProfile,
       );
+      publishActiveFormatting(nextFormatting);
       publishSelectionEvidence(view.state);
     },
   );
@@ -1325,12 +1346,11 @@ export const ManuscriptEditor = forwardRef<
     viewRef.current = view;
     activeDocumentRef.current = initialDocument;
     notifyDocumentActivated(initialDocument, summarizeState(view.state));
-    setActiveFormatting(
-      readActiveManuscriptFormatting(
-        view.state,
-        initialFormattingProfileRef.current,
-      ),
+    const initialActiveFormatting = readActiveManuscriptFormatting(
+      view.state,
+      initialFormattingProfileRef.current,
     );
+    publishActiveFormatting(initialActiveFormatting);
     publishSelectionEvidence(view.state);
 
     const handleCompositionEnd = () => {
