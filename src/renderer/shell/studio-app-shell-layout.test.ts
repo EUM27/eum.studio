@@ -157,6 +157,34 @@ describe("studio home layout", () => {
     expect(documentSelect).toContain("cursor: pointer");
   });
 
+  it("lets the compact editor hide its sidebar and use the full workspace width", () => {
+    const expandedEditor = ruleFor(
+      ".studio-app-shell.is-editor:not(.is-compact):has(.writing-workspace[data-work-section])",
+    );
+    const expandedSidebar = ruleFor(
+      ".studio-app-shell.is-editor:not(.is-compact):has(.writing-workspace[data-work-section]) .sidebar",
+    );
+    const expandedWorkspace = ruleFor(
+      ".studio-app-shell.is-editor:not(.is-compact):has(.writing-workspace[data-work-section]) .workspace",
+    );
+    const compactSidebar = ruleFor(
+      ".studio-app-shell.is-compact .sidebar",
+    );
+    const compactWorkspace = ruleFor(
+      ".studio-app-shell.is-compact .workspace",
+    );
+
+    expect(expandedEditor).toContain(
+      "--eum-sidebar-width: clamp(220px, 20vw, 288px)",
+    );
+    expect(expandedSidebar).toContain("visibility: visible");
+    expect(expandedSidebar).toContain("pointer-events: auto");
+    expect(expandedWorkspace).toContain("grid-column: 2");
+    expect(compactSidebar).toContain("visibility: hidden");
+    expect(compactSidebar).toContain("pointer-events: none");
+    expect(compactWorkspace).toContain("grid-column: 1 / -1");
+  });
+
   it("uses the full app width for the centered manuscript focus screen", () => {
     const focusShell = ruleFor(
       ".studio-app-shell.is-editor:has(.writing-workspace-manuscript-focus[data-work-section])",

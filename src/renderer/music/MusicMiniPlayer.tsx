@@ -149,6 +149,7 @@ export function MusicMiniPlayer(input: {
   const shuffleRef = useRef(false);
   const lastNonceRef = useRef(0);
   const localPlaybackNonceRef = useRef(0);
+  const pendingLocalAutoplayNonceRef = useRef<number | null>(null);
   const [queue, setQueue] = useState<readonly MusicTrackProjection[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -229,11 +230,13 @@ export function MusicMiniPlayer(input: {
         }
         localMediaRef.current?.pause();
         localPlaybackNonceRef.current += 1;
+        pendingLocalAutoplayNonceRef.current = localPlaybackNonceRef.current;
         setLocalPlaybackSource(Object.freeze({
           nonce: localPlaybackNonceRef.current,
           url: localMediaPlaybackUrl(track),
         }));
       } else {
+        pendingLocalAutoplayNonceRef.current = null;
         const media = localMediaRef.current;
         if (media !== null) {
           media.pause();
@@ -394,6 +397,7 @@ export function MusicMiniPlayer(input: {
     if (media !== null) {
       media.pause();
     }
+    pendingLocalAutoplayNonceRef.current = null;
     setLocalPlaybackSource(null);
     queueRef.current = [];
     playbackOrderRef.current = createPlaybackOrder(0, 0, shuffleRef.current);
@@ -629,10 +633,17 @@ export function MusicMiniPlayer(input: {
         <video
           className="music-mini-local-media"
           key={localPlaybackSource?.nonce ?? 0}
+          ref={localMediaRef}
           onCanPlay={(event) => {
-            if (localPlaybackSource === null || !event.currentTarget.paused) {
+            if (
+              localPlaybackSource === null ||
+              pendingLocalAutoplayNonceRef.current !==
+                localPlaybackSource.nonce ||
+              !event.currentTarget.paused
+            ) {
               return;
             }
+            pendingLocalAutoplayNonceRef.current = null;
             event.currentTarget.volume = volumeRef.current / 100;
             void event.currentTarget.play().then(
               () => {

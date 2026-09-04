@@ -213,6 +213,7 @@ export type ManuscriptEditorProps = {
   readonly loreEntries: readonly LoreEntryProjection[];
   readonly layoutSettings?: ManuscriptLayoutSettings;
   readonly orderedDocuments: readonly ManuscriptDocumentSource[];
+  readonly previousEpisodeFlowDocuments: readonly ManuscriptDocumentSource[];
   readonly annotationRanges?: readonly ManuscriptAnnotationRange[];
   readonly readOnly: boolean;
   readonly resumeLocation:
@@ -236,6 +237,7 @@ export type ManuscriptEditorProps = {
   ) => void;
   readonly onHeatmapModeChange?: (mode: ManuscriptHeatmapMode) => void;
   readonly onImportText?: () => void;
+  readonly onOpenBulkExport?: () => void;
   readonly onMoveToNextEpisode: () => void;
   readonly onLoreCueHover: (interaction: LoreCueInteraction | null) => void;
   readonly onOpenLoreCue: (cue: LoreCue) => void;
@@ -426,6 +428,7 @@ export const ManuscriptEditor = forwardRef<
     layoutSettings,
     loreEntries,
     orderedDocuments,
+    previousEpisodeFlowDocuments,
     onBlur,
     onCompositionEnd,
     onDocumentActivated,
@@ -433,6 +436,7 @@ export const ManuscriptEditor = forwardRef<
     onLayoutSettingsChange,
     onHeatmapModeChange,
     onImportText,
+    onOpenBulkExport,
     onMoveToNextEpisode,
     onLoreCueHover,
     onAddEvent,
@@ -473,6 +477,10 @@ export const ManuscriptEditor = forwardRef<
   const stateRegistryRef = useRef(new ManuscriptDocumentStateRegistry());
   const orderedDocumentsRef = useRef(orderedDocuments);
   orderedDocumentsRef.current = orderedDocuments;
+  const previousEpisodeFlowDocumentsRef = useRef(
+    previousEpisodeFlowDocuments,
+  );
+  previousEpisodeFlowDocumentsRef.current = previousEpisodeFlowDocuments;
   const loreEntriesRef = useRef(loreEntries);
   loreEntriesRef.current = loreEntries;
   const sceneBoundaryPreviewsRef = useRef(sceneBoundaryPreviews);
@@ -587,7 +595,7 @@ export const ManuscriptEditor = forwardRef<
   ) =>
     derivePreviousEpisodeFlowPreview(
       document,
-      orderedDocumentsRef.current,
+      previousEpisodeFlowDocumentsRef.current,
       materializeDocumentText,
     );
   const publishSelectionEvidence = useEffectEvent(
@@ -1454,7 +1462,7 @@ export const ManuscriptEditor = forwardRef<
     if (view !== null && document !== null) {
       syncPreviousEpisodeFlow(view, document);
     }
-  }, [orderedDocuments]);
+  }, [previousEpisodeFlowDocuments]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -2271,6 +2279,17 @@ export const ManuscriptEditor = forwardRef<
               type="button"
             >
               TXT 가져오기
+            </button>
+          )}
+          {onOpenBulkExport !== undefined && (
+            <button
+              className="toolbar-text-button"
+              disabled={readOnly}
+              onClick={onOpenBulkExport}
+              onMouseDown={(event) => event.preventDefault()}
+              type="button"
+            >
+              전체 다운로드
             </button>
           )}
           <button

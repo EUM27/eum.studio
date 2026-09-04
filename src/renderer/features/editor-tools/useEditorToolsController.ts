@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 
 import type { StudioBridge } from "../../../application/contracts/studio-bridge";
+import { prepareManuscriptBulkTextExport } from "../../../application/editor/manuscript-bulk-export";
 import type { ManuscriptDocumentSource } from "../../../application/editor/manuscript-document-profile";
 import {
   sanitizeManuscriptTextFileNamePart,
@@ -30,6 +31,12 @@ type PendingManuscriptPreflight = Readonly<{
   settingsProjection: ManuscriptPreflightSettingsProjection;
 }>;
 
+type PendingManuscriptBulkExport = Readonly<{
+  workId: ManuscriptDocumentSource["workId"];
+  workTitle: string;
+  orderedDocuments: readonly ManuscriptDocumentSource[];
+}>;
+
 export type EditorToolsPort = Readonly<{
   isAvailable: () => boolean;
   readDocumentState: (
@@ -54,7 +61,9 @@ export type EditorToolsPort = Readonly<{
 export function useEditorToolsController(input: Readonly<{
   client: StudioBridge["editor"];
   document: ManuscriptDocumentSource | null;
+  documents: readonly ManuscriptDocumentSource[];
   editor: EditorToolsPort;
+  workTitle: string | null;
 }>) {
   const preflightLoadSequenceRef = useRef(0);
   const [showForwardWritingDialog, setShowForwardWritingDialog] =
@@ -81,6 +90,8 @@ export function useEditorToolsController(input: Readonly<{
     useState<string | null>(null);
   const [pendingManuscriptPreflight, setPendingManuscriptPreflight] =
     useState<PendingManuscriptPreflight | null>(null);
+  const [pendingManuscriptBulkExport, setPendingManuscriptBulkExport] =
+    useState<PendingManuscriptBulkExport | null>(null);
   const [preflightActionError, setPreflightActionError] =
     useState<string | null>(null);
 
@@ -193,6 +204,53 @@ export function useEditorToolsController(input: Readonly<{
     setPendingManuscriptPreflight(null);
     setPreflightActionError(null);
   }, []);
+
+  const openManuscriptBulkExport = useCallback(() => {
+    if (input.document === null || input.workTitle === null) return;
+    const orderedDocuments = input.documents.filter(
+      (document) => document.workId === input.document?.workId,
+    );
+    if (orderedDocuments.length === 0) return;
+    setPendingManuscriptBulkExport({
+      workId: input.document.workId,
+      workTitle: input.workTitle,
+      orderedDocuments: Object.freeze([...orderedDocuments]),
+    });
+  }, [input.document, input.documents, input.workTitle]);
+
+  const closeManuscriptBulkExport = useCallback(() => {
+    setPendingManuscriptBulkExport(null);
+  }, []);
+
+  const exportManuscriptBulk = useCallback((
+    selectedDocumentIds: readonly ManuscriptDocumentSource["documentId"][],
+  ) => {
+    const pending = pendingManuscriptBulkExport;
+    if (pending === null) throw new Error("No manuscript bulk export is open");
+    const prepared = prepareManuscriptBulkTextExport({
+      workId: pending.workId,
+      orderedDocuments: pending.orderedDocuments.map((document) => {
+        const text = input.editor.materializeDocumentText(document);
+        if (text === undefined) {
+          throw new Error(`Cannot materialize manuscript: ${document.documentId}`);
+        }
+        return Object.freeze({
+          workId: document.workId,
+          documentId: document.documentId,
+          text,
+        });
+      }),
+      selectedDocumentIds,
+    });
+    const fileNamePart = sanitizeManuscriptTextFileNamePart(pending.workTitle);
+    return input.client.exportManuscriptText({
+      schemaVersion: 1,
+      workId: pending.workId,
+      documentId: prepared.documentId,
+      suggestedFileName: `${fileNamePart}.txt`,
+      text: prepared.text,
+    });
+  }, [input.client, input.editor, pendingManuscriptBulkExport]);
 
   const saveManuscriptPreflightSettings = useCallback(async (
     settings: ManuscriptPreflightSettings,
@@ -346,6 +404,7 @@ export function useEditorToolsController(input: Readonly<{
     manuscriptTextImportAction,
     manuscriptTextImportError,
     pendingManuscriptPreflight,
+    pendingManuscriptBulkExport,
     preflightActionError,
     openForwardWritingDialog,
     closeForwardWritingDialog,
@@ -355,10 +414,13 @@ export function useEditorToolsController(input: Readonly<{
     openManuscriptAnalysis,
     closeManuscriptAnalysis,
     openManuscriptPreflight,
+    openManuscriptBulkExport,
     closeManuscriptPreflight,
+    closeManuscriptBulkExport,
     saveManuscriptPreflightSettings,
     applyManuscriptPreflight,
     exportManuscriptPreflight,
+    exportManuscriptBulk,
     selectManuscriptTextImport,
     applyManuscriptTextImport,
     closeManuscriptTextImport,

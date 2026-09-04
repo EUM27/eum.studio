@@ -11,12 +11,19 @@ import path from "node:path";
 
 import type { ImmutableBlobStore, BlobAddress } from "../application/storage/blob-store";
 import {
+  EMPTY_LOCAL_WORKSPACE_BACKUP_MEDIA_COUNTS,
   parseLocalWorkspaceBackupStatusProjection,
   parseLocalWorkspaceBackupSummary,
+  type LocalWorkspaceBackupMediaCounts,
   type LocalWorkspaceBackupStatusProjection,
   type LocalWorkspaceBackupSummary,
 } from "../application/storage/local-workspace-backup-contract";
 import type { LocalWorkspaceBackupProfile } from "../application/storage/local-workspace-backup-profile";
+import {
+  createNodeLocalMediaBackupExtension,
+  stageNodeLocalMediaBackupRestore,
+  verifyNodeLocalMediaBackupExtension,
+} from "../platform/music/node-local-media-backup";
 import {
   createNodeSqliteBackupBundle,
   restoreNodeSqliteBackupBundle,
@@ -133,6 +140,7 @@ export type LocalWorkspaceBackupService = {
 
 export function createLocalWorkspaceBackupService(input: {
   readonly rootDirectoryPath: string;
+  readonly sourceLocalMediaLibraryRootDirectoryPath: string;
   readonly sourceBlobStore: ImmutableBlobStore;
   readonly profile: LocalWorkspaceBackupProfile;
 }): LocalWorkspaceBackupService {
@@ -174,10 +182,14 @@ export function createLocalWorkspaceBackupService(input: {
       if (!path.isAbsolute(finalBundleRoot)) {
         throw new Error("Backup bundle path must be absolute");
       }
+      const temporaryBundleRoot = temporarySibling(
+        finalBundleRoot,
+        "Backup bundle",
+      );
       const report = await createNodeSqliteBackupBundle({
         sourceDatabasePath,
         sourceBlobStore: input.sourceBlobStore,
-        temporaryBundleRoot: temporarySibling(finalBundleRoot, "Backup bundle"),
+        temporaryBundleRoot,
         finalBundleRoot,
         layout: bundleLayout,
         format: input.profile.format,
@@ -186,6 +198,31 @@ export function createLocalWorkspaceBackupService(input: {
         canonicalBytes: adapters.canonicalBytes,
         checksum: adapters.checksum,
         clock: Object.freeze({ now: () => new Date().toISOString() }),
+        stageHook: async (stage) => {
+          if (stage !== "before-bundle-publish") return;
+          await createNodeLocalMediaBackupExtension({
+            sourceDatabasePath: path.join(
+              temporaryBundleRoot,
+              ...input.profile.bundleLayout.databaseEntrySegments,
+            ),
+            sourceLibraryRootDirectoryPath:
+              input.sourceLocalMediaLibraryRootDirectoryPath,
+            temporaryBundleRoot,
+            profile: input.profile,
+            canonicalBytes: adapters.canonicalBytes,
+            checksum: adapters.checksum,
+          });
+        },
+      });
+      const verifiedMedia = await verifyNodeLocalMediaBackupExtension({
+        bundleRoot: path.resolve(finalBundleRoot),
+        sourceDatabasePath: path.join(
+          path.resolve(finalBundleRoot),
+          ...input.profile.bundleLayout.databaseEntrySegments,
+        ),
+        profile: input.profile,
+        canonicalBytes: adapters.canonicalBytes,
+        checksum: adapters.checksum,
       });
       return persistSummary({
         schemaVersion: 1,
@@ -195,6 +232,7 @@ export function createLocalWorkspaceBackupService(input: {
         verifiedAt: new Date().toISOString(),
         lastAction: "created",
         counts: report.manifest.counts,
+        media: verifiedMedia.counts,
       });
     },
     restoreBundle: async (
@@ -205,13 +243,72 @@ export function createLocalWorkspaceBackupService(input: {
         throw new Error("Backup source and restore target paths must be absolute");
       }
       const targetParent = path.dirname(path.resolve(targetFinalRoot));
+      const bundleManifestPath = path.join(
+        path.resolve(finalBundleRoot),
+        ...input.profile.bundleLayout.manifestEntrySegments,
+      );
+      const untrustedCoreManifest = adapters.manifestCodec.decodeCanonical(
+        new Uint8Array(await readFile(bundleManifestPath)),
+      ) as unknown;
+      if (
+        typeof untrustedCoreManifest !== "object" ||
+        untrustedCoreManifest === null ||
+        Array.isArray(untrustedCoreManifest) ||
+        typeof (untrustedCoreManifest as Record<string, unknown>).format !==
+          "object" ||
+        (untrustedCoreManifest as Record<string, unknown>).format === null
+      ) {
+        throw new Error("Backup manifest format is invalid");
+      }
+      const untrustedFormat = (
+        untrustedCoreManifest as Record<string, unknown>
+      ).format as Record<string, unknown>;
+      if (
+        untrustedFormat.identity !== input.profile.format.identity ||
+        typeof untrustedFormat.version !== "string"
+      ) {
+        throw new Error("Backup manifest format is incompatible");
+      }
+      const coreFormat = Object.freeze({
+        identity: input.profile.format.identity,
+        version: untrustedFormat.version,
+      });
+      const isCurrentFormat =
+        coreFormat.version === input.profile.format.version;
+      if (
+        !isCurrentFormat &&
+        !input.profile.localMedia.legacyCoreFormatVersions.includes(
+          coreFormat.version,
+        )
+      ) {
+        throw new Error("Backup manifest version is unsupported");
+      }
+      const bundleDatabasePath = path.join(
+        path.resolve(finalBundleRoot),
+        ...input.profile.bundleLayout.databaseEntrySegments,
+      );
+      const verifiedMedia = isCurrentFormat
+        ? await verifyNodeLocalMediaBackupExtension({
+            bundleRoot: path.resolve(finalBundleRoot),
+            sourceDatabasePath: bundleDatabasePath,
+            profile: input.profile,
+            canonicalBytes: adapters.canonicalBytes,
+            checksum: adapters.checksum,
+          })
+        : null;
+      const targetStagingRoot = temporarySibling(
+        targetFinalRoot,
+        "Restore target",
+      );
+      let restoredMedia: LocalWorkspaceBackupMediaCounts =
+        EMPTY_LOCAL_WORKSPACE_BACKUP_MEDIA_COUNTS;
       const report = await restoreNodeSqliteBackupBundle({
         finalBundleRoot,
         bundleLayout,
-        targetStagingRoot: temporarySibling(targetFinalRoot, "Restore target"),
+        targetStagingRoot,
         targetFinalRoot,
         targetLayout,
-        expectedFormat: input.profile.format,
+        expectedFormat: coreFormat,
         manifestCodec: adapters.manifestCodec,
         canonicalBytes: adapters.canonicalBytes,
         checksum: adapters.checksum,
@@ -219,14 +316,38 @@ export function createLocalWorkspaceBackupService(input: {
           preflight: async ({ requiredByteCount }) => {
             await access(targetParent, constants.W_OK);
             const available = await statfs(targetParent, { bigint: true });
+            const mediaByteCount =
+              verifiedMedia?.requiredTargetByteCount ?? 0;
+            const totalRequiredByteCount =
+              requiredByteCount + mediaByteCount;
+            if (!Number.isSafeInteger(totalRequiredByteCount)) {
+              throw new Error(
+                "Restore required byte count exceeds the supported range",
+              );
+            }
             if (
               available.bavail * available.bsize <
-              BigInt(requiredByteCount)
+              BigInt(totalRequiredByteCount)
             ) {
               throw new Error("Restore target does not have enough free space");
             }
           },
         }),
+        stageHook: async (stage) => {
+          if (stage !== "before-target-publish" || verifiedMedia === null) {
+            return;
+          }
+          restoredMedia = await stageNodeLocalMediaBackupRestore({
+            verified: verifiedMedia,
+            bundleRoot: path.resolve(finalBundleRoot),
+            targetLibraryRootDirectoryPath: path.join(
+              targetStagingRoot,
+              ...input.profile.localMedia.restoreRootSegments,
+            ),
+            profile: input.profile,
+            checksum: adapters.checksum,
+          });
+        },
       });
       return persistSummary({
         schemaVersion: 1,
@@ -236,6 +357,7 @@ export function createLocalWorkspaceBackupService(input: {
         verifiedAt: new Date().toISOString(),
         lastAction: "restored",
         counts: report.restoredCounts,
+        media: restoredMedia,
       });
     },
   });

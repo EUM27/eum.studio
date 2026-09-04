@@ -12,7 +12,80 @@
 
 ## 현재 Gate
 
-`통합 작품 정보 변화 묶음 — 장면 1회 분석·후보 승인·재시작 복원 구현·검증 완료`
+`이전 화 흐름 나열 순서 정합성 — source·standalone·기본 설치·실사용 확인 완료`
+
+### 2026-09-04 이전 화 흐름 나열 순서 정합성
+
+- [x] 실행 중인 실사용 작업공간을 원고 본문 없이 읽기 전용으로 확인했다. 활성 작품은 회차 30개·폴더 3개이며, 현재 회차의 평면 `documentProfile`상 이전 항목과 화면 폴더 트리에서 바로 앞에 나열된 회차가 달랐다.
+- [x] 폴더와 하위 폴더를 먼저, 이어서 같은 위치의 회차를 표시하는 `DocumentFolderTree`의 논리적 나열 순서를 순수 renderer 투영으로 만들었다. 중복·누락·고아 폴더가 있는 입력은 임의 fallback 없이 거부한다.
+- [x] 새 순서를 `이전 화 흐름` 전용 입력으로만 전달했다. 기존 SQLite `document.order_key` 기반 원고 저장·전체 다운로드·장면 이동과 평면 회차 순서는 변경하지 않았다.
+- [x] 중첩 폴더와 루트 회차를 함께 둔 단위 검증, 평면 드래그 재정렬·폴더 구성 회귀, 폴더 회차에서 루트 회차로 이어지는 production Electron 회귀를 추가했다.
+
+현재 증거:
+
+- 승인 설계 manifest 12개 checksum이 모두 일치했다.
+- focused Vitest 3개 파일·6개, 대상 ESLint, `git diff --check`, `npm run architecture:check`, 전체 `npm run check`가 통과했다. 전체 Vitest는 339개 파일·1,218개 통과·기존 1개 skip·실패 0이다.
+- production Electron에서 기존 평면 재정렬, 신규 폴더-트리 이전 화, 기존 폴더 구성 3개 흐름이 함께 통과했다. 신규 흐름은 표시 순서 `폴더의 3화 → 루트 1화 → 루트 2화`에서 1화의 이전 화가 3화인지 확인하고, 완전 종료·재실행 뒤에도 같은 결과를 확인한다.
+- 승격된 기본 `out/eum-studio-win-x64`는 794 files·376,818,655 bytes이며 renderer index SHA-256은 `2c91e7c2521d56b6bbff468fa590d8a6b185f0df5e4e27940346d6922d45fead`다. `file://`, typed bridge, 빈 작업공간 bootstrap, renderer 강제 종료 복구, 두 번째 인스턴스 exit 0과 기본 실행 파일의 신규 폴더-트리 이전 화 E2E가 통과했다.
+- [x] 기존 기본 package는 `out/eum-studio-win-x64-before-previous-flow-order-20260904T231753`에 보존하고 검증 후보를 기본 경로로 원자 승격했다. 기본 사용자 데이터의 실제 창에서 회차 30개·폴더 3개의 논리 트리와 활성 회차를 대조해 “이전 화 흐름” 제목이 바로 앞 회차와 일치함을 확인했으며 원고 본문은 읽지 않았다. 진단 창을 정상 종료해 package process 0을 확인한 뒤 일반 모드로 다시 열었고 새 창은 정상 응답한다.
+
+이전 현재 Gate: `선택 회차 전체 다운로드 — 실제 회차 순서 결합·단일 TXT 저장 구현·검증 완료`
+
+### 2026-09-04 선택 회차 전체 다운로드
+
+- [x] 원고 도구의 `전체 다운로드`를 누르면 현재 작품의 회차 선택 팝업이 열리고, 모든 회차가 기본 선택된 상태에서 원하는 회차만 남길 수 있다.
+- [x] 선택 결과는 클릭 순서나 회차 제목으로 다시 정렬하지 않고 SQLite `document.order_key`에서 projection된 현재 회차 배열 순서로 필터링한다. 각 회차의 현재 편집기 원고를 그 순서대로 빈 줄 하나 사이에 두고 결합하며 제목·메타데이터는 삽입하지 않는다.
+- [x] 기존 `원고 점검 → TXT 내보내기` 계약과 typed bridge·native save dialog·UTF-8 파일 adapter를 변경하지 않고, 결합 본문을 기존 내보내기 경로에 한 번 전달한다.
+- [x] 회차 선택 팝업은 기존 dialog·button·theme token을 사용하고, 회차를 하나도 선택하지 않으면 다운로드 동작을 비활성화한다.
+
+현재 증거:
+
+- focused 결합·팝업·기존 개별 내보내기 검증 4개 파일 5개가 통과했고, `npm run architecture:check`는 `architecture boundaries: ok`다.
+- fresh `npm run check`는 전체 lint, 네 TypeScript project, Vitest 338개 파일·1,217개 통과·기존 1개 skip·실패 0, production Electron/preload/renderer build를 통과했다.
+- 격리된 production Electron에서 실제 회차 순서를 `2화 → 10화 → 1화`로 만들고 `10화`를 제외한 뒤 단일 TXT가 exact `둘째 원고\n\n첫째 원고`인지 확인했다. 회차 선택 팝업 순서·기본 전체 선택·선택 수·파일 bytes가 한 흐름에서 통과했다.
+- 같은 production build에서 기존 exact-selection `원고 점검 → TXT 내보내기` E2E를 다시 실행해 승인한 선택 원문만 저장되는 기존 동작이 통과했다.
+- 기본 standalone 설치본과 실사용 DB는 종료·교체·수정하지 않았다.
+
+이전 현재 Gate: `관리형 MP3·MP4 포함 백업 — v2 bundle·빈 위치 복원·외부 파일 재연결 구현·검증 완료`
+
+### 2026-09-04 관리형 미디어 포함 백업
+
+- [x] SQLite snapshot의 `work_music_settings`가 실제 참조하는 로컬 미디어만 backup 대상으로 고정했다. 등록이 제거된 orphan descriptor·파일은 자동 귀속하거나 bundle에 섞지 않는다.
+- [x] 신규 backup format v2에 checksum sidecar가 있는 별도 local-media canonical manifest를 추가했다. `managed-copy` MP3·MP4는 exact bytes·크기·checksum과 함께 같은 임시 bundle에서 게시하고, `external-reference`는 파일을 복사하지 않은 채 원본 절대 경로·실제 파일명·등록 크기·checksum·백업 당시 연결 상태를 기록한다.
+- [x] restore는 core DB·revision blob과 local media 전체를 대상 생성 전에 검증하고, caller 용량 preflight 뒤 하나의 새 sibling staging에 DB·blob·관리형 파일·v2 descriptor를 쓴 다음 최종 위치를 한 번만 게시한다. 관리형 파일 또는 local-media manifest/sidecar가 누락·변조되면 target을 만들지 않는다.
+- [x] 복원 시 외부 파일이 없거나 등록 checksum과 다르면 path-free 상태 조회에서 `연결 끊김` 또는 `파일 변경됨`으로 표시하고 재생·큐 추가를 막는다. 사용자가 고른 같은 종류·exact checksum 파일만 기존 Work/media identity에 다시 연결한다.
+- [x] 기존 format v1 백업은 미디어 0건의 legacy bundle로 계속 복원한다. 신규 v2 bundle은 local-media 확장 manifest가 없으면 legacy로 낮추지 않고 거부한다.
+- [x] 백업 화면은 앱에 가져온 파일 포함 범위와 외부 연결 파일 비복사 범위를 명시하고, 마지막 검증 결과에 가져온 미디어·외부 연결·연결 끊김 수를 표시한다.
+
+현재 증거:
+
+- 승인 설계 manifest 12개 checksum이 모두 일치했고 시작 HEAD는 `11a822c10c9e61eb1978007f264d8f1dbeee2afb`, 작업 트리는 clean이었다.
+- focused application/platform/bridge/renderer 7개 파일 13개와 local workspace runtime의 v2 media backup·restore·exact relink, v1 호환, v2 manifest 누락·managed bytes 변조 거부가 통과했다.
+- fresh `npm run check`는 lint, 네 TypeScript project, Vitest 336개 파일·1,214개 통과·기존 1개 skip·실패 0, production Electron/preload/renderer build를 통과했다. `npm run architecture:check`도 `architecture boundaries: ok`다.
+- production Electron에서 외부/관리형 MP3·MP4 4건 등록, 실제 백업 창의 v2 bundle 생성, 외부 MP3 제거, 새 빈 위치 복원, 완전 종료·복원 작업실 재실행, `연결 끊김`·재생 차단, 동일 checksum 파일 재연결을 1개 흐름으로 통과했다. 기존 혼합 YouTube→linked/managed 재생·range 206·일시정지·재시작 회귀도 별도 1개가 통과했다.
+- 기본 standalone 설치본과 실사용 DB는 종료·교체·수정하지 않았다.
+
+동시 입력 회귀 수정:
+
+- [x] 실제 설치 창에서 로컬 MP4 pause 클릭 이벤트는 버튼까지 도달했지만 `togglePlayback`의 `localMediaRef.current`가 `null`이라 명령이 즉시 끝나는 것을 확인했다. `<video>`에 빠져 있던 `ref={localMediaRef}`를 연결했고, 새 source 자동재생도 source nonce당 한 번만 소비해 사용자 일시정지 뒤 후속 `canplay`가 재생을 되살리지 않게 했다. 기존 짧은 fixture가 자연 종료를 pause 성공으로 오인하던 E2E는 현재 트랙을 고정하고 클릭 직후 실제 `paused === true`를 검사하도록 수정했다.
+- [x] 편집기 전용 sidebar 표시 규칙을 `:not(.is-compact)`에만 적용해 `사이드바 접기`가 왼쪽 sidebar·문서 레일을 숨기고 본문 폭을 회수하도록 복구했다. 좁은 화면에서 접기, 우측 검토 레일 독립 사용, 넓은 화면 전환 뒤 닫힘 유지, 다시 펼치기를 production Electron에서 확인했다.
+- 최종 ref 변경의 ESLint·네 TypeScript project·production Electron/preload/renderer build와 실제 로컬 미디어 Electron E2E가 통과했다. 전체 Vitest 병렬 실행은 1,211개 통과·기존 1개 skip 후 무관한 SQLite 테스트 3개가 5초 timeout됐고, 해당 3개를 각각 단독 재실행해 모두 통과했다. ref 변경 전 전체 `npm run check`는 336개 파일·1,214개 통과·기존 1개 skip·실패 0이었으며, focused CSS·음악 Vitest 2개 파일·9개와 `npm run architecture:check`도 통과했다.
+- [x] 최종 ref 후보를 기본 `out/eum-studio-win-x64`로 승격했다. 새 기본본은 792 files·376,808,544 bytes이고 renderer index SHA-256은 `cc11be0f7a0bb53166b8207b272cf7264242bebf3b7353a44df431e56d218733`이다. 이전 기본본은 `out/eum-studio-win-x64-before-local-pause-ref-20260904T180225`에, 그 이전 778-file 설치본은 `out/eum-studio-win-x64-before-input-regression-20260904T174509`에 보존했다. 실제 사용자 작업공간의 첫 MP4에서 클릭 전 `paused=false`, 클릭 직후 `paused=true`, 1.5초 뒤에도 재생 위치 `0.320273` 고정과 버튼 `음악 재생`을 확인했고 사용자가 정상 동작을 확인했다. 진단 포트를 제거한 일반 실행으로 다시 열었다.
+
+다음 Gate: `최신 소스와 실제 설치본 버전 일치 — 버전·build·commit 표시, 안전한 update staging, 구성/schema 정합성 검사`.
+
+남은 첨부 우선순위:
+
+1. 보조 기능 실패와 필수 원고 bootstrap 분리
+2. 투고 작업면 독립 load·stale 응답 차단
+3. 자동 장면 분석 실행 단위 통합 검토
+4. 자동 분석 queue 중복 제거·취소·일시 정지
+5. 전 프로젝트 통합 검색
+6. WorkSnapshot 장면 선택 복원
+7. 출판사별 제출 파일 생성
+8. 실제 사용자 browser export 기반 이주 폐회로
+
+이전 현재 Gate: `통합 작품 정보 변화 묶음 — 장면 1회 분석·후보 승인·재시작 복원 구현·검증 완료`
 
 ### 2026-09-04 통합 작품 정보 변화 묶음
 

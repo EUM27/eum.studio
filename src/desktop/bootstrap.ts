@@ -1401,6 +1401,36 @@ async function registerApplicationHandlers(): Promise<void> {
     recoveryApplyProfileValue !== null ||
     resumeCheckpointProfileValue !== null ||
     crashGateProfileValue !== null;
+  const configuredLocalWorkspaceRoot =
+    process.env.EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH;
+  if (
+    configuredLocalWorkspaceRoot !== undefined &&
+    !path.isAbsolute(configuredLocalWorkspaceRoot)
+  ) {
+    throw new Error(
+      "EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH must be absolute",
+    );
+  }
+  const localWorkspaceBackupProfile = parseLocalWorkspaceBackupProfile(
+    JSON.parse(
+      readFileSync(
+        process.env.EUM_STUDIO_LOCAL_WORKSPACE_BACKUP_PROFILE_PATH ??
+          path.join(
+            app.getAppPath(),
+            "config",
+            "local-workspace-backup.json",
+          ),
+        "utf8",
+      ),
+    ),
+  );
+  const localMediaLibraryRootDirectoryPath =
+    configuredLocalWorkspaceRoot === undefined
+      ? path.join(app.getPath("userData"), "local-media-library-v1")
+      : path.join(
+          configuredLocalWorkspaceRoot,
+          ...localWorkspaceBackupProfile.localMedia.restoreRootSegments,
+        );
   const youtubeMusicConnectionStore =
     await openNodeYouTubeMusicConnectionStore({
       rootDirectoryPath: path.join(
@@ -1415,10 +1445,8 @@ async function registerApplicationHandlers(): Promise<void> {
       },
     });
   const localMediaLibrary = await openNodeLocalMediaLibrary({
-    rootDirectoryPath: path.join(
-      app.getPath("userData"),
-      "local-media-library-v1",
-    ),
+    rootDirectoryPath: localMediaLibraryRootDirectoryPath,
+    checksum: localWorkspaceBackupProfile.checksum,
   });
   protocol.handle("eum-media", async (request) => {
     if (request.method !== "GET" && request.method !== "HEAD") {
@@ -1488,16 +1516,7 @@ async function registerApplicationHandlers(): Promise<void> {
     !hasConfiguredManuscriptRuntime &&
     !useEphemeralTestWorkspace
   ) {
-    const configuredRoot =
-      process.env.EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH;
-    if (
-      configuredRoot !== undefined &&
-      !path.isAbsolute(configuredRoot)
-    ) {
-      throw new Error(
-        "EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH must be absolute",
-      );
-    }
+    const configuredRoot = configuredLocalWorkspaceRoot;
     const configuredAssistantConnectionRoot =
       process.env.EUM_STUDIO_ASSISTANT_CONNECTION_ROOT_PATH;
     if (
@@ -1602,6 +1621,7 @@ async function registerApplicationHandlers(): Promise<void> {
         rootDirectoryPath:
           configuredRoot ??
           path.join(app.getPath("userData"), "workspace-v1"),
+        localMediaLibraryRootDirectoryPath,
         studioDisplayName: app.getName(),
         locale: app.getLocale(),
         timezone:
@@ -1793,19 +1813,7 @@ async function registerApplicationHandlers(): Promise<void> {
         },
         emptyDocumentProfile: ephemeralDocumentProfile,
         defaults: localWorkspaceDefaults,
-        backupProfile: parseLocalWorkspaceBackupProfile(
-          JSON.parse(
-            readFileSync(
-              process.env.EUM_STUDIO_LOCAL_WORKSPACE_BACKUP_PROFILE_PATH ??
-                path.join(
-                  app.getAppPath(),
-                  "config",
-                  "local-workspace-backup.json",
-                ),
-              "utf8",
-            ),
-          ),
-        ),
+        backupProfile: localWorkspaceBackupProfile,
       });
     const publishingMailRuntime = createPublishingMailRuntime({
       profile: publishingMailConnectorProfile,
@@ -4583,6 +4591,50 @@ async function registerApplicationHandlers(): Promise<void> {
             workId: command.workId,
             storageMode: command.storageMode,
             filePaths,
+          }),
+        });
+      },
+      inspectLocalMedia: (command) => localMediaLibrary.inspect(command),
+      relinkLocalMedia: async (command) => {
+        const configuredPath =
+          process.env.EUM_STUDIO_LOCAL_MEDIA_RELINK_PATH;
+        let filePath: string | undefined;
+        if (configuredPath !== undefined) {
+          if (!path.isAbsolute(configuredPath)) {
+            throw new Error(
+              "EUM_STUDIO_LOCAL_MEDIA_RELINK_PATH must be absolute",
+            );
+          }
+          filePath = configuredPath;
+        } else {
+          const owner = mainWindow;
+          if (owner === null) throw new Error("Main window is unavailable");
+          const selection = await dialog.showOpenDialog(owner, {
+            title: "연결할 미디어 원본 선택",
+            buttonLabel: "다시 연결",
+            properties: ["openFile"],
+            filters: [{ name: "미디어 파일", extensions: ["mp3", "mp4"] }],
+          });
+          if (selection.canceled) {
+            return Object.freeze({
+              schemaVersion: 1,
+              status: "cancelled",
+            });
+          }
+          filePath = selection.filePaths[0];
+        }
+        if (filePath === undefined) {
+          return Object.freeze({
+            schemaVersion: 1,
+            status: "cancelled",
+          });
+        }
+        return Object.freeze({
+          schemaVersion: 1,
+          status: "relinked",
+          availability: await localMediaLibrary.relink({
+            ...command,
+            filePath,
           }),
         });
       },

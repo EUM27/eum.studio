@@ -39,6 +39,10 @@ import type {
   YouTubeVideoSearchResult,
 } from "../../application/music/youtube-music";
 import type {
+  InspectLocalMediaCommand,
+  InspectLocalMediaResult,
+  RelinkLocalMediaCommand,
+  RelinkLocalMediaResult,
   SelectLocalMediaCommand,
   SelectLocalMediaResult,
 } from "../../application/music/media-track";
@@ -119,6 +123,12 @@ export function registerStudioIpc(input: Readonly<{
     selectLocalMedia: (
       command: SelectLocalMediaCommand,
     ) => Promise<SelectLocalMediaResult>;
+    inspectLocalMedia: (
+      command: InspectLocalMediaCommand,
+    ) => Promise<InspectLocalMediaResult>;
+    relinkLocalMedia: (
+      command: RelinkLocalMediaCommand,
+    ) => Promise<RelinkLocalMediaResult>;
   }>;
   backup: Readonly<{
     create: () => Promise<LocalWorkspaceBackupActionResult>;
@@ -256,6 +266,8 @@ export function registerStudioIpc(input: Readonly<{
     profile: input.profiles.youtubeMusic,
     searchVideos: input.musicPlayback.searchVideos,
     selectLocalMedia: input.musicPlayback.selectLocalMedia,
+    inspectLocalMedia: input.musicPlayback.inspectLocalMedia,
+    relinkLocalMedia: input.musicPlayback.relinkLocalMedia,
   });
   registerPlotsIpc({
     ipcMain: input.ipcMain,

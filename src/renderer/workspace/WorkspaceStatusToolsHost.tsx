@@ -448,6 +448,7 @@ export function WorkspaceStatusToolsHost(input: Readonly<{
             error={music.musicLibraryError ?? music.sceneMusicQueueError}
             favorites={music.workMusicSettings?.settings.favoriteTracks ?? []}
             localMedia={music.workMusicSettings?.settings.localMedia ?? []}
+            localMediaAvailability={music.localMediaAvailability}
             onAddToQueue={music.addMusicLibraryTrack}
             onClose={music.closeMusicLibrary}
             onOpenConnectionSettings={() => {
@@ -468,6 +469,9 @@ export function WorkspaceStatusToolsHost(input: Readonly<{
             onRegisterLocalMedia={(storageMode) => {
               void music.registerLocalMedia(storageMode);
             }}
+            onRelinkLocalMedia={(track) => {
+              void music.relinkLocalMedia(track);
+            }}
             onRemoveLocalMedia={(track) => {
               void music.removeRegisteredLocalMedia(track);
             }}
@@ -482,6 +486,7 @@ export function WorkspaceStatusToolsHost(input: Readonly<{
             queueSaving={music.musicLibraryActionState === "saving-playlist"}
             registeringMode={music.localMediaRegistrationMode}
             removingMediaId={music.localMediaRemovalId}
+            relinkingMediaId={music.localMediaRelinkingId}
             results={music.musicLibraryResults}
             searching={music.musicLibraryActionState === "searching"}
           />,

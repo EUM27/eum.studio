@@ -716,6 +716,103 @@ test("preflights an exact selection and exports the approved text", async () => 
   }
 });
 
+test("downloads selected episodes as one TXT in the actual episode order", async () => {
+  test.setTimeout(90_000);
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "eum-studio-manuscript-bulk-export-"),
+  );
+  const exportPath = path.join(directory, `${randomUUID()}.txt`);
+  const runtimeEnvironment = {
+    ...process.env,
+    EUM_STUDIO_TEST_EPHEMERAL_WORKSPACE: "0",
+    EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH: directory,
+    EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+  };
+  const electronArguments = [
+    ".",
+    `--user-data-dir=${path.join(directory, "electron-user-data")}`,
+  ];
+  const workTitle = "순서 검증 작품";
+  const episodes = [
+    { title: "2화", text: "둘째 원고" },
+    { title: "10화", text: "열째 원고" },
+    { title: "1화", text: "첫째 원고" },
+  ] as const;
+  const electronApp = await electron.launch({
+    args: electronArguments,
+    cwd: process.cwd(),
+    env: runtimeEnvironment,
+  });
+
+  try {
+    const page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page
+      .getByRole("button", { name: "작품 만들기", exact: true })
+      .click();
+    const createWorkDialog = page.getByRole("dialog", {
+      name: "새 작품 만들기",
+    });
+    await createWorkDialog.getByLabel("작품 제목").fill(workTitle);
+    await createWorkDialog.getByLabel("첫 회차 제목").fill(episodes[0].title);
+    await createWorkDialog
+      .getByRole("button", { name: "작품 만들기", exact: true })
+      .click();
+
+    const manuscript = page.getByRole("textbox", { name: "원고" });
+    await manuscript.pressSequentially(episodes[0].text);
+    await expect(page.getByTestId("save-state")).toHaveText("저장됨");
+    for (const episode of episodes.slice(1)) {
+      await createNamedEpisode(page, episode.title);
+      await manuscript.pressSequentially(episode.text);
+      await expect(page.getByTestId("save-state")).toHaveText("저장됨");
+    }
+
+    await page
+      .getByRole("button", { name: "추가 서식 도구 열기", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "전체 다운로드", exact: true })
+      .click();
+    const exportDialog = page.getByRole("dialog", {
+      name: "전체 다운로드",
+    });
+    await expectDialogFitsDesktop(exportDialog);
+    await expect(
+      exportDialog.locator(".manuscript-bulk-export-selection label span"),
+    ).toHaveText(episodes.map((episode) => episode.title));
+    await expect(exportDialog.getByLabel("2화", { exact: true })).toBeChecked();
+    await expect(exportDialog.getByLabel("10화", { exact: true })).toBeChecked();
+    await expect(exportDialog.getByLabel("1화", { exact: true })).toBeChecked();
+    await exportDialog.getByLabel("10화", { exact: true }).uncheck();
+
+    await electronApp.evaluate(
+      ({ dialog }, selectedPath) => {
+        Object.defineProperty(dialog, "showSaveDialog", {
+          configurable: true,
+          value: async () => ({
+            canceled: false,
+            filePath: selectedPath,
+          }),
+        });
+      },
+      exportPath,
+    );
+    await exportDialog
+      .getByRole("button", { name: "선택한 회차 다운로드", exact: true })
+      .click();
+    await expect(exportDialog).toContainText(
+      "2개 회차를 하나의 TXT로 다운로드했습니다.",
+    );
+    expect(await readFile(exportPath, "utf8")).toBe(
+      `${episodes[0].text}\n\n${episodes[2].text}`,
+    );
+  } finally {
+    await electronApp.close().catch(() => undefined);
+    await removeVerifiedTemporaryDirectory(directory);
+  }
+});
+
 test("creates the first local Work and reopens its saved manuscript after restart", async () => {
   test.setTimeout(120_000);
   const directory = await mkdtemp(

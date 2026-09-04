@@ -228,6 +228,10 @@ describe("legacy lore dry-run writer", () => {
     );
     const opened = await openLocalWorkspaceRuntime({
       rootDirectoryPath: targetRootDirectoryPath,
+      localMediaLibraryRootDirectoryPath: join(
+        targetRootDirectoryPath,
+        "local-media-library-v1",
+      ),
       studioDisplayName: "이음 스튜디오",
       locale: "ko-KR",
       timezone: "Asia/Seoul",

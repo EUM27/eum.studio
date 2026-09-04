@@ -1,8 +1,8 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "format": {
     "identity": "eum-studio-local-workspace-backup",
-    "version": "1"
+    "version": "2"
   },
   "checksum": {
     "identity": "eum-studio-ledger-sha256-v1",
@@ -27,6 +27,19 @@
     "blobDirectorySegments": ["blobs", "published"],
     "blobShardWidths": [2, 2],
     "blobFileNameSuffix": ".blob"
+  },
+  "localMedia": {
+    "format": {
+      "identity": "eum-studio-local-media-backup",
+      "version": "1"
+    },
+    "legacyCoreFormatVersions": ["1"],
+    "bundleLayout": {
+      "manifestEntrySegments": ["local-media", "manifest.json"],
+      "manifestChecksumEntrySegments": ["local-media", "manifest.checksum.json"],
+      "managedFileDirectorySegments": ["local-media", "files"]
+    },
+    "restoreRootSegments": ["local-media-library-v1"]
   },
   "stateFileName": "backup-state-v1.json"
 }

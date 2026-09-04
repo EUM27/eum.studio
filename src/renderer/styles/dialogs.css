@@ -261,6 +261,51 @@
   gap: 6px;
 }
 
+.studio-app-shell .manuscript-bulk-export-selection {
+  display: grid;
+  max-height: min(52vh, 420px);
+  margin: 0;
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid var(--eum-line);
+  border-radius: 8px;
+}
+
+.studio-app-shell .manuscript-bulk-export-selection legend {
+  padding: 0 5px;
+  color: var(--eum-text);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.studio-app-shell .manuscript-bulk-export-selection label {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+
+.studio-app-shell .manuscript-bulk-export-selection label:hover {
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .manuscript-bulk-export-selection input {
+  accent-color: var(--eum-accent);
+}
+
+.studio-app-shell .manuscript-bulk-export-summary,
+.studio-app-shell .manuscript-bulk-export-message {
+  margin: 0;
+  color: var(--eum-text-muted);
+  font-size: 12px;
+}
+
+.studio-app-shell .manuscript-bulk-export-message {
+  color: var(--eum-text);
+}
+
 .studio-app-shell .daily-goal-description {
   margin: 14px 0 0;
   color: var(--eum-text-muted);

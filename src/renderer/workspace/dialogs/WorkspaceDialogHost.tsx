@@ -14,6 +14,7 @@ import type { useVersionController } from "../../features/version/useVersionCont
 import { ContinuousReadingDialog } from "../../editor/ContinuousReadingDialog";
 import { ForwardWritingGoalDialog } from "../../editor/ForwardWritingMode";
 import { ManuscriptAnalysisDialog } from "../../editor/ManuscriptAnalysisDialog";
+import { ManuscriptBulkExportDialog } from "../../editor/ManuscriptBulkExportDialog";
 import { ManuscriptPreflightDialog } from "../../editor/ManuscriptPreflightDialog";
 import { ManuscriptTextImportDialog } from "../../editor/ManuscriptTextImportDialog";
 import { WorkSnapshotComparisonDialog } from "../../editor/WorkSnapshotComparisonDialog";
@@ -80,6 +81,16 @@ export function WorkspaceDialogHost(input: WorkspaceDialogHostProps) {
           documentTitle={editorTools.manuscriptAnalysis.documentTitle}
           manuscript={editorTools.manuscriptAnalysis.manuscript}
           onClose={editorTools.closeManuscriptAnalysis}
+        />
+      )}
+      {editorTools.pendingManuscriptBulkExport !== null && (
+        <ManuscriptBulkExportDialog
+          onClose={editorTools.closeManuscriptBulkExport}
+          onExport={editorTools.exportManuscriptBulk}
+          orderedDocuments={
+            editorTools.pendingManuscriptBulkExport.orderedDocuments
+          }
+          workTitle={editorTools.pendingManuscriptBulkExport.workTitle}
         />
       )}
       {editorTools.manuscriptTextImport !== null && (

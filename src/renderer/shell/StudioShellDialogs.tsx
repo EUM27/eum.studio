@@ -71,7 +71,9 @@ export function BackupDialog({
           </button>
         </header>
         <p className="dialog-description">
-          현재 작업실을 검증된 백업으로 만들거나, 선택한 백업을 새 작업실 위치에 복원합니다.
+          현재 작업실과 앱에 가져온 MP3·MP4를 checksum으로 검증해 함께
+          보존합니다. 원본 위치 연결 파일은 복사하지 않고 경로·크기·checksum을
+          기록하며, 선택한 백업은 새 작업실 위치에만 복원합니다.
         </p>
         {actionState === "loading" ? (
           <p className="backup-empty-state">백업 기록을 확인하는 중입니다.</p>
@@ -99,6 +101,12 @@ export function BackupDialog({
               <div><dt>회차</dt><dd>{summary.counts.documentCount}</dd></div>
               <div><dt>버전</dt><dd>{summary.counts.revisionCount}</dd></div>
               <div><dt>집필 기록</dt><dd>{summary.counts.writingSessionCount}</dd></div>
+              <div><dt>가져온 미디어</dt><dd>{summary.media.managedFileCount}</dd></div>
+              <div><dt>외부 연결</dt><dd>{summary.media.externalReferenceCount}</dd></div>
+              <div>
+                <dt>연결 끊김</dt>
+                <dd>{summary.media.disconnectedExternalReferenceCount}</dd>
+              </div>
             </dl>
           </section>
         )}

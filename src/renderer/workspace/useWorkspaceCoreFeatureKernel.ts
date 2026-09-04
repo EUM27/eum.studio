@@ -389,17 +389,6 @@ export function useWorkspaceCoreFeatureKernel(input: Readonly<{
       ) => manuscriptEditorRef.current?.selectDocumentRange(document, range) ?? false,
       setManuscriptFocusActive,
     }), [setManuscriptFocusActive, manuscriptEditorRef]);
-    const editorToolsControllerInput = useMemo(() => ({
-      client: input.client.editor,
-      document: activeDocument ?? null,
-      editor: editorToolsPort,
-    }), [activeDocument, editorToolsPort, input.client.editor]);
-    const editorToolsController = useEditorToolsController(
-      editorToolsControllerInput,
-    );
-    const {
-      activeForwardWriting,
-    } = editorToolsController;
     const activeWorkDocuments = useMemo(
       () =>
         runtime.status === "ready" && activeWork !== undefined
@@ -409,6 +398,16 @@ export function useWorkspaceCoreFeatureKernel(input: Readonly<{
           : [],
       [activeWork, runtime],
     );
+    const editorToolsController = useEditorToolsController({
+      client: input.client.editor,
+      document: activeDocument ?? null,
+      documents: activeWorkDocuments,
+      editor: editorToolsPort,
+      workTitle: activeWork?.title ?? null,
+    });
+    const {
+      activeForwardWriting,
+    } = editorToolsController;
     const continuousReadingCoordination = useMemo(() => Object.freeze({
       progressRef: continuousReadingProgressRef,
       locationRef: continuousReadingLocationRef,

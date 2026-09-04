@@ -4572,6 +4572,12 @@ describe("studio bridge contract", () => {
         resumeCheckpointCount: 1,
         writingSessionCount: 1,
       },
+      media: {
+        managedFileCount: 1,
+        externalReferenceCount: 1,
+        disconnectedExternalReferenceCount: 0,
+        managedByteLength: 2048,
+      },
     } as const;
     const status = { schemaVersion: 1, lastVerified: summary } as const;
     const completed = {

@@ -103,6 +103,7 @@ type ManuscriptCallbacks = Pick<
 export function ManuscriptWorkspaceSurface(input: Readonly<{
   activeDocument: ManuscriptDocumentSource | null;
   activeWorkDocuments: readonly ManuscriptDocumentSource[];
+  previousEpisodeFlowDocuments: readonly ManuscriptDocumentSource[];
   callbacks: ManuscriptCallbacks;
   controllers: Readonly<{
     activity: ReturnType<typeof useActivityController>;
@@ -142,6 +143,7 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
   const {
     activeDocument,
     activeWorkDocuments,
+    previousEpisodeFlowDocuments,
     callbacks,
     controllers,
     editorRef,
@@ -330,6 +332,7 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
           loreEntries={loreEntries}
           canMoveToNextEpisode={episodeMove.canMoveToNextEpisode}
           orderedDocuments={activeWorkDocuments}
+          previousEpisodeFlowDocuments={previousEpisodeFlowDocuments}
           onBlur={activity.handleDocumentBlur}
           onCanonReview={onCanonReview}
           onContinuityManual={onContinuityManual}
@@ -359,6 +362,7 @@ export function ManuscriptWorkspaceSurface(input: Readonly<{
           onImportText={() => {
             void editorTools.selectManuscriptTextImport();
           }}
+          onOpenBulkExport={editorTools.openManuscriptBulkExport}
           onMoveToNextEpisode={() => {
             void episodeMove.moveHereToNextEpisode();
           }}

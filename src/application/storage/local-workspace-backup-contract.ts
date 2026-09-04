@@ -6,6 +6,13 @@ export type LocalWorkspaceBackupCounts = {
   readonly writingSessionCount: number;
 };
 
+export type LocalWorkspaceBackupMediaCounts = {
+  readonly managedFileCount: number;
+  readonly externalReferenceCount: number;
+  readonly disconnectedExternalReferenceCount: number;
+  readonly managedByteLength: number;
+};
+
 export type LocalWorkspaceBackupSummary = {
   readonly schemaVersion: 1;
   readonly bundlePath: string;
@@ -14,6 +21,7 @@ export type LocalWorkspaceBackupSummary = {
   readonly verifiedAt: string;
   readonly lastAction: "created" | "restored";
   readonly counts: LocalWorkspaceBackupCounts;
+  readonly media: LocalWorkspaceBackupMediaCounts;
 };
 
 export type LocalWorkspaceBackupStatusProjection = {
@@ -113,24 +121,66 @@ function counts(value: unknown, label: string): LocalWorkspaceBackupCounts {
   );
 }
 
+function mediaCounts(
+  value: unknown,
+  label: string,
+): LocalWorkspaceBackupMediaCounts {
+  const input = record(value, label);
+  const fields = [
+    "managedFileCount",
+    "externalReferenceCount",
+    "disconnectedExternalReferenceCount",
+    "managedByteLength",
+  ] as const;
+  exact(input, fields, label);
+  const parsed = Object.freeze(
+    Object.fromEntries(
+      fields.map((field) => {
+        const entry = input[field];
+        if (
+          typeof entry !== "number" ||
+          !Number.isSafeInteger(entry) ||
+          entry < 0
+        ) {
+          throw new Error(`${label}.${field} must be a non-negative integer`);
+        }
+        return [field, entry];
+      }),
+    ) as unknown as LocalWorkspaceBackupMediaCounts,
+  );
+  if (
+    parsed.disconnectedExternalReferenceCount >
+      parsed.externalReferenceCount ||
+    (parsed.managedFileCount === 0 && parsed.managedByteLength !== 0)
+  ) {
+    throw new Error(`${label} values are inconsistent`);
+  }
+  return parsed;
+}
+
+export const EMPTY_LOCAL_WORKSPACE_BACKUP_MEDIA_COUNTS =
+  Object.freeze<LocalWorkspaceBackupMediaCounts>({
+    managedFileCount: 0,
+    externalReferenceCount: 0,
+    disconnectedExternalReferenceCount: 0,
+    managedByteLength: 0,
+  });
+
 export function parseLocalWorkspaceBackupSummary(
   value: unknown,
 ): LocalWorkspaceBackupSummary {
   const label = "LocalWorkspaceBackupSummary";
   const input = record(value, label);
-  exact(
-    input,
-    [
-      "schemaVersion",
-      "bundlePath",
-      "targetPath",
-      "createdAt",
-      "verifiedAt",
-      "lastAction",
-      "counts",
-    ],
-    label,
-  );
+  const fields = [
+    "schemaVersion",
+    "bundlePath",
+    "targetPath",
+    "createdAt",
+    "verifiedAt",
+    "lastAction",
+    "counts",
+  ];
+  exact(input, input.media === undefined ? fields : [...fields, "media"], label);
   schema(input, label);
   if (input.lastAction !== "created" && input.lastAction !== "restored") {
     throw new Error(`${label}.lastAction is unsupported`);
@@ -143,6 +193,9 @@ export function parseLocalWorkspaceBackupSummary(
     verifiedAt: stringValue(input, "verifiedAt", label),
     lastAction: input.lastAction,
     counts: counts(input.counts, `${label}.counts`),
+    media: input.media === undefined
+      ? EMPTY_LOCAL_WORKSPACE_BACKUP_MEDIA_COUNTS
+      : mediaCounts(input.media, `${label}.media`),
   });
 }
 

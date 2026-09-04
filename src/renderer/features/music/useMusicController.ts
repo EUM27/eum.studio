@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { StudioBridge } from "../../../application/contracts/studio-bridge";
 import type {
+  LocalMediaAvailabilityStatus,
   LocalMediaTrackProjection,
   LocalMediaStorageMode,
   MusicTrackProjection,
@@ -72,11 +73,17 @@ export function useMusicController(input: Readonly<{
     | "saving-playlist"
     | "registering-media"
     | "removing-media"
+    | "relinking-media"
   >("idle");
   const [localMediaRegistrationMode, setLocalMediaRegistrationMode] =
     useState<LocalMediaStorageMode | null>(null);
   const [localMediaRemovalId, setLocalMediaRemovalId] =
     useState<string | null>(null);
+  const [localMediaRelinkingId, setLocalMediaRelinkingId] =
+    useState<string | null>(null);
+  const [localMediaAvailability, setLocalMediaAvailability] = useState<
+    Readonly<Record<string, LocalMediaAvailabilityStatus>>
+  >(Object.freeze({}));
   const [musicLibraryError, setMusicLibraryError] = useState<string | null>(
     null,
   );
@@ -117,6 +124,56 @@ export function useMusicController(input: Readonly<{
     onLoaded: setYoutubeMusicProfile,
     onFailed: () => setYoutubeMusicProfile(null),
   }), [initialProfileClient]);
+
+  useEffect(() => {
+    let disposed = false;
+    if (
+      !musicLibraryOpen ||
+      input.activeWorkId === null ||
+      input.operations === undefined ||
+      workMusicSettings?.workId !== input.activeWorkId
+    ) {
+      return () => {
+        disposed = true;
+      };
+    }
+    const mediaIds = workMusicSettings.settings.localMedia.map(
+      (track) => track.mediaId,
+    );
+    if (mediaIds.length === 0) {
+      return () => {
+        disposed = true;
+      };
+    }
+    void input.operations.playback.inspectLocalMedia({
+      schemaVersion: 1,
+      workId: input.activeWorkId,
+      mediaIds,
+    }).then(
+      (result) => {
+        if (disposed) return;
+        setLocalMediaAvailability(Object.freeze(Object.fromEntries(
+          result.entries.map((entry) => [entry.mediaId, entry.status]),
+        )));
+      },
+      (reason) => {
+        if (disposed) return;
+        setMusicLibraryError(
+          reason instanceof Error
+            ? reason.message
+            : "미디어 연결 상태를 확인하지 못했습니다.",
+        );
+      },
+    );
+    return () => {
+      disposed = true;
+    };
+  }, [
+    input.activeWorkId,
+    input.operations,
+    musicLibraryOpen,
+    workMusicSettings,
+  ]);
 
   const playMusicQueue = useCallback((
     tracks: readonly MusicTrackProjection[],
@@ -337,6 +394,13 @@ export function useMusicController(input: Readonly<{
       });
       replaceWorkMusicSettings(saved);
       setMusicLibraryQueue(saved.settings.playlistTracks);
+      setLocalMediaAvailability((current) => Object.freeze(
+        Object.fromEntries(
+          Object.entries(current).filter(([mediaId]) =>
+            mediaId !== track.mediaId
+          ),
+        ),
+      ));
     } catch (reason) {
       setMusicLibraryError(
         reason instanceof Error
@@ -352,6 +416,54 @@ export function useMusicController(input: Readonly<{
     input.operations,
     musicLibraryActionState,
     replaceWorkMusicSettings,
+    sceneMusicQueueActionState,
+    workMusicSettings,
+  ]);
+
+  const relinkLocalMedia = useCallback(async (
+    track: LocalMediaTrackProjection,
+  ) => {
+    if (
+      input.activeWorkId === null ||
+      input.operations === undefined ||
+      workMusicSettings?.workId !== input.activeWorkId ||
+      track.workId !== input.activeWorkId ||
+      track.storageMode !== "external-reference" ||
+      !workMusicSettings.settings.localMedia.some(
+        (entry) => entry.mediaId === track.mediaId,
+      ) ||
+      musicLibraryActionState !== "idle" ||
+      sceneMusicQueueActionState !== "idle"
+    ) return;
+    setMusicLibraryActionState("relinking-media");
+    setLocalMediaRelinkingId(track.mediaId);
+    setMusicLibraryError(null);
+    try {
+      const result = await input.operations.playback.relinkLocalMedia({
+        schemaVersion: 1,
+        workId: input.activeWorkId,
+        mediaId: track.mediaId,
+      });
+      if (result.status === "relinked") {
+        setLocalMediaAvailability((current) => Object.freeze({
+          ...current,
+          [track.mediaId]: result.availability.status,
+        }));
+      }
+    } catch (reason) {
+      setMusicLibraryError(
+        reason instanceof Error
+          ? reason.message
+          : "미디어 원본을 다시 연결하지 못했습니다.",
+      );
+    } finally {
+      setLocalMediaRelinkingId(null);
+      setMusicLibraryActionState("idle");
+    }
+  }, [
+    input.activeWorkId,
+    input.operations,
+    musicLibraryActionState,
     sceneMusicQueueActionState,
     workMusicSettings,
   ]);
@@ -617,6 +729,7 @@ export function useMusicController(input: Readonly<{
     saveMusicLibraryQueue,
     registerLocalMedia,
     removeRegisteredLocalMedia,
+    relinkLocalMedia,
     searchSceneMusicQueues,
     selectSceneMusicQueue,
     playSelectedSceneMusicQueue,
@@ -629,6 +742,8 @@ export function useMusicController(input: Readonly<{
     playMusicLibraryTrack,
     removeMusicLibraryTrack,
     localMediaRemovalId,
+    localMediaRelinkingId,
+    localMediaAvailability,
     reconcile,
   };
 }

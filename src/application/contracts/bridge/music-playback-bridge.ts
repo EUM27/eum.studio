@@ -7,8 +7,16 @@ import {
   type YouTubeVideoSearchResult,
 } from "../../music/youtube-music";
 import {
+  parseInspectLocalMediaCommand,
+  parseInspectLocalMediaResult,
+  parseRelinkLocalMediaCommand,
+  parseRelinkLocalMediaResult,
   parseSelectLocalMediaCommand,
   parseSelectLocalMediaResult,
+  type InspectLocalMediaCommand,
+  type InspectLocalMediaResult,
+  type RelinkLocalMediaCommand,
+  type RelinkLocalMediaResult,
   type SelectLocalMediaCommand,
   type SelectLocalMediaResult,
 } from "../../music/media-track";
@@ -30,6 +38,8 @@ import {
 export const YOUTUBE_MUSIC_PROFILE_CHANNEL = "studio:music:youtube-profile";
 export const YOUTUBE_MUSIC_SEARCH_CHANNEL = "studio:music:youtube-search";
 export const LOCAL_MEDIA_SELECT_CHANNEL = "studio:music:local-media-select";
+export const LOCAL_MEDIA_INSPECT_CHANNEL = "studio:music:local-media-inspect";
+export const LOCAL_MEDIA_RELINK_CHANNEL = "studio:music:local-media-relink";
 export const SCENE_MUSIC_QUEUE_SEARCH_CHANNEL =
   "studio:music:scene-queue-search";
 export const SCENE_MUSIC_QUEUE_LIST_CHANNEL =
@@ -41,6 +51,8 @@ export type MusicPlaybackBridgeChannel =
   | typeof YOUTUBE_MUSIC_PROFILE_CHANNEL
   | typeof YOUTUBE_MUSIC_SEARCH_CHANNEL
   | typeof LOCAL_MEDIA_SELECT_CHANNEL
+  | typeof LOCAL_MEDIA_INSPECT_CHANNEL
+  | typeof LOCAL_MEDIA_RELINK_CHANNEL
   | typeof SCENE_MUSIC_QUEUE_SEARCH_CHANNEL
   | typeof SCENE_MUSIC_QUEUE_LIST_CHANNEL
   | typeof SCENE_MUSIC_QUEUE_SELECT_CHANNEL;
@@ -48,6 +60,8 @@ export type MusicPlaybackBridgeChannel =
 export type MusicPlaybackBridgePayload =
   | SearchYouTubeVideosCommand
   | SelectLocalMediaCommand
+  | InspectLocalMediaCommand
+  | RelinkLocalMediaCommand
   | SearchSceneMusicQueuesCommand
   | ListSceneMusicQueueCandidatesCommand
   | SelectSceneMusicQueueCommand;
@@ -60,6 +74,12 @@ export type MusicPlaybackBridge = Readonly<{
   selectLocalMedia: (
     command: SelectLocalMediaCommand,
   ) => Promise<SelectLocalMediaResult>;
+  inspectLocalMedia: (
+    command: InspectLocalMediaCommand,
+  ) => Promise<InspectLocalMediaResult>;
+  relinkLocalMedia: (
+    command: RelinkLocalMediaCommand,
+  ) => Promise<RelinkLocalMediaResult>;
   searchSceneQueues: (
     command: SearchSceneMusicQueuesCommand,
   ) => Promise<SceneMusicQueueSearchResult>;
@@ -108,6 +128,38 @@ export function createMusicPlaybackBridge(
         return result;
       } catch {
         throw new Error("Invalid local media selection result");
+      }
+    },
+    inspectLocalMedia: async (input) => {
+      const command = parseInspectLocalMediaCommand(input);
+      const value = await invoke(LOCAL_MEDIA_INSPECT_CHANNEL, command);
+      try {
+        const result = parseInspectLocalMediaResult(value);
+        if (result.workId !== command.workId) {
+          throw new Error("Inspected local media crossed the Work boundary");
+        }
+        return result;
+      } catch {
+        throw new Error("Invalid local media inspection result");
+      }
+    },
+    relinkLocalMedia: async (input) => {
+      const command = parseRelinkLocalMediaCommand(input);
+      const value = await invoke(LOCAL_MEDIA_RELINK_CHANNEL, command);
+      try {
+        const result = parseRelinkLocalMediaResult(value);
+        if (
+          result.status === "relinked" &&
+          (
+            result.availability.workId !== command.workId ||
+            result.availability.mediaId !== command.mediaId
+          )
+        ) {
+          throw new Error("Relinked local media crossed its identity boundary");
+        }
+        return result;
+      } catch {
+        throw new Error("Invalid local media relink result");
       }
     },
     searchSceneQueues: async (input) => {

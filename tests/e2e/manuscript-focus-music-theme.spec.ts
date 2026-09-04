@@ -1502,12 +1502,44 @@ test("mixes YouTube with linked and managed MP3/MP4 files in the compact player"
     );
     await player.getByRole("button", { name: "다음 곡", exact: true }).click();
     await expect(player).toContainText("linked-track");
+    await localMediaElement.evaluate((media) => {
+      (media as HTMLMediaElement).loop = true;
+    });
     await expect.poll(() => page.evaluate(() =>
       (window as unknown as { __localMediaPlayCount?: number })
         .__localMediaPlayCount ?? 0
     )).toBeGreaterThan(playCountBeforeNext);
+    await expect.poll(() => localMediaElement.evaluate((media) => ({
+      paused: (media as HTMLMediaElement).paused,
+      readyState: (media as HTMLMediaElement).readyState,
+    }))).toMatchObject({
+      paused: false,
+      readyState: 4,
+    });
 
-    const mediaRoot = path.join(userDataPath, "local-media-library-v1");
+    await player.getByRole("button", {
+      name: "음악 일시정지",
+      exact: true,
+    }).click();
+    expect(await localMediaElement.evaluate((media) =>
+      (media as HTMLMediaElement).paused
+    )).toBe(true);
+    await expect(player.getByRole("button", {
+      name: "음악 재생",
+      exact: true,
+    })).toBeVisible();
+    await localMediaElement.evaluate((media) => {
+      media.dispatchEvent(new Event("canplay"));
+    });
+    expect(await localMediaElement.evaluate((media) =>
+      (media as HTMLMediaElement).paused
+    )).toBe(true);
+    await expect(player.getByRole("button", {
+      name: "음악 재생",
+      exact: true,
+    })).toBeVisible();
+
+    const mediaRoot = path.join(directory, "local-media-library-v1");
     await expect.poll(async () =>
       (await readdir(path.join(mediaRoot, "entries"))).length
     ).toBe(4);
@@ -1970,10 +2002,16 @@ test("previews and applies a caller-selected UTF-8 manuscript text file", async 
   }
 });
 
-test("preserves manual compact state across viewport changes while workspace rails stay available", async () => {
+test("hides the editor sidebar in manual compact state across viewport changes", async () => {
   const documentProfile = createDocumentSwitchProfile();
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "eum-studio-sidebar-compact-e2e-"),
+  );
   const electronApp = await electron.launch({
-    args: ["."],
+    args: [
+      ".",
+      `--user-data-dir=${path.join(directory, "electron-user-data")}`,
+    ],
     cwd: process.cwd(),
     env: {
       ...process.env,
@@ -2002,13 +2040,13 @@ test("preserves manual compact state across viewport changes while workspace rai
       .getByRole("button", { name: "사이드바 접기" })
       .click();
     await expect(window.locator(".studio-app-shell")).toHaveClass(/is-compact/u);
-    await expect(documentRail).toBeVisible();
+    await expect(documentRail).toBeHidden();
     await expect(reviewRail).toBeHidden();
 
     await window
       .getByRole("button", { name: "검토 레일 열기" })
       .click();
-    await expect(documentRail).toBeVisible();
+    await expect(documentRail).toBeHidden();
     await expect(reviewRail).toBeVisible();
     await window
       .getByRole("button", { name: "검토 레일 닫기" })
@@ -2019,13 +2057,20 @@ test("preserves manual compact state across viewport changes while workspace rai
       height: randomInt(680, 820),
     });
     await expect(window.locator(".studio-app-shell")).toHaveClass(/is-compact/u);
-    await expect(documentRail).toBeVisible();
+    await expect(documentRail).toBeHidden();
     await expect(reviewRail).toBeHidden();
-    await expect(
-      window.getByRole("button", { name: "사이드바 펼치기" }),
-    ).toBeVisible();
+    const expandSidebar = window.getByRole("button", {
+      name: "사이드바 펼치기",
+    });
+    await expect(expandSidebar).toBeVisible();
+    await expandSidebar.click();
+    await expect(window.locator(".studio-app-shell")).not.toHaveClass(
+      /is-compact/u,
+    );
+    await expect(documentRail).toBeVisible();
   } finally {
     await electronApp.close();
+    await removeVerifiedTemporaryDirectory(directory);
   }
 });
 

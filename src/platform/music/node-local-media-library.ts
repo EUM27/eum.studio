@@ -1,22 +1,40 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { constants as fileConstants } from "node:fs";
 import {
   copyFile,
-  mkdir,
-  readFile,
+  open,
   rename,
   rm,
   stat,
-  writeFile,
 } from "node:fs/promises";
 import path from "node:path";
 
 import {
+  parseInspectLocalMediaCommand,
   parseLocalMediaPlaybackUrl,
   parseLocalMediaTrackProjection,
+  parseRelinkLocalMediaCommand,
+  type InspectLocalMediaCommand,
+  type InspectLocalMediaResult,
+  type LocalMediaAvailabilityProjection,
   type LocalMediaStorageMode,
   type LocalMediaTrackProjection,
+  type RelinkLocalMediaCommand,
 } from "../../application/music/media-track";
+import {
+  checksumLocalMediaFile,
+  createNodeLocalMediaLibraryPaths,
+  ensureNodeLocalMediaLibraryPaths,
+  isMissingLocalMediaError,
+  localMediaDescriptorPath,
+  localMediaOpaqueFileStem,
+  localMediaSourcePath,
+  readStoredLocalMediaDescriptor,
+  sameStoredLocalMediaIntegrity,
+  writeStoredLocalMediaDescriptor,
+  type NodeLocalMediaChecksumProfile,
+  type StoredLocalMediaDescriptor,
+} from "./node-local-media-descriptor";
 
 type SupportedMedia = Readonly<{
   mediaKind: "audio" | "video";
@@ -29,14 +47,6 @@ const SUPPORTED_MEDIA_BY_EXTENSION: Readonly<Record<string, SupportedMedia>> =
     ".mp4": Object.freeze({ mediaKind: "video", mediaType: "video/mp4" }),
   });
 
-type StoredLocalMediaDescriptor = Readonly<{
-  schemaVersion: 1;
-  track: LocalMediaTrackProjection;
-  locator:
-    | Readonly<{ kind: "external-path"; filePath: string }>
-    | Readonly<{ kind: "managed-file"; fileName: string }>;
-}>;
-
 export type LocalMediaPlaybackSource = Readonly<{
   filePath: string;
   mediaType: string;
@@ -48,86 +58,12 @@ export type NodeLocalMediaLibrary = Readonly<{
     storageMode: LocalMediaStorageMode;
     filePaths: readonly string[];
   }>): Promise<readonly LocalMediaTrackProjection[]>;
+  inspect(input: InspectLocalMediaCommand): Promise<InspectLocalMediaResult>;
+  relink(input: RelinkLocalMediaCommand & Readonly<{
+    filePath: string;
+  }>): Promise<LocalMediaAvailabilityProjection>;
   resolvePlaybackUrl(url: string): Promise<LocalMediaPlaybackSource>;
 }>;
-
-function record(value: unknown, label: string): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error(`${label} must be an object`);
-  }
-  return value as Record<string, unknown>;
-}
-
-function exact(
-  input: Record<string, unknown>,
-  fields: readonly string[],
-  label: string,
-): void {
-  const expected = new Set(fields);
-  if (
-    Object.keys(input).length !== expected.size ||
-    Object.keys(input).some((field) => !expected.has(field))
-  ) {
-    throw new Error(`${label} fields do not match the schema`);
-  }
-}
-
-function parseStoredDescriptor(value: unknown): StoredLocalMediaDescriptor {
-  const label = "Stored local media descriptor";
-  const input = record(value, label);
-  exact(input, ["schemaVersion", "track", "locator"], label);
-  if (input.schemaVersion !== 1) {
-    throw new Error(`${label}.schemaVersion must be 1`);
-  }
-  const track = parseLocalMediaTrackProjection(input.track, `${label}.track`);
-  const locatorInput = record(input.locator, `${label}.locator`);
-  if (locatorInput.kind === "external-path") {
-    exact(locatorInput, ["kind", "filePath"], `${label}.locator`);
-    if (
-      track.storageMode !== "external-reference" ||
-      typeof locatorInput.filePath !== "string" ||
-      !path.isAbsolute(locatorInput.filePath)
-    ) {
-      throw new Error(`${label}.locator does not match external-reference`);
-    }
-    return Object.freeze({
-      schemaVersion: 1,
-      track,
-      locator: Object.freeze({
-        kind: "external-path",
-        filePath: locatorInput.filePath,
-      }),
-    });
-  }
-  if (locatorInput.kind === "managed-file") {
-    exact(locatorInput, ["kind", "fileName"], `${label}.locator`);
-    if (
-      track.storageMode !== "managed-copy" ||
-      typeof locatorInput.fileName !== "string" ||
-      locatorInput.fileName.length === 0 ||
-      path.basename(locatorInput.fileName) !== locatorInput.fileName
-    ) {
-      throw new Error(`${label}.locator does not match managed-copy`);
-    }
-    return Object.freeze({
-      schemaVersion: 1,
-      track,
-      locator: Object.freeze({
-        kind: "managed-file",
-        fileName: locatorInput.fileName,
-      }),
-    });
-  }
-  throw new Error(`${label}.locator.kind is unsupported`);
-}
-
-function opaqueFileStem(mediaId: string): string {
-  return createHash("sha256").update(mediaId, "utf8").digest("hex");
-}
-
-function descriptorFileName(mediaId: string): string {
-  return `${opaqueFileStem(mediaId)}.json`;
-}
 
 function supportedMedia(filePath: string): SupportedMedia {
   const extension = path.extname(filePath).toLocaleLowerCase();
@@ -140,20 +76,72 @@ function supportedMedia(filePath: string): SupportedMedia {
 
 export async function openNodeLocalMediaLibrary(input: {
   readonly rootDirectoryPath: string;
+  readonly checksum: NodeLocalMediaChecksumProfile;
   readonly createId?: () => string;
 }): Promise<NodeLocalMediaLibrary> {
-  if (!path.isAbsolute(input.rootDirectoryPath)) {
-    throw new Error("Local media library rootDirectoryPath must be absolute");
-  }
-  const entriesDirectoryPath = path.join(input.rootDirectoryPath, "entries");
-  const filesDirectoryPath = path.join(input.rootDirectoryPath, "files");
-  const temporaryDirectoryPath = path.join(input.rootDirectoryPath, "temporary");
-  await Promise.all([
-    mkdir(entriesDirectoryPath, { recursive: true }),
-    mkdir(filesDirectoryPath, { recursive: true }),
-    mkdir(temporaryDirectoryPath, { recursive: true }),
-  ]);
+  const paths = createNodeLocalMediaLibraryPaths(input.rootDirectoryPath);
+  await ensureNodeLocalMediaLibraryPaths(paths);
   const createId = input.createId ?? randomUUID;
+
+  const assertDescriptorIdentity = (
+    descriptor: StoredLocalMediaDescriptor,
+    workId: string,
+    mediaId: string,
+  ): void => {
+    if (
+      descriptor.track.mediaId !== mediaId ||
+      descriptor.track.workId !== workId
+    ) {
+      throw new Error("Local media identity does not match its descriptor");
+    }
+  };
+
+  const inspectOne = async (
+    workId: string,
+    mediaId: string,
+  ): Promise<LocalMediaAvailabilityProjection> => {
+    let descriptor: StoredLocalMediaDescriptor;
+    try {
+      descriptor = await readStoredLocalMediaDescriptor({ paths, mediaId });
+    } catch (error) {
+      if (isMissingLocalMediaError(error)) {
+        return Object.freeze({
+          schemaVersion: 1,
+          workId: workId as LocalMediaAvailabilityProjection["workId"],
+          mediaId,
+          status: "disconnected",
+        });
+      }
+      throw error;
+    }
+    assertDescriptorIdentity(descriptor, workId, mediaId);
+    try {
+      const observed = await checksumLocalMediaFile({
+        filePath: localMediaSourcePath(paths, descriptor),
+        checksum: input.checksum,
+      });
+      return Object.freeze({
+        schemaVersion: 1,
+        workId: descriptor.track.workId,
+        mediaId,
+        status: descriptor.integrity === null
+          ? "unverified"
+          : sameStoredLocalMediaIntegrity(descriptor.integrity, observed)
+            ? "available"
+            : "changed",
+      });
+    } catch (error) {
+      if (isMissingLocalMediaError(error)) {
+        return Object.freeze({
+          schemaVersion: 1,
+          workId: descriptor.track.workId,
+          mediaId,
+          status: "disconnected",
+        });
+      }
+      throw error;
+    }
+  };
 
   return Object.freeze({
     async register(registrationInput) {
@@ -175,11 +163,11 @@ export async function openNodeLocalMediaLibrary(input: {
           if (!path.isAbsolute(filePath)) {
             throw new Error("Selected local media path must be absolute");
           }
-          const fileStat = await stat(filePath);
-          if (!fileStat.isFile()) {
-            throw new Error("Selected local media path must be a file");
-          }
           const media = supportedMedia(filePath);
+          const integrity = await checksumLocalMediaFile({
+            filePath,
+            checksum: input.checksum,
+          });
           const mediaId = createId();
           if (mediaId.trim().length === 0) {
             throw new Error("Local media identity must not be empty");
@@ -195,9 +183,9 @@ export async function openNodeLocalMediaLibrary(input: {
             mediaKind: media.mediaKind,
             mediaType: media.mediaType,
             storageMode: registrationInput.storageMode,
-            byteLength: fileStat.size,
+            byteLength: integrity.byteLength,
           });
-          return Object.freeze({ filePath, track });
+          return Object.freeze({ filePath, integrity, track });
         },
       ));
       if (
@@ -209,18 +197,31 @@ export async function openNodeLocalMediaLibrary(input: {
 
       const createdPaths: string[] = [];
       try {
-        for (const { filePath, track } of prepared) {
-          const stem = opaqueFileStem(track.mediaId);
+        for (const { filePath, integrity, track } of prepared) {
+          const stem = localMediaOpaqueFileStem(track.mediaId);
           let locator: StoredLocalMediaDescriptor["locator"];
           if (registrationInput.storageMode === "managed-copy") {
             const managedFileName = `${stem}${path.extname(filePath).toLocaleLowerCase()}`;
-            const managedPath = path.join(filesDirectoryPath, managedFileName);
+            const managedPath = path.join(paths.filesDirectoryPath, managedFileName);
             const temporaryManagedPath = path.join(
-              temporaryDirectoryPath,
+              paths.temporaryDirectoryPath,
               `${managedFileName}.${randomUUID()}.tmp`,
             );
             createdPaths.push(temporaryManagedPath);
             await copyFile(filePath, temporaryManagedPath, fileConstants.COPYFILE_EXCL);
+            const copiedIntegrity = await checksumLocalMediaFile({
+              filePath: temporaryManagedPath,
+              checksum: input.checksum,
+            });
+            if (!sameStoredLocalMediaIntegrity(integrity, copiedIntegrity)) {
+              throw new Error("Managed local media copy does not match its source");
+            }
+            const handle = await open(temporaryManagedPath, "r+");
+            try {
+              await handle.sync();
+            } finally {
+              await handle.close();
+            }
             await rename(temporaryManagedPath, managedPath);
             createdPaths.push(managedPath);
             locator = Object.freeze({
@@ -232,26 +233,13 @@ export async function openNodeLocalMediaLibrary(input: {
           }
 
           const descriptor: StoredLocalMediaDescriptor = Object.freeze({
-            schemaVersion: 1,
+            schemaVersion: 2,
             track,
+            integrity,
             locator,
           });
-          const descriptorPath = path.join(
-            entriesDirectoryPath,
-            descriptorFileName(track.mediaId),
-          );
-          const temporaryDescriptorPath = path.join(
-            temporaryDirectoryPath,
-            `${stem}.${randomUUID()}.json.tmp`,
-          );
-          createdPaths.push(temporaryDescriptorPath);
-          await writeFile(
-            temporaryDescriptorPath,
-            `${JSON.stringify(descriptor)}\n`,
-            { encoding: "utf8", flag: "wx", mode: 0o600 },
-          );
-          await rename(temporaryDescriptorPath, descriptorPath);
-          createdPaths.push(descriptorPath);
+          await writeStoredLocalMediaDescriptor({ paths, descriptor });
+          createdPaths.push(localMediaDescriptorPath(paths, track.mediaId));
         }
       } catch (reason) {
         await Promise.all(createdPaths.map((createdPath) =>
@@ -263,24 +251,83 @@ export async function openNodeLocalMediaLibrary(input: {
       return Object.freeze(prepared.map(({ track }) => track));
     },
 
+    async inspect(value) {
+      const command = parseInspectLocalMediaCommand(value);
+      return Object.freeze({
+        schemaVersion: 1,
+        workId: command.workId,
+        entries: Object.freeze(await Promise.all(command.mediaIds.map(
+          (mediaId) => inspectOne(command.workId, mediaId),
+        ))),
+      });
+    },
+
+    async relink(value) {
+      const command = parseRelinkLocalMediaCommand({
+        schemaVersion: value.schemaVersion,
+        workId: value.workId,
+        mediaId: value.mediaId,
+      });
+      if (!path.isAbsolute(value.filePath)) {
+        throw new Error("Selected local media path must be absolute");
+      }
+      const descriptor = await readStoredLocalMediaDescriptor({
+        paths,
+        mediaId: command.mediaId,
+      });
+      assertDescriptorIdentity(descriptor, command.workId, command.mediaId);
+      if (
+        descriptor.track.storageMode !== "external-reference" ||
+        descriptor.locator.kind !== "external-path"
+      ) {
+        throw new Error("Only external local media can be reconnected");
+      }
+      const selectedMedia = supportedMedia(value.filePath);
+      if (
+        selectedMedia.mediaKind !== descriptor.track.mediaKind ||
+        selectedMedia.mediaType !== descriptor.track.mediaType
+      ) {
+        throw new Error("선택한 파일 형식이 등록된 미디어와 일치하지 않습니다.");
+      }
+      const integrity = await checksumLocalMediaFile({
+        filePath: value.filePath,
+        checksum: input.checksum,
+      });
+      if (
+        descriptor.integrity !== null
+          ? !sameStoredLocalMediaIntegrity(descriptor.integrity, integrity)
+          : integrity.byteLength !== descriptor.track.byteLength
+      ) {
+        throw new Error("선택한 파일이 등록된 원본과 일치하지 않습니다.");
+      }
+      await writeStoredLocalMediaDescriptor({
+        paths,
+        descriptor: Object.freeze({
+          schemaVersion: 2,
+          track: descriptor.track,
+          integrity,
+          locator: Object.freeze({
+            kind: "external-path",
+            filePath: path.resolve(value.filePath),
+          }),
+        }),
+      });
+      return Object.freeze({
+        schemaVersion: 1,
+        workId: descriptor.track.workId,
+        mediaId: descriptor.track.mediaId,
+        status: "available",
+      });
+    },
+
     async resolvePlaybackUrl(url) {
       const identity = parseLocalMediaPlaybackUrl(url);
-      const descriptorPath = path.join(
-        entriesDirectoryPath,
-        descriptorFileName(identity.mediaId),
-      );
-      const descriptor = parseStoredDescriptor(
-        JSON.parse(await readFile(descriptorPath, "utf8")),
-      );
-      if (
-        descriptor.track.mediaId !== identity.mediaId ||
-        descriptor.track.workId !== identity.workId
-      ) {
-        throw new Error("Local media playback identity does not match its descriptor");
-      }
-      const filePath = descriptor.locator.kind === "external-path"
-        ? descriptor.locator.filePath
-        : path.join(filesDirectoryPath, descriptor.locator.fileName);
+      const descriptor = await readStoredLocalMediaDescriptor({
+        paths,
+        mediaId: identity.mediaId,
+      });
+      assertDescriptorIdentity(descriptor, identity.workId, identity.mediaId);
+      const filePath = localMediaSourcePath(paths, descriptor);
       const fileStat = await stat(filePath);
       if (!fileStat.isFile()) {
         throw new Error("Registered local media is unavailable");

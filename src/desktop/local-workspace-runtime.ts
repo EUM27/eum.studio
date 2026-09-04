@@ -2291,6 +2291,7 @@ type PreparedSceneMusicQueueSearch =
 
 export type LocalWorkspaceRuntimeOptions = {
   readonly rootDirectoryPath: string;
+  readonly localMediaLibraryRootDirectoryPath: string;
   readonly studioDisplayName: string;
   readonly locale: string;
   readonly timezone: string;
@@ -31236,6 +31237,8 @@ export async function openLocalWorkspaceRuntime(
     });
     const backupService = createLocalWorkspaceBackupService({
       rootDirectoryPath: options.rootDirectoryPath,
+      sourceLocalMediaLibraryRootDirectoryPath:
+        options.localMediaLibraryRootDirectoryPath,
       sourceBlobStore: blobStore,
       profile: options.backupProfile,
     });

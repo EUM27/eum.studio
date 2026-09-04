@@ -49,6 +49,12 @@ describe("StudioShellDialogs", () => {
           resumeCheckpointCount: 1,
           writingSessionCount: 5,
         }),
+        media: Object.freeze({
+          managedFileCount: 2,
+          externalReferenceCount: 1,
+          disconnectedExternalReferenceCount: 1,
+          managedByteLength: 1024,
+        }),
       }),
     });
     const markup = renderToStaticMarkup(createElement(BackupDialog, {
@@ -72,6 +78,9 @@ describe("StudioShellDialogs", () => {
     expect(markup).toContain("백업 오류");
     expect(markup).toContain("새 위치에 복원");
     expect(markup).toContain("새 백업");
+    expect(markup).toContain("앱에 가져온 MP3·MP4");
+    expect(markup).toContain("가져온 미디어");
+    expect(markup).toContain("연결 끊김");
   });
 
   it("keeps the existing import rehearsal dialog markup contract", () => {

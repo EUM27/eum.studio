@@ -1,6 +1,8 @@
 import type { IpcMain, IpcMainInvokeEvent } from "electron";
 
 import {
+  LOCAL_MEDIA_INSPECT_CHANNEL,
+  LOCAL_MEDIA_RELINK_CHANNEL,
   LOCAL_MEDIA_SELECT_CHANNEL,
   SCENE_MUSIC_QUEUE_LIST_CHANNEL,
   SCENE_MUSIC_QUEUE_SEARCH_CHANNEL,
@@ -15,7 +17,13 @@ import {
   type YouTubeVideoSearchResult,
 } from "../../application/music/youtube-music";
 import {
+  parseInspectLocalMediaCommand,
+  parseRelinkLocalMediaCommand,
   parseSelectLocalMediaCommand,
+  type InspectLocalMediaCommand,
+  type InspectLocalMediaResult,
+  type RelinkLocalMediaCommand,
+  type RelinkLocalMediaResult,
   type SelectLocalMediaCommand,
   type SelectLocalMediaResult,
 } from "../../application/music/media-track";
@@ -54,6 +62,12 @@ export function registerMusicPlaybackIpc(input: Readonly<{
   selectLocalMedia: (
     command: SelectLocalMediaCommand,
   ) => Promise<SelectLocalMediaResult>;
+  inspectLocalMedia: (
+    command: InspectLocalMediaCommand,
+  ) => Promise<InspectLocalMediaResult>;
+  relinkLocalMedia: (
+    command: RelinkLocalMediaCommand,
+  ) => Promise<RelinkLocalMediaResult>;
 }>): void {
   input.ipcMain.handle(YOUTUBE_MUSIC_PROFILE_CHANNEL, (event) => {
     input.authorizeSender(event);
@@ -69,6 +83,14 @@ export function registerMusicPlaybackIpc(input: Readonly<{
   input.ipcMain.handle(LOCAL_MEDIA_SELECT_CHANNEL, (event, value: unknown) => {
     input.authorizeSender(event);
     return input.selectLocalMedia(parseSelectLocalMediaCommand(value));
+  });
+  input.ipcMain.handle(LOCAL_MEDIA_INSPECT_CHANNEL, (event, value: unknown) => {
+    input.authorizeSender(event);
+    return input.inspectLocalMedia(parseInspectLocalMediaCommand(value));
+  });
+  input.ipcMain.handle(LOCAL_MEDIA_RELINK_CHANNEL, (event, value: unknown) => {
+    input.authorizeSender(event);
+    return input.relinkLocalMedia(parseRelinkLocalMediaCommand(value));
   });
   input.ipcMain.handle(
     SCENE_MUSIC_QUEUE_SEARCH_CHANNEL,

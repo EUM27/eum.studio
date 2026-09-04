@@ -23,6 +23,12 @@ describe("local workspace backup contract", () => {
         resumeCheckpointCount: 1,
         writingSessionCount: 4,
       },
+      media: {
+        managedFileCount: 2,
+        externalReferenceCount: 1,
+        disconnectedExternalReferenceCount: 1,
+        managedByteLength: 4096,
+      },
     } as const;
 
     expect(
@@ -38,5 +44,19 @@ describe("local workspace backup contract", () => {
         summary,
       }),
     ).toEqual({ schemaVersion: 1, status: "completed", summary });
+
+    const legacySummary: Record<string, unknown> = { ...summary };
+    delete legacySummary.media;
+    expect(
+      parseLocalWorkspaceBackupStatusProjection({
+        schemaVersion: 1,
+        lastVerified: legacySummary,
+      }).lastVerified?.media,
+    ).toEqual({
+      managedFileCount: 0,
+      externalReferenceCount: 0,
+      disconnectedExternalReferenceCount: 0,
+      managedByteLength: 0,
+    });
   });
 });

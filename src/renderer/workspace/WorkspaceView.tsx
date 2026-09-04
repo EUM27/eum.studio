@@ -29,6 +29,7 @@ import {
   type StarlightThemeKey,
 } from "../theme/starlight-theme";
 import { DocumentRailHost } from "./documents/DocumentRailHost";
+import { orderWorkspaceDocumentItemsByTree } from "./documents/workspace-document-tree-order";
 import { WorkspaceFeatureDialogHost } from "./dialogs/WorkspaceFeatureDialogHost";
 import { ManuscriptWorkspaceSurface } from "./editor/ManuscriptWorkspaceSurface";
 import { WorkspaceHeaderRecoveryHost } from "./header/WorkspaceHeaderRecoveryHost";
@@ -215,6 +216,16 @@ export function WorkspaceView(input: Readonly<{
     contextPlannerController,
     narrativeDigestController,
   } = input.coreKernel;
+  const previousEpisodeFlowDocuments = useMemo(
+    () =>
+      activeWork === undefined
+        ? Object.freeze([] as ManuscriptDocumentSource[])
+        : orderWorkspaceDocumentItemsByTree(
+            activeWork,
+            activeWorkDocuments,
+          ),
+    [activeWork, activeWorkDocuments],
+  );
   const { refreshCandidates: refreshCanonReviewCandidates } =
     canonReviewController;
   const {
@@ -869,6 +880,7 @@ export function WorkspaceView(input: Readonly<{
               <ManuscriptWorkspaceSurface
                 activeDocument={activeDocument ?? null}
                 activeWorkDocuments={activeWorkDocuments}
+                previousEpisodeFlowDocuments={previousEpisodeFlowDocuments}
                 automaticSceneAnalysis={automaticSceneAnalysisController}
                 callbacks={{
                   onCompositionEnd: handleCompositionEnd,

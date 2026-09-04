@@ -2143,6 +2143,158 @@ test("reorders episodes without changing manuscript state", async () => {
   }
 });
 
+test("uses the displayed folder-tree order for previous episode flow", async () => {
+  test.setTimeout(120_000);
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "eum-studio-previous-flow-tree-order-"),
+  );
+  const workTitle = randomUUID();
+  const firstDocumentTitle = randomUUID();
+  const secondDocumentTitle = randomUUID();
+  const thirdDocumentTitle = randomUUID();
+  const firstManuscript = `${randomUUID()} 첫 회차 끝.`;
+  const secondManuscript = `${randomUUID()} 둘째 회차 끝.`;
+  const thirdManuscript = `${randomUUID()} 셋째 회차 끝.`;
+  const runtimeEnvironment = {
+    ...process.env,
+    EUM_STUDIO_TEST_EPHEMERAL_WORKSPACE: "0",
+    EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH: directory,
+    EUM_STUDIO_WINDOW_VISIBILITY: "hidden",
+  };
+  const executablePath =
+    process.env.EUM_STUDIO_PREVIOUS_FLOW_E2E_EXECUTABLE_PATH?.trim() || null;
+  const userDataArgument =
+    `--user-data-dir=${path.join(directory, "electron-user-data")}`;
+  const launchApplication = () =>
+    electron.launch({
+      ...(executablePath === null ? {} : { executablePath }),
+      args: executablePath === null
+        ? [".", userDataArgument]
+        : [userDataArgument],
+      cwd: process.cwd(),
+      env: runtimeEnvironment,
+    });
+  const dragEpisodeToFolder = async (
+    page: Page,
+    source: Locator,
+    target: Locator,
+  ): Promise<void> => {
+    const sourceBox = await source.boundingBox();
+    const targetBox = await target.boundingBox();
+    if (sourceBox === null || targetBox === null) {
+      throw new Error("Episode folder drag target is not visible");
+    }
+    await page.mouse.move(
+      sourceBox.x + sourceBox.width / 2,
+      sourceBox.y + sourceBox.height / 2,
+    );
+    await page.mouse.down();
+    await page.mouse.move(
+      targetBox.x + targetBox.width / 2,
+      targetBox.y + targetBox.height / 2,
+      { steps: 5 },
+    );
+    await page.mouse.up();
+  };
+  let electronApp = await launchApplication();
+
+  try {
+    let window = await electronApp.firstWindow();
+    await window.setViewportSize({ width: 1280, height: 900 });
+    await window
+      .getByRole("button", { name: "작품 만들기", exact: true })
+      .click();
+    const createWorkDialog = window.getByRole("dialog", {
+      name: "새 작품 만들기",
+    });
+    await createWorkDialog.getByLabel("작품 제목").fill(workTitle);
+    await createWorkDialog
+      .getByLabel("첫 회차 제목")
+      .fill(firstDocumentTitle);
+    await createWorkDialog
+      .getByRole("button", { name: "작품 만들기", exact: true })
+      .click();
+
+    let manuscript = window.getByRole("textbox", { name: "원고" });
+    await manuscript.pressSequentially(firstManuscript);
+    await expectEditorText(manuscript, firstManuscript);
+    await expect(window.getByTestId("save-state")).toHaveText("저장됨");
+
+    await createNamedEpisode(window, secondDocumentTitle);
+    await expect(window.getByTestId("manuscript-title")).toHaveText(
+      secondDocumentTitle,
+    );
+    manuscript = window.getByRole("textbox", { name: "원고" });
+    await expectEditorText(manuscript, "");
+    await expect(manuscript).toBeEditable();
+    await manuscript.click();
+    await manuscript.pressSequentially(secondManuscript);
+    await expectEditorText(manuscript, secondManuscript);
+    await expect(window.getByTestId("save-state")).toHaveText("저장됨");
+
+    await createNamedEpisode(window, thirdDocumentTitle);
+    await expect(window.getByTestId("manuscript-title")).toHaveText(
+      thirdDocumentTitle,
+    );
+    manuscript = window.getByRole("textbox", { name: "원고" });
+    await expectEditorText(manuscript, "");
+    await expect(manuscript).toBeEditable();
+    await manuscript.click();
+    await manuscript.pressSequentially(thirdManuscript);
+    await expectEditorText(manuscript, thirdManuscript);
+    await expect(window.getByTestId("save-state")).toHaveText("저장됨");
+
+    let folderRegion = window.getByRole("region", { name: "회차 폴더" });
+    await folderRegion
+      .getByRole("button", { name: "폴더 추가", exact: true })
+      .click();
+    const folderRow = folderRegion.locator(".document-tree-folder").first();
+    await expect(folderRow).toBeVisible();
+    await dragEpisodeToFolder(
+      window,
+      documentTreeButton(window, thirdDocumentTitle),
+      folderRow,
+    );
+    await expect(
+      folderRegion.locator(
+        ".document-tree-document .document-tree-title",
+      ),
+    ).toHaveText([
+      thirdDocumentTitle,
+      firstDocumentTitle,
+      secondDocumentTitle,
+    ]);
+
+    await documentTreeButton(window, firstDocumentTitle).click();
+    let flow = window.getByRole("region", { name: "이전 화 흐름" });
+    await expect(flow.locator("strong")).toHaveText(thirdDocumentTitle);
+    await expect(flow).toContainText(thirdManuscript);
+
+    await electronApp.close();
+    electronApp = await launchApplication();
+    window = await electronApp.firstWindow();
+    await window.setViewportSize({ width: 1280, height: 900 });
+    await continueFromMain(window);
+    folderRegion = window.getByRole("region", { name: "회차 폴더" });
+    await expect(
+      folderRegion.locator(
+        ".document-tree-document .document-tree-title",
+      ),
+    ).toHaveText([
+      thirdDocumentTitle,
+      firstDocumentTitle,
+      secondDocumentTitle,
+    ]);
+    await documentTreeButton(window, firstDocumentTitle).click();
+    flow = window.getByRole("region", { name: "이전 화 흐름" });
+    await expect(flow.locator("strong")).toHaveText(thirdDocumentTitle);
+    await expect(flow).toContainText(thirdManuscript);
+  } finally {
+    await electronApp.close();
+    await removeVerifiedTemporaryDirectory(directory);
+  }
+});
+
 test("organizes episodes in folders without changing manuscript state", async () => {
   test.setTimeout(120_000);
   const directory = await mkdtemp(

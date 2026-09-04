@@ -612,17 +612,17 @@
   gap: 7px;
 }
 
-.studio-app-shell.is-editor:has(.writing-workspace[data-work-section]) {
+.studio-app-shell.is-editor:not(.is-compact):has(.writing-workspace[data-work-section]) {
   --eum-sidebar-width: clamp(220px, 20vw, 288px);
 }
 
-.studio-app-shell.is-editor:has(.writing-workspace[data-work-section]) .sidebar {
+.studio-app-shell.is-editor:not(.is-compact):has(.writing-workspace[data-work-section]) .sidebar {
   visibility: visible;
   opacity: 1;
   pointer-events: auto;
 }
 
-.studio-app-shell.is-editor:has(.writing-workspace[data-work-section]) .workspace {
+.studio-app-shell.is-editor:not(.is-compact):has(.writing-workspace[data-work-section]) .workspace {
   grid-column: 2;
 }
 

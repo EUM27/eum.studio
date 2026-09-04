@@ -6,6 +6,10 @@ import {
   localMediaPlaybackUrl,
   musicTrackIdentity,
   parseLocalMediaPlaybackUrl,
+  parseInspectLocalMediaCommand,
+  parseInspectLocalMediaResult,
+  parseRelinkLocalMediaCommand,
+  parseRelinkLocalMediaResult,
   parseLocalMediaTrackProjection,
   parseSelectLocalMediaCommand,
   parseSelectLocalMediaResult,
@@ -68,5 +72,55 @@ describe("music media track contract", () => {
       workId: "work-a",
       tracks: [localTrack],
     });
+  });
+
+  it("validates Work-owned availability inspection and exact relink results", () => {
+    expect(parseInspectLocalMediaCommand({
+      schemaVersion: 1,
+      workId: "work-a",
+      mediaIds: ["media-a"],
+    })).toEqual({
+      schemaVersion: 1,
+      workId: "work-a",
+      mediaIds: ["media-a"],
+    });
+    expect(parseInspectLocalMediaResult({
+      schemaVersion: 1,
+      workId: "work-a",
+      entries: [{
+        schemaVersion: 1,
+        workId: "work-a",
+        mediaId: "media-a",
+        status: "disconnected",
+      }],
+    }).entries[0]?.status).toBe("disconnected");
+    const command = parseRelinkLocalMediaCommand({
+      schemaVersion: 1,
+      workId: "work-a",
+      mediaId: "media-a",
+    });
+    expect(parseRelinkLocalMediaResult({
+      schemaVersion: 1,
+      status: "relinked",
+      availability: {
+        schemaVersion: 1,
+        workId: command.workId,
+        mediaId: command.mediaId,
+        status: "available",
+      },
+    })).toMatchObject({
+      status: "relinked",
+      availability: { status: "available" },
+    });
+    expect(() => parseInspectLocalMediaResult({
+      schemaVersion: 1,
+      workId: "work-a",
+      entries: [{
+        schemaVersion: 1,
+        workId: "work-b",
+        mediaId: "media-a",
+        status: "available",
+      }],
+    })).toThrow("cross the Work boundary");
   });
 });

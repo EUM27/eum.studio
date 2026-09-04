@@ -39,6 +39,45 @@ export type SelectLocalMediaResult =
       tracks: readonly LocalMediaTrackProjection[];
     }>;
 
+export type LocalMediaAvailabilityStatus =
+  | "available"
+  | "disconnected"
+  | "changed"
+  | "unverified";
+
+export type LocalMediaAvailabilityProjection = Readonly<{
+  schemaVersion: 1;
+  workId: EntityId<"Work">;
+  mediaId: string;
+  status: LocalMediaAvailabilityStatus;
+}>;
+
+export type InspectLocalMediaCommand = Readonly<{
+  schemaVersion: 1;
+  workId: EntityId<"Work">;
+  mediaIds: readonly string[];
+}>;
+
+export type InspectLocalMediaResult = Readonly<{
+  schemaVersion: 1;
+  workId: EntityId<"Work">;
+  entries: readonly LocalMediaAvailabilityProjection[];
+}>;
+
+export type RelinkLocalMediaCommand = Readonly<{
+  schemaVersion: 1;
+  workId: EntityId<"Work">;
+  mediaId: string;
+}>;
+
+export type RelinkLocalMediaResult =
+  | Readonly<{ schemaVersion: 1; status: "cancelled" }>
+  | Readonly<{
+      schemaVersion: 1;
+      status: "relinked";
+      availability: LocalMediaAvailabilityProjection;
+    }>;
+
 function record(value: unknown, label: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error(`${label} must be an object`);
@@ -79,6 +118,41 @@ function storageMode(value: unknown, label: string): LocalMediaStorageMode {
     throw new Error(`${label} is unsupported`);
   }
   return value;
+}
+
+function availabilityStatus(
+  value: unknown,
+  label: string,
+): LocalMediaAvailabilityStatus {
+  if (
+    value !== "available" &&
+    value !== "disconnected" &&
+    value !== "changed" &&
+    value !== "unverified"
+  ) {
+    throw new Error(`${label} is unsupported`);
+  }
+  return value;
+}
+
+function schemaVersionOne(value: unknown, label: string): 1 {
+  if (value !== 1) {
+    throw new Error(`${label}.schemaVersion must be 1`);
+  }
+  return 1;
+}
+
+function uniqueMediaIds(value: unknown, label: string): readonly string[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`${label} must be an array`);
+  }
+  const mediaIds = value.map((mediaId, index) =>
+    nonEmpty(mediaId, `${label}[${index}]`)
+  );
+  if (new Set(mediaIds).size !== mediaIds.length) {
+    throw new Error(`${label} must not contain duplicates`);
+  }
+  return Object.freeze(mediaIds);
 }
 
 export function parseLocalMediaTrackProjection(
@@ -226,5 +300,97 @@ export function parseSelectLocalMediaResult(
     status: "selected",
     workId,
     tracks,
+  });
+}
+
+export function parseLocalMediaAvailabilityProjection(
+  value: unknown,
+  label = "LocalMediaAvailabilityProjection",
+): LocalMediaAvailabilityProjection {
+  const input = record(value, label);
+  exact(input, ["schemaVersion", "workId", "mediaId", "status"], label);
+  return Object.freeze({
+    schemaVersion: schemaVersionOne(input.schemaVersion, label),
+    workId: nonEmpty(input.workId, `${label}.workId`) as EntityId<"Work">,
+    mediaId: nonEmpty(input.mediaId, `${label}.mediaId`),
+    status: availabilityStatus(input.status, `${label}.status`),
+  });
+}
+
+export function parseInspectLocalMediaCommand(
+  value: unknown,
+): InspectLocalMediaCommand {
+  const label = "InspectLocalMediaCommand";
+  const input = record(value, label);
+  exact(input, ["schemaVersion", "workId", "mediaIds"], label);
+  return Object.freeze({
+    schemaVersion: schemaVersionOne(input.schemaVersion, label),
+    workId: nonEmpty(input.workId, `${label}.workId`) as EntityId<"Work">,
+    mediaIds: uniqueMediaIds(input.mediaIds, `${label}.mediaIds`),
+  });
+}
+
+export function parseInspectLocalMediaResult(
+  value: unknown,
+): InspectLocalMediaResult {
+  const label = "InspectLocalMediaResult";
+  const input = record(value, label);
+  exact(input, ["schemaVersion", "workId", "entries"], label);
+  const workId = nonEmpty(input.workId, `${label}.workId`) as EntityId<"Work">;
+  if (!Array.isArray(input.entries)) {
+    throw new Error(`${label}.entries must be an array`);
+  }
+  const entries = Object.freeze(input.entries.map((entry, index) =>
+    parseLocalMediaAvailabilityProjection(entry, `${label}.entries[${index}]`)
+  ));
+  if (entries.some((entry) => entry.workId !== workId)) {
+    throw new Error(`${label}.entries cross the Work boundary`);
+  }
+  if (new Set(entries.map((entry) => entry.mediaId)).size !== entries.length) {
+    throw new Error(`${label}.entries contain duplicate identities`);
+  }
+  return Object.freeze({
+    schemaVersion: schemaVersionOne(input.schemaVersion, label),
+    workId,
+    entries,
+  });
+}
+
+export function parseRelinkLocalMediaCommand(
+  value: unknown,
+): RelinkLocalMediaCommand {
+  const label = "RelinkLocalMediaCommand";
+  const input = record(value, label);
+  exact(input, ["schemaVersion", "workId", "mediaId"], label);
+  return Object.freeze({
+    schemaVersion: schemaVersionOne(input.schemaVersion, label),
+    workId: nonEmpty(input.workId, `${label}.workId`) as EntityId<"Work">,
+    mediaId: nonEmpty(input.mediaId, `${label}.mediaId`),
+  });
+}
+
+export function parseRelinkLocalMediaResult(
+  value: unknown,
+): RelinkLocalMediaResult {
+  const label = "RelinkLocalMediaResult";
+  const input = record(value, label);
+  if (input.status === "cancelled") {
+    exact(input, ["schemaVersion", "status"], label);
+    return Object.freeze({
+      schemaVersion: schemaVersionOne(input.schemaVersion, label),
+      status: "cancelled",
+    });
+  }
+  if (input.status !== "relinked") {
+    throw new Error(`${label}.status is unsupported`);
+  }
+  exact(input, ["schemaVersion", "status", "availability"], label);
+  return Object.freeze({
+    schemaVersion: schemaVersionOne(input.schemaVersion, label),
+    status: "relinked",
+    availability: parseLocalMediaAvailabilityProjection(
+      input.availability,
+      `${label}.availability`,
+    ),
   });
 }

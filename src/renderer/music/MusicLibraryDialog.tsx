@@ -19,6 +19,7 @@ import {
   isLocalMediaTrack,
   musicTrackIdentity,
   type LocalMediaStorageMode,
+  type LocalMediaAvailabilityStatus,
   type LocalMediaTrackProjection,
   type MusicTrackProjection,
 } from "../../application/music/media-track";
@@ -46,11 +47,27 @@ function trackSubtitle(track: MusicTrackProjection): string {
   ].join(" · ");
 }
 
+function availabilityLabel(
+  track: LocalMediaTrackProjection,
+  status: LocalMediaAvailabilityStatus | undefined,
+): string {
+  if (status === undefined) return "연결 확인 중";
+  if (status === "available") {
+    return track.storageMode === "managed-copy" ? "백업 포함" : "연결됨";
+  }
+  if (status === "disconnected") return "연결 끊김";
+  if (status === "changed") return "파일 변경됨";
+  return "checksum 확인 필요";
+}
+
 export function MusicLibraryDialog(input: {
   readonly connected: boolean;
   readonly error: string | null;
   readonly favorites: readonly MusicTrackProjection[];
   readonly localMedia: readonly LocalMediaTrackProjection[];
+  readonly localMediaAvailability: Readonly<
+    Record<string, LocalMediaAvailabilityStatus>
+  >;
   readonly onAddToQueue: (track: MusicTrackProjection) => void;
   readonly onClearQueue: () => void;
   readonly onClose: () => void;
@@ -60,6 +77,7 @@ export function MusicLibraryDialog(input: {
   readonly onPlayQueueTrack: (index: number) => void;
   readonly onPlayTrack: (track: MusicTrackProjection) => void;
   readonly onRegisterLocalMedia: (mode: LocalMediaStorageMode) => void;
+  readonly onRelinkLocalMedia: (track: LocalMediaTrackProjection) => void;
   readonly onRemoveLocalMedia: (track: LocalMediaTrackProjection) => void;
   readonly onRemoveFromQueue: (track: MusicTrackProjection) => void;
   readonly onSearch: (query: string) => void;
@@ -68,15 +86,24 @@ export function MusicLibraryDialog(input: {
   readonly queueSaving: boolean;
   readonly registeringMode: LocalMediaStorageMode | null;
   readonly removingMediaId: string | null;
+  readonly relinkingMediaId: string | null;
   readonly results: readonly YouTubeVideoProjection[];
   readonly searching: boolean;
 }) {
-  const [activeTab, setActiveTab] = useState<MusicLibraryTab>("queue");
+  const [activeTab, setActiveTab] = useState<MusicLibraryTab>(() =>
+    input.localMedia.some((track) => {
+      const status = input.localMediaAvailability[track.mediaId];
+      return status === "disconnected" || status === "changed";
+    })
+      ? "local"
+      : "queue"
+  );
   const [query, setQuery] = useState("");
   const favoriteIds = new Set(input.favorites.map(musicTrackIdentity));
   const queueIds = new Set(input.queue.map(musicTrackIdentity));
   const busy = input.searching || input.queueSaving ||
-    input.registeringMode !== null || input.removingMediaId !== null;
+    input.registeringMode !== null || input.removingMediaId !== null ||
+    input.relinkingMediaId !== null;
   const onBackdropPointerDown = useDialogDismiss({
     disabled: busy,
     onClose: input.onClose,
@@ -96,6 +123,18 @@ export function MusicLibraryDialog(input: {
     const identity = musicTrackIdentity(track);
     const favorite = favoriteIds.has(identity);
     const queued = queueIds.has(identity);
+    const availability = isLocalMediaTrack(track)
+      ? input.localMediaAvailability[track.mediaId]
+      : undefined;
+    const unavailable = isLocalMediaTrack(track) &&
+      (availability === "disconnected" || availability === "changed");
+    const canRelink = isLocalMediaTrack(track) &&
+      track.storageMode === "external-reference" &&
+      (
+        availability === "disconnected" ||
+        availability === "changed" ||
+        availability === "unverified"
+      );
     const favoriteAction = isLocalMediaTrack(track)
       ? favorite ? "즐겨찾기 해제" : "즐겨찾기 추가"
       : favorite ? "선호 영상 해제" : "선호 영상 저장";
@@ -112,11 +151,16 @@ export function MusicLibraryDialog(input: {
           )}
         <span className="music-library-track-copy">
           <strong>{track.title}</strong>
-          <small>{trackSubtitle(track)}</small>
+          <small>
+            {trackSubtitle(track)}
+            {isLocalMediaTrack(track) &&
+              ` · ${availabilityLabel(track, availability)}`}
+          </small>
         </span>
         <div className="music-library-track-actions">
           <button
             aria-label={`${track.title} 바로 재생`}
+            disabled={unavailable}
             onClick={() => {
               if (mode === "queue" && queueIndex !== undefined) {
                 input.onPlayQueueTrack(queueIndex);
@@ -132,7 +176,7 @@ export function MusicLibraryDialog(input: {
           {mode !== "queue" && (
             <button
               aria-label={`${track.title} 재생목록에 추가`}
-              disabled={busy || queued}
+              disabled={busy || queued || unavailable}
               onClick={() => input.onAddToQueue(track)}
               title={queued ? "재생목록에 있음" : "재생목록에 추가"}
               type="button"
@@ -172,15 +216,28 @@ export function MusicLibraryDialog(input: {
             </>
           )}
           {mode === "local" && isLocalMediaTrack(track) && (
-            <button
-              aria-label={`${track.title} 등록 삭제`}
-              disabled={busy}
-              onClick={() => input.onRemoveLocalMedia(track)}
-              title="등록 삭제"
-              type="button"
-            >
-              <Trash2 aria-hidden="true" size={13} />
-            </button>
+            <>
+              {canRelink && (
+                  <button
+                    aria-label={`${track.title} 다시 연결`}
+                    disabled={busy}
+                    onClick={() => input.onRelinkLocalMedia(track)}
+                    title="다시 연결"
+                    type="button"
+                  >
+                    <Link2 aria-hidden="true" size={13} />
+                  </button>
+                )}
+              <button
+                aria-label={`${track.title} 등록 삭제`}
+                disabled={busy}
+                onClick={() => input.onRemoveLocalMedia(track)}
+                title="등록 삭제"
+                type="button"
+              >
+                <Trash2 aria-hidden="true" size={13} />
+              </button>
+            </>
           )}
           {mode !== "queue" && (
             <button

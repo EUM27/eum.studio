@@ -1,10 +1,16 @@
 import {
+  createHash,
   randomUUID,
 } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
+  cp,
+  mkdir,
   mkdtemp,
+  readFile,
   rm,
+  stat,
+  writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -49,12 +55,36 @@ import { parseMusicSettingsProfile } from "../application/music/work-music-setti
 import { entityId, type EntityId } from "../domain/writing";
 import { CANON_REVIEW_PROMPT_VERSION } from "../application/canon/canon-review-contract";
 import { CONTINUITY_REVIEW_PROMPT_VERSION } from "../application/continuity/continuity-review-contract";
+import {
+  localMediaPlaybackUrl,
+} from "../application/music/media-track";
+import {
+  openNodeLocalMediaLibrary,
+} from "../platform/music/node-local-media-library";
+
+function canonicalJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(canonicalJsonValue);
+  }
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, entry]) => [key, canonicalJsonValue(entry)]),
+    );
+  }
+  return value;
+}
 
 function createOptions(rootDirectoryPath: string) {
   const workId = randomUUID();
   const documentId = randomUUID();
   return {
     rootDirectoryPath,
+    localMediaLibraryRootDirectoryPath: path.join(
+      rootDirectoryPath,
+      "local-media-library-v1",
+    ),
     studioDisplayName: randomUUID(),
     locale: "ko-KR",
     timezone: "Asia/Seoul",
@@ -12210,6 +12240,62 @@ describe("local workspace runtime", () => {
         },
       });
 
+      const legacyBundleRootDirectoryPath = path.join(
+        parentDirectoryPath,
+        "legacy-v1-backup",
+      );
+      const legacyRestoredRootDirectoryPath = path.join(
+        parentDirectoryPath,
+        "legacy-v1-restored",
+      );
+      await cp(bundleRootDirectoryPath, legacyBundleRootDirectoryPath, {
+        recursive: true,
+      });
+      const legacyManifestPath = path.join(
+        legacyBundleRootDirectoryPath,
+        ...options.backupProfile.bundleLayout.manifestEntrySegments,
+      );
+      const legacyManifest = JSON.parse(
+        await readFile(legacyManifestPath, "utf8"),
+      ) as { format: { identity: string; version: string } };
+      legacyManifest.format.version = "1";
+      const legacyManifestBytes = Buffer.from(
+        JSON.stringify(canonicalJsonValue(legacyManifest)),
+        "utf8",
+      );
+      await writeFile(legacyManifestPath, legacyManifestBytes);
+      const legacySidecarPath = path.join(
+        legacyBundleRootDirectoryPath,
+        ...options.backupProfile.bundleLayout.manifestChecksumEntrySegments,
+      );
+      await writeFile(
+        legacySidecarPath,
+        JSON.stringify(canonicalJsonValue({
+          checksumIdentity: options.backupProfile.checksum.identity,
+          checksumValue: createHash(
+            options.backupProfile.checksum.algorithm,
+          ).update(legacyManifestBytes).digest("hex"),
+          byteLength: legacyManifestBytes.byteLength,
+          manifestEntrySegments:
+            options.backupProfile.bundleLayout.manifestEntrySegments,
+        })),
+        "utf8",
+      );
+      await rm(path.join(legacyBundleRootDirectoryPath, "local-media"), {
+        recursive: true,
+        force: true,
+      });
+      const legacyRestored = await runtime.restoreBackupBundle(
+        legacyBundleRootDirectoryPath,
+        legacyRestoredRootDirectoryPath,
+      );
+      expect(legacyRestored.media).toEqual({
+        managedFileCount: 0,
+        externalReferenceCount: 0,
+        disconnectedExternalReferenceCount: 0,
+        managedByteLength: 0,
+      });
+
       const restoredBackup = await runtime.restoreBackupBundle(
         bundleRootDirectoryPath,
         restoredRootDirectoryPath,
@@ -12238,6 +12324,236 @@ describe("local workspace runtime", () => {
         documentId: created.documentId,
         initialText: manuscript,
       });
+    } finally {
+      restoredRuntime?.close();
+      runtime.close();
+      await rm(parentDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("backs up managed media, records external checksums, and restores disconnected references for exact relinking", async () => {
+    const parentDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-local-media-backup-"),
+    );
+    const sourceRootDirectoryPath = path.join(parentDirectoryPath, "source");
+    const sourceFilesDirectoryPath = path.join(parentDirectoryPath, "media");
+    const bundleRootDirectoryPath = path.join(parentDirectoryPath, "backup");
+    const restoredRootDirectoryPath = path.join(parentDirectoryPath, "restored");
+    await mkdir(sourceFilesDirectoryPath, { recursive: true });
+    const externalPath = path.join(sourceFilesDirectoryPath, "rain.mp3");
+    const managedSourcePath = path.join(sourceFilesDirectoryPath, "scene.mp4");
+    const externalBytes = Buffer.from([0x49, 0x44, 0x33, 0x03, 0x11]);
+    const managedBytes = Buffer.from([
+      0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70,
+    ]);
+    await writeFile(externalPath, externalBytes);
+    await writeFile(managedSourcePath, managedBytes);
+    const options = createOptions(sourceRootDirectoryPath);
+    const mediaLibrary = await openNodeLocalMediaLibrary({
+      rootDirectoryPath: options.localMediaLibraryRootDirectoryPath,
+      checksum: options.backupProfile.checksum,
+      createId: (() => {
+        const ids = ["external-media", "managed-media", "orphan-media"];
+        return () => ids.shift()!;
+      })(),
+    });
+    const runtime = await openLocalWorkspaceRuntime(options);
+    let restoredRuntime: Awaited<
+      ReturnType<typeof openLocalWorkspaceRuntime>
+    > | null = null;
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "미디어 백업 작품",
+        firstDocumentTitle: "1화",
+      });
+      const [external] = await mediaLibrary.register({
+        workId: created.workId,
+        storageMode: "external-reference",
+        filePaths: [externalPath],
+      });
+      const [managed] = await mediaLibrary.register({
+        workId: created.workId,
+        storageMode: "managed-copy",
+        filePaths: [managedSourcePath],
+      });
+      const [orphan] = await mediaLibrary.register({
+        workId: created.workId,
+        storageMode: "managed-copy",
+        filePaths: [managedSourcePath],
+      });
+      const currentSettings = await runtime.getWorkMusicSettings({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      await runtime.saveWorkMusicSettings({
+        schemaVersion: 1,
+        workId: created.workId,
+        expectedRevision: currentSettings.revision,
+        settings: {
+          ...currentSettings.settings,
+          localMedia: [external!, managed!],
+          playlistTracks: [external!, managed!],
+        },
+      });
+
+      const createdBackup = await runtime.createBackupBundle(
+        bundleRootDirectoryPath,
+      );
+      expect(createdBackup.media).toEqual({
+        managedFileCount: 1,
+        externalReferenceCount: 1,
+        disconnectedExternalReferenceCount: 0,
+        managedByteLength: managedBytes.byteLength,
+      });
+      const mediaManifestPath = path.join(
+        bundleRootDirectoryPath,
+        ...options.backupProfile.localMedia.bundleLayout.manifestEntrySegments,
+      );
+      const mediaManifest = JSON.parse(await readFile(mediaManifestPath, "utf8"));
+      expect(mediaManifest.entries).toHaveLength(2);
+      expect(
+        mediaManifest.entries.some(
+          (entry: { track: { mediaId: string } }) =>
+            entry.track.mediaId === orphan!.mediaId,
+        ),
+      ).toBe(false);
+      expect(mediaManifest.entries).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          track: expect.objectContaining({ mediaId: external!.mediaId }),
+          integrity: expect.objectContaining({
+            checksumIdentity: options.backupProfile.checksum.identity,
+            byteLength: externalBytes.byteLength,
+          }),
+          storage: expect.objectContaining({
+            kind: "external-path",
+            filePath: externalPath,
+            sourceFileName: "rain.mp3",
+          }),
+        }),
+        expect.objectContaining({
+          track: expect.objectContaining({ mediaId: managed!.mediaId }),
+          storage: expect.objectContaining({ kind: "managed-file" }),
+        }),
+      ]));
+
+      await rm(externalPath);
+      const restoredBackup = await runtime.restoreBackupBundle(
+        bundleRootDirectoryPath,
+        restoredRootDirectoryPath,
+      );
+      expect(restoredBackup.media).toEqual({
+        managedFileCount: 1,
+        externalReferenceCount: 1,
+        disconnectedExternalReferenceCount: 1,
+        managedByteLength: managedBytes.byteLength,
+      });
+
+      const restoredOptions = createOptions(restoredRootDirectoryPath);
+      const restoredLibrary = await openNodeLocalMediaLibrary({
+        rootDirectoryPath:
+          restoredOptions.localMediaLibraryRootDirectoryPath,
+        checksum: restoredOptions.backupProfile.checksum,
+      });
+      expect(await restoredLibrary.inspect({
+        schemaVersion: 1,
+        workId: created.workId,
+        mediaIds: [external!.mediaId, managed!.mediaId],
+      })).toMatchObject({
+        entries: [
+          { mediaId: external!.mediaId, status: "disconnected" },
+          { mediaId: managed!.mediaId, status: "available" },
+        ],
+      });
+      const managedPlayback = await restoredLibrary.resolvePlaybackUrl(
+        localMediaPlaybackUrl(managed!),
+      );
+      expect(await readFile(managedPlayback.filePath)).toEqual(managedBytes);
+
+      const relocatedExternalPath = path.join(
+        sourceFilesDirectoryPath,
+        "relocated-rain.mp3",
+      );
+      await writeFile(relocatedExternalPath, externalBytes);
+      expect(await restoredLibrary.relink({
+        schemaVersion: 1,
+        workId: created.workId,
+        mediaId: external!.mediaId,
+        filePath: relocatedExternalPath,
+      })).toMatchObject({ status: "available" });
+      expect((await restoredLibrary.resolvePlaybackUrl(
+        localMediaPlaybackUrl(external!),
+      )).filePath).toBe(relocatedExternalPath);
+
+      const tamperedBundlePath = path.join(
+        parentDirectoryPath,
+        "tampered-backup",
+      );
+      const rejectedRestorePath = path.join(
+        parentDirectoryPath,
+        "rejected-restore",
+      );
+      await cp(bundleRootDirectoryPath, tamperedBundlePath, {
+        recursive: true,
+      });
+      const managedManifestEntry = mediaManifest.entries.find(
+        (entry: {
+          track: { mediaId: string };
+          storage: { kind: string; bundleRelativeSegments?: string[] };
+        }) => entry.track.mediaId === managed!.mediaId,
+      );
+      expect(managedManifestEntry?.storage.kind).toBe("managed-file");
+      const managedBundleSegments =
+        managedManifestEntry?.storage.bundleRelativeSegments;
+      expect(managedBundleSegments).toBeDefined();
+      if (managedBundleSegments === undefined) {
+        throw new Error("Managed media bundle segments are missing");
+      }
+      await writeFile(
+        path.join(tamperedBundlePath, ...managedBundleSegments),
+        Buffer.from(managedBytes.map((value) => value ^ 0xff)),
+      );
+      await expect(runtime.restoreBackupBundle(
+        tamperedBundlePath,
+        rejectedRestorePath,
+      )).rejects.toThrow(
+        "Managed media bundle entry failed checksum verification",
+      );
+      await expect(stat(rejectedRestorePath)).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+
+      const missingManifestBundlePath = path.join(
+        parentDirectoryPath,
+        "missing-media-manifest-backup",
+      );
+      const missingManifestRestorePath = path.join(
+        parentDirectoryPath,
+        "missing-media-manifest-restore",
+      );
+      await cp(bundleRootDirectoryPath, missingManifestBundlePath, {
+        recursive: true,
+      });
+      await rm(path.join(
+        missingManifestBundlePath,
+        ...options.backupProfile.localMedia.bundleLayout
+          .manifestChecksumEntrySegments,
+      ));
+      await expect(runtime.restoreBackupBundle(
+        missingManifestBundlePath,
+        missingManifestRestorePath,
+      )).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(stat(missingManifestRestorePath)).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+
+      restoredRuntime = await openLocalWorkspaceRuntime(restoredOptions);
+      expect(
+        (await restoredRuntime.getWorkMusicSettings({
+          schemaVersion: 1,
+          workId: created.workId,
+        })).settings.localMedia.map((track) => track.mediaId),
+      ).toEqual([external!.mediaId, managed!.mediaId]);
     } finally {
       restoredRuntime?.close();
       runtime.close();

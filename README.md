@@ -4,7 +4,15 @@
 
 ## 현재 상태
 
-`통합 작품 정보 변화 묶음 — 장면 1회 분석·후보 승인·재시작 복원 검증 완료`
+`관리형 MP3·MP4 포함 백업 — checksum manifest·빈 위치 복원·외부 파일 재연결 검증 완료`
+
+로컬 작업실 백업 format v2는 SQLite snapshot과 revision blob에 더해, snapshot의 작품 음악 설정이 실제로 참조하는 로컬 미디어만 별도 canonical manifest로 봉인한다. `앱에 가져오기`로 관리되는 MP3·MP4는 파일 bytes와 checksum을 bundle에 포함하고, `원본 위치 연결` 파일은 복사하지 않은 채 절대 원본 경로·실제 파일명·크기·등록 checksum을 기록한다. 관리형 파일·미디어 manifest·sidecar가 누락되거나 변조되면 새 복원 위치를 만들기 전에 거부한다.
+
+복원은 기존 POC-3 계약처럼 새 빈 위치에만 게시하며, 관리형 파일과 checksum descriptor도 같은 staging 안에서 검증한 뒤 함께 게시한다. 외부 원본이 복원 시점에 없으면 음악 라이브러리에 `연결 끊김`으로 표시하고 재생을 막으며, 사용자가 고른 동일 checksum 파일만 같은 media identity에 다시 연결한다. 기존 format v1 백업은 미디어 0건의 레거시 bundle로 계속 복원한다.
+
+focused 계약·runtime·변조/누락 부정 경로, 전체 lint·TypeScript·Vitest·production build·architecture 경계를 통과했다. production Electron에서는 MP3·MP4를 외부 연결과 앱 가져오기로 등록하고 실제 백업 UI에서 v2 bundle 생성→외부 MP3 제거→새 위치 복원→완전 재실행→연결 끊김 표시→exact checksum 재연결을 통과했다. 사용 중일 수 있는 기본 standalone 설치본과 실사용 DB는 교체하거나 쓰지 않았다.
+
+직전 `통합 작품 정보 변화 묶음 — 장면 1회 분석·후보 승인·재시작 복원` 완료 상태도 유지한다.
 
 자동 장면 분석은 stable `sceneId`, exact `DocumentRevision`·UTF-16 범위·본문 hash, 사용한 정본 revision을 하나의 source manifest로 고정한 뒤 제공자 요청 한 번으로 이야기 요약과 작품 정보·연속성 제안을 함께 받는다. 작품 정보 제안 범위는 Character·CharacterRelation·LoreEntry(별빛)·CharacterKnowledge이며, 연속성은 기존 ContinuityThread 검토 계약을 사용한다. 요약만 파생 기록으로 저장되고 나머지는 사용자가 편집·부분 승인·기각할 수 있는 Candidate이므로 원고나 정규 원본을 자동 수정하지 않는다.
 
