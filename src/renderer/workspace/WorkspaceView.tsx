@@ -50,6 +50,7 @@ import type { useWorkspaceStoryFeatureKernel } from "./useWorkspaceStoryFeatureK
 import { WorkOperationsWorkspace, type WorkOperationsSection } from "./WorkOperationsWorkspace";
 import { WorkspaceFeatureSurfaceHost } from "./WorkspaceFeatureSurfaceHost";
 import { WorkspaceStatusToolsHost } from "./WorkspaceStatusToolsHost";
+import { WorkspaceTools } from "../quick-tools/WorkspaceTools";
 
 function formatTimerDuration(durationMs: number): string {
   const totalSeconds = Math.max(0, Math.floor(durationMs / 1_000));
@@ -678,6 +679,8 @@ export function WorkspaceView(input: Readonly<{
     ]);
     const canonWorkspaceContent = activeWork === undefined ? null : (
       <CanonWorkspace
+        onManageCharacters={() => changeStructureTab("characters")}
+        onManageLore={() => changeStructureTab("lore")}
         activeTab={canonTab}
         characters={activeWorkCharacters}
         controller={canonReviewController}
@@ -753,6 +756,52 @@ export function WorkspaceView(input: Readonly<{
         aria-label="원고 작업실"
         className={embedded ? "studio-shell studio-shell-embedded" : "studio-shell"}
       >
+        <WorkspaceTools
+          disabledReason={
+            runtime.status !== "ready" || activeWork === undefined || activeDocument === undefined
+              ? "작품과 회차를 연 뒤 사용할 수 있습니다."
+              : workspaceActionState !== "idle" || versionActionState !== "idle"
+                ? "현재 작업을 마친 뒤 사용할 수 있습니다."
+                : runtime.startupRecovery.status !== "clean"
+                  ? "원고 복구 상태를 먼저 확인하세요."
+                  : null
+          }
+          editingDisabledReason={activeForwardWriting === null ? null : "수정금지 집필을 마친 뒤 사용할 수 있습니다."}
+          actions={{
+            write: () => changeWorkSection("write"),
+            focus: () => {
+              changeWorkSection("write");
+              manuscriptFocusController.setManuscriptFocusActive(true);
+            },
+            reading: () => { void readingLayoutController.openContinuousReading(); },
+            fragments: fragmentsController.openFragmentShelf,
+            forward: editorToolsController.openForwardWritingDialog,
+            export: editorToolsController.openManuscriptBulkExport,
+            import: () => { void editorToolsController.selectManuscriptTextImport(); },
+            overview: () => changeStructureTab("overview"),
+            characters: () => changeStructureTab("characters"),
+            plots: () => changeStructureTab("plots"),
+            events: () => changeStructureTab("events"),
+            scenes: () => changeStructureTab("scenes"),
+            foreshadow: () => changeStructureTab("foreshadow"),
+            lore: () => changeStructureTab("lore"),
+            canon: () => { changeWorkSection("canon"); changeCanonTab("canonical"); },
+            "canon-review": () => { changeWorkSection("canon"); changeCanonTab("review"); },
+            continuity: () => { changeWorkSection("canon"); changeCanonTab("continuity"); },
+            knowledge: () => { changeWorkSection("canon"); changeCanonTab("knowledge"); },
+            digest: () => { changeWorkSection("canon"); changeCanonTab("digest"); },
+            context: () => { changeWorkSection("canon"); changeCanonTab("context"); },
+            preflight: editorToolsController.openManuscriptPreflight,
+            analysis: editorToolsController.openManuscriptAnalysis,
+            candidates: () => { changeWorkSection("review"); changeReviewTab("candidates"); },
+            records: () => { changeWorkSection("review"); changeReviewTab("records"); },
+            versions: () => { changeWorkSection("review"); changeReviewTab("versions"); },
+            goal: activityController.openDailyGoalDialog,
+            pomodoro: activityController.openFocusDialog,
+            schedule: scheduleController.openSchedule,
+            music: musicController.openMusicLibrary,
+          }}
+        />
         {!embedded && (
           <header className="studio-header">
             <div>

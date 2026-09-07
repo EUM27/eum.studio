@@ -129,14 +129,23 @@ try {
       visible: window.isVisible(),
     }));
     if (!state.crashed && state.processId !== rendererProcessId) {
-      const bodyText = await browserWindow.evaluate((window) =>
+      const recoveredUi = await browserWindow.evaluate((window) =>
         window.webContents.executeJavaScript(
-          "document.body?.innerText ?? ''",
+          `(async () => {
+            if (typeof window.eumStudio?.workspace?.getCatalog !== "function") return null;
+            const catalog = await window.eumStudio.workspace.getCatalog();
+            const start = document.querySelector(".library-first-work button");
+            return {
+              canCreateFirstWork: catalog.canCreateFirstWork,
+              firstWorkActionReady: start instanceof HTMLButtonElement &&
+                !start.disabled && start.getClientRects().length > 0,
+            };
+          })()`,
           true,
         )
       );
-      if (String(bodyText).includes("작품이 없습니다.")) {
-        rendererRecovery = state;
+      if (recoveredUi?.canCreateFirstWork && recoveredUi.firstWorkActionReady) {
+        rendererRecovery = { ...state, ...recoveredUi };
         break;
       }
     }

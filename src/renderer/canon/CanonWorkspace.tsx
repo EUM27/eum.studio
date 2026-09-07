@@ -561,6 +561,8 @@ function CanonicalBrowser(input: Readonly<{
   loreEntries: readonly LoreEntryProjection[];
   onEvidenceOpen?: (evidence: CanonWorkspaceEvidence) => void;
   relations: readonly CharacterRelationProjection[];
+  onManageCharacters?: (() => void) | undefined;
+  onManageLore?: (() => void) | undefined;
 }>) {
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<"all" | CanonRecordKind>("all");
@@ -610,7 +612,14 @@ function CanonicalBrowser(input: Readonly<{
       <section aria-label="별빛 목록" className="canon-review-column canon-browser-list">
         <header><h3>별빛 목록</h3><span>{visibleRecords.length}건</span></header>
         {visibleRecords.length === 0 ? (
-          <p className="canon-empty">조건에 맞는 별빛이 없습니다.</p>
+          <div className="canon-empty">
+            <p>{records.length === 0 ? "아직 등록한 인물과 설정이 없습니다." : "조건에 맞는 별빛이 없습니다."}</p>
+            {records.length === 0 && <div className="canon-empty-actions">
+              {input.onManageCharacters !== undefined && <button onClick={input.onManageCharacters} type="button">인물 추가·관리</button>}
+              {input.onManageLore !== undefined && <button onClick={input.onManageLore} type="button">별빛 추가·관리</button>}
+            </div>}
+            {records.length > 0 && <button onClick={() => { setQuery(""); setKind("all"); }} type="button">전체 보기</button>}
+          </div>
         ) : (
           <ol>
             {visibleRecords.map((record) => (
@@ -705,6 +714,8 @@ export function CanonWorkspace(input: Readonly<{
   onTabChange: (tab: CanonTab) => void;
   relations: readonly CharacterRelationProjection[];
   workTitle: string;
+  onManageCharacters?: (() => void) | undefined;
+  onManageLore?: (() => void) | undefined;
 }>) {
   const evidence = input.controller.selectedItem?.evidence ?? [];
   const reviewEvidence = evidence.map((entry) => Object.freeze({
@@ -781,6 +792,8 @@ export function CanonWorkspace(input: Readonly<{
               ? {}
               : { onEvidenceOpen: input.onEvidenceOpen })}
             relations={input.relations}
+            onManageCharacters={input.onManageCharacters}
+            onManageLore={input.onManageLore}
           />
         ) : input.activeTab === "review" ? (
           <div className="canon-review-grid">

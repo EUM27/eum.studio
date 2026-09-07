@@ -1,0 +1,194 @@
+/* Shared controls for embedded feature surfaces, independent of dialog ancestry. */
+.studio-app-shell [hidden] { display: none !important; }
+
+.studio-app-shell :is(.work-section-surface, .workspace-rail-right) {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.studio-app-shell :is(.work-section-surface, .workspace-rail-right) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 1px solid var(--eum-line-strong);
+  border-radius: var(--eum-radius-sm);
+  color: var(--eum-text);
+  background: var(--eum-panel);
+  font: inherit;
+}
+
+.studio-app-shell :is(.work-section-surface, .workspace-rail-right) button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.studio-app-shell :is(.work-section-surface, .workspace-rail-right) button:disabled { cursor: default; opacity: .5; }
+.studio-app-shell :is(.work-section-surface, .workspace-rail-right, .app-settings-dialog, .quick-tools-dialog) :is(button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--eum-accent);
+  outline-offset: 2px;
+}
+
+.studio-app-shell .work-section-description {
+  margin: 0;
+  padding: 10px 18px;
+  color: var(--eum-text-muted);
+  background: var(--eum-panel);
+  border-bottom: 1px solid var(--eum-line);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.studio-app-shell .work-section-surface:has(> .work-section-description) { grid-template-rows: auto auto minmax(0, 1fr); }
+.studio-app-shell .work-subsection-tabs button { min-height: 36px; font-size: 12px; }
+.studio-app-shell .work-header .work-primary-navigation button { white-space: nowrap; }
+.studio-app-shell .canon-empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 18px; }
+.studio-app-shell .canon-empty-actions button { min-height: 36px; padding: 7px 12px; border: 1px solid var(--eum-accent-border); border-radius: 7px; color: var(--eum-accent-text); background: var(--eum-panel); cursor: pointer; }
+
+/* Canon tools respond to their available work area, including the open sidebar. */
+.studio-app-shell .canon-workspace { display: flex; flex-direction: column; container: canon-workspace / inline-size; overflow: hidden; }
+.studio-app-shell .canon-workspace-header { display: grid; flex: 0 0 auto; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 16px; }
+.studio-app-shell .canon-workspace-header > div:first-child { min-width: 0; }
+.studio-app-shell .canon-eyebrow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-app-shell .canon-workspace-tabs { grid-column: 1 / -1; grid-row: 2; min-width: 0; overflow-x: auto; }
+.studio-app-shell .canon-workspace-tabs button { flex: 1 0 auto; min-height: 34px; font-size: 12px; }
+.studio-app-shell .canon-markdown-export { grid-column: 2; grid-row: 1; }
+.studio-app-shell .canon-markdown-export small { white-space: normal; text-align: right; }
+.studio-app-shell .canon-workspace-content { flex: 1 1 auto; overflow: auto; }
+.studio-app-shell .canon-review-grid,
+.studio-app-shell .canon-browser-grid,
+.studio-app-shell .continuity-main-grid,
+.studio-app-shell .character-knowledge-grid,
+.studio-app-shell .assistant-context-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  min-width: 0;
+}
+
+@container canon-workspace (max-width: 56rem) {
+  .studio-app-shell .canon-browser-detail { grid-column: 1 / -1; }
+  .studio-app-shell .canon-review-grid,
+  .studio-app-shell .canon-browser-grid,
+  .studio-app-shell .continuity-main-grid,
+  .studio-app-shell .character-knowledge-grid,
+  .studio-app-shell .assistant-context-grid { height: auto; overflow: visible; align-items: start; }
+  .studio-app-shell .continuity-panel,
+  .studio-app-shell .character-knowledge-panel,
+  .studio-app-shell .assistant-context-panel { height: auto; overflow: visible; }
+  .studio-app-shell .continuity-radar-body { grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); }
+  .studio-app-shell .narrative-digest-layout { grid-template-columns: 1fr; }
+}
+
+/* Structure overview */
+.studio-app-shell .work-structure-content { display: block; }
+.studio-app-shell .work-structure-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 6.5rem), 1fr));
+  gap: 8px;
+  padding: 16px 0;
+}
+.studio-app-shell .work-structure-metrics > div {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--eum-line);
+  border-radius: 9px;
+  color: var(--eum-text-muted);
+  background: var(--eum-panel);
+}
+.studio-app-shell .work-structure-metrics strong { color: var(--eum-text); font-size: 22px; font-weight: 650; }
+.studio-app-shell .work-structure-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  align-items: start;
+  gap: 14px;
+}
+.studio-app-shell .work-structure-panel { min-width: 0; padding: 18px; border: 1px solid var(--eum-line); border-radius: 10px; background: var(--eum-panel); }
+.studio-app-shell .work-structure-panel > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.studio-app-shell .work-structure-panel h3 { margin: 0; font-size: 14px; }
+.studio-app-shell .work-structure-panel > header > span { padding: 2px 8px; border-radius: 20px; color: var(--eum-text-muted); background: var(--eum-accent-soft); }
+.studio-app-shell .work-structure-panel ul { display: grid; gap: 7px; list-style: none; margin: 0; padding: 0; }
+.studio-app-shell .work-structure-panel li > button {
+  display: grid;
+  width: 100%;
+  min-height: 56px;
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  color: var(--eum-text);
+  background: var(--eum-bg);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.studio-app-shell .work-structure-panel li > button:hover { border-color: var(--eum-accent); }
+.studio-app-shell .work-structure-panel li > button span { color: var(--eum-text-muted); font-size: 12px; }
+.studio-app-shell .work-structure-empty { margin: 0; padding-block: 10px; color: var(--eum-text-muted); line-height: 1.65; }
+.studio-app-shell .work-structure-row-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.studio-app-shell .work-structure-panel > button,
+.studio-app-shell .work-structure-row-actions button { min-height: 34px; padding: 6px 12px; border: 1px solid var(--eum-line); border-radius: 7px; color: var(--eum-accent-text); background: var(--eum-panel); }
+
+/* Records retain their content width even with many metrics or long titles. */
+.studio-app-shell .work-records-panel,
+.studio-app-shell .records-content { min-width: 0; max-width: 100%; }
+.studio-app-shell .records-content { height: auto; overflow: visible; }
+.studio-app-shell .records-date-filter { flex-wrap: wrap; }
+.studio-app-shell .records-date-filter label { min-width: 0; flex: 0 1 12rem; }
+.studio-app-shell .records-content > :is(.records-export, .records-metrics, .records-streak, .records-goals) { margin: 12px 0; padding: 16px; border: 1px solid var(--eum-line); border-radius: 10px; background: var(--eum-panel); }
+.studio-app-shell .records-export,
+.studio-app-shell .records-export-actions,
+.studio-app-shell .records-streak,
+.studio-app-shell .records-goals > header { flex-wrap: wrap; }
+.studio-app-shell .records-metrics { grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr)); }
+.studio-app-shell .records-metrics strong,
+.studio-app-shell .records-streak strong { font-size: 18px; }
+.studio-app-shell .records-goals form { grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: 14px; }
+.studio-app-shell .records-goals form label,
+.studio-app-shell .records-export > div { min-width: 0; }
+.studio-app-shell .records-dialog-body { grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); padding: 0; }
+.studio-app-shell .records-detail-panel > header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.studio-app-shell .records-detail-panel h3 { margin: 0; font-size: 14px; }
+.studio-app-shell .records-detail-panel ul { list-style: none; display: grid; gap: 7px; padding: 0; }
+.studio-app-shell .records-document-panel button { display: flex; width: 100%; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 10px; border: 1px solid var(--eum-line); border-radius: 7px; color: var(--eum-text); background: var(--eum-bg); text-align: left; }
+.studio-app-shell .records-empty { color: var(--eum-text-muted); line-height: 1.7; }
+.studio-app-shell .records-readthrough-row { grid-template-columns: minmax(0, 1.3fr) minmax(4rem, 1fr) minmax(0, 1fr) minmax(0, 1fr); }
+.studio-app-shell .records-readthrough-row > * { min-width: 0; overflow-wrap: anywhere; }
+
+/* Named entry cards replace oversized, unexplained operation tiles. */
+.studio-app-shell .work-operations-workspace { align-content: start; padding: clamp(16px, 3vw, 28px); overflow-y: auto; }
+.studio-app-shell .work-operations-workspace > header { flex-wrap: wrap; margin-bottom: 24px; }
+.studio-app-shell .work-operations-workspace > header > p { margin: 0; color: var(--eum-text-muted); line-height: 1.7; }
+.studio-app-shell .work-operations-grid { align-self: start; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 16px; }
+.studio-app-shell .work-operations-grid button { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; min-height: 0; padding: 24px; text-align: left; }
+.studio-app-shell .work-operations-grid button > strong { font-size: 18px; }
+.studio-app-shell .work-operation-icon { display: grid; width: 42px; height: 42px; place-items: center; border: 1px solid var(--eum-line); border-radius: 10px; color: var(--eum-accent-text); background: var(--eum-accent-soft); }
+.studio-app-shell .work-operation-description { color: var(--eum-text-muted); font-size: 13px; line-height: 1.7; }
+.studio-app-shell .work-operation-link { display: flex; align-items: center; gap: 6px; margin-top: auto; padding-top: 8px; color: var(--eum-accent-text); font-size: 12px; font-weight: 650; }
+
+/* A small inspector should not lead with an unusable full-size form. */
+.studio-app-shell .manuscript-annotations-panel-header { flex-wrap: wrap; }
+.studio-app-shell .manuscript-annotation-selection-hint { margin: 0; padding: 12px; border: 1px dashed var(--eum-line); border-radius: 8px; color: var(--eum-text-muted); font-size: 12px; line-height: 1.65; }
+.studio-app-shell .manuscript-annotation-custom-tag-input { display: flex; flex-wrap: wrap; }
+.studio-app-shell .manuscript-annotation-custom-tag-input input { flex: 1 1 8rem; }
+.studio-app-shell .manuscript-annotation-custom-tag-input button { flex: 0 0 auto; }
+.studio-app-shell .workspace-rail-right :is(.review-inspector-section-stack, .manuscript-annotations-panel, .manuscript-annotation-composer) { min-width: 0; }
+.studio-app-shell .daily-goal-status { border: 1px solid var(--eum-line); border-radius: 7px; background: var(--eum-panel); color: var(--eum-text-muted); padding: 6px 10px; cursor: pointer; font: inherit; font-size: 12px; }
+
+/* Settings are grouped by the task they affect; drafts stay mounted across tabs. */
+.studio-app-shell .app-settings-dialog { width: min(30rem, calc(100vw - 24px)); }
+.studio-app-shell .app-settings-dialog form { grid-template-rows: auto minmax(0, 1fr) auto; }
+.studio-app-shell .app-settings-tabs { display: flex; padding: 10px 16px 0; gap: 4px; border-bottom: 1px solid var(--eum-line); }
+.studio-app-shell .app-settings-tabs button { flex: 1; min-width: 0; min-height: 38px; padding: 8px; border: 0; border-bottom: 2px solid transparent; color: var(--eum-text-muted); background: transparent; font: inherit; font-size: 12px; cursor: pointer; }
+.studio-app-shell .app-settings-tabs button[aria-selected="true"] { color: var(--eum-accent-text); border-bottom-color: var(--eum-accent); font-weight: 700; }
+.studio-app-shell .app-settings-section { padding-block: 24px; gap: 14px; }
+.studio-app-shell .app-settings-section p { font-size: 12px; line-height: 1.7; color: var(--eum-text-muted); }
+.studio-app-shell .app-settings-section label:has(input:is([type="checkbox"], [type="radio"])) { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; }
+.studio-app-shell .app-settings-section input:is([type="checkbox"], [type="radio"]) { flex: 0 0 auto; width: 17px; height: 17px; min-width: 17px; min-height: 17px; margin: 1px 0 0; padding: 0; accent-color: var(--eum-accent); box-shadow: none; }
+.studio-app-shell .app-settings-section label > span { line-height: 1.55; }
+.studio-app-shell .app-settings-check-grid { grid-template-columns: 1fr; gap: 0; }
+.studio-app-shell .app-settings-inline-status { flex-wrap: wrap; gap: 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-app-shell { transition: none; }
+}

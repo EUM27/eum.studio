@@ -187,6 +187,7 @@ test("automatically records one integrated Scene information update and applies 
 
     await page.getByRole("button",{name:"앱 설정 열기",exact:true}).click();
     const settings=page.getByRole("dialog",{name:"앱 설정"});
+    await settings.getByRole("tab", { name: "조수·장면 분석", exact: true }).click();
     const toggle=settings.getByLabel("장면 전환·분할·회차 전환 시 요약과 작품 정보·연속성 후보 생성");
     await expect(toggle).not.toBeChecked();await toggle.check();
     await settings.getByRole("button",{name:"저장",exact:true}).click();

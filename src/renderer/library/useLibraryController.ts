@@ -252,6 +252,12 @@ export function useLibraryController(input: Readonly<{
     }
   }, [acceptCatalog, actionState, catalogState.status, input.workspaceController]);
 
+  const revealActiveWorkspace = useCallback((): boolean => {
+    if (catalogState.status !== "ready" || catalogState.catalog.activeWorkId === null || actionState !== "idle") return false;
+    setActivePage("workspace");
+    return true;
+  }, [actionState, catalogState]);
+
   const openWorkSchedule = useCallback(async (work: WorkspaceWorkSummary) => {
     await openLocation(
       work.workId,
@@ -480,6 +486,7 @@ export function useLibraryController(input: Readonly<{
     toggleWorkFavorite,
     selectWorkCover,
     openLocation,
+    revealActiveWorkspace,
     openWorkSchedule,
     openCompletedRevision,
     returnToMain,
@@ -507,6 +514,7 @@ export function useLibraryController(input: Readonly<{
     openCompletedRevision,
     openCreateWorkDialog,
     openLocation,
+    revealActiveWorkspace,
     openRenameWorkDialog,
     openWorkSchedule,
     renameWork,

@@ -133,7 +133,9 @@ export function ManuscriptAnnotationsPanel(input: Readonly<{
         </button>
       </header>
 
-      <div className="manuscript-annotation-composer">
+      {!input.hasSelection && body.length === 0 && tags.length === 0 ? (
+        <p className="manuscript-annotation-selection-hint">원고를 선택하면 그 구간에 주석을 붙일 수 있습니다.</p>
+      ) : <div className="manuscript-annotation-composer">
         <p>
           {input.hasSelection
             ? "선택한 원고 구간에 주석을 붙입니다."
@@ -162,7 +164,7 @@ export function ManuscriptAnnotationsPanel(input: Readonly<{
         >
           선택에 주석 추가
         </button>
-      </div>
+      </div>}
 
       {input.error !== null && (
         <p className="event-action-error" role="alert">

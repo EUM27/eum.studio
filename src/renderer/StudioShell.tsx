@@ -1,7 +1,10 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
+  useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import {
   ChevronDown,
@@ -39,9 +42,14 @@ import { useStudioSettingsController } from "./features/settings/useStudioSettin
 import { useUiPreferencesController } from "./features/settings/useUiPreferencesController";
 import { useBackupMigrationController } from "./features/backup/useBackupMigrationController";
 import { useLibraryController } from "./library/useLibraryController";
+import { StudioToolContext } from "./quick-tools/StudioToolContext";
+import { StudioToolRegistry, type StudioTool } from "./quick-tools/studio-tool-registry";
 
 
 export function StudioRoot() {
+  const [toolRegistry] = useState(() => new StudioToolRegistry());
+  const workspaceTools = useSyncExternalStore(toolRegistry.subscribe, toolRegistry.getSnapshot, toolRegistry.getSnapshot);
+  const toolReturnFocus = useRef<HTMLElement | null>(null);
   const [workspaceController] = useState(() => new WorkspaceController());
   const [documentRailHost, setDocumentRailHost] =
     useState<HTMLDivElement | null>(null);
@@ -102,6 +110,7 @@ export function StudioRoot() {
     toggleWorkFavorite,
     selectWorkCover,
     openLocation,
+    revealActiveWorkspace,
     openWorkSchedule,
     openCompletedRevision,
     returnToMain,
@@ -172,11 +181,23 @@ export function StudioRoot() {
   });
 
   const openQuickTools = useCallback(() => {
+    if (showQuickTools) return;
     if (catalogState.status === "ready" && actionState === "idle") {
+      toolReturnFocus.current = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
       dismissAppSettingsForQuickTools();
       setShowQuickTools(true);
     }
-  }, [actionState, catalogState.status, dismissAppSettingsForQuickTools]);
+  }, [actionState, catalogState.status, dismissAppSettingsForQuickTools, showQuickTools]);
+
+  const shellTools = useMemo<readonly StudioTool[]>(() => [
+    { id: "studio-tool:backup", label: "백업·복원", detail: "작업실을 백업하거나 새 위치에 복원합니다.", group: "작업실", keywords: ["안전", "데이터", "복구"], disabledReason: backupActionState === "idle" ? null : "백업 작업을 마친 뒤 열 수 있습니다.", run: openBackup },
+    { id: "studio-tool:settings", label: "앱 설정", detail: "집필 기준과 조수·음악 연결을 설정합니다.", group: "작업실", keywords: ["로그인", "API", "자동 분석"], run: openAppSettings },
+    { id: "studio-tool:import", label: "기존 데이터 가져오기", detail: "가져올 자료를 먼저 살펴봅니다.", group: "작업실", keywords: ["이주", "불러오기"], disabledReason: importRehearsalRunning ? "가져오기 확인이 진행 중입니다." : null, run: openImportRehearsal },
+    { id: "studio-tool:publishing", label: "투고 운영", detail: "투고·계약·정산을 관리합니다.", group: "작업실", keywords: ["출판사", "발행", "입금"], run: () => publishingController.openPublishingPartners() },
+  ], [backupActionState, importRehearsalRunning, openAppSettings, openBackup, openImportRehearsal, publishingController]);
+  const allTools = useMemo(() => [...workspaceTools, ...shellTools], [shellTools, workspaceTools]);
 
   useEffect(() => {
     const handleQuickToolsShortcut = (event: KeyboardEvent) => {
@@ -206,6 +227,15 @@ export function StudioRoot() {
         openCreateWorkDialog();
         return;
       }
+      if (target.kind === "command") {
+        const tool = shellTools.find((candidate) => candidate.id === target.id);
+        if (tool !== undefined) {
+          if (!tool.disabledReason) tool.run();
+        } else {
+          if (revealActiveWorkspace()) toolRegistry.run(target.id);
+        }
+        return;
+      }
       if (target.workId !== null && catalog !== null) {
         const ownedWork = catalog.works.find(
           (work) => work.workId === target.workId,
@@ -221,10 +251,11 @@ export function StudioRoot() {
         void openLocation(ownedWork.workId, ownedDocument?.documentId ?? null);
       }
     },
-    [catalog, openCreateWorkDialog, openLocation, returnToMain],
+    [catalog, openCreateWorkDialog, openLocation, returnToMain, revealActiveWorkspace, shellTools, toolRegistry],
   );
 
   return (
+    <StudioToolContext value={toolRegistry}>
     <StudioAppShell
       compact={sidebarCompact}
       editor={activePage === "workspace"}
@@ -255,6 +286,18 @@ export function StudioRoot() {
           type="button"
         >
           <Home aria-hidden="true" size={15} />
+        </button>
+        <button
+          aria-label="전체 도구 열기"
+          aria-keyshortcuts="Control+K Meta+K"
+          className="app-topbar-tool-search"
+          disabled={busy || catalogState.status !== "ready"}
+          onClick={openQuickTools}
+          type="button"
+        >
+          <Search aria-hidden="true" size={15} />
+          <span>도구 찾기</span>
+          <kbd>Ctrl K</kbd>
         </button>
         <div className="app-topbar-music" ref={setMusicPlayerHost} />
         <button
@@ -292,7 +335,7 @@ export function StudioRoot() {
             type="button"
           >
             <Search aria-hidden="true" size={16} />
-            <span>빠른 전환</span>
+            <span>빠른 도구</span>
             <kbd>Ctrl K</kbd>
           </button>
           <button
@@ -368,6 +411,7 @@ export function StudioRoot() {
               resumePreview={resumePreview}
               scheduleByWork={scheduleByWork}
               onOpenBackup={openBackup}
+              onCreate={openCreateWorkDialog}
               onOpenImport={openImportRehearsal}
               onOpenPublishing={publishingController.openPublishingPartners}
               onOpenCompletedRevision={(work, documentId, revisionId) => {
@@ -447,11 +491,15 @@ export function StudioRoot() {
       )}
       {showQuickTools && catalog !== null && (
         <QuickToolsDialog
+          tools={allTools}
           client={window.eumStudio.quickTools}
           catalog={catalog}
           disabled={busy}
           onClose={() => {
-            if (!busy) setShowQuickTools(false);
+            if (!busy) {
+              setShowQuickTools(false);
+              queueMicrotask(() => toolReturnFocus.current?.isConnected && toolReturnFocus.current.focus({ preventScroll: true }));
+            }
           }}
           onSelect={selectQuickToolTarget}
         />
@@ -505,6 +553,7 @@ export function StudioRoot() {
         />
       )}
     </StudioAppShell>
+    </StudioToolContext>
   );
 }
 

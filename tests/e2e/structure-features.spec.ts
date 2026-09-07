@@ -720,6 +720,7 @@ test("uses local inspiration draws and keeps GPT scene work separate", async () 
     await installFakeYouTubePlayer(page);
     await page.getByRole("button", { name: "앱 설정 열기", exact: true }).click();
     const settingsDialog = page.getByRole("dialog", { name: "앱 설정" });
+    await settingsDialog.getByRole("tab", { name: "음악", exact: true }).click();
     await expect(settingsDialog).toContainText("YouTube 음악 연결");
     await expect(settingsDialog).toContainText("API 키가 암호화 저장되어 있습니다.");
     await expect(settingsDialog).not.toContainText("Spotify");
@@ -2587,6 +2588,7 @@ test("uses the fixed Work header across IA sections and preserves the mounted ma
     await expect(workNavigation.getByRole("button")).toHaveText([
       "쓰기",
       "구조",
+      "별빛",
       "검토",
       "운영",
     ]);
@@ -2623,16 +2625,17 @@ test("uses the fixed Work header across IA sections and preserves the mounted ma
     await expect(workOperations).not.toContainText(
       "현재 작품으로 범위가 고정된 운영 진입점입니다.",
     );
-    await expect(workOperations.getByRole("button")).toHaveText([
+    await expect(workOperations.getByRole("button").locator("strong")).toHaveText([
       "투고",
       "계약·발행",
       "정산·입금",
     ]);
+    await expect(workOperations.locator(".work-operation-description")).toHaveCount(3);
     await workOperations.getByRole("button", { name: "투고", exact: true }).click();
     const publishingDialog = page.getByRole("dialog", { name: "투고" });
     await expect(
       publishingDialog.locator(".publishing-workspace-tabs button:visible"),
-    ).toHaveText(["투고 이력", "투고처 원장"]);
+    ).toHaveText(["투고 이력", "투고처 원장", "투고 양식"]);
     await publishingDialog.getByRole("button", {
       name: "투고처 원장",
       exact: true,

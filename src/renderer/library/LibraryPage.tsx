@@ -42,6 +42,7 @@ export function LibraryPage({
   importBusy,
   error,
   onOpenBackup,
+  onCreate,
   onOpenImport,
   onOpenPublishing,
   onOpenCompletedRevision,
@@ -62,6 +63,7 @@ export function LibraryPage({
   readonly backupBusy: boolean;
   readonly importBusy: boolean;
   readonly onOpenBackup: () => void;
+  readonly onCreate?: () => void;
   readonly onOpenImport: () => void;
   readonly onOpenPublishing: () => void;
   readonly onOpenCompletedRevision: (
@@ -260,6 +262,9 @@ export function LibraryPage({
               </label>
             )}
             <span className="library-sort-label">최근 편집순</span>
+            <button className="secondary-button library-backup-shortcut" disabled={busy || backupBusy} onClick={onOpenBackup} type="button">
+              <Archive aria-hidden="true" size={15} /> 백업·복원
+            </button>
             <button
               aria-expanded={showLibraryTools}
               aria-label="작품 도구 열기"
@@ -269,6 +274,7 @@ export function LibraryPage({
               type="button"
             >
               <MoreHorizontal aria-hidden="true" size={18} />
+              <span>작품 관리</span>
             </button>
             {showLibraryTools && (
               <div aria-label="작품 도구" className="library-tools-menu" role="menu">
@@ -323,6 +329,16 @@ export function LibraryPage({
         )}
 
         {filteredWorks.length === 0 ? (
+          catalog.works.length === 0 ? (
+            <section className="library-first-work" aria-label="작업실 시작하기">
+              <h3>첫 작품을 시작해 보세요.</h3>
+              <p>작품을 만들면 회차를 나누어 쓰고, 인물과 설정을 함께 정리할 수 있습니다.</p>
+              <div>
+                {onCreate !== undefined && <button className="primary-button" disabled={busy} onClick={onCreate} type="button">첫 작품 만들기</button>}
+                <button className="secondary-button" disabled={busy || importBusy} onClick={onOpenImport} type="button">기존 데이터 가져오기</button>
+              </div>
+            </section>
+          ) :
           <p className="empty-search-result">
             {normalizedQuery.length > 0
               ? "검색 결과가 없습니다."

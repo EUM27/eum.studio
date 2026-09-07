@@ -553,6 +553,7 @@ test("persists YouTube connection status and Work-owned music settings", async (
       .getByRole("button", { name: "앱 설정 열기", exact: true })
       .click();
     let settingsDialog = page.getByRole("dialog", { name: "앱 설정" });
+    await settingsDialog.getByRole("tab", { name: "음악", exact: true }).click();
     await expect(settingsDialog.getByText("YouTube 음악 연결")).toBeVisible();
     await expect(settingsDialog.getByText("현재 작품 음악")).toBeVisible();
     await settingsDialog
@@ -570,6 +571,7 @@ test("persists YouTube connection status and Work-owned music settings", async (
       .getByRole("button", { name: "앱 설정 열기", exact: true })
       .click();
     settingsDialog = page.getByRole("dialog", { name: "앱 설정" });
+    await settingsDialog.getByRole("tab", { name: "음악", exact: true }).click();
     await expect(
       settingsDialog.getByLabel("회차 전환 시 자동 선곡"),
     ).toBeChecked();

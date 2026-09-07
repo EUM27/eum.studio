@@ -498,7 +498,7 @@ test("switches Works with Ctrl+K and restores the exact per-Work quick memo", as
     await page.keyboard.press("Control+K");
     let quickTools = page.getByRole("dialog", { name: "빠른 도구" });
     await expect(quickTools).toBeVisible();
-    const quickSearch = quickTools.getByRole("searchbox", {
+    const quickSearch = quickTools.getByRole("combobox", {
       name: "작품, 회차 또는 명령 검색",
     });
     const results = quickTools.getByRole("option");
@@ -537,10 +537,10 @@ test("switches Works with Ctrl+K and restores the exact per-Work quick memo", as
     await page.keyboard.press("Control+K");
     quickTools = page.getByRole("dialog", { name: "빠른 도구" });
     await quickTools
-      .getByRole("searchbox", { name: "작품, 회차 또는 명령 검색" })
+      .getByRole("combobox", { name: "작품, 회차 또는 명령 검색" })
       .fill(secondDocumentTitle);
     await quickTools
-      .getByRole("searchbox", { name: "작품, 회차 또는 명령 검색" })
+      .getByRole("combobox", { name: "작품, 회차 또는 명령 검색" })
       .press("Enter");
     manuscript = page.getByRole("textbox", { name: "원고" });
     await expectEditorText(manuscript, secondManuscript);
@@ -578,10 +578,10 @@ test("switches Works with Ctrl+K and restores the exact per-Work quick memo", as
     expect(layout.dialogScrollWidth).toBeLessThanOrEqual(layout.dialogClientWidth);
 
     await quickTools
-      .getByRole("searchbox", { name: "작품, 회차 또는 명령 검색" })
+      .getByRole("combobox", { name: "작품, 회차 또는 명령 검색" })
       .fill(secondDocumentTitle);
     await quickTools
-      .getByRole("searchbox", { name: "작품, 회차 또는 명령 검색" })
+      .getByRole("combobox", { name: "작품, 회차 또는 명령 검색" })
       .press("Enter");
     manuscript = page.getByRole("textbox", { name: "원고" });
     await expectEditorText(manuscript, secondManuscript);

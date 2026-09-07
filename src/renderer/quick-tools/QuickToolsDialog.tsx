@@ -1,6 +1,8 @@
 import {
   useEffect,
+  useId,
   useMemo,
+  useRef,
   useState,
   type KeyboardEvent,
 } from "react";
@@ -8,6 +10,7 @@ import {
   BookOpen,
   FileText,
   Home,
+  LayoutGrid,
   Plus,
   Save,
   Search,
@@ -28,6 +31,9 @@ import type {
   WorkspaceWorkSummary,
 } from "../../application/workspace/workspace-contract";
 import type { StudioBridge } from "../../application/contracts/studio-bridge";
+import type { StudioToolDescriptor } from "./studio-tool-registry";
+
+const EMPTY_TOOLS: readonly StudioToolDescriptor[] = Object.freeze([]);
 
 type MemoState =
   | { readonly status: "loading" }
@@ -42,6 +48,7 @@ export const QUICK_TOOL_CREATE_WORK_COMMAND_ID = "quick-tool:create-work";
 
 function createTargets(
   catalog: WorkspaceCatalogProjection,
+  tools: readonly StudioToolDescriptor[],
 ): readonly QuickToolTarget[] {
   const targets: QuickToolTarget[] = [
     {
@@ -53,6 +60,19 @@ function createTargets(
       documentId: null,
     },
   ];
+  for (const group of new Set(tools.map((tool) => tool.group))) {
+    for (const tool of tools.filter((candidate) => candidate.group === group)) {
+      targets.push({
+        id: tool.id,
+        kind: "command",
+        label: tool.label,
+        detail: tool.detail,
+        keywords: tool.keywords ?? [],
+        workId: null,
+        documentId: null,
+      });
+    }
+  }
   for (const work of catalog.works) {
     targets.push({
       id: `work:${work.workId}`,
@@ -108,6 +128,7 @@ function TargetIcon({ kind }: { readonly kind: QuickToolTarget["kind"] }) {
 }
 
 export function QuickToolsDialog(input: {
+  readonly tools?: readonly StudioToolDescriptor[];
   readonly client: StudioBridge["quickTools"];
   readonly catalog: WorkspaceCatalogProjection;
   readonly disabled: boolean;
@@ -115,20 +136,28 @@ export function QuickToolsDialog(input: {
   readonly onSelect: (target: QuickToolTarget) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [group, setGroup] = useState<string | null>(null);
+  const identity = useId();
+  const dialogRef = useRef<HTMLElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showMemo, setShowMemo] = useState(false);
   const [memoState, setMemoState] = useState<MemoState>({ status: "loading" });
   const [memoDraft, setMemoDraft] = useState("");
-  const targets = useMemo(() => createTargets(input.catalog), [input.catalog]);
+  const tools = input.tools ?? EMPTY_TOOLS;
+  const toolsById = useMemo(() => new Map(tools.map((tool) => [tool.id, tool])), [tools]);
+  const groups = useMemo(() => Array.from(new Set(tools.map((tool) => tool.group))), [tools]);
+  const targets = useMemo(() => createTargets(input.catalog, tools), [input.catalog, tools]);
   const visibleTargets = useMemo(
     () =>
       searchQuickToolTargets({
-        targets,
+        targets: group === null ? targets : targets.filter((target) =>
+          group === "작품·회차" ? target.kind !== "command" : toolsById.get(target.id)?.group === group),
         query,
         activeWorkId: input.catalog.activeWorkId,
         activeDocumentId: input.catalog.activeDocumentId,
       }),
-    [input.catalog.activeDocumentId, input.catalog.activeWorkId, query, targets],
+    [group, input.catalog.activeDocumentId, input.catalog.activeWorkId, query, targets, toolsById],
   );
   const visibleTargetIndex = useMemo(
     () => new Map(visibleTargets.map((target, index) => [target.id, index])),
@@ -149,9 +178,14 @@ export function QuickToolsDialog(input: {
   const memoChanged =
     memoProjection !== null && memoDraft !== memoProjection.text;
   const onBackdropPointerDown = useDialogDismiss({
-    disabled: input.disabled,
+    disabled: input.disabled || memoState.status === "saving",
     onClose: input.onClose,
   });
+
+  useEffect(() => {
+    dialogRef.current?.querySelector<HTMLElement>(`[data-result-index="${safeSelectedIndex}"]`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [safeSelectedIndex, query, group]);
 
   useEffect(() => {
     if (activeWork === null) {
@@ -181,7 +215,7 @@ export function QuickToolsDialog(input: {
   }, [activeWork, input.client]);
 
   const selectTarget = (target: QuickToolTarget | undefined) => {
-    if (target === undefined || input.disabled) return;
+    if (target === undefined || input.disabled || memoState.status === "saving" || toolsById.get(target.id)?.disabledReason) return;
     input.onSelect(target);
   };
 
@@ -253,23 +287,31 @@ export function QuickToolsDialog(input: {
             : `quick-tool-result ${hierarchyClassName}`
         }
         disabled={input.disabled}
-        id={`quick-tool-target-${index}`}
+        id={`${identity}-target-${index}`}
+        data-result-index={index}
+        aria-disabled={Boolean(toolsById.get(target.id)?.disabledReason) || undefined}
         key={target.id}
         onClick={() => selectTarget(target)}
         onMouseEnter={() => setSelectedIndex(index)}
         role="option"
+        tabIndex={-1}
         type="button"
       >
         <span className="quick-tool-result-icon">
           {target.id === QUICK_TOOL_CREATE_WORK_COMMAND_ID ? (
             <Plus aria-hidden="true" size={17} />
           ) : (
-            <TargetIcon kind={target.kind} />
+            target.kind === "command" && toolsById.has(target.id)
+              ? <LayoutGrid aria-hidden="true" size={17} />
+              : <TargetIcon kind={target.kind} />
           )}
         </span>
         <span className="quick-tool-result-copy">
           <strong>{target.label}</strong>
           <small>{target.detail}</small>
+          {toolsById.get(target.id)?.disabledReason && (
+            <span className="quick-tool-disabled-reason">{toolsById.get(target.id)?.disabledReason}</span>
+          )}
         </span>
         <span className="quick-tool-result-kind">
           {target.kind === "document"
@@ -292,12 +334,27 @@ export function QuickToolsDialog(input: {
         aria-labelledby="quick-tools-heading"
         aria-modal="true"
         className={showMemo ? "quick-tools-dialog is-memo-open" : "quick-tools-dialog"}
+        ref={dialogRef}
+        onKeyDown={(event) => {
+          if (event.key !== "Tab") return;
+          const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(
+            'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), [tabindex="0"]',
+          ) ?? []).filter((element) => element.tabIndex >= 0 && element.getClientRects().length > 0);
+          const first = focusable[0];
+          const last = focusable.at(-1);
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault(); last?.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault(); first?.focus();
+          }
+        }}
         role="dialog"
       >
         <header className="quick-tools-header">
           <div>
-            <p className="panel-kicker">QUICK TOOLS</p>
+            <p className="panel-kicker">작업실 도구</p>
             <h2 id="quick-tools-heading">빠른 도구</h2>
+            <p className="quick-tools-description">기능을 찾거나 작품·회차로 바로 이동하세요.</p>
           </div>
           <div className="quick-tools-actions">
             <button
@@ -329,10 +386,15 @@ export function QuickToolsDialog(input: {
               <Search aria-hidden="true" size={17} />
               <span className="visually-hidden">작품, 회차 또는 명령 검색</span>
               <input
+                aria-label="작품, 회차 또는 명령 검색"
+                aria-controls={`${identity}-results`}
+                aria-autocomplete="list"
+                aria-expanded="true"
+                role="combobox"
                 aria-activedescendant={
                   safeSelectedIndex < 0
                     ? undefined
-                    : `quick-tool-target-${safeSelectedIndex}`
+                    : `${identity}-target-${safeSelectedIndex}`
                 }
                 autoFocus
                 disabled={input.disabled}
@@ -341,19 +403,37 @@ export function QuickToolsDialog(input: {
                   setSelectedIndex(0);
                 }}
                 onKeyDown={handleSearchKeyDown}
-                placeholder="작품, 회차 또는 명령 검색"
+                placeholder="기능, 작품, 회차 검색 · 예: 파편, 백업, 인물"
+                ref={searchRef}
                 type="search"
                 value={query}
               />
-              <kbd>Esc</kbd>
+              <kbd aria-hidden="true">Esc</kbd>
             </label>
+            {groups.length > 0 && (
+              <div className="quick-tool-categories" aria-label="도구 분류">
+                {[null, ...groups, "작품·회차"].map((category) => (
+                  <button
+                    aria-pressed={group === category}
+                    key={category ?? "all"}
+                    onClick={() => { setGroup(category); setSelectedIndex(0); }}
+                    type="button"
+                  >{category ?? "전체"}</button>
+                ))}
+              </div>
+            )}
             <div
               aria-label="빠른 이동 결과"
+              id={`${identity}-results`}
               className="quick-tool-results"
               role="listbox"
             >
               {visibleTargets.length === 0 ? (
-                <p className="quick-tool-empty">일치하는 항목이 없습니다.</p>
+                <div className="quick-tool-empty">
+                  <strong>일치하는 항목이 없습니다.</strong>
+                  <p>다른 이름으로 검색하거나 전체 도구를 살펴보세요.</p>
+                  <button onClick={() => { setQuery(""); setGroup(null); searchRef.current?.focus(); }} type="button">전체 도구 보기</button>
+                </div>
               ) : (
                 <>
                   {visibleTargetIndex.has(QUICK_TOOL_MAIN_COMMAND_ID) && (
@@ -371,6 +451,15 @@ export function QuickToolsDialog(input: {
                       )}
                     </div>
                   )}
+                  {groups.map((category) => {
+                    const commands = visibleTargets.filter((target) => toolsById.get(target.id)?.group === category);
+                    return commands.length === 0 ? null : (
+                      <div className="quick-tool-result-group" aria-label={category} role="group" key={category}>
+                        <p className="quick-tool-group-label">{category}</p>
+                        {commands.map((target) => renderTarget(target, "quick-tool-command-result"))}
+                      </div>
+                    );
+                  })}
                   {input.catalog.works.map((work) => {
                     const workTarget = targets.find(
                       (target) => target.id === `work:${work.workId}`,
@@ -484,6 +573,7 @@ export function QuickToolsDialog(input: {
           </section>}
         </div>
         <footer className="quick-tools-footer">
+          <span className="quick-tool-result-count" aria-live="polite">{visibleTargets.length}개 항목</span>
           <span><kbd>↑</kbd><kbd>↓</kbd> 이동</span>
           <span><kbd>Enter</kbd> 열기</span>
           <span><kbd>Esc</kbd> 닫기</span>

@@ -1,0 +1,103 @@
+/* Dialog layouts follow their content, including toolbars and feedback rows. */
+.studio-app-shell .fragment-shelf-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(60rem, calc(100vw - 3rem));
+  height: min(42rem, calc(100dvh - 3rem));
+  container: fragments / inline-size;
+}
+.studio-app-shell .fragment-shelf-header,
+.studio-app-shell .fragment-shelf-toolbar,
+.studio-app-shell .fragment-selection-help,
+.studio-app-shell .fragment-shelf-error { flex: 0 0 auto; }
+.studio-app-shell .fragment-shelf-toolbar {
+  display: grid;
+  grid-template-columns: minmax(7rem, .75fr) auto auto minmax(10rem, 1.5fr) minmax(7rem, .65fr);
+  align-items: end;
+  gap: 10px;
+  padding: 18px;
+  border-bottom: 1px solid var(--eum-line);
+}
+.studio-app-shell .fragment-shelf-toolbar label {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+.studio-app-shell .fragment-shelf-toolbar button { min-height: 36px; padding: 7px 12px; white-space: nowrap; }
+.studio-app-shell .fragment-selection-help {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 18px;
+  background: var(--eum-accent-soft);
+  border-bottom: 1px solid var(--eum-line);
+}
+.studio-app-shell .fragment-selection-help p { margin: 0; font-size: 12px; color: var(--eum-text-muted); line-height: 1.65; }
+.studio-app-shell .fragment-selection-help button { min-height: 34px; padding: 6px 10px; border: 1px solid var(--eum-line); border-radius: 7px; color: var(--eum-accent-text); background: var(--eum-panel); cursor: pointer; font-size: 12px; }
+.studio-app-shell .fragment-shelf-content { flex: 1 1 auto; min-height: 0; padding: 18px; }
+.studio-app-shell .fragment-shelf-empty { display: grid; min-height: 12rem; align-content: center; margin: 0; padding: 24px; border: 1px dashed var(--eum-line); border-radius: 10px; color: var(--eum-text-muted); background: var(--eum-panel); font-size: 13px; text-align: center; line-height: 1.7; }
+.studio-app-shell .fragment-card { padding: 16px; border: 1px solid var(--eum-line); border-radius: 10px; }
+.studio-app-shell .fragment-card-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(6rem, .3fr) auto; }
+.studio-app-shell .fragment-card pre { margin-block: 16px; padding: 16px; border-radius: 7px; color: var(--eum-text); background: var(--eum-bg); font: inherit; font-size: 14px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+.studio-app-shell .fragment-source-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.studio-app-shell .fragment-source-row > span { display: grid; gap: 5px; margin-right: auto; }
+.studio-app-shell .fragment-source-row small { color: var(--eum-text-muted); }
+
+.studio-app-shell .dialog-backdrop [role="dialog"] label:has(> input:is([type="checkbox"], [type="radio"])) {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  line-height: 1.6;
+}
+.studio-app-shell .dialog-backdrop [role="dialog"] input:is([type="checkbox"], [type="radio"]) {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  min-height: 16px;
+  margin: 2px 0 0;
+  padding: 0;
+  accent-color: var(--eum-accent);
+  box-shadow: none;
+}
+.studio-app-shell .manuscript-preflight-dialog { grid-template-rows: auto minmax(0, 1fr) auto; }
+.studio-app-shell .manuscript-preflight-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin: 0; padding: 14px 18px; border-top: 1px solid var(--eum-line); background: var(--eum-panel); }
+.studio-app-shell .preflight-settings-panel { padding: 20px; }
+.studio-app-shell .preflight-scope-fieldset { gap: 8px; margin: 0 0 18px; padding: 12px; border: 1px solid var(--eum-line); border-radius: 8px; }
+.studio-app-shell .preflight-check-row { padding-block: 4px; }
+.studio-app-shell .preflight-save-settings { margin-top: 18px; }
+.studio-app-shell .preflight-result-panel { padding: 24px; }
+.studio-app-shell .preflight-result-panel h3 { margin-top: 0; font-size: 17px; }
+.studio-app-shell .preflight-result-panel p { color: var(--eum-text-muted); font-size: 13px; line-height: 1.7; }
+
+.studio-app-shell .manuscript-analysis-body { gap: 14px; padding: 20px; }
+.studio-app-shell .manuscript-analysis-card h3 { font-size: 14px; }
+.studio-app-shell .manuscript-analysis-card li { padding-block: 5px; border-bottom: 1px solid var(--eum-line); font-size: 13px; }
+.studio-app-shell .manuscript-analysis-metrics dt { color: var(--eum-text-muted); font-size: 12px; }
+.studio-app-shell .manuscript-analysis-metrics dd { margin: 4px 0; font-size: 20px; font-weight: 650; }
+.studio-app-shell .manuscript-analysis-density { grid-column: 1 / -1; }
+.studio-app-shell .manuscript-analysis-density > strong,
+.studio-app-shell .manuscript-analysis-card li strong { color: var(--eum-accent-text); }
+.studio-app-shell .quick-tools-dialog .quick-tool-search-field input:focus { box-shadow: none; outline: none; }
+
+.studio-app-shell .publishing-partner-fields:has(> .publishing-partner-field-grid) { grid-template-columns: minmax(0, 1fr); }
+.studio-app-shell .publishing-partner-field-grid { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: 14px; min-width: 0; }
+.studio-app-shell .publishing-partner-field-grid > label { display: grid; min-width: 0; gap: 6px; }
+.studio-app-shell .publishing-workspace-tabs button[aria-pressed="true"] { color: var(--eum-accent-text); background: var(--eum-accent-soft); font-weight: 700; box-shadow: inset 0 -2px var(--eum-accent); }
+
+@container fragments (max-width: 43rem) {
+  .studio-app-shell .fragment-shelf-toolbar { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .studio-app-shell .fragment-search-field { grid-column: span 2; }
+}
+
+@media (max-width: 760px) {
+  .studio-app-shell .manuscript-preflight-layout { grid-template-columns: minmax(0, 1fr); overflow-y: auto; }
+  .studio-app-shell .preflight-settings-panel,
+  .studio-app-shell .preflight-result-panel { min-height: 12rem; overflow: visible; }
+  .studio-app-shell .preflight-settings-panel { border-right: 0; border-bottom: 1px solid var(--eum-line); }
+  .studio-app-shell .fragment-card-head { grid-template-columns: minmax(0, 1fr) auto; }
+  .studio-app-shell .fragment-card-head > input { grid-column: 1 / -1; }
+  .studio-app-shell .manuscript-analysis-body { grid-template-columns: 1fr; }
+}

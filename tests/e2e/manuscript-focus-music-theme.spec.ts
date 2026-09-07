@@ -971,6 +971,7 @@ test("runs selected, one-track, full, and random-repeat playback through the ful
     }).click();
     await page.getByRole("button", { name: "앱 설정 열기", exact: true }).click();
     const settingsDialog = page.getByRole("dialog", { name: "앱 설정" });
+    await settingsDialog.getByRole("tab", { name: "음악", exact: true }).click();
     await settingsDialog.getByLabel("YouTube Data API 키").fill("mode-key");
     await settingsDialog.getByRole("button", { name: "저장", exact: true })
       .click();
@@ -1314,6 +1315,7 @@ test("mixes YouTube with linked and managed MP3/MP4 files in the compact player"
 
     await page.getByRole("button", { name: "앱 설정 열기", exact: true }).click();
     const settingsDialog = page.getByRole("dialog", { name: "앱 설정" });
+    await settingsDialog.getByRole("tab", { name: "음악", exact: true }).click();
     await settingsDialog.getByLabel("YouTube Data API 키").fill("mixed-test-key");
     await settingsDialog.getByRole("button", { name: "저장", exact: true }).click();
     await expect(settingsDialog).toBeHidden();

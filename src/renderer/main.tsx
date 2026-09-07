@@ -29,6 +29,9 @@ import "./styles/planning-import-dark-compat.css";
 import "./styles/theme-compat.css";
 import "./styles/music-assistant-surfaces.css";
 import "./shell/studio-app-shell.css";
+import "./styles/tool-discovery.css";
+import "./styles/workspace-surfaces.css";
+import "./styles/feature-dialogs.css";
 
 const root = document.getElementById("root");
 

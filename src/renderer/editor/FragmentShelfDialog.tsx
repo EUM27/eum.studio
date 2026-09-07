@@ -96,7 +96,7 @@ export function FragmentShelfDialog(input: {
       >
         <header className="fragment-shelf-header">
           <div>
-            <p className="panel-kicker">FRAGMENT SHELF</p>
+            <p className="panel-kicker">문장과 아이디어 보관</p>
             <h2 id="fragment-shelf-heading">파편 서랍</h2>
             <p>
               선택 원문을 그대로 복사하거나 명시적으로 이동해 이 작품에
@@ -176,6 +176,12 @@ export function FragmentShelfDialog(input: {
           </label>
         </div>
 
+        {!input.canCapture && (
+          <div className="fragment-selection-help">
+            <p>원고에서 보관할 구간을 선택하면 파편으로 복사하거나 이동할 수 있습니다.</p>
+            <button disabled={busy} onClick={input.onClose} type="button">원고에서 선택하기</button>
+          </div>
+        )}
         {input.error !== null && (
           <p className="fragment-shelf-error" role="alert">
             {input.error}

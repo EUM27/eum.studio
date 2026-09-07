@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { Settings, X } from "lucide-react";
 
 import type {
@@ -21,6 +21,12 @@ export type AppSettingsSaveValue = {
   readonly youtubeApiKey: string | null;
   readonly workSceneAnalysisEnabled: boolean | null;
 };
+
+const SETTINGS_SECTIONS = [
+  { id: "general", label: "집필 기준" },
+  { id: "assistant", label: "조수·장면 분석" },
+  { id: "music", label: "음악" },
+] as const;
 
 export function parseDefaultEpisodeCharactersInput(
   value: string,
@@ -73,6 +79,8 @@ export function AppSettingsDialog({
   readonly onRemoveYouTubeApiKey: () => void;
   readonly onStartChatGptOAuthLogin: () => void;
 }) {
+  const identity = useId();
+  const [section, setSection] = useState<typeof SETTINGS_SECTIONS[number]["id"]>("general");
   const [value, setValue] = useState(
     projection === null
       ? ""
@@ -106,6 +114,7 @@ export function AppSettingsDialog({
           : workSceneAnalysisEnabled,
       });
     } catch (reason) {
+      setSection("general");
       setValidationError(
         reason instanceof Error ? reason.message : "설정값을 확인하세요.",
       );
@@ -124,7 +133,7 @@ export function AppSettingsDialog({
               <Settings size={17} />
             </span>
             <div>
-              <p className="panel-kicker">APP SETTINGS</p>
+              <p className="panel-kicker">작업실 환경</p>
               <h2 id="app-settings-title">앱 설정</h2>
             </div>
           </div>
@@ -144,7 +153,32 @@ export function AppSettingsDialog({
           </p>
         ) : (
           <form onSubmit={submit}>
+            <div className="app-settings-tabs" role="tablist" aria-label="설정 분류">
+              {SETTINGS_SECTIONS.map((item, index) => (
+                <button
+                  aria-controls={`${identity}-${item.id}`}
+                  aria-selected={section === item.id}
+                  id={`${identity}-${item.id}-tab`}
+                  key={item.id}
+                  role="tab"
+                  tabIndex={section === item.id ? 0 : -1}
+                  onClick={() => setSection(item.id)}
+                  onKeyDown={(event) => {
+                    const next = event.key === "ArrowRight" ? (index + 1) % SETTINGS_SECTIONS.length
+                      : event.key === "ArrowLeft" ? (index + SETTINGS_SECTIONS.length - 1) % SETTINGS_SECTIONS.length
+                        : event.key === "Home" ? 0 : event.key === "End" ? SETTINGS_SECTIONS.length - 1 : null;
+                    if (next === null) return;
+                    event.preventDefault();
+                    const target = SETTINGS_SECTIONS[next]!;
+                    setSection(target.id);
+                    document.getElementById(`${identity}-${target.id}-tab`)?.focus();
+                  }}
+                  type="button"
+                >{item.label}</button>
+              ))}
+            </div>
             <div className="app-settings-scroll">
+              <section hidden={section !== "general"} id={`${identity}-general`} aria-labelledby={`${identity}-general-tab`} role="tabpanel">
               <div className="app-settings-section">
               <h3>원고 통계</h3>
               <label>
@@ -166,7 +200,9 @@ export function AppSettingsDialog({
                 원고 내용이나 회차 순서는 바꾸지 않습니다.
               </p>
               </div>
+              </section>
 
+              <section hidden={section !== "assistant"} id={`${identity}-assistant`} aria-labelledby={`${identity}-assistant-tab`} role="tabpanel">
               <div className="app-settings-section">
               <h3>GPT 로그인</h3>
               <div className="app-settings-inline-status">
@@ -209,7 +245,9 @@ export function AppSettingsDialog({
                   </p>
                 </div>
               )}
+              </section>
 
+              <section hidden={section !== "music"} id={`${identity}-music`} aria-labelledby={`${identity}-music-tab`} role="tabpanel">
               <div className="app-settings-section">
               <h3>YouTube 음악 연결</h3>
               <label>
@@ -289,6 +327,7 @@ export function AppSettingsDialog({
                 </fieldset>
                 </div>
               )}
+              </section>
               {(validationError ?? error) !== null && (
                 <p className="dialog-error" role="alert">
                   {validationError ?? error}
@@ -297,8 +336,7 @@ export function AppSettingsDialog({
             </div>
             <footer>
               <span>
-                허용 범위 {profile.defaultEpisodeCharacters.minValue.toLocaleString()}
-                –{profile.defaultEpisodeCharacters.maxValue.toLocaleString()}자
+                변경한 설정을 저장하세요.
               </span>
               <button disabled={busy} onClick={onClose} type="button">
                 취소

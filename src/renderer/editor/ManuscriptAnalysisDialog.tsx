@@ -47,7 +47,7 @@ export function ManuscriptAnalysisDialog(input: {
           <section className="manuscript-analysis-summary">
             <Tags aria-hidden="true" size={18} />
             <div>
-              <span>자동 요약</span>
+              <span>분석 요약</span>
               <strong>{analysis.summary}</strong>
             </div>
           </section>
