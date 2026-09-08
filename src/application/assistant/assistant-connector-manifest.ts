@@ -1,4 +1,5 @@
 import type { EntityId } from "../../domain/writing";
+import { parseAssistantRequestPolicy, withAssistantRequestLifetime, type AssistantRequestPolicy } from "./assistant-request-lifecycle";
 import {
   ASSISTANT_CAPABILITIES,
   type AssistantCapability,
@@ -29,6 +30,7 @@ export type AssistantConnectorOperation =
   (typeof ASSISTANT_CONNECTOR_OPERATIONS)[number];
 
 export type AssistantConnectorManifestEntry = {
+  readonly requestPolicy?: AssistantRequestPolicy;
   readonly connectorKind: string;
   readonly displayName: string;
   readonly capabilities: readonly AssistantCapability[];
@@ -54,6 +56,7 @@ export type AssistantConnectorInternalConnection = {
 };
 
 export type AssistantConnectorExecutionCommand = {
+  readonly signal?: AbortSignal;
   readonly schemaVersion: 1;
   readonly requestId: EntityId<"AssistantConnectorRequest">;
   readonly connectionId: EntityId<"AssistantConnection">;
@@ -64,6 +67,8 @@ export type AssistantConnectorExecutionCommand = {
 };
 
 export type AssistantConnectorAdapterInput = {
+  readonly signal?: AbortSignal;
+  readonly requestPolicy?: AssistantRequestPolicy;
   readonly schemaVersion: 1;
   readonly requestId: EntityId<"AssistantConnectorRequest">;
   readonly connectionId: EntityId<"AssistantConnection">;
@@ -152,6 +157,7 @@ function parseEntry(
     "contextTokenBudget",
     "credentialPolicy",
     "runtimeConfig",
+    ...(input.requestPolicy === undefined ? [] : ["requestPolicy"]),
   ], label);
   if (!Array.isArray(input.capabilities) || input.capabilities.length === 0) {
     throw new Error(`${label}.capabilities must be a non-empty array`);
@@ -165,6 +171,7 @@ function parseEntry(
   const runtimeConfig = record(input.runtimeConfig, `${label}.runtimeConfig`);
   exact(runtimeConfig, ["endpoint", "model"], `${label}.runtimeConfig`);
   return Object.freeze({
+    ...(input.requestPolicy === undefined ? {} : { requestPolicy: parseAssistantRequestPolicy(input.requestPolicy) }),
     connectorKind: nonEmptyString(input.connectorKind, `${label}.connectorKind`),
     displayName: nonEmptyString(input.displayName, `${label}.displayName`),
     capabilities,
@@ -278,16 +285,22 @@ export function createAssistantConnectorExecutor(input: {
         throw new Error(`Assistant connector adapter is unavailable: ${connection.connectorKind}`);
       }
       const startedAt = input.now();
-      const adapterResult = await adapter.execute(Object.freeze({
-        schemaVersion: 1,
-        requestId: command.requestId,
-        connectionId: command.connectionId,
-        operation: command.operation,
-        endpoint: connection.endpoint,
-        model: connection.model,
-        credential: connection.credential,
-        input: command.input,
-      }));
+      const adapterResult = await withAssistantRequestLifetime({
+        ...(command.signal === undefined ? {} : { signal: command.signal }),
+        ...(manifest.requestPolicy === undefined ? {} : { timeoutMs: manifest.requestPolicy.timeoutMs }),
+        execute: (signal) => adapter.execute(Object.freeze({
+          signal,
+          ...(manifest.requestPolicy === undefined ? {} : { requestPolicy: manifest.requestPolicy }),
+          schemaVersion: 1,
+          requestId: command.requestId,
+          connectionId: command.connectionId,
+          operation: command.operation,
+          endpoint: connection.endpoint,
+          model: connection.model,
+          credential: connection.credential,
+          input: command.input,
+        })),
+      });
       const completedAt = input.now();
       return Object.freeze({
         schemaVersion: 1,

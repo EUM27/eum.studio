@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 
 import type { LegacyLoreImportRehearsalSummary } from "../../application/migration/legacy-lore-import-contract";
-import type { LocalWorkspaceBackupStatusProjection } from "../../application/storage/local-workspace-backup-contract";
+import type { LocalWorkspaceBackupMode, LocalWorkspaceBackupStatusProjection } from "../../application/storage/local-workspace-backup-contract";
 import type { WorkspaceWorkSummary } from "../../application/workspace/workspace-contract";
 import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
@@ -34,9 +34,10 @@ export function BackupDialog({
   readonly actionState: "loading" | "idle" | "creating" | "restoring";
   readonly error: string | null;
   readonly onCancel: () => void;
-  readonly onCreate: () => void;
+  readonly onCreate: (mode: LocalWorkspaceBackupMode) => void;
   readonly onRestore: () => void;
 }) {
+  const [mode, setMode] = useState<LocalWorkspaceBackupMode>("complete");
   const busy = actionState !== "idle";
   const summary = status?.lastVerified ?? null;
   const onBackdropPointerDown = useDialogDismiss({
@@ -75,6 +76,23 @@ export function BackupDialog({
           보존합니다. 원본 위치 연결 파일은 복사하지 않고 경로·크기·checksum을
           기록하며, 선택한 백업은 새 작업실 위치에만 복원합니다.
         </p>
+        <label className="form-field">
+          <span>백업 범위</span>
+          <select
+            value={mode}
+            disabled={busy}
+            onChange={(event) => setMode(event.target.value === "manuscript-only" ? "manuscript-only" : "complete")}
+          >
+            <option value="complete">전체 백업 · 미디어 포함</option>
+            <option value="manuscript-only">원고·데이터 백업 · 미디어 미포함</option>
+          </select>
+        </label>
+        {mode === "manuscript-only" && (
+          <p className="dialog-description">
+            미디어 미포함: 원고, 버전, 집필 기록과 작업실 데이터를 보존합니다.
+            음악·영상 파일과 재연결 정보는 포함하지 않습니다.
+          </p>
+        )}
         {actionState === "loading" ? (
           <p className="backup-empty-state">백업 기록을 확인하는 중입니다.</p>
         ) : summary === null ? (
@@ -93,6 +111,11 @@ export function BackupDialog({
               </time>
             </header>
             <code title={summary.bundlePath}>{summary.bundlePath}</code>
+            <p role="status">
+              {summary.mode === "manuscript-only" ? "원고·데이터 백업 · 미디어 미포함"
+                : summary.mode === "legacy" ? "이전 형식 백업 · 미디어 보존 정보 없음"
+                  : "전체 백업 · 미디어 포함"}
+            </p>
             {summary.targetPath !== null && (
               <p title={summary.targetPath}>복원 위치 · {summary.targetPath}</p>
             )}
@@ -126,7 +149,7 @@ export function BackupDialog({
           <button
             className="primary-button"
             disabled={busy}
-            onClick={onCreate}
+            onClick={() => onCreate(mode)}
             type="button"
           >
             <Archive aria-hidden="true" size={15} />

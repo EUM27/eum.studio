@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { expect, test } from "@playwright/test";
-import { _electron as electron } from "playwright";
+import { electron } from "./support/desktop-shell-suite";
 
 async function removeTemporaryWorkspace(directory: string): Promise<void> {
   const resolved = await realpath(directory).catch(() => path.resolve(directory));

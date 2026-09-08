@@ -6,9 +6,11 @@ import {
   BACKUP_RESTORE_CHANNEL,
 } from "../../application/contracts/studio-bridge";
 import type {
+  CreateLocalWorkspaceBackupCommand,
   LocalWorkspaceBackupActionResult,
   LocalWorkspaceBackupStatusProjection,
 } from "../../application/storage/local-workspace-backup-contract";
+import { parseCreateLocalWorkspaceBackupCommand } from "../../application/storage/local-workspace-backup-contract";
 
 export type BackupIpcRuntime = Readonly<{
   getBackupStatus: () => Promise<LocalWorkspaceBackupStatusProjection>;
@@ -18,16 +20,16 @@ export function registerBackupIpc(input: Readonly<{
   ipcMain: Pick<IpcMain, "handle">;
   authorizeSender: (event: IpcMainInvokeEvent) => void;
   runtime: BackupIpcRuntime;
-  create: () => Promise<LocalWorkspaceBackupActionResult>;
+  create: (command: CreateLocalWorkspaceBackupCommand) => Promise<LocalWorkspaceBackupActionResult>;
   restore: () => Promise<LocalWorkspaceBackupActionResult>;
 }>): void {
   input.ipcMain.handle(BACKUP_GET_STATUS_CHANNEL, (event) => {
     input.authorizeSender(event);
     return input.runtime.getBackupStatus();
   });
-  input.ipcMain.handle(BACKUP_CREATE_CHANNEL, (event) => {
+  input.ipcMain.handle(BACKUP_CREATE_CHANNEL, (event, command: unknown) => {
     input.authorizeSender(event);
-    return input.create();
+    return input.create(parseCreateLocalWorkspaceBackupCommand(command));
   });
   input.ipcMain.handle(BACKUP_RESTORE_CHANNEL, (event) => {
     input.authorizeSender(event);

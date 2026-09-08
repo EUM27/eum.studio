@@ -88,6 +88,7 @@ export type AssistantExternalSettingReviewAuthorization =
     }>;
 
 export type AssistantExternalSettingReviewResult =
+  | AssistantRequestFailure
   | Readonly<{
       schemaVersion: 1;
       status: "permission-required";
@@ -397,6 +398,7 @@ export function createAssistantExternalSettingReviewRecords(input: {
 export function parseAssistantExternalSettingReviewResult(value: unknown): AssistantExternalSettingReviewResult {
   const label = "AssistantExternalSettingReviewResult";
   const input = record(value, label);
+  if (input.status === "failed") return parseAssistantRequestFailure(input);
   if (input.schemaVersion !== 1) throw new Error(`${label}.schemaVersion must be 1`);
   if (input.status === "permission-required") {
     exact(input, ["schemaVersion", "status", "missing"], label);
@@ -425,3 +427,4 @@ export function parseAssistantExternalSettingReviewResult(value: unknown): Assis
   }
   throw new Error(`${label}.status is unsupported`);
 }
+import { parseAssistantRequestFailure, type AssistantRequestFailure } from "./assistant-request-lifecycle";

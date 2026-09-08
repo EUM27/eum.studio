@@ -77,6 +77,7 @@ export function AssistantDialogHost(input: Readonly<{
             documentLabels={input.documentLabels}
             error={controller.assistantContextActionError}
             onClose={controller.closeAssistantContextDialog}
+            onCancelRequest={() => { void controller.cancelAssistantRequest(); }}
             onGrant={(draft) => {
               void controller.grantAssistantContextPermission(draft);
             }}

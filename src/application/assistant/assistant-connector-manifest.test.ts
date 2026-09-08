@@ -97,6 +97,7 @@ describe("assistant connector manifest", () => {
 
     expect(execute).toHaveBeenCalledTimes(1);
     expect(execute).toHaveBeenCalledWith({
+      signal: expect.any(AbortSignal),
       schemaVersion: 1,
       requestId: "request-a",
       connectionId,

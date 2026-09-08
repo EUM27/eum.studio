@@ -11,6 +11,10 @@ export type LocalWorkspaceBackupProfile = {
     readonly identity: string;
     readonly version: string;
   };
+  readonly manuscriptOnlyFormat?: {
+    readonly identity: string;
+    readonly version: string;
+  };
   readonly checksum: {
     readonly identity: string;
     readonly algorithm: string;
@@ -185,6 +189,7 @@ export function parseLocalWorkspaceBackupProfile(
     [
       "schemaVersion",
       "format",
+      ...(input.manuscriptOnlyFormat === undefined ? [] : ["manuscriptOnlyFormat"]),
       "checksum",
       "sqlite",
       "bundleLayout",
@@ -199,6 +204,14 @@ export function parseLocalWorkspaceBackupProfile(
   }
   const format = record(input.format, `${label}.format`);
   exact(format, ["identity", "version"], `${label}.format`);
+  const manuscriptOnly = input.manuscriptOnlyFormat === undefined
+    ? undefined : record(input.manuscriptOnlyFormat, `${label}.manuscriptOnlyFormat`);
+  if (manuscriptOnly !== undefined) {
+    exact(manuscriptOnly, ["identity", "version"], `${label}.manuscriptOnlyFormat`);
+    if (manuscriptOnly.identity === format.identity) {
+      throw new Error(`${label}.manuscriptOnlyFormat must have a distinct identity`);
+    }
+  }
   const checksum = record(input.checksum, `${label}.checksum`);
   exact(checksum, ["identity", "algorithm"], `${label}.checksum`);
   const sqlite = record(input.sqlite, `${label}.sqlite`);
@@ -275,6 +288,10 @@ export function parseLocalWorkspaceBackupProfile(
       identity: stringValue(format, "identity", `${label}.format`),
       version: stringValue(format, "version", `${label}.format`),
     }),
+    ...(manuscriptOnly === undefined ? {} : { manuscriptOnlyFormat: Object.freeze({
+      identity: stringValue(manuscriptOnly, "identity", `${label}.manuscriptOnlyFormat`),
+      version: stringValue(manuscriptOnly, "version", `${label}.manuscriptOnlyFormat`),
+    }) }),
     checksum: Object.freeze({
       identity: stringValue(checksum, "identity", `${label}.checksum`),
       algorithm: stringValue(checksum, "algorithm", `${label}.checksum`),

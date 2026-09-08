@@ -1,19 +1,53 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { localMediaPlaybackUrl } from "../../application/music/media-track";
 import { openNodeLocalMediaLibrary } from "./node-local-media-library";
+import * as descriptors from "./node-local-media-descriptor";
 
 describe("Node local media library", () => {
   const temporaryDirectories: string[] = [];
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await Promise.all(temporaryDirectories.splice(0).map((directory) =>
       rm(directory, { force: true, recursive: true })
     ));
+  });
+
+  it.each(["external-reference", "managed-copy"] as const)("blocks changed %s bytes after an earlier successful playback", async (storageMode) => {
+    const directory = await mkdtemp(path.join(tmpdir(), "eum-local-media-changed-"));
+    temporaryDirectories.push(directory);
+    const selected = path.join(directory, `${randomUUID()}.mp3`);
+    await writeFile(selected, Buffer.from([0x49, 0x44, 0x33, 0x03]));
+    const library = await openNodeLocalMediaLibrary({ rootDirectoryPath: path.join(directory, "library"), checksum: { identity: "sha256", algorithm: "sha256" } });
+    const [track] = await library.register({ workId: randomUUID(), storageMode, filePaths: [selected] });
+    const url = localMediaPlaybackUrl(track!);
+    const source = await library.resolvePlaybackUrl(url);
+    const previous = await stat(source.filePath);
+    await writeFile(source.filePath, Buffer.from([0x49, 0x44, 0x33, 0x09]));
+    await utimes(source.filePath, previous.atime, previous.mtime);
+    await expect(library.resolvePlaybackUrl(url)).rejects.toThrow("변경");
+    expect(await library.inspect({ schemaVersion: 1, workId: track!.workId, mediaIds: [track!.mediaId] })).toMatchObject({ entries: [{ status: "changed" }] });
+  });
+
+  it("reuses successful verification for concurrent range requests to an unchanged file", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "eum-local-media-verified-"));
+    temporaryDirectories.push(directory);
+    const selected = path.join(directory, `${randomUUID()}.mp3`);
+    await writeFile(selected, Buffer.from([0x49, 0x44, 0x33, 0x03]));
+    const library = await openNodeLocalMediaLibrary({ rootDirectoryPath: path.join(directory, "library"), checksum: { identity: "sha256", algorithm: "sha256" } });
+    const [track] = await library.register({ workId: randomUUID(), storageMode: "external-reference", filePaths: [selected] });
+    const checksum = vi.spyOn(descriptors, "checksumLocalMediaFile");
+    const url = localMediaPlaybackUrl(track!);
+    const sources = await Promise.all([library.resolvePlaybackUrl(url), library.resolvePlaybackUrl(url)]);
+    expect(sources.every((source) => source.filePath === selected)).toBe(true);
+    await library.resolvePlaybackUrl(url);
+    expect(checksum).toHaveBeenCalledTimes(1);
   });
 
   it("restores external references and managed copies without projecting paths", async () => {

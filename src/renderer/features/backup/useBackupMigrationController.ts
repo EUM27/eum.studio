@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { StudioBridge } from "../../../application/contracts/studio-bridge";
 import type { LegacyLoreImportRehearsalSummary } from "../../../application/migration/legacy-lore-import-contract";
-import type { LocalWorkspaceBackupStatusProjection } from "../../../application/storage/local-workspace-backup-contract";
+import type { LocalWorkspaceBackupMode, LocalWorkspaceBackupStatusProjection } from "../../../application/storage/local-workspace-backup-contract";
 import type { WorkspaceCatalogProjection } from "../../../application/workspace/workspace-contract";
 
 export function useBackupMigrationController(input: Readonly<{
@@ -86,7 +86,7 @@ export function useBackupMigrationController(input: Readonly<{
     setImportRehearsalError(null);
   }, [importRehearsalRunning]);
 
-  const runBackupAction = useCallback((action: "create" | "restore") => {
+  const runBackupAction = useCallback((action: "create" | "restore", mode: LocalWorkspaceBackupMode = "complete") => {
     if (
       backupActionState !== "idle" ||
       input.shellActionState !== "idle"
@@ -99,7 +99,7 @@ export function useBackupMigrationController(input: Readonly<{
           input.acceptCatalog(await input.workspace.prepareForMain());
         }
         const result = action === "create"
-          ? await input.backupClient.create()
+          ? await input.backupClient.create({ schemaVersion: 1, mode })
           : await input.backupClient.restore();
         if (result.status === "completed") {
           setBackupStatus({ schemaVersion: 1, lastVerified: result.summary });

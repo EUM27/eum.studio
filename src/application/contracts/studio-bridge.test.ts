@@ -4560,6 +4560,7 @@ describe("studio bridge contract", () => {
   it("exposes verified local backup status, creation, and restore actions", async () => {
     const summary = {
       schemaVersion: 1,
+      mode: "complete",
       bundlePath: "D:\\Backups\\eum-studio-2026-08-07",
       targetPath: null,
       createdAt: "2026-08-07T00:00:00.000Z",
@@ -4598,6 +4599,8 @@ describe("studio bridge contract", () => {
     await expect(bridge.backup.restore()).resolves.toEqual(completed);
     expect(invoke).toHaveBeenCalledWith(BACKUP_GET_STATUS_CHANNEL);
     expect(invoke).toHaveBeenCalledWith(BACKUP_CREATE_CHANNEL);
+    await bridge.backup.create({ schemaVersion: 1, mode: "manuscript-only" });
+    expect(invoke).toHaveBeenCalledWith(BACKUP_CREATE_CHANNEL, { schemaVersion: 1, mode: "manuscript-only" });
     expect(invoke).toHaveBeenCalledWith(BACKUP_RESTORE_CHANNEL);
   });
 

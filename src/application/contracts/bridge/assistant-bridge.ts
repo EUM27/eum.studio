@@ -73,6 +73,7 @@ import {
 
 export const ASSISTANT_CHATGPT_OAUTH_STATUS_CHANNEL =
   "studio:assistant:chatgpt-oauth-status";
+export const ASSISTANT_CANCEL_REQUEST_CHANNEL = "studio:assistant:cancel-request";
 export const ASSISTANT_CHATGPT_OAUTH_START_LOGIN_CHANNEL =
   "studio:assistant:chatgpt-oauth-start-login";
 export const ASSISTANT_CHAT_RUN_CHANNEL = "studio:assistant:chat-run";
@@ -104,6 +105,7 @@ export const ASSISTANT_DELETE_CONNECTION_CHANNEL =
   "studio:assistant:delete-connection";
 
 export type AssistantBridgeChannel =
+  | typeof ASSISTANT_CANCEL_REQUEST_CHANNEL
   | typeof ASSISTANT_CHATGPT_OAUTH_STATUS_CHANNEL
   | typeof ASSISTANT_CHATGPT_OAUTH_START_LOGIN_CHANNEL
   | typeof ASSISTANT_CHAT_RUN_CHANNEL
@@ -122,6 +124,7 @@ export type AssistantBridgeChannel =
   | typeof ASSISTANT_DELETE_CONNECTION_CHANNEL;
 
 export type AssistantBridgePayload =
+  | CancelAssistantRequestCommand
   | RunAssistantChatCommand
   | ListAssistantContextStateCommand
   | GrantAssistantContextPermissionCommand
@@ -135,6 +138,7 @@ export type AssistantBridgePayload =
   | DeleteAssistantConnectionCommand;
 
 export type AssistantBridge = Readonly<{
+  cancelRequest: (command: CancelAssistantRequestCommand) => Promise<CancelAssistantRequestResult>;
   getChatGptOAuthStatus: () => Promise<ChatGptOAuthConnectionStatus>;
   startChatGptOAuthLogin: () => Promise<ChatGptOAuthConnectionStatus>;
   runChat: (command: RunAssistantChatCommand) => Promise<AssistantChatResult>;
@@ -180,6 +184,10 @@ export function createAssistantBridge(
   invoke: AssistantBridgeInvoke,
 ): AssistantBridge {
   return Object.freeze({
+    cancelRequest: async (input) => {
+      const command = parseCancelAssistantRequestCommand(input);
+      return parseCancelAssistantRequestResult(await invoke(ASSISTANT_CANCEL_REQUEST_CHANNEL, command));
+    },
     getChatGptOAuthStatus: async () => {
       const value = await invoke(ASSISTANT_CHATGPT_OAUTH_STATUS_CHANNEL);
       try {
@@ -340,3 +348,4 @@ export function createAssistantBridge(
     },
   });
 }
+import { parseCancelAssistantRequestCommand, parseCancelAssistantRequestResult, type CancelAssistantRequestCommand, type CancelAssistantRequestResult } from "../../assistant/assistant-request-lifecycle";

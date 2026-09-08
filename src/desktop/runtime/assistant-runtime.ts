@@ -4,6 +4,7 @@ export function pickAssistantRuntime(
   runtime: AssistantIpcRuntime,
 ): AssistantIpcRuntime {
   return Object.freeze({
+    cancelAssistantRequest: (command) => runtime.cancelAssistantRequest(command),
     listAssistantConnections: () => runtime.listAssistantConnections(),
     saveAssistantConnection: (command) =>
       runtime.saveAssistantConnection(command),

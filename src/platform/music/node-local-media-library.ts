@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { constants as fileConstants } from "node:fs";
+import { constants as fileConstants, type BigIntStats } from "node:fs";
 import {
   copyFile,
   open,
@@ -74,6 +74,10 @@ function supportedMedia(filePath: string): SupportedMedia {
   return media;
 }
 
+function fileVersion(details: BigIntStats): string {
+  return [details.dev, details.ino, details.size, details.mtimeNs, details.ctimeNs].join(":");
+}
+
 export async function openNodeLocalMediaLibrary(input: {
   readonly rootDirectoryPath: string;
   readonly checksum: NodeLocalMediaChecksumProfile;
@@ -82,6 +86,11 @@ export async function openNodeLocalMediaLibrary(input: {
   const paths = createNodeLocalMediaLibraryPaths(input.rootDirectoryPath);
   await ensureNodeLocalMediaLibraryPaths(paths);
   const createId = input.createId ?? randomUUID;
+  const playbackVerifications = new Map<string, Readonly<{
+    descriptor: string;
+    version: string;
+    complete: Promise<void>;
+  }>>();
 
   const assertDescriptorIdentity = (
     descriptor: StoredLocalMediaDescriptor,
@@ -328,9 +337,34 @@ export async function openNodeLocalMediaLibrary(input: {
       });
       assertDescriptorIdentity(descriptor, identity.workId, identity.mediaId);
       const filePath = localMediaSourcePath(paths, descriptor);
-      const fileStat = await stat(filePath);
+      const fileStat = await stat(filePath, { bigint: true });
       if (!fileStat.isFile()) {
         throw new Error("Registered local media is unavailable");
+      }
+      if (descriptor.integrity !== null) {
+        const descriptorKey = JSON.stringify([filePath, descriptor.integrity]);
+        const version = fileVersion(fileStat);
+        let verification = playbackVerifications.get(identity.mediaId);
+        if (verification?.descriptor !== descriptorKey || verification.version !== version) {
+          verification = {
+            descriptor: descriptorKey,
+            version,
+            complete: (async () => {
+              const observed = await checksumLocalMediaFile({ filePath, checksum: input.checksum });
+              const after = await stat(filePath, { bigint: true });
+              if (fileVersion(after) !== version || !sameStoredLocalMediaIntegrity(descriptor.integrity!, observed)) {
+                throw new Error("등록된 미디어 파일이 변경되어 재생할 수 없습니다.");
+              }
+            })(),
+          };
+          playbackVerifications.set(identity.mediaId, verification);
+        }
+        try {
+          await verification.complete;
+        } catch (error) {
+          if (playbackVerifications.get(identity.mediaId) === verification) playbackVerifications.delete(identity.mediaId);
+          throw error;
+        }
       }
       return Object.freeze({
         filePath,

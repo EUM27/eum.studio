@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
   cp,
+  lstat,
   mkdir,
   readFile,
   readdir,
@@ -17,7 +18,7 @@ const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const outputRoot = resolve(projectRoot, "out");
 const packageDirectoryName =
   process.env.EUM_STUDIO_WINDOWS_PACKAGE_DIRECTORY_NAME?.trim() ||
-  "eum-studio-win-x64";
+  `eum-studio-candidate-${randomUUID()}`;
 if (
   basename(packageDirectoryName) !== packageDirectoryName ||
   packageDirectoryName === "." ||
@@ -31,6 +32,18 @@ const stagingRoot = resolveInside(
   `.${packageDirectoryName}-staging-${randomUUID()}`,
 );
 const executableName = "이음 스튜디오.exe";
+
+async function requireNewPackageTarget() {
+  try {
+    await lstat(packageRoot);
+  } catch (error) {
+    if (error?.code === "ENOENT") return;
+    throw error;
+  }
+  throw new Error(`Package target already exists; choose a new candidate directory: ${packageRoot}`);
+}
+
+await requireNewPackageTarget();
 
 function resolveInside(root, targetRelativePath) {
   const target = resolve(root, targetRelativePath);
@@ -227,28 +240,8 @@ try {
     "utf8",
   );
 
-  const previousRoot = resolveInside(
-    outputRoot,
-    `.${packageDirectoryName}-previous-${randomUUID()}`,
-  );
-  const currentExists = await stat(packageRoot).then(
-    (details) => details.isDirectory(),
-    () => false,
-  );
-  if (currentExists) {
-    await rename(packageRoot, previousRoot);
-  }
-  try {
-    await rename(stagingRoot, packageRoot);
-  } catch (error) {
-    if (currentExists) {
-      await rename(previousRoot, packageRoot);
-    }
-    throw error;
-  }
-  if (currentExists) {
-    await rm(previousRoot, { recursive: true, force: true });
-  }
+  await requireNewPackageTarget();
+  await rename(stagingRoot, packageRoot);
 
   process.stdout.write(`${JSON.stringify({
     packageRoot,

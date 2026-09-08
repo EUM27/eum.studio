@@ -1,3 +1,21 @@
+export type LocalWorkspaceBackupMode = "complete" | "manuscript-only";
+
+export type CreateLocalWorkspaceBackupCommand = Readonly<{
+  schemaVersion: 1;
+  mode: LocalWorkspaceBackupMode;
+}>;
+
+export function parseCreateLocalWorkspaceBackupCommand(value: unknown): CreateLocalWorkspaceBackupCommand {
+  if (value === undefined) return Object.freeze({ schemaVersion: 1, mode: "complete" });
+  const input = record(value, "CreateLocalWorkspaceBackupCommand");
+  exact(input, ["schemaVersion", "mode"], "CreateLocalWorkspaceBackupCommand");
+  schema(input, "CreateLocalWorkspaceBackupCommand");
+  if (input.mode !== "complete" && input.mode !== "manuscript-only") {
+    throw new Error("Unsupported backup mode");
+  }
+  return Object.freeze({ schemaVersion: 1, mode: input.mode });
+}
+
 export type LocalWorkspaceBackupCounts = {
   readonly workCount: number;
   readonly documentCount: number;
@@ -15,6 +33,7 @@ export type LocalWorkspaceBackupMediaCounts = {
 
 export type LocalWorkspaceBackupSummary = {
   readonly schemaVersion: 1;
+  readonly mode: LocalWorkspaceBackupMode | "legacy";
   readonly bundlePath: string;
   readonly targetPath: string | null;
   readonly createdAt: string;
@@ -180,22 +199,30 @@ export function parseLocalWorkspaceBackupSummary(
     "lastAction",
     "counts",
   ];
-  exact(input, input.media === undefined ? fields : [...fields, "media"], label);
+  exact(input, [...fields, ...(input.media === undefined ? [] : ["media"]), ...(input.mode === undefined ? [] : ["mode"])], label);
   schema(input, label);
+  const mode = input.mode === undefined ? (input.media === undefined ? "legacy" : "complete") : input.mode;
+  if (mode !== "complete" && mode !== "manuscript-only" && mode !== "legacy") {
+    throw new Error(`${label}.mode is unsupported`);
+  }
+  const media = input.media === undefined
+    ? EMPTY_LOCAL_WORKSPACE_BACKUP_MEDIA_COUNTS : mediaCounts(input.media, `${label}.media`);
+  if (mode === "manuscript-only" && Object.values(media).some((count) => count !== 0)) {
+    throw new Error("A manuscript-only backup cannot claim included media");
+  }
   if (input.lastAction !== "created" && input.lastAction !== "restored") {
     throw new Error(`${label}.lastAction is unsupported`);
   }
   return Object.freeze({
     schemaVersion: 1,
+    mode,
     bundlePath: stringValue(input, "bundlePath", label),
     targetPath: nullableString(input, "targetPath", label),
     createdAt: stringValue(input, "createdAt", label),
     verifiedAt: stringValue(input, "verifiedAt", label),
     lastAction: input.lastAction,
     counts: counts(input.counts, `${label}.counts`),
-    media: input.media === undefined
-      ? EMPTY_LOCAL_WORKSPACE_BACKUP_MEDIA_COUNTS
-      : mediaCounts(input.media, `${label}.media`),
+    media,
   });
 }
 

@@ -16,6 +16,7 @@ import {
   ASSISTANT_RUN_SETTING_REVIEW_CHANNEL,
   ASSISTANT_RUN_VOCABULARY_LOOKUP_CHANNEL,
   ASSISTANT_RUN_VOCABULARY_SUGGESTION_CHANNEL,
+  ASSISTANT_CANCEL_REQUEST_CHANNEL,
   ASSISTANT_SAVE_CONNECTION_CHANNEL,
 } from "../../application/contracts/studio-bridge";
 import type { AssistantContextPermissionGrant } from "../../application/assistant/assistant-context-permission";
@@ -73,6 +74,7 @@ import type { ChatGptOAuthConnectionStatus } from "../../application/assistant/c
 type MaybePromise<T> = T | Promise<T>;
 
 export type AssistantIpcRuntime = Readonly<{
+  cancelAssistantRequest: (command: CancelAssistantRequestCommand) => MaybePromise<CancelAssistantRequestResult>;
   listAssistantConnections: () => Promise<AssistantConnectionListProjection>;
   saveAssistantConnection: (
     command: SaveAssistantConnectionCommand,
@@ -118,6 +120,10 @@ export function registerAssistantIpc(input: Readonly<{
   }>;
   runChat: (command: RunAssistantChatCommand) => Promise<AssistantChatResult>;
 }>): void {
+  input.ipcMain.handle(ASSISTANT_CANCEL_REQUEST_CHANNEL, (event, value: unknown) => {
+    input.authorizeSender(event);
+    return input.runtime.cancelAssistantRequest(parseCancelAssistantRequestCommand(value));
+  });
   input.ipcMain.handle(ASSISTANT_CHATGPT_OAUTH_STATUS_CHANNEL, (event) => {
     input.authorizeSender(event);
     return input.oauth.getStatus();
@@ -233,3 +239,4 @@ export function registerAssistantIpc(input: Readonly<{
     },
   );
 }
+import { parseCancelAssistantRequestCommand, type CancelAssistantRequestCommand, type CancelAssistantRequestResult } from "../../application/assistant/assistant-request-lifecycle";

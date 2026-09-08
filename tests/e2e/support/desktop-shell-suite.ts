@@ -23,7 +23,23 @@ import {
   type Locator,
   type Page,
 } from "@playwright/test";
-import { _electron as electron } from "playwright";
+import { _electron as nativeElectron } from "playwright";
+
+// Every launch without a caller-selected profile stays inside this test's
+// output directory, including restarts and runtime capability probes.
+const electron: Pick<typeof nativeElectron, "launch"> = {
+  launch: async (options = {}) => {
+    const args = [...(options.args ?? [])];
+    if (!args.some((argument) => argument === "--user-data-dir" || argument.startsWith("--user-data-dir="))) {
+      args.push(`--user-data-dir=${test.info().outputPath("electron-user-data")}`);
+    }
+    const executablePath = options.executablePath ?? process.env.EUM_STUDIO_E2E_EXECUTABLE_PATH;
+    if (executablePath !== undefined && !path.isAbsolute(executablePath)) {
+      throw new Error("The selected E2E executable path must be absolute");
+    }
+    return nativeElectron.launch({ ...options, args, ...(executablePath === undefined ? {} : { executablePath }) });
+  },
+};
 
 import { parseManuscriptInputProfile } from "../../../src/application/editor/manuscript-input-profile";
 import { getPreviousEpisodeFlowPreviewText } from "../../../src/application/editor/previous-episode-flow";

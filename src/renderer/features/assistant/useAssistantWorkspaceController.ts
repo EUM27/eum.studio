@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ASSISTANT_REQUEST_FAILURE_MESSAGES, type CancelAssistantRequestCommand } from "../../../application/assistant/assistant-request-lifecycle";
 
 import type { StudioBridge } from "../../../application/contracts/studio-bridge";
 import type { AssistantContextPermissionGrant } from "../../../application/assistant/assistant-context-permission";
@@ -44,6 +45,12 @@ export function useAssistantWorkspaceController(
   input: AssistantWorkspaceControllerInput | null,
 ) {
   const assistantContextLoadSequenceRef = useRef(0);
+  const requestGenerationRef = useRef(0);
+  const activeRequestRef = useRef<{
+    identity: CancelAssistantRequestCommand;
+    client: StudioBridge["assistant"];
+    dispatched: boolean;
+  } | null>(null);
   const [assistantConversationId] = useState(() =>
     entityId<"AssistantConversation">(crypto.randomUUID()),
   );
@@ -70,6 +77,36 @@ export function useAssistantWorkspaceController(
     useState<AssistantConnectionsDialogActionState>("idle");
   const [assistantConnectionsActionError, setAssistantConnectionsActionError] =
     useState<string | null>(null);
+
+  const activeWorkId = input?.activeWorkId ?? null;
+  useLayoutEffect(() => () => {
+    requestGenerationRef.current += 1;
+    assistantContextLoadSequenceRef.current += 1;
+    const active = activeRequestRef.current;
+    activeRequestRef.current = null;
+    if (active?.dispatched) void active.client.cancelRequest(active.identity).catch(() => undefined);
+    setAssistantContextActionState("idle");
+    setAssistantContextActionError(null);
+    setAssistantContextProjection(null);
+  }, [activeWorkId]);
+
+  const cancelAssistantRequest = useCallback(async () => {
+    const active = activeRequestRef.current;
+    if (active === null) return;
+    activeRequestRef.current = null;
+    const generation = ++requestGenerationRef.current;
+    setAssistantContextActionState("idle");
+    setAssistantContextActionError(ASSISTANT_REQUEST_FAILURE_MESSAGES.cancelled);
+    if (active.dispatched) {
+      try { await active.client.cancelRequest(active.identity); }
+      catch {
+        // Do not apply an old cancellation error to a new Work or a newer request.
+        if (requestGenerationRef.current === generation) {
+          setAssistantContextActionError("취소 요청을 전달하지 못했습니다. 연결의 제한 시간이 지나면 요청이 종료됩니다.");
+        }
+      }
+    }
+  }, []);
 
   const assistantContextConnections = useMemo<
     readonly AssistantContextConnectionProjection[]
@@ -269,13 +306,14 @@ export function useAssistantWorkspaceController(
     [assistantConnectionsActionState, input],
   );
 
-  const refreshAssistantContext = useCallback(async () => {
+  const refreshAssistantContext = useCallback(async (isCurrent?: () => boolean) => {
     if (input === null || input.activeWorkId === null) return;
     const projection = await input.client.listContextState({
       schemaVersion: 1,
       workId: input.activeWorkId,
       conversationId: assistantConversationId,
     });
+    if (isCurrent?.() === false) return;
     setAssistantContextProjection(projection);
   }, [assistantConversationId, input]);
 
@@ -434,6 +472,15 @@ export function useAssistantWorkspaceController(
       ) {
         return;
       }
+      if (activeRequestRef.current !== null) return;
+      const active = {
+        identity: { schemaVersion: 1 as const, workId: input.activeWorkId, requestId: crypto.randomUUID() },
+        client: input.client,
+        dispatched: false,
+      };
+      requestGenerationRef.current += 1;
+      activeRequestRef.current = active;
+      const isCurrent = () => activeRequestRef.current === active;
       setAssistantContextActionState("running-vocabulary-suggestion");
       setAssistantContextActionError(null);
       try {
@@ -452,6 +499,7 @@ export function useAssistantWorkspaceController(
             throw new Error("함께 보낼 원고 범위를 정확히 선택하세요.");
           }
           await input.document.persist();
+          if (!isCurrent()) return;
           const documentRevisionId =
             input.document.getCurrentRevisionId() ??
             input.document.source.documentRevisionId;
@@ -465,10 +513,12 @@ export function useAssistantWorkspaceController(
             to: selection.to,
           };
         }
+        if (!isCurrent()) return;
+        active.dispatched = true;
         const result = await input.client.runVocabularySuggestion({
           schemaVersion: 1,
           requestId: entityId<"AssistantVocabularySuggestionRequest">(
-            crypto.randomUUID(),
+            active.identity.requestId,
           ),
           workId: input.activeWorkId,
           conversationId: assistantConversationId,
@@ -476,6 +526,11 @@ export function useAssistantWorkspaceController(
           query: request.query,
           sourceRange,
         });
+        if (!isCurrent()) return;
+        if (result.status === "failed") {
+          setAssistantContextActionError(ASSISTANT_REQUEST_FAILURE_MESSAGES[result.reason]);
+          return;
+        }
         if (result.status === "permission-required") {
           setAssistantContextActionError(
             "정확한 선택 범위를 함께 보내려면 해당 연결의 로컬 읽기·외부 전송 권한을 먼저 승인하세요.",
@@ -488,15 +543,19 @@ export function useAssistantWorkspaceController(
           );
           return;
         }
-        await refreshAssistantContext();
+        await refreshAssistantContext(isCurrent);
       } catch (reason) {
+        if (!isCurrent()) return;
         setAssistantContextActionError(
           reason instanceof Error
             ? reason.message
             : "어휘·유의어 제안을 받지 못했습니다.",
         );
       } finally {
-        setAssistantContextActionState("idle");
+        if (isCurrent()) {
+          activeRequestRef.current = null;
+          setAssistantContextActionState("idle");
+        }
       }
     },
     [
@@ -517,10 +576,20 @@ export function useAssistantWorkspaceController(
       ) {
         return;
       }
+      if (activeRequestRef.current !== null) return;
+      const active = {
+        identity: { schemaVersion: 1 as const, workId: input.activeWorkId, requestId: crypto.randomUUID() },
+        client: input.client,
+        dispatched: false,
+      };
+      requestGenerationRef.current += 1;
+      activeRequestRef.current = active;
+      const isCurrent = () => activeRequestRef.current === active;
       setAssistantContextActionState("running-external-setting-review");
       setAssistantContextActionError(null);
       try {
         await input.document.persist();
+          if (!isCurrent()) return;
         const manuscript = input.document.materializeText();
         if (manuscript.length === 0) {
           throw new Error("외부 설정 검토에 보낼 현재 회차 원고가 비어 있습니다.");
@@ -531,10 +600,12 @@ export function useAssistantWorkspaceController(
         if (documentRevisionId === null) {
           throw new Error("현재 원고의 저장 revision을 확인하지 못했습니다.");
         }
+        if (!isCurrent()) return;
+        active.dispatched = true;
         const result = await input.client.runExternalSettingReview({
           schemaVersion: 1,
           requestId: entityId<"AssistantExternalSettingReviewRequest">(
-            crypto.randomUUID(),
+            active.identity.requestId,
           ),
           workId: input.activeWorkId,
           conversationId: assistantConversationId,
@@ -547,6 +618,11 @@ export function useAssistantWorkspaceController(
             to: manuscript.length,
           },
         });
+        if (!isCurrent()) return;
+        if (result.status === "failed") {
+          setAssistantContextActionError(ASSISTANT_REQUEST_FAILURE_MESSAGES[result.reason]);
+          return;
+        }
         if (result.status === "permission-required") {
           setAssistantContextActionError(
             "현재 회차와 작품 설정을 보내려면 해당 연결의 작품 로컬 읽기·외부 전송 권한을 먼저 승인하세요.",
@@ -559,15 +635,19 @@ export function useAssistantWorkspaceController(
           );
           return;
         }
-        await refreshAssistantContext();
+        await refreshAssistantContext(isCurrent);
       } catch (reason) {
+        if (!isCurrent()) return;
         setAssistantContextActionError(
           reason instanceof Error
             ? reason.message
             : "외부 설정 검토 결과를 받지 못했습니다.",
         );
       } finally {
-        setAssistantContextActionState("idle");
+        if (isCurrent()) {
+          activeRequestRef.current = null;
+          setAssistantContextActionState("idle");
+        }
       }
     },
     [
@@ -717,6 +797,7 @@ export function useAssistantWorkspaceController(
     revokeAssistantContextPermission,
     runAssistantVocabularyLookup,
     runAssistantVocabularySuggestion,
+    cancelAssistantRequest,
     runAssistantExternalSettingReview,
     runAssistantNotationReview,
     runAssistantSettingReview,

@@ -10,6 +10,10 @@
         "publishing-operations"
       ],
       "contextTokenBudget": 32768,
+      "requestPolicy": {
+        "timeoutMs": 120000,
+        "maxResponseBytes": 4194304
+      },
       "credentialPolicy": "optional",
       "runtimeConfig": {
         "endpoint": "required",

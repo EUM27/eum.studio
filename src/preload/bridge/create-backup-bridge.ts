@@ -5,5 +5,5 @@ import {
 } from "../../application/contracts/studio-bridge";
 
 export function createPreloadBackupBridge(invoke: BridgeInvoke): BackupBridge {
-  return createBackupBridge((channel) => invoke(channel));
+  return createBackupBridge((channel, command) => invoke(channel, command));
 }

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   electron,
   expect,
@@ -14,6 +15,81 @@ import {
   tmpdir,
   writeFile,
 } from "./support/desktop-shell-suite";
+
+test("creates a media-excluded backup through the UI after complete backup fails and reopens its restored manuscript", async () => {
+  test.setTimeout(120_000);
+  const directory = await mkdtemp(path.join(tmpdir(), "eum-manuscript-backup-e2e-"));
+  const sourceWorkspacePath = path.join(directory, "source");
+  const mediaPath = path.join(directory, `${randomUUID()}.mp3`);
+  const completePath = path.join(directory, "complete");
+  const bundlePath = path.join(directory, "manuscript-only");
+  const targetPath = path.join(directory, "restored");
+  const manuscript = `${randomUUID()} 미디어 없이도 보존되는 원고`;
+  await writeFile(mediaPath, Buffer.concat([Buffer.from("ID3"), Buffer.alloc(1024, 0x31)]));
+  let electronApp = await electron.launch({
+    args: [".", `--user-data-dir=${path.join(directory, "source-user")}`],
+    cwd: process.cwd(),
+    env: { ...process.env, EUM_STUDIO_TEST_EPHEMERAL_WORKSPACE: "0",
+      EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH: sourceWorkspacePath,
+      EUM_STUDIO_LOCAL_MEDIA_SELECTION_PATHS: JSON.stringify([mediaPath]),
+      EUM_STUDIO_WINDOW_VISIBILITY: "hidden" },
+  });
+  try {
+    let page = await electronApp.firstWindow();
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.getByRole("button", { name: "작품 만들기", exact: true }).click();
+    const create = page.getByRole("dialog", { name: "새 작품 만들기" });
+    await create.getByLabel("작품 제목").fill(randomUUID());
+    await create.getByLabel("첫 회차 제목").fill(randomUUID());
+    await create.getByRole("button", { name: "작품 만들기", exact: true }).click();
+    await page.getByRole("textbox", { name: "원고", exact: true }).fill(manuscript);
+    await page.getByRole("region", { name: "음악 플레이어" })
+      .getByRole("button", { name: "선곡·재생목록 열기", exact: true }).click();
+    const library = page.getByRole("dialog", { name: "음악 선곡과 재생목록", exact: true });
+    await library.getByRole("button", { name: "원본 위치 연결", exact: true }).click();
+    await library.getByRole("tab", { name: "내 미디어 탭", exact: true }).click();
+    await expect(library.getByRole("region", { name: "내 미디어", exact: true }).getByRole("listitem")).toHaveCount(1);
+    await library.getByRole("button", { name: "음악 창 닫기", exact: true }).click();
+    await writeFile(mediaPath, randomUUID());
+    await electronApp.evaluate(({ dialog }, filePath) => {
+      Object.defineProperty(dialog, "showSaveDialog", { configurable: true, value: async () => ({ canceled: false, filePath }) });
+    }, completePath);
+    await openStudioHome(page);
+    await page.getByRole("button", { name: "작품 도구 열기", exact: true }).click();
+    await page.getByRole("menu", { name: "작품 도구" }).getByRole("menuitem", { name: "백업", exact: true }).click();
+    const backup = page.getByRole("dialog", { name: "백업" });
+    await backup.getByRole("button", { name: "새 백업", exact: true }).click();
+    await expect(backup.getByRole("alert")).toContainText("백업을 만들지 못했습니다.");
+    await expect(backup).not.toContainText("백업 생성 완료");
+    await electronApp.evaluate(({ dialog }, filePath) => {
+      Object.defineProperty(dialog, "showSaveDialog", { configurable: true, value: async () => ({ canceled: false, filePath }) });
+    }, bundlePath);
+    await backup.getByLabel("백업 범위").selectOption("manuscript-only");
+    await expect(backup).toContainText("음악·영상 파일과 재연결 정보는 포함하지 않습니다.");
+    await backup.getByRole("button", { name: "새 백업", exact: true }).click();
+    await expect(backup).toContainText("백업 생성 완료");
+    await expect(backup.getByRole("status")).toContainText("미디어 미포함");
+    await electronApp.evaluate(({ dialog }, selected) => {
+      Object.defineProperty(dialog, "showOpenDialog", { configurable: true, value: async () => ({ canceled: false, filePaths: [selected.bundlePath] }) });
+      Object.defineProperty(dialog, "showSaveDialog", { configurable: true, value: async () => ({ canceled: false, filePath: selected.targetPath }) });
+    }, { bundlePath, targetPath });
+    await backup.getByRole("button", { name: "새 위치에 복원", exact: true }).click();
+    await expect(backup).toContainText("새 위치 복원 완료");
+    await expect(backup.getByRole("status")).toContainText("미디어 미포함");
+    await electronApp.close();
+    electronApp = await electron.launch({
+      args: [".", `--user-data-dir=${path.join(directory, "restored-user")}`],
+      cwd: process.cwd(),
+      env: { ...process.env, EUM_STUDIO_TEST_EPHEMERAL_WORKSPACE: "0",
+        EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH: targetPath, EUM_STUDIO_WINDOW_VISIBILITY: "hidden" },
+    });
+    page = await openStudioWorkspace(electronApp);
+    await expect(page.getByRole("textbox", { name: "원고", exact: true })).toHaveText(manuscript);
+  } finally {
+    await electronApp.close().catch(() => undefined);
+    await removeVerifiedTemporaryDirectory(directory);
+  }
+});
 
 test("backs up managed MP3/MP4 and reconnects a missing external file after empty-location restore", async () => {
   test.setTimeout(120_000);

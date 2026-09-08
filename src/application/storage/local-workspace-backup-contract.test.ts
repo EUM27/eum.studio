@@ -3,14 +3,24 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
 import {
+  parseCreateLocalWorkspaceBackupCommand,
+  parseLocalWorkspaceBackupSummary,
   parseLocalWorkspaceBackupActionResult,
   parseLocalWorkspaceBackupStatusProjection,
 } from "./local-workspace-backup-contract";
 
 describe("local workspace backup contract", () => {
+  it("accepts only explicit supported backup scopes", () => {
+    expect(parseCreateLocalWorkspaceBackupCommand(undefined).mode).toBe("complete");
+    expect(parseCreateLocalWorkspaceBackupCommand({ schemaVersion: 1, mode: "manuscript-only" }).mode).toBe("manuscript-only");
+    for (const value of [null, {}, { schemaVersion: 1, mode: "automatic" }, { schemaVersion: 1, mode: "manuscript-only", extra: true }]) {
+      expect(() => parseCreateLocalWorkspaceBackupCommand(value)).toThrow();
+    }
+  });
   it("parses a persisted verified backup and a completed action", () => {
     const summary = {
       schemaVersion: 1,
+      mode: "complete",
       bundlePath: `C:\\${randomUUID()}`,
       targetPath: null,
       createdAt: new Date().toISOString(),
@@ -47,6 +57,7 @@ describe("local workspace backup contract", () => {
 
     const legacySummary: Record<string, unknown> = { ...summary };
     delete legacySummary.media;
+    delete legacySummary.mode;
     expect(
       parseLocalWorkspaceBackupStatusProjection({
         schemaVersion: 1,
@@ -58,5 +69,8 @@ describe("local workspace backup contract", () => {
       disconnectedExternalReferenceCount: 0,
       managedByteLength: 0,
     });
+    expect(parseLocalWorkspaceBackupSummary(legacySummary).mode).toBe("legacy");
+    expect(() => parseLocalWorkspaceBackupSummary({ ...summary, mode: null })).toThrow();
+    expect(() => parseLocalWorkspaceBackupSummary({ ...summary, mode: "manuscript-only" })).toThrow("cannot claim included media");
   });
 });

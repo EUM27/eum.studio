@@ -37,6 +37,7 @@ describe("StudioShellDialogs", () => {
       schemaVersion: 1,
       lastVerified: Object.freeze({
         schemaVersion: 1,
+        mode: "complete",
         bundlePath: "backup-bundle",
         targetPath: "restore-target",
         createdAt: "2026-08-23T00:00:00.000Z",

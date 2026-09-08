@@ -12,9 +12,11 @@ import path from "node:path";
 import type { ImmutableBlobStore, BlobAddress } from "../application/storage/blob-store";
 import {
   EMPTY_LOCAL_WORKSPACE_BACKUP_MEDIA_COUNTS,
+  parseCreateLocalWorkspaceBackupCommand,
   parseLocalWorkspaceBackupStatusProjection,
   parseLocalWorkspaceBackupSummary,
   type LocalWorkspaceBackupMediaCounts,
+  type LocalWorkspaceBackupMode,
   type LocalWorkspaceBackupStatusProjection,
   type LocalWorkspaceBackupSummary,
 } from "../application/storage/local-workspace-backup-contract";
@@ -131,7 +133,7 @@ async function writeStatus(
 
 export type LocalWorkspaceBackupService = {
   getStatus(): Promise<LocalWorkspaceBackupStatusProjection>;
-  createBundle(finalBundleRoot: string): Promise<LocalWorkspaceBackupSummary>;
+  createBundle(finalBundleRoot: string, mode?: LocalWorkspaceBackupMode): Promise<LocalWorkspaceBackupSummary>;
   restoreBundle(
     finalBundleRoot: string,
     targetFinalRoot: string,
@@ -178,7 +180,10 @@ export function createLocalWorkspaceBackupService(input: {
 
   return Object.freeze({
     getStatus: () => readStatus(statePath),
-    createBundle: async (finalBundleRoot: string) => {
+    createBundle: async (finalBundleRoot: string, mode: LocalWorkspaceBackupMode = "complete") => {
+      parseCreateLocalWorkspaceBackupCommand({ schemaVersion: 1, mode });
+      const format = mode === "complete" ? input.profile.format : input.profile.manuscriptOnlyFormat;
+      if (format === undefined) throw new Error("Manuscript-only backup format is not configured");
       if (!path.isAbsolute(finalBundleRoot)) {
         throw new Error("Backup bundle path must be absolute");
       }
@@ -192,14 +197,14 @@ export function createLocalWorkspaceBackupService(input: {
         temporaryBundleRoot,
         finalBundleRoot,
         layout: bundleLayout,
-        format: input.profile.format,
+        format,
         sqlite: input.profile.sqlite,
         manifestCodec: adapters.manifestCodec,
         canonicalBytes: adapters.canonicalBytes,
         checksum: adapters.checksum,
         clock: Object.freeze({ now: () => new Date().toISOString() }),
         stageHook: async (stage) => {
-          if (stage !== "before-bundle-publish") return;
+          if (stage !== "before-bundle-publish" || mode !== "complete") return;
           await createNodeLocalMediaBackupExtension({
             sourceDatabasePath: path.join(
               temporaryBundleRoot,
@@ -214,7 +219,7 @@ export function createLocalWorkspaceBackupService(input: {
           });
         },
       });
-      const verifiedMedia = await verifyNodeLocalMediaBackupExtension({
+      const verifiedMedia = mode === "complete" ? await verifyNodeLocalMediaBackupExtension({
         bundleRoot: path.resolve(finalBundleRoot),
         sourceDatabasePath: path.join(
           path.resolve(finalBundleRoot),
@@ -223,16 +228,17 @@ export function createLocalWorkspaceBackupService(input: {
         profile: input.profile,
         canonicalBytes: adapters.canonicalBytes,
         checksum: adapters.checksum,
-      });
+      }) : null;
       return persistSummary({
         schemaVersion: 1,
+        mode,
         bundlePath: path.resolve(finalBundleRoot),
         targetPath: null,
         createdAt: report.manifest.createdAt,
         verifiedAt: new Date().toISOString(),
         lastAction: "created",
         counts: report.manifest.counts,
-        media: verifiedMedia.counts,
+        media: verifiedMedia?.counts ?? EMPTY_LOCAL_WORKSPACE_BACKUP_MEDIA_COUNTS,
       });
     },
     restoreBundle: async (
@@ -264,22 +270,25 @@ export function createLocalWorkspaceBackupService(input: {
         untrustedCoreManifest as Record<string, unknown>
       ).format as Record<string, unknown>;
       if (
-        untrustedFormat.identity !== input.profile.format.identity ||
+        typeof untrustedFormat.identity !== "string" ||
         typeof untrustedFormat.version !== "string"
       ) {
         throw new Error("Backup manifest format is incompatible");
       }
       const coreFormat = Object.freeze({
-        identity: input.profile.format.identity,
+        identity: untrustedFormat.identity,
         version: untrustedFormat.version,
       });
       const isCurrentFormat =
+        coreFormat.identity === input.profile.format.identity &&
         coreFormat.version === input.profile.format.version;
+      const isManuscriptOnly = input.profile.manuscriptOnlyFormat !== undefined &&
+        coreFormat.identity === input.profile.manuscriptOnlyFormat.identity &&
+        coreFormat.version === input.profile.manuscriptOnlyFormat.version;
+      const isLegacy = coreFormat.identity === input.profile.format.identity &&
+        input.profile.localMedia.legacyCoreFormatVersions.includes(coreFormat.version);
       if (
-        !isCurrentFormat &&
-        !input.profile.localMedia.legacyCoreFormatVersions.includes(
-          coreFormat.version,
-        )
+        !isCurrentFormat && !isManuscriptOnly && !isLegacy
       ) {
         throw new Error("Backup manifest version is unsupported");
       }
@@ -351,6 +360,7 @@ export function createLocalWorkspaceBackupService(input: {
       });
       return persistSummary({
         schemaVersion: 1,
+        mode: isManuscriptOnly ? "manuscript-only" : isCurrentFormat ? "complete" : "legacy",
         bundlePath: path.resolve(finalBundleRoot),
         targetPath: path.resolve(targetFinalRoot),
         createdAt: report.manifest.createdAt,

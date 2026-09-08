@@ -1,30 +1,19 @@
-$ErrorActionPreference = "Stop"
-
-$sourceRoot = "\\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy6\Users\limoj\AppData\Roaming\이음 스튜디오\workspace-v1"
-$targetRoot = "D:\eum.studio\recovery\vss-20260902-061930-workspace-v1"
-
-if (Test-Path -LiteralPath $targetRoot) {
-  throw "VSS workspace recovery target already exists: $targetRoot"
+param(
+  [Parameter(Mandatory)][string]$SourceRoot,
+  [Parameter(Mandatory)][string]$TargetRoot,
+  [Parameter(Mandatory)][string[]]$FileNames
+)
+$ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'recovery-output.ps1')
+$targetDirectory = Assert-RecoveryOutputPath $TargetRoot
+$sourceDirectory = [IO.Path]::GetFullPath($SourceRoot)
+if ($targetDirectory.StartsWith($sourceDirectory.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Recovery target cannot be inside the source.' }
+$reportPath = Assert-RecoveryOutputPath ($targetDirectory + '-files.json')
+foreach ($fileName in $FileNames) {
+  if ([IO.Path]::GetFileName($fileName) -ne $fileName -or $fileName -in @('.', '..')) { throw 'FileNames must contain file names only.' }
 }
-
-New-Item -ItemType Directory -Path $targetRoot | Out-Null
-
-foreach ($fileName in @("workspace.sqlite3", "workspace.sqlite3-wal", "workspace.sqlite3-shm")) {
-  $sourcePath = Join-Path $sourceRoot $fileName
-  if (Test-Path -LiteralPath $sourcePath) {
-    [System.IO.File]::Copy($sourcePath, (Join-Path $targetRoot $fileName), $false)
-  }
-}
-
-icacls $targetRoot /reset /T /C | Out-Null
-
-$files = Get-ChildItem -LiteralPath $targetRoot -File -Force |
-  ForEach-Object {
-    [pscustomobject]@{
-      FullName = $_.FullName
-      Length = $_.Length
-      LastWriteTime = $_.LastWriteTime.ToString("o")
-    }
-  }
-
-$files | ConvertTo-Json | Set-Content -LiteralPath "$targetRoot-files.json" -Encoding utf8
+$sources = @($FileNames | ForEach-Object { Join-Path $SourceRoot $_ } | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
+if ($sources.Count -eq 0) { throw 'No selected source files were found.' }
+[IO.Directory]::CreateDirectory($targetDirectory) | Out-Null
+$files = foreach ($sourcePath in $sources) { Copy-RecoveryFile -SourcePath $sourcePath -TargetPath (Join-Path $targetDirectory ([IO.Path]::GetFileName($sourcePath))) }
+Write-RecoveryJson -OutputPath $reportPath -Value ([ordered]@{ SourceRoot=$SourceRoot; Files=@($files) })

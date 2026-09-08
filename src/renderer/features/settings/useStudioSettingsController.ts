@@ -183,7 +183,7 @@ export function useStudioSettingsController(input: Readonly<{
         settings: { enabled: value.workSceneAnalysisEnabled },
       });
     };
-    void Promise.all([
+    void Promise.allSettled([
       input.settingsClient.save({
         schemaVersion: 1,
         expectedRevision: appSettingsProjection.revision,
@@ -194,23 +194,24 @@ export function useStudioSettingsController(input: Readonly<{
       saveWorkMusic,
       saveYouTubeConnection,
       saveSceneAnalysis(),
-    ]).then(
-      ([saved, savedWorkMusic, savedYouTubeStatus, savedSceneAnalysis]) => {
-        setAppSettingsProjection(saved);
-        setWorkMusicSettingsProjection(savedWorkMusic);
-        setYoutubeMusicConnectionStatus(savedYouTubeStatus);
-        setWorkSceneAnalysisSettingsProjection(savedSceneAnalysis);
-        setAppSettingsScheduleRevision(saved.revision);
-        setAppSettingsActionState("idle");
+    ]).then((results) => {
+      const [saved, savedWorkMusic, savedYouTubeStatus, savedSceneAnalysis] = results;
+      if (saved.status === "fulfilled") {
+        setAppSettingsProjection(saved.value);
+        setAppSettingsScheduleRevision(saved.value.revision);
+      }
+      if (savedWorkMusic.status === "fulfilled") setWorkMusicSettingsProjection(savedWorkMusic.value);
+      if (savedYouTubeStatus.status === "fulfilled") setYoutubeMusicConnectionStatus(savedYouTubeStatus.value);
+      if (savedSceneAnalysis.status === "fulfilled") setWorkSceneAnalysisSettingsProjection(savedSceneAnalysis.value);
+      const failed = results.find((result) => result.status === "rejected");
+      if (failed !== undefined) {
+        const reason: unknown = failed.reason;
+        setAppSettingsError(reason instanceof Error ? reason.message : "설정을 저장하지 못했습니다.");
+      } else {
         setShowAppSettings(false);
-      },
-      (reason: unknown) => {
-        setAppSettingsError(
-          reason instanceof Error ? reason.message : "설정을 저장하지 못했습니다.",
-        );
-        setAppSettingsActionState("idle");
-      },
-    );
+      }
+      setAppSettingsActionState("idle");
+    });
   }, [
     appSettingsProjection,
     input.activeWorkId,
@@ -269,8 +270,10 @@ export function useStudioSettingsController(input: Readonly<{
     appSettingsProfile,
     appSettingsProjection,
     musicSettingsProfile,
-    workMusicSettingsProjection,
-    workSceneAnalysisSettingsProjection,
+    workMusicSettingsProjection: workMusicSettingsProjection?.workId === input.activeWorkId
+      ? workMusicSettingsProjection : null,
+    workSceneAnalysisSettingsProjection: workSceneAnalysisSettingsProjection?.workId === input.activeWorkId
+      ? workSceneAnalysisSettingsProjection : null,
     youtubeMusicConnectionStatus,
     chatGptOAuthStatus,
     chatGptOAuthLoginState,

@@ -1,4 +1,6 @@
 import {
+  parseCreateLocalWorkspaceBackupCommand,
+  type CreateLocalWorkspaceBackupCommand,
   parseLocalWorkspaceBackupActionResult,
   parseLocalWorkspaceBackupStatusProjection,
   type LocalWorkspaceBackupActionResult,
@@ -16,12 +18,13 @@ export type BackupBridgeChannel =
 
 export type BackupBridge = Readonly<{
   getStatus: () => Promise<LocalWorkspaceBackupStatusProjection>;
-  create: () => Promise<LocalWorkspaceBackupActionResult>;
+  create: (command?: CreateLocalWorkspaceBackupCommand) => Promise<LocalWorkspaceBackupActionResult>;
   restore: () => Promise<LocalWorkspaceBackupActionResult>;
 }>;
 
 export type BackupBridgeInvoke = (
   channel: BackupBridgeChannel,
+  command?: CreateLocalWorkspaceBackupCommand,
 ) => Promise<unknown>;
 
 export function createBackupBridge(invoke: BackupBridgeInvoke): BackupBridge {
@@ -34,8 +37,9 @@ export function createBackupBridge(invoke: BackupBridgeInvoke): BackupBridge {
         throw new Error("Invalid local workspace backup status");
       }
     },
-    create: async () => {
-      const value = await invoke(BACKUP_CREATE_CHANNEL);
+    create: async (command) => {
+      const value = command === undefined ? await invoke(BACKUP_CREATE_CHANNEL)
+        : await invoke(BACKUP_CREATE_CHANNEL, parseCreateLocalWorkspaceBackupCommand(command));
       try {
         return parseLocalWorkspaceBackupActionResult(value);
       } catch {

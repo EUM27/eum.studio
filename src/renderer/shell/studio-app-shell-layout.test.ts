@@ -30,11 +30,11 @@ const stylesheet = Buffer.concat([
   readFileSync(new URL("../styles/theme-compat.css", import.meta.url)),
   readFileSync(new URL("../styles/music-assistant-surfaces.css", import.meta.url)),
   readFileSync(new URL("./studio-app-shell.css", import.meta.url)),
-]).toString("utf8");
+]).toString("utf8").replaceAll("\r\n", "\n");
 const mainEntry = readFileSync(
   new URL("../main.tsx", import.meta.url),
   "utf8",
-);
+).replaceAll("\r\n", "\n");
 
 function ruleFor(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

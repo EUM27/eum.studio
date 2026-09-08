@@ -4,6 +4,10 @@
     "identity": "eum-studio-local-workspace-backup",
     "version": "2"
   },
+  "manuscriptOnlyFormat": {
+    "identity": "eum-studio-manuscript-only-backup",
+    "version": "1"
+  },
   "checksum": {
     "identity": "eum-studio-ledger-sha256-v1",
     "algorithm": "sha256"

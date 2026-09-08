@@ -984,7 +984,8 @@ test("creates the first local Work and reopens its saved manuscript after restar
     await expect(
       page
         .getByRole("region", { name: "사건 레일" })
-        .getByRole("button", { name: new RegExp(eventTitle) }),
+        .locator(".bottom-event-card-open")
+        .filter({ hasText: eventTitle }),
     ).toBeVisible();
     await manuscript.press("ArrowRight");
     await page
@@ -1051,7 +1052,8 @@ test("creates the first local Work and reopens its saved manuscript after restar
     await restartedPage.getByRole("tab", { name: "현재", exact: true }).click();
     await restartedPage
       .getByRole("region", { name: "사건 레일" })
-      .getByRole("button", { name: new RegExp(eventTitle) })
+      .locator(".bottom-event-card-open")
+      .filter({ hasText: eventTitle })
       .click();
     await expect
       .poll(() =>

@@ -19,11 +19,7 @@ describe("structured JSON HTTP assistant connector", () => {
       }],
       note: "문맥상 격식 있는 표현입니다.",
     };
-    const fetch = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => ({ schemaVersion: 1, payload: responsePayload }),
-    }));
+    const fetch = vi.fn(async () => Response.json({ schemaVersion: 1, payload: responsePayload }));
     const connector = createStructuredJsonHttpConnector({ fetch });
 
     await expect(connector.execute({
@@ -35,6 +31,7 @@ describe("structured JSON HTTP assistant connector", () => {
       model: "user-model",
       credential,
       input: { query, context },
+      requestPolicy: { timeoutMs: 1000, maxResponseBytes: new TextEncoder().encode(JSON.stringify({ schemaVersion: 1, payload: responsePayload })).byteLength },
     })).resolves.toEqual({
       schemaVersion: 1,
       payload: responsePayload,
@@ -42,6 +39,7 @@ describe("structured JSON HTTP assistant connector", () => {
 
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(fetch).toHaveBeenCalledWith(endpoint, {
+      signal: expect.any(AbortSignal),
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -538,7 +538,7 @@ export function StudioRoot() {
           actionState={backupActionState}
           error={backupError}
           onCancel={closeBackup}
-          onCreate={() => runBackupAction("create")}
+          onCreate={(mode) => runBackupAction("create", mode)}
           onRestore={() => runBackupAction("restore")}
           status={backupStatus}
         />

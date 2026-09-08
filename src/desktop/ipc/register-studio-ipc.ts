@@ -51,7 +51,7 @@ import { registerMusicPlaybackIpc } from "./register-music-playback-ipc";
 import { registerVersionIpc } from "./register-version-ipc";
 import { registerBackupIpc } from "./register-backup-ipc";
 import { registerMigrationIpc } from "./register-migration-ipc";
-import type { LocalWorkspaceBackupActionResult } from "../../application/storage/local-workspace-backup-contract";
+import type { CreateLocalWorkspaceBackupCommand, LocalWorkspaceBackupActionResult } from "../../application/storage/local-workspace-backup-contract";
 import type { LegacyLoreImportRehearsalActionResult } from "../../application/migration/legacy-lore-import-contract";
 import { registerPlotsIpc } from "./register-plots-ipc";
 import { registerStructureIpc } from "./register-structure-ipc";
@@ -131,7 +131,7 @@ export function registerStudioIpc(input: Readonly<{
     ) => Promise<RelinkLocalMediaResult>;
   }>;
   backup: Readonly<{
-    create: () => Promise<LocalWorkspaceBackupActionResult>;
+    create: (command: CreateLocalWorkspaceBackupCommand) => Promise<LocalWorkspaceBackupActionResult>;
     restore: () => Promise<LocalWorkspaceBackupActionResult>;
   }>;
   migration: Readonly<{

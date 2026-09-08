@@ -136,6 +136,19 @@ async function createRepository() {
 }
 
 describe("git source provenance", () => {
+  it("streams a diff larger than the child-process output buffer and hashes its final bytes", async () => {
+    const { directory, trackedPath } = await createRepository();
+    const checksumAlgorithm = selectHashAlgorithm();
+    const content = randomUUID().repeat(2 ** 16);
+    await writeFile(trackedPath, `${content}\n${randomUUID()}`);
+    const first = await captureGitSourceProvenance({ cwd: directory, checksumAlgorithm });
+    await writeFile(trackedPath, `${content}\n${randomUUID()}`);
+    const second = await captureGitSourceProvenance({ cwd: directory, checksumAlgorithm });
+    expect(first.dirty).toBe(true);
+    expect(second.trackedDiffChecksum).not.toBe(first.trackedDiffChecksum);
+    expect(second.sourceFingerprint).not.toBe(first.sourceFingerprint);
+  });
+
   it("fingerprints untracked file contents even when porcelain status and tracked diff stay unchanged", async () => {
     const repository =
       await createRepository();

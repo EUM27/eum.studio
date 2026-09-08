@@ -157,6 +157,7 @@ export function AssistantContextDialog(input: {
   readonly documentLabels: Readonly<Record<string, string>>;
   readonly error: string | null;
   readonly onClose: () => void;
+  readonly onCancelRequest: () => void;
   readonly onGrant: (draft: AssistantPermissionDraft) => void;
   readonly onOpenVocabularyOccurrence: (
     occurrence: AssistantVocabularyOccurrence,
@@ -272,6 +273,11 @@ export function AssistantContextDialog(input: {
             </div>
           </div>
           <div className="assistant-context-header-actions">
+            {(input.actionState === "running-vocabulary-suggestion" || input.actionState === "running-external-setting-review") && (
+              <button className="assistant-context-connections-button" onClick={input.onCancelRequest} type="button">
+                요청 취소
+              </button>
+            )}
             <button
               className="assistant-context-connections-button"
               disabled={busy}

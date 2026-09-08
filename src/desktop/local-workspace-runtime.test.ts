@@ -13,10 +13,16 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import * as fileSystem from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 import { describe, expect, it, vi } from "vitest";
+
+vi.mock("node:fs/promises", async (load) => {
+  const actual = await load<typeof import("node:fs/promises")>();
+  return { ...actual, readFile: vi.fn(actual.readFile) };
+});
 
 import {
   parseManuscriptDocumentProfile,
@@ -9948,6 +9954,56 @@ describe("local workspace runtime", () => {
     }
   });
 
+  it("moves and undoes manuscript text while earlier catalog mutations are queued", async () => {
+    const rootDirectoryPath = await mkdtemp(path.join(tmpdir(), "eum-move-queued-mutations-"));
+    const runtime = await openLocalWorkspaceRuntime(createOptions(rootDirectoryPath));
+    try {
+      const source = await runtime.createFirstWork({ schemaVersion: 1, title: randomUUID(), firstDocumentTitle: randomUUID() });
+      const target = await runtime.createDocument({ schemaVersion: 1, workId: source.workId, title: randomUUID() });
+      const text = randomUUID(); const split = Math.floor(text.length / 2);
+      const saved = await runtime.saveChangeBatch(parseChangeBatch({ schemaVersion: 1, textRepresentation: DURABLE_TEXT_REPRESENTATION_V1, batchId: randomUUID(), workId: source.workId, documentId: source.documentId, baseRevisionId: source.revisionId, sequence: 0, createdAt: new Date().toISOString(), beforeTextLengthUtf16: 0, afterTextLengthUtf16: text.length, changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: text }] }));
+      if (!("revisionId" in saved)) throw new Error("Expected a durable revision");
+      const [, , moved] = await Promise.all([
+        runtime.renameWork({ schemaVersion: 1, workId: source.workId, title: randomUUID() }),
+        runtime.renameDocument({ schemaVersion: 1, workId: source.workId, documentId: source.documentId, title: randomUUID() }),
+        runtime.moveRangeToEpisode({ schemaVersion: 1, workId: source.workId, sourceEpisodeId: source.documentId, targetEpisodeId: target.documentId, expectedSourceRevisionId: saved.revisionId, expectedTargetRevisionId: target.revisionId, from: split, to: text.length, placement: "start" }),
+      ]);
+      const contents = () => new Map(runtime.getManuscriptDocumentProfile().documents.map((document) => [document.documentId, document.initialText]));
+      expect(contents().get(source.documentId)).toBe(text.slice(0, split));
+      expect(contents().get(target.documentId)).toBe(text.slice(split));
+      await runtime.undoMoveRangeToEpisode({ schemaVersion: 1, workId: source.workId, moveId: moved.moveId, expectedSourceRevisionId: moved.sourceRevisionId, expectedTargetRevisionId: moved.targetRevisionId });
+      expect(contents().get(source.documentId)).toBe(text);
+      expect(contents().get(target.documentId)).toBe("");
+    } finally { runtime.close(); await rm(rootDirectoryPath, { recursive: true, force: true }); }
+  });
+
+  it("derives historical character deltas without rereading manuscript blobs", async () => {
+    const rootDirectoryPath = await mkdtemp(path.join(tmpdir(), "eum-activity-metadata-"));
+    const runtime = await openLocalWorkspaceRuntime(createOptions(rootDirectoryPath));
+    try {
+      const created = await runtime.createFirstWork({ schemaVersion: 1, title: randomUUID(), firstDocumentTitle: randomUUID() });
+      const started = await runtime.startWritingSession({ schemaVersion: 1, workId: created.workId, documentId: created.documentId, note: "" });
+      const text = `${randomUUID()}가🙂`;
+      await runtime.saveChangeBatch(parseChangeBatch({ schemaVersion: 1, textRepresentation: DURABLE_TEXT_REPRESENTATION_V1, batchId: randomUUID(), workId: created.workId, documentId: created.documentId, baseRevisionId: created.revisionId, sequence: 0, createdAt: new Date().toISOString(), beforeTextLengthUtf16: 0, afterTextLengthUtf16: text.length, changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: text }] }));
+      await runtime.stopWritingSession({ schemaVersion: 1, workId: created.workId, sessionId: started.activeSessionId });
+      for (let index = 0; index < 5; index += 1) {
+        const session = await runtime.startWritingSession({ schemaVersion: 1, workId: created.workId, documentId: created.documentId, note: "" });
+        await runtime.stopWritingSession({ schemaVersion: 1, workId: created.workId, sessionId: session.activeSessionId });
+      }
+      const read = vi.mocked(fileSystem.readFile);
+      read.mockClear();
+      try {
+        const activity = await runtime.listWorkActivity({ schemaVersion: 1, workId: created.workId });
+        expect(activity.sessions).toHaveLength(6);
+        expect(activity.sessions.find((session) => session.sessionId === started.activeSessionId)?.characterDelta).toBe(text.length);
+        expect(read.mock.calls.filter(([file]) => String(file).endsWith(".blob"))).toHaveLength(0);
+      } finally { read.mockClear(); }
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
   it("persists a manual writing session and caller-configured focus cycle across reopen", async () => {
     const rootDirectoryPath = await mkdtemp(
       path.join(tmpdir(), "eum-studio-work-activity-runtime-"),
@@ -11603,6 +11659,7 @@ describe("local workspace runtime", () => {
       });
 
       expect(connectorCalls).toEqual([{
+        signal: expect.any(AbortSignal),
         requestId: expect.any(String),
         connectionId,
         query,
@@ -12328,6 +12385,64 @@ describe("local workspace runtime", () => {
       restoredRuntime?.close();
       runtime.close();
       await rm(parentDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    { storageMode: "external-reference", missing: false },
+    { storageMode: "managed-copy", missing: false },
+    { storageMode: "managed-copy", missing: true },
+  ] as const)("rejects altered media for complete backup but creates and restores an explicitly media-excluded manuscript backup ($storageMode, missing=$missing)", async ({ storageMode, missing }) => {
+    const directory = await mkdtemp(path.join(tmpdir(), "eum-manuscript-backup-"));
+    const options = createOptions(path.join(directory, "source"));
+    const runtime = await openLocalWorkspaceRuntime(options);
+    let restored: Awaited<ReturnType<typeof openLocalWorkspaceRuntime>> | null = null;
+    try {
+      const created = await runtime.createFirstWork({ schemaVersion: 1, title: randomUUID(), firstDocumentTitle: randomUUID() });
+      const manuscript = `${randomUUID()} 원고\n보존`;
+      const saved = await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1, textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(), workId: created.workId, documentId: created.documentId,
+        baseRevisionId: created.revisionId, sequence: 0, createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0, afterTextLengthUtf16: manuscript.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: manuscript }],
+      }));
+      if (!("revisionId" in saved)) throw new Error("Expected a durable revision receipt");
+      const mediaPath = path.join(directory, `${randomUUID()}.mp3`);
+      await writeFile(mediaPath, Buffer.from([0x49, 0x44, 0x33, 0x03, 0x11]));
+      const library = await openNodeLocalMediaLibrary({ rootDirectoryPath: options.localMediaLibraryRootDirectoryPath, checksum: options.backupProfile.checksum });
+      const [track] = await library.register({ workId: created.workId, storageMode, filePaths: [mediaPath] });
+      const current = await runtime.getWorkMusicSettings({ schemaVersion: 1, workId: created.workId });
+      await runtime.saveWorkMusicSettings({ schemaVersion: 1, workId: created.workId, expectedRevision: current.revision,
+        settings: { ...current.settings, localMedia: [track!], playlistTracks: [track!] } });
+      const registeredPath = (await library.resolvePlaybackUrl(localMediaPlaybackUrl(track!))).filePath;
+      if (missing) await rm(registeredPath);
+      else await writeFile(registeredPath, randomUUID());
+      const completePath = path.join(directory, "complete");
+      await expect(runtime.createBackupBundle(completePath)).rejects.toThrow();
+      await expect(stat(completePath)).rejects.toMatchObject({ code: "ENOENT" });
+
+      const bundle = path.join(directory, "manuscript-only");
+      const summary = await runtime.createBackupBundle(bundle, "manuscript-only");
+      expect(summary).toMatchObject({ mode: "manuscript-only", counts: { revisionCount: 2, documentCount: 1 } });
+      expect(summary.media.managedFileCount).toBe(0);
+      const manifest = JSON.parse(await readFile(path.join(bundle, ...options.backupProfile.bundleLayout.manifestEntrySegments), "utf8"));
+      expect(manifest.format).toEqual(options.backupProfile.manuscriptOnlyFormat);
+      const target = path.join(directory, "restored");
+      const receipt = await runtime.restoreBackupBundle(bundle, target);
+      expect(receipt.mode).toBe("manuscript-only");
+      restored = await openLocalWorkspaceRuntime(createOptions(target));
+      expect(restored.getManuscriptDocumentProfile().documents[0]).toMatchObject({
+        workId: created.workId, documentId: created.documentId,
+        documentRevisionId: saved.revisionId, initialText: manuscript,
+      });
+      expect((await restored.getWorkMusicSettings({ schemaVersion: 1, workId: created.workId })).settings.localMedia).toEqual([track]);
+      const restoredLibrary = await openNodeLocalMediaLibrary({ rootDirectoryPath: createOptions(target).localMediaLibraryRootDirectoryPath, checksum: options.backupProfile.checksum });
+      expect((await restoredLibrary.inspect({ schemaVersion: 1, workId: created.workId, mediaIds: [track!.mediaId] })).entries[0]?.status).toBe("disconnected");
+    } finally {
+      restored?.close();
+      runtime.close();
+      await rm(directory, { recursive: true, force: true });
     }
   });
 
