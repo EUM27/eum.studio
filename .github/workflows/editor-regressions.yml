@@ -24,8 +24,6 @@ jobs:
         run: |
           cp package-lock.json "$RUNNER_TEMP/original-lock.json"
           trap 'cp "$RUNNER_TEMP/original-lock.json" package-lock.json' EXIT
-          # The committed lock omits the root entry required by wasm-runtime.
-          # Reuse the exact already-locked nested package, never a newer version.
           node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync } from 'node:fs';
           const path = 'package-lock.json';
@@ -39,19 +37,14 @@ jobs:
           }
           NODE
           npm ci --no-audit --no-fund
-      - name: Export isolated verification runtime
-        run: |
-          mkdir -p "$RUNNER_TEMP/editor-runtime/bin" "$RUNNER_TEMP/editor-runtime/lib/node_modules"
-          cp "$(command -v node)" "$RUNNER_TEMP/editor-runtime/bin/node"
-          cp -a "$(npm root -g)/npm" "$RUNNER_TEMP/editor-runtime/lib/node_modules/npm"
-          tar -czf "$RUNNER_TEMP/editor-dependencies.tar.gz" node_modules
-          tar -czf "$RUNNER_TEMP/editor-node.tar.gz" -C "$RUNNER_TEMP" editor-runtime
+      - name: Install the already-pinned Electron binary
+        run: node node_modules/electron/install.js
+      - name: Export Electron verification runtime
+        run: tar -czf "$RUNNER_TEMP/editor-electron.tar.gz" node_modules/electron/dist node_modules/electron/path.txt
       - uses: actions/upload-artifact@v7
         with:
-          name: editor-runtime
-          path: |
-            ${{ runner.temp }}/editor-dependencies.tar.gz
-            ${{ runner.temp }}/editor-node.tar.gz
+          name: editor-electron
+          path: ${{ runner.temp }}/editor-electron.tar.gz
           retention-days: 1
           compression-level: 0
       - name: Typecheck
