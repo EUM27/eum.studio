@@ -3,6 +3,7 @@ import type { ManuscriptDocumentProfile } from "../../application/editor/manuscr
 import type { WorkspaceCatalogProjection } from "../../application/workspace/workspace-contract";
 import type { EntityId } from "../../domain/writing";
 import type { MutableDocumentSaveTarget } from "./state-contracts";
+import { workspaceWindowContext } from "../workspace-window-context";
 
 /** Current workspace identity and live save targets, shared by all responsibility owners. */
 export class WorkspaceRuntimeState {
@@ -25,16 +26,52 @@ export class WorkspaceRuntimeState {
     }
   }
 
-  get catalog(): WorkspaceCatalogProjection { return this.#catalog; }
-  get documentProfile(): ManuscriptDocumentProfile { return this.#documentProfile; }
-  get resumeProjection(): ManuscriptResumeCheckpointProjection { return this.#resumeProjection; }
+  get catalog(): WorkspaceCatalogProjection {
+    const context = workspaceWindowContext.getStore();
+    if (context === undefined) return this.#catalog;
+    if (context.location?.activeWorkId === null && this.#catalog.activeWorkId !== null) {
+      context.location = { activeWorkId: this.#catalog.activeWorkId, activeDocumentId: this.#catalog.activeDocumentId };
+      context.resumeProjection = this.#resumeProjection;
+    }
+    context.location ??= {
+      activeWorkId: this.#catalog.activeWorkId,
+      activeDocumentId: this.#catalog.activeDocumentId,
+    };
+    context.resumeProjection ??= this.#resumeProjection;
+    return Object.freeze({ ...this.#catalog, ...context.location });
+  }
+  get documentProfile(): ManuscriptDocumentProfile {
+    if (workspaceWindowContext.getStore() === undefined) return this.#documentProfile;
+    return Object.freeze({
+      ...this.#documentProfile,
+      initialDocumentId: this.catalog.activeDocumentId ?? this.#documentProfile.initialDocumentId,
+    });
+  }
+  get resumeProjection(): ManuscriptResumeCheckpointProjection {
+    const context = workspaceWindowContext.getStore();
+    const resume = context?.resumeProjection ?? this.#resumeProjection;
+    if (context !== undefined && "targetRevisionId" in resume &&
+      this.#documentTargets.get(resume.documentId)?.currentRevisionId !== resume.targetRevisionId) {
+      return Object.freeze({ schemaVersion: 1, status: "missing", workId: resume.workId });
+    }
+    return resume;
+  }
   get documentTargets(): ReadonlyMap<EntityId<"Document">, MutableDocumentSaveTarget> {
     return this.#documentTargets;
   }
 
-  replaceCatalog(catalog: WorkspaceCatalogProjection): void { this.#catalog = catalog; }
+  replaceCatalog(catalog: WorkspaceCatalogProjection): void {
+    const context = workspaceWindowContext.getStore();
+    if (context !== undefined) context.location = {
+      activeWorkId: catalog.activeWorkId,
+      activeDocumentId: catalog.activeDocumentId,
+    };
+    this.#catalog = catalog;
+  }
   replaceDocumentProfile(profile: ManuscriptDocumentProfile): void { this.#documentProfile = profile; }
   replaceResumeProjection(projection: ManuscriptResumeCheckpointProjection): void {
+    const context = workspaceWindowContext.getStore();
+    if (context !== undefined) context.resumeProjection = projection;
     this.#resumeProjection = projection;
   }
   clearDocumentTargets(): void { this.#documentTargets.clear(); }

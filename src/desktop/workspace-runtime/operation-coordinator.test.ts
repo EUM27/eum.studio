@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { WorkspaceOperationCoordinator } from "./operation-coordinator";
 import { BackupService } from "./services/backup";
+import { workspaceWindowContext } from "../workspace-window-context";
 
 function deferred() {
   let resolve!: () => void;
@@ -9,6 +10,27 @@ function deferred() {
 }
 
 describe("workspace operation coordinator", () => {
+  it("prevents another window saving during workspace reload without blocking external analysis", async () => {
+    const operations = new WorkspaceOperationCoordinator();
+    const release = deferred();
+    const entered = deferred();
+    const events: string[] = [];
+    const mutation = workspaceWindowContext.run({ webContentsId: 1, multipleWindows: true }, () =>
+      operations.enqueueMutation(async (saves) => {
+        await saves;
+        entered.resolve();
+        await release.promise;
+        events.push("reload");
+      }));
+    await entered.promise;
+    const saving = workspaceWindowContext.run({ webContentsId: 2, multipleWindows: true }, () =>
+      operations.enqueueSave(() => { events.push("save"); }));
+    await Promise.resolve();
+    expect(events).toEqual([]);
+    release.resolve();
+    await Promise.all([mutation, saving]);
+    expect(events).toEqual(["reload", "save"]);
+  });
   it("finishes a queued mutation before a later transfer without a circular save wait", async () => {
     const operations = new WorkspaceOperationCoordinator();
     const firstStarted = deferred();

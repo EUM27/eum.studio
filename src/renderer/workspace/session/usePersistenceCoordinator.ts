@@ -53,7 +53,7 @@ export function usePersistenceCoordinator() {
     const sequencesByDocument = new Map(
       input.persistenceProfile.documentSequences.map((sequence) => [
         sequence.documentId,
-        sequence.nextSequence,
+        sequence,
       ]),
     );
     if (sequencesByDocument.size !== input.documentProfile.documents.length) {
@@ -67,8 +67,8 @@ export function usePersistenceCoordinator() {
           `Persistence document has no durable base revision: ${document.documentId}`,
         );
       }
-      const nextSequence = sequencesByDocument.get(document.documentId);
-      if (nextSequence === undefined) {
+      const sequence = sequencesByDocument.get(document.documentId);
+      if (sequence === undefined) {
         throw new Error(
           `Persistence projection has no sequence for document: ${document.documentId}`,
         );
@@ -76,8 +76,9 @@ export function usePersistenceCoordinator() {
       return {
         workId: document.workId,
         documentId: document.documentId,
-        baseRevisionId: document.documentRevisionId,
-        nextSequence,
+        baseRevisionId: sequence.baseRevisionId ?? document.documentRevisionId,
+        currentRevisionId: document.documentRevisionId,
+        nextSequence: sequence.nextSequence,
       };
     });
     durableSaveQueueRef.current = new ManuscriptDurableSaveQueue({
@@ -157,7 +158,8 @@ export function usePersistenceCoordinator() {
     durableSaveQueueRef.current.registerDocument({
       workId: createdDocument.workId,
       documentId: createdDocument.documentId,
-      baseRevisionId: createdDocument.documentRevisionId,
+      baseRevisionId: sequence.baseRevisionId ?? createdDocument.documentRevisionId,
+      currentRevisionId: createdDocument.documentRevisionId,
       nextSequence: sequence.nextSequence,
     });
     saveStateStore.publish(createdDocument.documentId, "saved");

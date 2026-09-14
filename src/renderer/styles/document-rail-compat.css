@@ -532,6 +532,9 @@
   max-height: calc(100vh - clamp(132px, 18vh, 184px) - 80px);
 }
 
+/* Keep the unmoved compact timer in the status row while review controls are open. */
+.studio-app-shell.is-editor:has(.workspace-rail-right)
+  .session-feedback-panel.is-collapsed:not(.is-moved),
 .studio-app-shell
   .writing-workspace:is(
     [data-workspace-surface="characters"],
@@ -551,6 +554,9 @@
   backdrop-filter: none;
 }
 
+.studio-app-shell.is-editor:has(.workspace-rail-right)
+  .session-feedback-panel.is-collapsed:not(.is-moved)
+  .session-feedback-heading,
 .studio-app-shell
   .writing-workspace:is(
     [data-workspace-surface="characters"],

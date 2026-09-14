@@ -1,0 +1,18 @@
+# T003 progress (not completion)
+
+Automatic analysis production changes:
+
+- `useAutomaticSceneAnalysisController.ts` captures Work scope identity/generation and per-request IDs before enqueue. A Work change or unmount invalidates active/queued old requests and detaches the old queue. Every completion/error publication checks current Work and request ID. Per-Work render state resets before committing the new Work UI.
+- `automatic-scene-analysis.ts` checks the supplied `isCurrent` guard after each awaited stage, including before post-response view refreshes.
+- Actual hook regression harness: late completed/permission/failure, A→B→A generation, B running while old A completes, old queued requests and real executor obsolete-response refresh suppression. `npx vitest run src/renderer/features/analysis/useAutomaticSceneAnalysisController.test.ts src/renderer/features/analysis/automatic-scene-analysis.test.ts`: 2 files, 10 passed.
+- Renderer and test project TypeScript were green before the latest two unit additions. Changed-file ESLint passed before those additions; rerun at final verification.
+- `tests/e2e/automatic-scene-analysis-lifecycle.spec.ts` drives real Electron React/scene split/Work navigation while delaying the analysis IPC boundary. It has failed and login-required response cases. Initial runs reached the Work switch but the test used visible text `새 작품` instead of aria-label `작품 만들기`; corrected. One test now uses measured DOM text range for split point.
+- Existing production integrated-analysis E2E could not start after the HTTP Worker changed manifest config while the previous desktop bundle was in use: `AssistantConnectorManifestProfile.connectors[0] fields do not match the schema`. This is a known temporary source/bundle mismatch, not a completed verification. Rerun both E2E files after Worker builds current desktop source.
+
+HTTP Worker `/root/structured_http_lifecycle` owns item 5 end to end, including connector policy/transport, typed cancellation, registration before queued execution, runtime result recording guards, IPC/preload/facade, renderer cancellation, and tests. PM explicitly approved preserving existing authorization/access audit receipts while preventing late connector-success/candidate records. Necessary `src/desktop/runtime/assistant-runtime.ts` forwarding is inside Worker scope. Worker has been told it may now build when stable. No simultaneous build is running.
+
+Read-only Scout `/root/runtime_service_map` is preparing a detailed AST method/SCC group map for T004. Initial map is in T004-runtime-service-map.md.
+
+T005 read-only recovery inventory: `recovery/` contains 17 tracked files totalling 1,105,362,438 bytes, including 4 `.ps1` scripts and 13 recovery originals/artifacts. Nothing has been copied, moved, deleted or altered yet. Plan: preserve all original bytes with checksums in a restricted D: archive, then remove only archived data from source; parameterize retained scripts to accept source/destination paths, add ignore protection. No Git history rewrite or commit/push.
+
+Fresh follow-up: Worker rebuilt desktop/preload for the new manifest; PM rebuilt renderer. `npx playwright test tests/e2e/automatic-scene-analysis-lifecycle.spec.ts tests/e2e/automatic-scene-analysis.spec.ts` passed all 3 in 1.2m (25.1s failed-response isolation, 25.1s login-required isolation, 22.5s original integrated analysis/approval/restart). Previous locator and bundle mismatch failures are superseded by this real execution. `git diff --check` and GoalBuddy board checker pass. Worker reports test TypeScript now passes and is finishing the real HTTP cancellation/timeout E2E.

@@ -11,6 +11,21 @@ export type MusicPlaybackRequest = Readonly<{
   tracks: readonly MusicTrackProjection[];
 }>;
 
+export function appendMusicTracksToQueue(
+  queue: readonly MusicTrackProjection[],
+  tracks: readonly MusicTrackProjection[],
+): readonly MusicTrackProjection[] {
+  const identities = new Set(queue.map(musicTrackIdentity));
+  const next = [...queue];
+  for (const track of tracks) {
+    const identity = musicTrackIdentity(track);
+    if (identities.has(identity)) continue;
+    identities.add(identity);
+    next.push(track);
+  }
+  return Object.freeze(next);
+}
+
 export function createMusicPlaybackRequest(
   currentNonce: number,
   tracks: readonly MusicTrackProjection[],

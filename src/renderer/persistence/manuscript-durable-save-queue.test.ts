@@ -33,6 +33,29 @@ function createDocument(
   };
 }
 
+describe("shared window durable sources", () => {
+  it("adopts a clean remote revision and saves from its current sequence and original base", async () => {
+    const document = createDocument();
+    const saveChangeBatch = vi.fn(async (batch: ChangeBatch) => receiptFor(batch));
+    const { queue } = createQueue({ documents: [document], saveChangeBatch });
+    const remote = { ...document, currentRevisionId: entityId<"DocumentRevision">(randomUUID()), nextSequence: document.nextSequence + 1 };
+    expect(queue.adoptConfirmedDocument(remote)).toBe(true);
+    expect(queue.getCurrentRevisionId(document.documentId)).toBe(remote.currentRevisionId);
+    queue.record(document.documentId, appendTransaction("remote").transaction, { composing: false });
+    await queue.flush(document.documentId);
+    expect(saveChangeBatch.mock.calls[0]?.[0]).toMatchObject({ baseRevisionId: document.baseRevisionId, sequence: remote.nextSequence });
+  });
+
+  it("preserves an in-progress local composition when another window saves", () => {
+    const document = createDocument();
+    const { queue } = createQueue({ documents: [document] });
+    queue.record(document.documentId, appendTransaction("").transaction, { composing: true });
+    expect(queue.adoptConfirmedDocument({ ...document, currentRevisionId: entityId<"DocumentRevision">(randomUUID()) })).toBe(false);
+    expect(queue.hasPendingChanges(document.documentId)).toBe(true);
+    expect(queue.getCurrentRevisionId(document.documentId)).toBe(document.baseRevisionId);
+  });
+});
+
 function appendTransaction(
   beforeText: string,
   insertedText = randomUUID(),

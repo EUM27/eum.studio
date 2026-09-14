@@ -18,6 +18,7 @@ import {
 import {
   useCallback,
   useEffect,
+  useEffectEvent,
   useRef,
   useState,
 } from "react";
@@ -41,11 +42,14 @@ import {
   type RepeatMode,
 } from "./playback-order";
 
-type YouTubePlayer = {
+import type { SharedMusicBridge, SharedMusicCommand, SharedMusicState } from "../../application/music/shared-music-playback";
+import { useSharedMusicConnection, type SharedMusicHandlers } from "./useSharedMusicConnection";
+import { loadYouTubePlayback, type YouTubePlaybackPort } from "./youtube-playback";
+
+type YouTubePlayer = YouTubePlaybackPort & {
   readonly destroy: () => void;
   readonly getCurrentTime?: () => number;
   readonly getDuration?: () => number;
-  readonly loadVideoById: (videoId: string) => void;
   readonly pauseVideo: () => void;
   readonly playVideo: () => void;
   readonly seekTo?: (seconds: number, allowSeekAhead: boolean) => void;
@@ -127,6 +131,7 @@ function trackSubtitle(track: MusicTrackProjection | null): string | null {
 }
 
 export function MusicMiniPlayer(input: {
+  readonly shared?: SharedMusicBridge | undefined;
   readonly connection: YouTubeMusicConnectionStatus | null;
   readonly focusText: string | null;
   readonly onOpenLibrary: () => void;
@@ -135,6 +140,10 @@ export function MusicMiniPlayer(input: {
   readonly playRequest: MusicPlaybackRequest | null;
   readonly profile: YouTubeMusicProfile | null;
 }) {
+  const sharedHandlers = useRef<SharedMusicHandlers>({ command: () => {}, restore: () => {}, silence: () => {}, error: () => {} });
+  const { snapshot: sharedSnapshot, isOwner, ownerRef, command: sendSharedCommand, publish: publishSharedState } = useSharedMusicConnection(input.shared, sharedHandlers);
+  const playbackGenerationRef = useRef(0);
+  const resumePlaybackRef = useRef<{ currentTime: number; paused: boolean } | null>(null);
   const youtubeHostRef = useRef<HTMLDivElement>(null);
   const localMediaRef = useRef<HTMLVideoElement>(null);
   const playerRef = useRef<YouTubePlayer | null>(null);
@@ -150,21 +159,34 @@ export function MusicMiniPlayer(input: {
   const lastNonceRef = useRef(0);
   const localPlaybackNonceRef = useRef(0);
   const pendingLocalAutoplayNonceRef = useRef<number | null>(null);
-  const [queue, setQueue] = useState<readonly MusicTrackProjection[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [paused, setPaused] = useState(true);
-  const [showVideo, setShowVideo] = useState(false);
-  const [volume, setVolume] = useState(70);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [repeatMode, setRepeatMode] = useState<RepeatMode>("off");
-  const [shuffle, setShuffle] = useState(false);
+  const [engineQueue, setQueue] = useState<readonly MusicTrackProjection[]>([]);
+  const [engineCurrentIndex, setCurrentIndex] = useState(0);
+  const [engineLoading, setLoading] = useState(false);
+  const [engineError, setError] = useState<string | null>(null);
+  const [enginePaused, setPaused] = useState(true);
+  const [engineShowVideo, setShowVideo] = useState(false);
+  const [engineVolume, setVolume] = useState(70);
+  const [engineCurrentTime, setCurrentTime] = useState(0);
+  const [engineDuration, setDuration] = useState(0);
+  const [engineRepeatMode, setRepeatMode] = useState<RepeatMode>("off");
+  const [engineShuffle, setShuffle] = useState(false);
   const [localPlaybackSource, setLocalPlaybackSource] = useState<Readonly<{
     nonce: number;
     url: string;
   }> | null>(null);
+
+  const mirrored = input.shared !== undefined && !isOwner ? sharedSnapshot?.state : null;
+  const queue = mirrored?.queue ?? engineQueue;
+  const currentIndex = mirrored?.currentIndex ?? engineCurrentIndex;
+  const loading = mirrored?.loading ?? engineLoading;
+  const error = mirrored?.error ?? engineError;
+  const paused = mirrored?.paused ?? enginePaused;
+  const volume = mirrored?.volume ?? engineVolume;
+  const currentTime = mirrored?.currentTime ?? engineCurrentTime;
+  const duration = mirrored?.duration ?? engineDuration;
+  const repeatMode = mirrored?.repeatMode ?? engineRepeatMode;
+  const shuffle = mirrored?.shuffle ?? engineShuffle;
+  const showVideo = mirrored ? false : engineShowVideo;
 
   const currentTrack = queue[currentIndex] ?? null;
   const currentIsLocal = currentTrack !== null && isLocalMediaTrack(currentTrack);
@@ -197,11 +219,27 @@ export function MusicMiniPlayer(input: {
         }),
         events: Object.freeze({
           onReady: () => {
+            if (!ownerRef.current) { player.destroy(); return; }
             player.setVolume(volumeRef.current);
             playerRef.current = player;
             resolve(player);
           },
           onStateChange: (event) => {
+            if (!ownerRef.current) return;
+            const resume = resumePlaybackRef.current;
+            if (resume !== null && event.data === 5) {
+              resumePlaybackRef.current = null;
+              setCurrentTime(resume.currentTime);
+              setDuration(player.getDuration?.() ?? 0);
+              setPaused(true);
+              return;
+            }
+            if (resume !== null && (event.data === 1 || event.data === 2)) {
+              resumePlaybackRef.current = null;
+              player.seekTo?.(resume.currentTime, true);
+              setCurrentTime(resume.currentTime);
+              if (resume.paused) { player.pauseVideo(); setPaused(true); return; }
+            }
             if (event.data === 1) setPaused(false);
             if (event.data === 2) setPaused(true);
             if (event.data === 0) onEndedRef.current();
@@ -209,15 +247,18 @@ export function MusicMiniPlayer(input: {
         }),
       });
     });
-  }, [input.profile]);
+  }, [input.profile, ownerRef]);
 
-  const loadQueueIndex = useCallback(async (nextIndex: number): Promise<void> => {
+  const loadQueueIndex = useCallback(async (nextIndex: number, resume?: { currentTime: number; paused: boolean }): Promise<void> => {
+    if (!ownerRef.current) return;
+    const generation = ++playbackGenerationRef.current;
+    resumePlaybackRef.current = resume ?? null;
     const tracks = queueRef.current;
     if (nextIndex < 0 || nextIndex >= tracks.length) return;
     const track = tracks[nextIndex]!;
     currentIndexRef.current = nextIndex;
     setCurrentIndex(nextIndex);
-    setCurrentTime(0);
+    setCurrentTime(resume?.currentTime ?? 0);
     setDuration(0);
     setLoading(true);
     setError(null);
@@ -243,22 +284,24 @@ export function MusicMiniPlayer(input: {
         }
         setLocalPlaybackSource(null);
         const player = await ensurePlayer();
-        player.loadVideoById(track.videoId);
+        if (!ownerRef.current || generation !== playbackGenerationRef.current) return;
+        loadYouTubePlayback(player, track.videoId, resume);
         player.setVolume(volumeRef.current);
-        setPaused(false);
+        setPaused(resume?.paused ?? false);
       }
       if (isLocalMediaTrack(track) && track.mediaKind !== "video") {
         setShowVideo(false);
       }
     } catch (reason) {
+      if (!ownerRef.current || generation !== playbackGenerationRef.current) return;
       setPaused(true);
       setError(
         reason instanceof Error ? reason.message : "미디어 재생에 실패했습니다.",
       );
     } finally {
-      setLoading(false);
+      if (ownerRef.current && generation === playbackGenerationRef.current) setLoading(false);
     }
-  }, [ensurePlayer]);
+  }, [ensurePlayer, ownerRef]);
 
   const nextTrack = useCallback(() => {
     const step = nextPlaybackStep(
@@ -286,31 +329,28 @@ export function MusicMiniPlayer(input: {
     };
   }, [duration, loadQueueIndex, repeatMode]);
 
-  useEffect(() => {
-    const request = input.playRequest;
-    if (
-      request === null ||
-      request.tracks.length === 0 ||
-      request.nonce === lastNonceRef.current
-    ) {
-      return;
-    }
-    lastNonceRef.current = request.nonce;
-    queueRef.current = request.tracks;
-    const startIndex = Math.min(
-      Math.max(Math.trunc(request.startIndex ?? 0), 0),
-      request.tracks.length - 1,
-    );
-    playbackOrderRef.current = createPlaybackOrder(
-      request.tracks.length,
-      startIndex,
-      shuffleRef.current,
-    );
+  const startQueue = useCallback((tracks: readonly MusicTrackProjection[], startIndex = 0) => {
+    queueRef.current = tracks;
+    playbackOrderRef.current = createPlaybackOrder(tracks.length, startIndex, shuffleRef.current);
     currentIndexRef.current = startIndex;
-    setQueue(request.tracks);
+    setQueue(tracks);
     setCurrentIndex(startIndex);
     void loadQueueIndex(startIndex);
-  }, [input.playRequest, loadQueueIndex]);
+  }, [loadQueueIndex]);
+
+  const handlePlaybackRequest = useEffectEvent((request: MusicPlaybackRequest | null) => {
+    if (request === null || request.tracks.length === 0 || request.nonce === lastNonceRef.current) return;
+    lastNonceRef.current = request.nonce;
+    const startIndex = Math.min(Math.max(Math.trunc(request.startIndex ?? 0), 0), request.tracks.length - 1);
+    if (input.shared !== undefined) {
+      void sendSharedCommand({ type: "play-queue", tracks: request.tracks, startIndex }).catch((reason: unknown) => setError(String(reason)));
+    } else startQueue(request.tracks, startIndex);
+  });
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => { if (!cancelled) handlePlaybackRequest(input.playRequest); });
+    return () => { cancelled = true; };
+  }, [input.playRequest]);
 
   useEffect(() => {
     volumeRef.current = volume;
@@ -322,7 +362,7 @@ export function MusicMiniPlayer(input: {
   }, [volume]);
 
   useEffect(() => {
-    if (paused || currentTrack === null || isLocalMediaTrack(currentTrack)) {
+    if (!isOwner || paused || currentTrack === null || isLocalMediaTrack(currentTrack)) {
       return;
     }
     const update = () => {
@@ -335,7 +375,7 @@ export function MusicMiniPlayer(input: {
     update();
     const timer = window.setInterval(update, 500);
     return () => window.clearInterval(timer);
-  }, [currentTrack, paused]);
+  }, [currentTrack, paused, isOwner]);
 
   useEffect(() => () => {
     try {
@@ -366,15 +406,6 @@ export function MusicMiniPlayer(input: {
 
   const previousTrack = () => {
     if (currentTrack === null) return;
-    if (currentTime > 5) {
-      if (isLocalMediaTrack(currentTrack) && localMediaRef.current !== null) {
-        localMediaRef.current.currentTime = 0;
-      } else {
-        playerRef.current?.seekTo?.(0, true);
-      }
-      setCurrentTime(0);
-      return;
-    }
     const step = previousPlaybackStep(
       playbackOrderRef.current,
       repeatMode === "one" ? "all" : repeatMode,
@@ -388,6 +419,8 @@ export function MusicMiniPlayer(input: {
   };
 
   const stopPlayback = () => {
+    playbackGenerationRef.current += 1;
+    resumePlaybackRef.current = null;
     try {
       playerRef.current?.stopVideo();
     } catch {
@@ -455,6 +488,63 @@ export function MusicMiniPlayer(input: {
     );
   };
 
+  const sendControl = (command: SharedMusicCommand) => {
+    void sendSharedCommand(command).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "음악을 조작하지 못했습니다."));
+  };
+  const silenceSharedPlayer = useEffectEvent(() => {
+    playbackGenerationRef.current += 1;
+    pendingLocalAutoplayNonceRef.current = null;
+    localMediaRef.current?.pause();
+    try { playerRef.current?.stopVideo(); } catch { /* renderer teardown */ }
+  });
+  const restoreSharedPlayer = useEffectEvent((state: SharedMusicState) => {
+    volumeRef.current = state.volume;
+    previousAudibleVolumeRef.current = state.previousAudibleVolume;
+    shuffleRef.current = state.shuffle;
+    queueRef.current = state.queue;
+    playbackOrderRef.current = state.order;
+    setQueue(state.queue);
+    setCurrentIndex(state.currentIndex);
+    setVolume(state.volume);
+    setRepeatMode(state.repeatMode);
+    setShuffle(state.shuffle);
+    setShowVideo(state.showVideo);
+    setPaused(state.paused);
+    if (state.queue.length > 0) void loadQueueIndex(state.currentIndex, { currentTime: state.currentTime, paused: state.paused });
+  });
+  const applySharedCommand = useEffectEvent((command: SharedMusicCommand) => {
+    switch (command.type) {
+      case "play-queue": startQueue(command.tracks, command.startIndex); break;
+      case "toggle": togglePlayback(); break;
+      case "next": nextTrack(); break;
+      case "previous": previousTrack(); break;
+      case "stop": stopPlayback(); break;
+      case "seek": seek(command.value); break;
+      case "volume": setVolume(command.value); break;
+      case "shuffle": toggleShuffle(); break;
+      case "repeat": cycleRepeatMode(); break;
+      case "mute": toggleMute(); break;
+      case "video": setShowVideo(command.visible); break;
+    }
+  });
+  useEffect(() => {
+    Object.assign(sharedHandlers.current, {
+      error: setError,
+      command: (command: SharedMusicCommand) => applySharedCommand(command),
+      restore: (state: SharedMusicState) => restoreSharedPlayer(state),
+      silence: () => silenceSharedPlayer(),
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!isOwner) return;
+    publishSharedState({ queue: engineQueue, currentIndex: engineCurrentIndex, paused: enginePaused,
+      loading: engineLoading, error: engineError, volume: engineVolume, previousAudibleVolume: previousAudibleVolumeRef.current,
+      currentTime: Number.isFinite(engineCurrentTime) ? engineCurrentTime : 0,
+      duration: Number.isFinite(engineDuration) ? engineDuration : 0,
+      repeatMode: engineRepeatMode, shuffle: engineShuffle, showVideo: engineShowVideo, order: playbackOrderRef.current });
+  }, [engineQueue, engineCurrentIndex, enginePaused, engineLoading, engineError, engineVolume, engineCurrentTime, engineDuration, engineRepeatMode, engineShuffle, engineShowVideo, isOwner, publishSharedState]);
+
   const title = loading
     ? "미디어 준비 중"
     : currentTrack?.title ?? "재생할 곡을 선택하세요";
@@ -467,6 +557,7 @@ export function MusicMiniPlayer(input: {
   return (
     <section
       aria-label="음악 플레이어"
+      data-playback-owner={isOwner ? "true" : "false"}
       className={
         currentTrack === null
           ? "music-mini-player is-idle"
@@ -498,7 +589,7 @@ export function MusicMiniPlayer(input: {
           disabled={currentTrack === null || duration <= 0 || loading}
           max={Math.max(duration, 0)}
           min="0"
-          onChange={(event) => seek(Number(event.currentTarget.value))}
+          onChange={(event) => sendControl({ type: "seek", value: Number(event.currentTarget.value) })}
           step="0.1"
           type="range"
           value={Math.min(currentTime, Math.max(duration, 0))}
@@ -513,7 +604,7 @@ export function MusicMiniPlayer(input: {
           }
           aria-pressed={shuffle}
           className={shuffle ? "is-active" : undefined}
-          onClick={toggleShuffle}
+          onClick={() => sendControl({ type: "shuffle" })}
           title={shuffle ? "랜덤 전체 반복 켜짐" : "랜덤 전체 반복"}
           type="button"
         >
@@ -522,7 +613,7 @@ export function MusicMiniPlayer(input: {
         <button
           aria-label="이전 곡"
           disabled={currentTrack === null || loading}
-          onClick={previousTrack}
+          onClick={() => sendControl({ type: "previous" })}
           type="button"
         >
           <SkipBack aria-hidden="true" size={14} />
@@ -531,7 +622,7 @@ export function MusicMiniPlayer(input: {
           aria-label={paused ? "음악 재생" : "음악 일시정지"}
           className="music-mini-primary-control"
           disabled={(!hasPlaylist && currentTrack === null) || loading}
-          onClick={togglePlayback}
+          onClick={() => { if (currentTrack === null && hasPlaylist) input.onPlayPlaylist(0); else sendControl({ type: "toggle" }); }}
           type="button"
         >
           {paused
@@ -541,7 +632,7 @@ export function MusicMiniPlayer(input: {
         <button
           aria-label="다음 곡"
           disabled={currentTrack === null || loading}
-          onClick={nextTrack}
+          onClick={() => sendControl({ type: "next" })}
           type="button"
         >
           <SkipForward aria-hidden="true" size={14} />
@@ -555,7 +646,7 @@ export function MusicMiniPlayer(input: {
           aria-pressed={repeatMode !== "off"}
           className={repeatMode === "off" ? undefined : "is-active"}
           disabled={currentTrack === null && !hasPlaylist}
-          onClick={cycleRepeatMode}
+          onClick={() => sendControl({ type: "repeat" })}
           title={
             repeatMode === "all"
               ? "전체 반복 켜짐"
@@ -579,7 +670,7 @@ export function MusicMiniPlayer(input: {
         <button
           aria-label={volume === 0 ? "음소거 해제" : "음소거"}
           aria-pressed={volume === 0}
-          onClick={toggleMute}
+          onClick={() => sendControl({ type: "mute" })}
           title={volume === 0 ? "음소거 해제" : "음소거"}
           type="button"
         >
@@ -591,7 +682,7 @@ export function MusicMiniPlayer(input: {
           aria-label="음량"
           max="100"
           min="0"
-          onChange={(event) => setVolume(Number(event.currentTarget.value))}
+          onChange={(event) => sendControl({ type: "volume", value: Number(event.currentTarget.value) })}
           step="1"
           type="range"
           value={volume}
@@ -601,7 +692,7 @@ export function MusicMiniPlayer(input: {
         <button
           aria-label={showVideo ? "동영상 숨기기" : "동영상 표시"}
           disabled={!videoAvailable}
-          onClick={() => setShowVideo((current) => !current)}
+          onClick={() => sendControl({ type: "video", visible: !showVideo })}
           type="button"
         >
           {showVideo
@@ -611,7 +702,7 @@ export function MusicMiniPlayer(input: {
         <button
           aria-label="음악 정지"
           disabled={currentTrack === null}
-          onClick={stopPlayback}
+          onClick={() => sendControl({ type: "stop" })}
           type="button"
         >
           <Square aria-hidden="true" size={11} />
@@ -636,7 +727,7 @@ export function MusicMiniPlayer(input: {
           ref={localMediaRef}
           onCanPlay={(event) => {
             if (
-              localPlaybackSource === null ||
+              !ownerRef.current || localPlaybackSource === null ||
               pendingLocalAutoplayNonceRef.current !==
                 localPlaybackSource.nonce ||
               !event.currentTarget.paused
@@ -645,6 +736,13 @@ export function MusicMiniPlayer(input: {
             }
             pendingLocalAutoplayNonceRef.current = null;
             event.currentTarget.volume = volumeRef.current / 100;
+            const resume = resumePlaybackRef.current;
+            resumePlaybackRef.current = null;
+            if (resume !== null) {
+              event.currentTarget.currentTime = resume.currentTime;
+              setCurrentTime(resume.currentTime);
+              if (resume.paused) { setPaused(true); setLoading(false); return; }
+            }
             void event.currentTarget.play().then(
               () => {
                 setPaused(false);

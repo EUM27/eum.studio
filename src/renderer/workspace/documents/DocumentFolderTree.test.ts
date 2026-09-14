@@ -71,6 +71,7 @@ describe("DocumentFolderTree", () => {
       disabled: false,
       onActivateDocument: vi.fn(),
       onRenameDocument: vi.fn(async () => undefined),
+      onCreateDocument: vi.fn(async () => undefined),
       onCreateFolder: vi.fn(async () => undefined),
       onMoveDocument: vi.fn(async () => undefined),
       onRenameFolder: vi.fn(async () => undefined),
@@ -90,5 +91,7 @@ describe("DocumentFolderTree", () => {
     expect(markup).toContain("프롤로그");
     expect(markup).toContain("1회차");
     expect(markup).toContain("폴더 추가");
+    expect(markup).toContain('aria-label="1부 폴더에 새 문서 추가"');
+    expect(markup).toContain('aria-label="도입 폴더에 새 문서 추가"');
   });
 });

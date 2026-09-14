@@ -19,6 +19,8 @@
 
 bootstrap은 앱 생명주기·창·기존 runtime 선택·IPC 조립을 소유한다. profile 입력은 `runtime/load-application-profiles.ts`가 읽고 충돌을 검증하며, `runtime/create-configured-application-runtime.ts`가 기존 구성형 runtime의 typed public API를 만든다. 개별 close IPC 전송도 `ipc/send-manuscript-close-request.ts`에 있다.
 
+다중 창에서는 `workspace-window-context.ts`의 AsyncLocalStorage가 main이 생성한 창 문맥을 IPC와 비동기 작업에 전달한다. `WorkspaceRuntimeState`의 작품 목록·원고·저장 대상은 공유하고 현재 위치와 복귀 투영만 창에 귀속한다. `ipc/create-window-scoped-ipc.ts`는 신뢰된 발신자를 검증한 후 문맥을 설치하고 다른 창에 변경을 알린다. 두 창 이상일 때 저장과 mutation을 공통 barrier로 조정하여 한 창의 저장 중 다른 창이 저장 대상을 다시 적재하지 않도록 한다. 외부 분석의 별도 lane은 유지한다. 창 닫기 acknowledgement와 renderer 복구 promise도 창마다 보관한다.
+
 `architecture:report`는 production `src`의 TS·TSX·JS·MJS 파일 전체에서 크기·구문·resolved import를 측정한다. `architecture:check`는 기존 domain/application/renderer 경계 외에 main/bootstrap/runtime 진입점의 SQL과 개별 IPC 참조, 서비스의 composition 역참조·IPC·동적 module 접근·서비스 의존 순환을 검사한다. 큰 서비스도 보고서에 포함되므로 크기를 숨기지 않는다. 파일 크기 자체를 실행 성능으로 해석하거나 임의 줄 수를 통과 조건으로 사용하지 않는다.
 
 저장 큐와 작품·연결 수명에 대한 회귀 범위는 [작업 흐름 검토 수정](verification/review-workflow-fixes.md)에 기록한다. 원고 연속 입력·재열기·회차 전환·정상 종료·강제 종료 복구·실제 패키지 실행의 결과는 실행별 검증 JSON으로 확인하며, 필수 실행 방법과 코드 지문 범위는 [검증 절차](verification.md)를 따른다.

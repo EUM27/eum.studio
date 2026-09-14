@@ -8,11 +8,39 @@
 
 현재 storage 결정: [POC-3 SQLite·blob·backup 결정](docs/poc-3-storage-decisions.md)
 
-마지막 갱신: 2026-09-04
+마지막 갱신: 2026-09-05
 
 ## 현재 Gate
 
-`이전 화 흐름 나열 순서 정합성 — source·standalone·기본 설치·실사용 확인 완료`
+### 사용자 요청: 같은 작업공간의 다중 창
+
+- 본문 폭 보완: 텍스트 요소의 배경·테두리·그림자를 분리하고 편집 배경을 스크롤 영역에 둔다. `manuscript-width.spec.ts`에서 실제 폭 조절과 밝은·어두운 테마의 배경 위치·크기 고정, 원고 보존을 확인한다.
+
+- 음악 공유 보완: 단일 재생 창, 공통 재생 대기열과 조작, 남은 창으로 재생 인계, 작품별 음악 설정 변경 알림을 연결한다.
+- 내 미디어 보완: 항목 체크박스·전체 선택·일괄 재생목록 추가, 바로 재생의 목록 유지로 이전·다음 곡 동작을 연결한다.
+- 음악 검증: 실제 MP3 기반 `shared-music.spec.ts`, 기존 혼합 미디어·반복 재생 Electron 회귀, 동일 후보 실행 파일 검증.
+
+- 단일 main process와 저장소를 유지하고 두 번째 실행·새 창 단축키를 별도 BrowserWindow로 연결한다.
+- 신뢰된 IPC 발신 창의 문맥에서 현재 작품·회차·복귀 상태를 조회한다. 저장·변경 큐는 다중 창에서 공유 순서를 보장하고 외부 분석은 별도 lane을 유지한다.
+- 새 창의 저장 기준 리비전과 현재 리비전을 구분하고, 다른 창으로 돌아오면 원고·목록·저장 순서를 같은 snapshot으로 읽는다. 미저장 편집과 조합 중인 원고는 교체하지 않는다.
+- 창별 종료 요청·복구·대화상자 소유권과 작품별 단일 WritingSession 원장을 유지한다.
+- 검증: `npm run verification:core`, 다중 창 Electron 회귀, 별도 Windows 후보 생성 후 `verify:package:win`과 후보 실행 파일의 다중 창 회귀. 실사용 설치 적용과 검증 후보는 별도로 기록한다.
+
+### 이전 Gate 기록
+
+`f8215a5 리뷰 8개 항목 — 구현과 최종 소스 검증`
+
+이 Gate의 완료 판단은 [목표 상태와 실행 receipt](docs/goals/review-f8215a5-completion/state.yaml)를 따른다. 아래 과거 Gate의 통과 결과는 이번 변경의 최신 검증을 대체하지 않는다.
+
+- TXT 임시 파일 기록·sync·내용 검증 후 교체, 쓰기 및 Windows 교체 실패 시 기존 바이트 유지.
+- 전체 metadata 검증 후 선택 회차만 본문 읽기, 실제 controller 호출 순서 회귀.
+- 엄격한 완전 백업을 유지하고 미디어 미포함 형식·화면 선택·빈 위치 복원을 별도 연결.
+- 자동 장면 분석의 작품·요청 세대 격리와 HTTP 요청의 deadline·취소·응답 크기 제한.
+- 중앙 runtime의 545개 메서드를 24개 서비스로 분리하고 세 operation lane과 transaction을 보존. [책임 구조](docs/workspace-runtime-structure.md).
+- 전체 production source, bootstrap/IPC, 서비스 의존성을 포함하는 구조 검사와 필수 core 8개 Electron 흐름. [현재 검증 명령](docs/verification.md).
+- 복구 자료의 별도 checksum 보관과 Git 추적 해제, 호출자 경로를 쓰는 복구 스크립트 유지.
+
+최종 검증은 `npm run verification:core`, `npm run verification:heavy -- --process-budget-ms <호출자 예산>`을 같은 코드 지문에서 실행한다. 무거운 검증은 고유 후보 패키지만 만들며 기본 설치본을 교체하지 않는다. 각 결과 JSON은 기준 commit, dirty 상태, 실제 파일 바이트 지문, 단계별 명령·종료 코드·로그 hash를 보존한다. GitHub workflow 추가와 원격 실행·branch protection 설정은 별개다.
 
 ### 2026-09-04 이전 화 흐름 나열 순서 정합성
 

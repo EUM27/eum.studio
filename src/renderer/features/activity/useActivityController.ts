@@ -150,6 +150,19 @@ export function useActivityController(input: Readonly<{
   const resumePausedPomodoroOnInputRef = useRef<() => void>(() => undefined);
 
   useEffect(() => {
+    const handleWindowFocus = () => {
+      if (!writingSessionTransitionPendingRef.current) {
+        // Another window may have ended this session. The next input asks the
+        // shared runtime to continue or switch the one authoritative session.
+        activeWritingSessionRef.current = undefined;
+        deferredAutomaticActivityRef.current = null;
+      }
+    };
+    window.addEventListener("focus", handleWindowFocus);
+    return () => window.removeEventListener("focus", handleWindowFocus);
+  }, [activeWritingSessionRef]);
+
+  useEffect(() => {
     manuscriptFocusActiveRef.current = input.manuscriptFocusActive;
   }, [input.manuscriptFocusActive]);
 

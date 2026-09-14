@@ -6,6 +6,8 @@ dist-renderer/
 out/
 coverage/
 test-results/
+test-results-*/
+**/.goalbuddy-board/
 playwright-report/
 artifacts/
 

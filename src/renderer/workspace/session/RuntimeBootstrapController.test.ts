@@ -329,14 +329,8 @@ describe("RuntimeBootstrapController", () => {
     expect(loadMethods).toHaveLength(1);
     const loadBody = loadMethods[0]?.body;
     if (loadBody === undefined) throw new Error("Missing load body");
-    const normalizedLoadBody = printer.printNode(
-      ts.EmitHint.Unspecified,
-      loadBody,
-      controller.sourceFile,
-    ).replaceAll("this.client", "window.eumStudio");
-    expect(sha256(normalizedLoadBody)).toBe(
-      "C07844875946BF27261F3407580E523A480F1CDFAF3B6CD7C30A026863E22153",
-    );
+    // The loader now accepts an atomic snapshot from a shared desktop runtime.
+    // Its data and failure contracts are exercised below instead of freezing its body.
 
     expect(app.source).not.toContain("queryRuntimeProjection");
     expect(app.source.match(/runtimeBootstrapController\.load\(\)/gu))
@@ -363,5 +357,32 @@ describe("RuntimeBootstrapController", () => {
     expect(controller.source).not.toMatch(
       /window\.|React|useState|useEffect|setRuntime|installRuntimeProjection|ManuscriptDurableSaveQueue|activeDocument|preferredDocument|onCatalogChange|retry|fallback|timeout|cancel|epoch|cache/u,
     );
+  });
+});
+
+describe("shared workspace bootstrap", () => {
+  it("takes catalog, manuscript, sequence and resume from the same snapshot", async () => {
+    const client = createResolvedClient();
+    const snapshot = {
+      catalog: { ...values.catalog },
+      documentProfile: { ...values.documentProfile },
+      persistenceProfile: values.persistenceProfile === null ? null : { ...values.persistenceProfile },
+      resumeCheckpoint: { ...values.resumeCheckpoint },
+    };
+    const getSnapshot = vi.fn(async () => snapshot);
+    const projection = await new RuntimeBootstrapController({ ...client, workspace: { ...client.workspace, shared: { getSnapshot, onChanged: () => () => undefined } } }).load();
+    expect(getSnapshot).toHaveBeenCalledOnce();
+    expect(projection.documentProfile).toBe(snapshot.documentProfile);
+    expect(projection.catalog).toBe(snapshot.catalog);
+    expect(projection.persistenceProfile).toBe(snapshot.persistenceProfile);
+    expect(projection.resumeCheckpoint).toBe(snapshot.resumeCheckpoint);
+    expect(projection.inputProfile).toBe(values.inputProfile);
+  });
+
+  it("does not combine stale individual reads after the atomic snapshot fails", async () => {
+    const client = createResolvedClient();
+    const failure = new Error("snapshot unavailable");
+    const loader = new RuntimeBootstrapController({ ...client, workspace: { ...client.workspace, shared: { getSnapshot: async () => { throw failure; }, onChanged: () => () => undefined } } });
+    await expect(loader.load()).rejects.toBe(failure);
   });
 });

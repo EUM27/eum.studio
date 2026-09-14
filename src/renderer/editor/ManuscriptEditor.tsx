@@ -1,5 +1,4 @@
 import {
-  history,
   historyKeymap,
   isolateHistory,
   redo,
@@ -71,6 +70,7 @@ import type {
   ManuscriptResumeCheckpointProjection,
 } from "../../application/checkpoints/manuscript-resume-checkpoint-projection";
 import { ManuscriptDocumentStateRegistry } from "./manuscript-document-state";
+import { manuscriptHistoryExtension } from "./manuscript-history-extension";
 import { createManuscriptInputRules } from "./manuscript-input-rules";
 import {
   createPreviousEpisodeFlowExtension,
@@ -908,7 +908,7 @@ export const ManuscriptEditor = forwardRef<
         extensions: [
           manuscriptTextStatisticsExtension,
           createManuscriptHeatmapExtension(heatmapMode),
-          history(),
+          manuscriptHistoryExtension,
           search({ top: true }),
           EditorState.phrases.of({
             Find: "검색",

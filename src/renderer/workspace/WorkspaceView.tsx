@@ -882,7 +882,7 @@ export function WorkspaceView(input: Readonly<{
               activeWork={activeWork ?? null}
               commands={{
                 clearWorkspaceError: () => setWorkspaceActionError(null),
-                createDocument: () => createDocument(""),
+                createDocument: (folderId) => createDocument("", folderId),
                 moveDocument,
                 retireWork,
                 startWorkTitleEdit,

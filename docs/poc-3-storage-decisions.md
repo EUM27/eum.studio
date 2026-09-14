@@ -100,6 +100,12 @@ SQL·verification·hook 실패 또는 commit 전 process 종료는 transaction �
 
 ## 검증 명령
 
+### 명시적 미디어 미포함 백업
+
+완전 백업 format v2의 미디어 검증은 유지한다. 추가한 `manuscript-only` 명령은 runtime profile의 별도 `manuscriptOnlyFormat` identity/version을 사용하고, 미디어 확장 단계 없이 SQLite snapshot·원장·reachable revision blob을 봉인한다. UI와 결과 summary는 `원고·데이터 백업 · 미디어 미포함`으로 표시한다. mode를 생략한 기존 호출은 완전 백업이며 오류 시 자동으로 미디어 미포함 모드로 바꾸지 않는다.
+
+복원은 manifest의 형식으로 모드를 식별한다. 미디어 미포함 bundle에 포함 미디어 건수를 주장하는 summary는 거부한다. 기존 DB의 미디어 metadata는 원시 보존하지만 파일 복사본은 만들지 않으며 사용할 수 없는 파일은 연결 끊김으로 나타난다. 완전 백업이 미디어 변조 때문에 거부되는 경우에도 사용자가 선택한 별도 원고 백업을 빈 위치에 복원할 수 있다.
+
 각 명령의 timeout, deadline, profile과 artifact path는 caller가 제공한다. 측정 fixture 수치와 경로는 제품 기본값이나 제한이 아니다.
 
 ```powershell

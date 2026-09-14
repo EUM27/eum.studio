@@ -4,8 +4,12 @@ import { mkdir, mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promise
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { coreScenarios } from "../../playwright.core.config";
+
+// These integration fixtures launch Git, Node and npm and inspect real NTFS
+// writes. Their process startup time is not a five-second product benchmark.
+vi.setConfig({ testTimeout: 30_000 });
 
 const runnerUrl = pathToFileURL(path.join(process.cwd(), "scripts/run-verification.mjs")).href;
 const sourceUrl = pathToFileURL(path.join(process.cwd(), "scripts/verification-source.mjs")).href;

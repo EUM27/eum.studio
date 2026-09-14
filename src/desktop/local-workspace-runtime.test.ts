@@ -18,6 +18,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 import { describe, expect, it, vi } from "vitest";
+import { workspaceWindowContext } from "./workspace-window-context";
 
 vi.mock("node:fs/promises", async (load) => {
   const actual = await load<typeof import("node:fs/promises")>();
@@ -2436,6 +2437,7 @@ describe("local workspace runtime", () => {
       expect(persistenceProfile?.documentSequences).toContainEqual({
           documentId: first.documentId,
           nextSequence: 2,
+          baseRevisionId: first.revisionId,
         });
       expect(runtime.getWorkspaceCatalog()).toMatchObject({
         activeWorkId: first.workId,
@@ -14872,4 +14874,25 @@ describe("local workspace runtime", () => {
     }
   });
 
+});
+
+
+describe("shared-window writing activity", () => {
+  it("serializes window changes into one work session and tolerates a stale stop", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "eum-window-activity-"));
+    const runtime = await openLocalWorkspaceRuntime(createOptions(directory));
+    try {
+      const work = await runtime.createFirstWork({ schemaVersion: 1, title: randomUUID(), firstDocumentTitle: randomUUID() });
+      const other = await runtime.createDocument({ schemaVersion: 1, workId: work.workId, title: randomUUID() });
+      const first = await workspaceWindowContext.run({ webContentsId: 1 }, () => runtime.startWritingSession({ schemaVersion: 1, workId: work.workId, documentId: work.documentId, note: "" }));
+      const second = await workspaceWindowContext.run({ webContentsId: 2 }, () => runtime.startWritingSession({ schemaVersion: 1, workId: work.workId, documentId: other.documentId, note: "" }));
+      expect(second.sessions.filter((session) => session.state === "active")).toHaveLength(1);
+      expect(second.sessions.find((session) => session.sessionId === second.activeSessionId)?.documentId).toBe(other.documentId);
+      const staleStop = await workspaceWindowContext.run({ webContentsId: 1 }, () => runtime.stopWritingSession({ schemaVersion: 1, workId: work.workId, sessionId: first.activeSessionId }));
+      expect(staleStop.activeSessionId).toBe(second.activeSessionId);
+    } finally {
+      runtime.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 });

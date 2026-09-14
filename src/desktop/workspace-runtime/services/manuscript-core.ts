@@ -387,6 +387,7 @@ export class ManuscriptCoreService {
         (target) => ({
           documentId: target.documentId,
           nextSequence: target.nextSequence,
+          baseRevisionId: target.baseRevisionId,
         }),
       ),
     });
@@ -629,4 +630,3 @@ export class ManuscriptCoreService {
     throw new Error("Local workspace startup recovery is not pending");
   }
 }
-

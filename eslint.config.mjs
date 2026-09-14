@@ -15,6 +15,8 @@ export default tseslint.config(
       "out/**",
       "playwright-report/**",
       "test-results/**",
+      "test-results-*/**",
+      "**/.goalbuddy-board/**",
       ".tmp/**",
     ],
   },

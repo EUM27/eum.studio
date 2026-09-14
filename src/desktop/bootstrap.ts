@@ -1,6 +1,8 @@
 import {
   app,
   BrowserWindow,
+  Menu,
+  MenuItem,
   dialog,
   ipcMain,
   protocol,
@@ -20,6 +22,11 @@ import { loadApplicationProfiles } from "./runtime/load-application-profiles";
 if (process.env.EUM_STUDIO_DISABLE_SANDBOX === "1") {
   app.commandLine.appendSwitch("no-sandbox");
 }
+
+import { workspaceWindowContext, type WorkspaceWindowContext } from "./workspace-window-context";
+import { createWindowScopedIpc } from "./ipc/create-window-scoped-ipc";
+import { registerSharedMusicIpc } from "./ipc/register-shared-music-ipc";
+import { SharedMusicCoordinator } from "./shared-music-coordinator";
 
 import { registerStudioIpc } from "./ipc/register-studio-ipc";
 import { createApplicationRuntimes } from "./runtime/create-application-runtimes";
@@ -103,15 +110,33 @@ import {
   YOUTUBE_PLAYER_REQUEST_FILTER,
 } from "./youtube-player-request-policy";
 
-let mainWindow: BrowserWindow | null = null;
-let configuredRendererTarget: string | null =
-  null;
-let pendingCloseRequest:
-  ManuscriptCloseRequest | null = null;
-let allowMainWindowClose = false;
+type StudioWindow = WorkspaceWindowContext & {
+  readonly window: BrowserWindow;
+  readonly rendererTarget: string;
+  pendingCloseRequest: ManuscriptCloseRequest | null;
+  allowClose: boolean;
+  recovery: Promise<void> | null;
+};
+const studioWindows = new Map<number, StudioWindow>();
+const sharedMusic = new SharedMusicCoordinator();
 let applicationHandlersRegistered = false;
 let applicationIsQuitting = false;
-let rendererRecoveryPromise: Promise<void> | null = null;
+let pendingWindowRequests = 0;
+let windowCreationTail: Promise<unknown> = Promise.resolve();
+
+function getRequestWindow(): BrowserWindow | null {
+  const context = workspaceWindowContext.getStore();
+  if (context !== undefined) return studioWindows.get(context.webContentsId)?.window ?? null;
+  return BrowserWindow.getFocusedWindow() ?? studioWindows.values().next().value?.window ?? null;
+}
+
+function requireRequestWindowState(): StudioWindow {
+  const context = workspaceWindowContext.getStore();
+  const state = context === undefined ? undefined : studioWindows.get(context.webContentsId);
+  if (state === undefined) throw new Error("The requesting window is unavailable");
+  return state;
+}
+
 let activeApplicationRuntime: ApplicationRuntime | null = null;
 let activeYouTubePlayerReferer: string | null = null;
 
@@ -163,36 +188,22 @@ function configuredLocalMediaSelectionPaths(value: string): readonly string[] {
 
 
 
-function assertTrustedRendererSender(
-  event: IpcMainInvokeEvent,
-): void {
-  const window = mainWindow;
-  const rendererTarget =
-    configuredRendererTarget;
-  const senderFrame =
-    event.senderFrame;
-  if (
-    window === null ||
-    rendererTarget === null ||
-    senderFrame === null ||
+function assertTrustedRendererSender(event: IpcMainInvokeEvent): void {
+  const state = studioWindows.get(event.sender.id);
+  const senderFrame = event.senderFrame;
+  if (state === undefined || state.window.isDestroyed() || senderFrame === null ||
+    senderFrame !== event.sender.mainFrame ||
     !isTrustedRendererIpcSender({
-      senderWebContentsId:
-        event.sender.id,
-      trustedWebContentsId:
-        window.webContents.id,
-      senderFrameUrl:
-        senderFrame.url,
-      senderMainFrameUrl:
-        event.sender.mainFrame.url,
-      configuredRendererTarget:
-        rendererTarget,
-    })
-  ) {
-    throw new Error(
-      "Rejected untrusted renderer IPC sender",
-    );
+      senderWebContentsId: event.sender.id,
+      trustedWebContentsId: state.window.webContents.id,
+      senderFrameUrl: senderFrame.url,
+      senderMainFrameUrl: event.sender.mainFrame.url,
+      configuredRendererTarget: state.rendererTarget,
+    })) {
+    throw new Error("Rejected untrusted renderer IPC sender");
   }
 }
+
 
 async function registerApplicationHandlers(): Promise<void> {
   const { ephemeralDocumentProfile, documentProfile, manuscriptInputProfile, formattingProfile, appSettingsProfile, musicSettingsProfile, assistantDestinationProfile, assistantConnectorProfile, chatGptOAuthProfile, youtubeMusicProfile, publishingMailConnectorProfile, preflightProfile, fragmentProfile, foreshadowPointProfile, journalProfile, batchingPolicy, crashGate, recoveryApplyProfile, resumeCheckpointProfile, useEphemeralTestWorkspace, hasConfiguredManuscriptRuntime, configuredLocalWorkspaceRoot, localWorkspaceBackupProfile } = loadApplicationProfiles({
@@ -258,7 +269,7 @@ async function registerApplicationHandlers(): Promise<void> {
   const chatGptOAuthWindowLauncher = createChatGptOAuthWindowLauncher({
     createWindow: () => {
       const window = new BrowserWindow(
-        createChatGptOAuthWindowOptions(mainWindow ?? undefined),
+        createChatGptOAuthWindowOptions(getRequestWindow() ?? undefined),
       );
       window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
       return {
@@ -1156,9 +1167,30 @@ async function registerApplicationHandlers(): Promise<void> {
   }
   activeApplicationRuntime = applicationRuntime;
   const manuscriptRuntime = applicationRuntime.manuscript;
+  registerSharedMusicIpc({
+    ipcMain,
+    authorizeSender: assertTrustedRendererSender,
+    coordinator: sharedMusic,
+    focusOwner: (clientId) => { const owner = studioWindows.get(clientId)?.window; if (owner !== undefined && !owner.isDestroyed()) activateMainWindow(owner); },
+  });
+
+  const windowIpc = createWindowScopedIpc({
+    ipcMain,
+    authorizeSender: assertTrustedRendererSender,
+    getContext: (event) => studioWindows.get(event.sender.id)!,
+    getPeers: (context) => [...studioWindows.values()]
+      .filter((other) => other.webContentsId !== context.webContentsId && !other.window.isDestroyed())
+      .map((other) => other.window.webContents),
+    getSnapshot: () => ({
+      catalog: applicationRuntime.getWorkspaceCatalog(),
+      documentProfile: manuscriptRuntime.getManuscriptDocumentProfile(),
+      persistenceProfile: manuscriptRuntime.getManuscriptPersistenceProfile(),
+      resumeCheckpoint: manuscriptRuntime.getManuscriptResumeCheckpoint(),
+    }),
+  });
 
   registerStudioIpc({
-    ipcMain,
+    ipcMain: windowIpc,
     authorizeSender: assertTrustedRendererSender,
     runtimes: createApplicationRuntimes(applicationRuntime),
     getRuntimeInfo: () => ({
@@ -1209,7 +1241,7 @@ async function registerApplicationHandlers(): Promise<void> {
         const command = await applicationRuntime.prepareManuscriptTextExport(
           input,
         );
-        const owner = mainWindow;
+        const owner = getRequestWindow();
         if (owner === null) {
           throw new Error("Main window is unavailable");
         }
@@ -1238,7 +1270,7 @@ async function registerApplicationHandlers(): Promise<void> {
         } as const;
       },
       selectTextImport: async (command) => {
-        const owner = mainWindow;
+        const owner = getRequestWindow();
         if (owner === null) {
           throw new Error("Main window is unavailable");
         }
@@ -1273,23 +1305,19 @@ async function registerApplicationHandlers(): Promise<void> {
         } as const;
       },
       completeCloseRequest: (result) => {
-        const request = pendingCloseRequest;
+        const state = requireRequestWindowState();
+        const request = state.pendingCloseRequest;
         if (request === null || request.requestId !== result.requestId) {
-          throw new Error(
-            "Manuscript close result does not identify the pending request",
-          );
+          throw new Error("Manuscript close result does not identify the pending request");
         }
-        pendingCloseRequest = null;
+        state.pendingCloseRequest = null;
         if (result.status === "saved") {
-          const window = mainWindow;
-          if (window !== null) {
-            allowMainWindowClose = true;
-            setImmediate(() => {
-              if (!window.isDestroyed()) {
-                window.close();
-              }
-            });
-          }
+          state.allowClose = true;
+          setImmediate(() => {
+            if (!state.window.isDestroyed()) state.window.close();
+          });
+        } else {
+          applicationIsQuitting = false;
         }
         return result;
       },
@@ -1303,7 +1331,7 @@ async function registerApplicationHandlers(): Promise<void> {
     },
     canonicalMarkdownExport: async (input) => {
       const prepared = await applicationRuntime.prepareCanonicalMarkdownExport(input);
-      const owner = mainWindow;
+      const owner = getRequestWindow();
       if (owner === null) throw new Error("Main window is unavailable");
       const configuredRoot = process.env.EUM_STUDIO_CANONICAL_MARKDOWN_EXPORT_ROOT_PATH;
       const baseDirectoryPath = configuredRoot ?? (await dialog.showOpenDialog(owner, {
@@ -1333,7 +1361,7 @@ async function registerApplicationHandlers(): Promise<void> {
       const prepared = await applicationRuntime.prepareWorkRecordsExport(
         command,
       );
-      const owner = mainWindow;
+      const owner = getRequestWindow();
       if (owner === null) {
         throw new Error("Main window is unavailable");
       }
@@ -1370,7 +1398,7 @@ async function registerApplicationHandlers(): Promise<void> {
     },
     backup: {
       create: async (command) => {
-        const owner = mainWindow;
+        const owner = getRequestWindow();
         if (owner === null) {
           throw new Error("Main window is unavailable");
         }
@@ -1388,7 +1416,7 @@ async function registerApplicationHandlers(): Promise<void> {
         return { schemaVersion: 1, status: "completed", summary } as const;
       },
       restore: async () => {
-        const owner = mainWindow;
+        const owner = getRequestWindow();
         if (owner === null) {
           throw new Error("Main window is unavailable");
         }
@@ -1435,7 +1463,7 @@ async function registerApplicationHandlers(): Promise<void> {
         if (configuredPaths !== undefined) {
           filePaths = configuredLocalMediaSelectionPaths(configuredPaths);
         } else {
-          const owner = mainWindow;
+          const owner = getRequestWindow();
           if (owner === null) throw new Error("Main window is unavailable");
           const selection = await dialog.showOpenDialog(owner, {
             title: command.storageMode === "external-reference"
@@ -1479,7 +1507,7 @@ async function registerApplicationHandlers(): Promise<void> {
           }
           filePath = configuredPath;
         } else {
-          const owner = mainWindow;
+          const owner = getRequestWindow();
           if (owner === null) throw new Error("Main window is unavailable");
           const selection = await dialog.showOpenDialog(owner, {
             title: "연결할 미디어 원본 선택",
@@ -1513,7 +1541,7 @@ async function registerApplicationHandlers(): Promise<void> {
     },
     migration: {
       runLegacyLoreRehearsal: async () => {
-        const owner = mainWindow;
+        const owner = getRequestWindow();
         if (owner === null) {
           throw new Error("Main window is unavailable");
         }
@@ -1588,7 +1616,7 @@ async function registerApplicationHandlers(): Promise<void> {
     },
     publishing: {
       selectPartnerCsv: async () => {
-        const owner = mainWindow;
+        const owner = getRequestWindow();
         if (owner === null) throw new Error("Main window is unavailable");
         const selected = await dialog.showOpenDialog(owner, {
           title: "투고처 CSV 선택",
@@ -1611,7 +1639,7 @@ async function registerApplicationHandlers(): Promise<void> {
         });
       },
       selectSubmissionCsv: async () => {
-        const owner = mainWindow;
+        const owner = getRequestWindow();
         if (owner === null) throw new Error("Main window is unavailable");
         const selected = await dialog.showOpenDialog(owner, {
           title: "투고 이력 CSV 선택",
@@ -1636,7 +1664,7 @@ async function registerApplicationHandlers(): Promise<void> {
     },
     workspace: {
       selectCover: async (command) => {
-        const owner = mainWindow;
+        const owner = getRequestWindow();
         if (owner === null) throw new Error("Main window is unavailable");
         const selected = await dialog.showOpenDialog(owner, {
           title: "작품 표지 선택",
@@ -1758,67 +1786,56 @@ function scheduleRendererRecovery(
   window: BrowserWindow,
   failure: Readonly<{ reason: string; exitCode: number }>,
 ): void {
-  if (!shouldRecoverMainWindowRenderer({
-    failedWindowIsCurrent: mainWindow === window,
-    isQuitting: applicationIsQuitting || allowMainWindowClose,
-    recoveryInProgress: rendererRecoveryPromise !== null,
+  const state = studioWindows.get(window.webContents.id);
+  if (state === undefined || !shouldRecoverMainWindowRenderer({
+    failedWindowIsCurrent: state.window === window,
+    isQuitting: applicationIsQuitting || state.allowClose,
+    recoveryInProgress: state.recovery !== null,
     windowDestroyed: window.isDestroyed(),
     webContentsDestroyed: window.webContents.isDestroyed(),
   })) return;
-
   const recovery = waitForRendererReload(window).then(() => {
-    if (mainWindow === window && !window.isDestroyed()) {
-      pendingCloseRequest = null;
-      allowMainWindowClose = false;
+    if (!window.isDestroyed()) {
+      state.pendingCloseRequest = null;
+      state.allowClose = false;
       activateMainWindow(window);
     }
   });
-  rendererRecoveryPromise = recovery;
-  void recovery.then(
-    () => undefined,
-    (reason) => quitAfterDesktopFailure(
-      `화면 프로세스를 복구하지 못했습니다 (${failure.reason}, ${failure.exitCode})`,
-      reason,
-    ),
-  ).finally(() => {
-    if (rendererRecoveryPromise === recovery) rendererRecoveryPromise = null;
+  state.recovery = recovery;
+  void recovery.catch((reason: unknown) => {
+    console.error(`[eum-studio desktop] Renderer recovery failed (${failure.reason}, ${failure.exitCode})`, reason);
+    dialog.showErrorBox("이음 스튜디오", "이 창의 화면을 복구하지 못했습니다. 마지막으로 저장된 원고는 보존됩니다.");
+  }).finally(() => {
+    if (state.recovery === recovery) state.recovery = null;
   });
 }
 
 async function activateOrCreateMainWindow(): Promise<void> {
-  if (
-    applicationIsQuitting ||
-    !app.isReady() ||
-    !applicationHandlersRegistered
-  ) return;
-  const window = mainWindow;
-  if (
-    window !== null &&
-    canActivateMainWindow({
-      windowDestroyed: window.isDestroyed(),
-      webContentsDestroyed: window.webContents.isDestroyed(),
-      rendererCrashed: !window.webContents.isDestroyed() &&
-        window.webContents.isCrashed(),
-    })
-  ) {
+  if (applicationIsQuitting || !app.isReady() || !applicationHandlersRegistered) return;
+  const window = getRequestWindow();
+  if (window !== null && canActivateMainWindow({
+    windowDestroyed: window.isDestroyed(),
+    webContentsDestroyed: window.webContents.isDestroyed(),
+    rendererCrashed: !window.webContents.isDestroyed() && window.webContents.isCrashed(),
+  })) {
     activateMainWindow(window);
-    return;
+  } else if (window !== null && !window.isDestroyed() && !window.webContents.isDestroyed()) {
+    scheduleRendererRecovery(window, { reason: "activate", exitCode: 0 });
+  } else {
+    await createMainWindow();
   }
-  if (
-    window !== null &&
-    !window.isDestroyed() &&
-    !window.webContents.isDestroyed() &&
-    window.webContents.isCrashed()
-  ) {
-    scheduleRendererRecovery(window, { reason: "second-instance", exitCode: 0 });
-    return;
-  }
+}
 
-  const replacement = await createMainWindow();
-  if (window !== null && !window.isDestroyed()) {
-    window.destroy();
+function requestNewWindow(): void {
+  if (applicationIsQuitting) return;
+  if (!applicationHandlersRegistered) {
+    pendingWindowRequests += 1;
+    return;
   }
-  activateMainWindow(replacement);
+  windowCreationTail = windowCreationTail.then(() => createMainWindow()).catch((reason: unknown) => {
+    console.error("[eum-studio desktop] New window failed", reason);
+    dialog.showErrorBox("이음 스튜디오", "새 창을 열지 못했습니다. 열려 있는 창에서 계속 작업할 수 있습니다.");
+  });
 }
 
 async function createMainWindow(): Promise<BrowserWindow> {
@@ -1830,10 +1847,6 @@ async function createMainWindow(): Promise<BrowserWindow> {
   const configuredRendererUrl = process.env.EUM_STUDIO_RENDERER_URL;
   const rendererTarget =
     configuredRendererUrl ?? pathToFileURL(rendererFile).toString();
-  configuredRendererTarget =
-    rendererTarget;
-  pendingCloseRequest = null;
-  allowMainWindowClose = false;
 
   const window = new BrowserWindow({
     autoHideMenuBar: true,
@@ -1850,7 +1863,18 @@ async function createMainWindow(): Promise<BrowserWindow> {
     webPreferences: createSecureWebPreferences(preloadPath),
     width: 1200,
   });
-  mainWindow = window;
+  const state: StudioWindow = {
+    window,
+    webContentsId: window.webContents.id,
+    rendererTarget,
+    pendingCloseRequest: null,
+    allowClose: false,
+    recovery: null,
+  };
+  studioWindows.set(state.webContentsId, state);
+  for (const entry of studioWindows.values()) entry.multipleWindows = studioWindows.size > 1;
+  // Capture this window's initial selection before another window can navigate.
+  workspaceWindowContext.run(state, () => activeApplicationRuntime?.getWorkspaceCatalog());
 
   if (activeYouTubePlayerReferer !== null) {
     const playerReferer = activeYouTubePlayerReferer;
@@ -1868,12 +1892,21 @@ async function createMainWindow(): Promise<BrowserWindow> {
   }
 
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  window.webContents.on("before-input-event", (event, input) => {
+    if (input.type === "keyDown" && !input.isAutoRepeat &&
+      (input.control || input.meta) && input.shift && !input.alt &&
+      input.key.toLowerCase() === "n") {
+      event.preventDefault();
+      requestNewWindow();
+    }
+  });
   window.webContents.on("will-navigate", (event, requestedTarget) => {
     if (!isAllowedRendererNavigation(requestedTarget, rendererTarget)) {
       event.preventDefault();
     }
   });
   window.webContents.on("render-process-gone", (_event, details) => {
+    sharedMusic.detach(window.webContents.id);
     scheduleRendererRecovery(window, details);
   });
   window.once("ready-to-show", () => {
@@ -1882,37 +1915,24 @@ async function createMainWindow(): Promise<BrowserWindow> {
     }
   });
   window.on("closed", () => {
-    if (mainWindow === window) {
-      mainWindow = null;
-      configuredRendererTarget =
-        null;
-      pendingCloseRequest = null;
-      allowMainWindowClose = false;
-    }
+    sharedMusic.detach(state.webContentsId);
+    studioWindows.delete(state.webContentsId);
+    for (const entry of studioWindows.values()) entry.multipleWindows = studioWindows.size > 1;
   });
   window.on("close", (event) => {
-    if (allowMainWindowClose) {
-      return;
-    }
-    if (
-      activeApplicationRuntime?.getWorkspaceCatalog().canCreateFirstWork ===
-      true
-    ) {
-      allowMainWindowClose = true;
+    if (state.allowClose) return;
+    if (workspaceWindowContext.run(state, () =>
+      activeApplicationRuntime?.getWorkspaceCatalog().canCreateFirstWork === true)) {
+      state.allowClose = true;
       return;
     }
     event.preventDefault();
-    if (
-      pendingCloseRequest !== null
-    ) {
-      return;
-    }
-    const request: ManuscriptCloseRequest =
-      Object.freeze({
-        schemaVersion: 1,
-        requestId: randomUUID(),
-      });
-    pendingCloseRequest = request;
+    if (state.pendingCloseRequest !== null) return;
+    const request: ManuscriptCloseRequest = Object.freeze({
+      schemaVersion: 1,
+      requestId: randomUUID(),
+    });
+    state.pendingCloseRequest = request;
     sendManuscriptCloseRequest(window.webContents, request);
   });
 
@@ -1923,14 +1943,9 @@ async function createMainWindow(): Promise<BrowserWindow> {
       await window.loadURL(configuredRendererUrl);
     }
   } catch (reason) {
-    allowMainWindowClose = true;
+    state.allowClose = true;
     if (!window.isDestroyed()) window.destroy();
-    if (mainWindow === window) {
-      mainWindow = null;
-      configuredRendererTarget = null;
-      pendingCloseRequest = null;
-      allowMainWindowClose = false;
-    }
+    studioWindows.delete(state.webContentsId);
     throw reason;
   }
   if (
@@ -1958,15 +1973,20 @@ if (!hasSingleInstanceLock) {
   applicationIsQuitting = true;
   app.quit();
 } else {
-  app.on("second-instance", () => {
-    void activateOrCreateMainWindow().catch((reason) => {
-      quitAfterDesktopFailure("앱 창을 다시 열지 못했습니다.", reason);
-    });
-  });
+  app.on("second-instance", requestNewWindow);
   void app.whenReady().then(async () => {
     await registerApplicationHandlers();
     applicationHandlersRegistered = true;
-    mainWindow = await createMainWindow();
+    await createMainWindow();
+    const menu = Menu.getApplicationMenu() ?? new Menu();
+    menu.append(new MenuItem({ label: "창", submenu: [{
+      label: "새 창", accelerator: "CmdOrCtrl+Shift+N", click: requestNewWindow,
+    }] }));
+    Menu.setApplicationMenu(menu);
+    while (pendingWindowRequests > 0) {
+      pendingWindowRequests -= 1;
+      requestNewWindow();
+    }
 
     app.on("activate", () => {
       void activateOrCreateMainWindow().catch((reason) => {

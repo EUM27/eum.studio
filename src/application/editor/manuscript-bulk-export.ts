@@ -13,11 +13,14 @@ export type PreparedManuscriptBulkTextExport = Readonly<{
 
 const EPISODE_SEPARATOR = "\n\n";
 
-export function prepareManuscriptBulkTextExport(input: Readonly<{
+export function selectManuscriptBulkExportDocuments<T extends Readonly<{
   workId: EntityId<"Work">;
-  orderedDocuments: readonly OrderedManuscriptBulkExportDocument[];
+  documentId: EntityId<"Document">;
+}>>(input: Readonly<{
+  workId: EntityId<"Work">;
+  orderedDocuments: readonly T[];
   selectedDocumentIds: readonly EntityId<"Document">[];
-}>): PreparedManuscriptBulkTextExport {
+}>): readonly T[] {
   const selectedDocumentIds = new Set(input.selectedDocumentIds);
   if (selectedDocumentIds.size !== input.selectedDocumentIds.length) {
     throw new Error("Selected manuscript export Documents must be unique");
@@ -44,9 +47,17 @@ export function prepareManuscriptBulkTextExport(input: Readonly<{
     }
   }
 
-  const selectedDocuments = input.orderedDocuments.filter((document) =>
+  return Object.freeze(input.orderedDocuments.filter((document) =>
     selectedDocumentIds.has(document.documentId)
-  );
+  ));
+}
+
+export function prepareManuscriptBulkTextExport(input: Readonly<{
+  workId: EntityId<"Work">;
+  orderedDocuments: readonly OrderedManuscriptBulkExportDocument[];
+  selectedDocumentIds: readonly EntityId<"Document">[];
+}>): PreparedManuscriptBulkTextExport {
+  const selectedDocuments = selectManuscriptBulkExportDocuments(input);
   const firstDocument = selectedDocuments[0];
   if (firstDocument === undefined) {
     throw new Error("At least one manuscript export Document must be selected");

@@ -51,6 +51,7 @@ import {
   type DocumentNavigationWorkspaceSnapshot,
 } from "./workspace/session/WorkspaceSessionStore";
 import { useWorkspaceSession } from "./workspace/session/useWorkspaceSession";
+import { useSharedWorkspaceSync } from "./workspace/session/useSharedWorkspaceSync";
 import { usePersistenceCoordinator } from "./workspace/session/usePersistenceCoordinator";
 import { useWorkspaceRuntimeProjectionController } from "./workspace/session/useWorkspaceRuntimeProjectionController";
 import type { WorkspaceController } from "./workspace/lifecycle/WorkspaceController";
@@ -316,6 +317,15 @@ export function WorkspaceRoot({
   const {
     installRuntimeProjection,
   } = runtimeProjectionController;
+  useSharedWorkspaceSync({
+    shared: window.eumStudio.workspace.shared,
+    runtime,
+    queueRef: durableSaveQueueRef,
+    editorRef: manuscriptEditorRef,
+    setRuntime,
+    onCatalogChange,
+    onError: workspaceLifecycle.setWorkspaceActionError,
+  });
   const loadRuntimeProjection = useCallback(
     () => runtimeBootstrapController.load(),
     [runtimeBootstrapController],

@@ -52,22 +52,36 @@ export function useAutomaticSceneAnalysisController(input: Readonly<{
   const [storedError,setStoredError]=useState<Readonly<{
     workId:EntityId<"Work">;message:string;
   }>|null>(null);
+  const [statusWorkId,setStatusWorkId]=useState(input.activeWorkId);
+  if(statusWorkId!==input.activeWorkId){
+    setStatusWorkId(input.activeWorkId);
+    setState("idle");setCanRetry(false);setStoredError(null);
+  }
   const activeSceneRef=useRef<SceneProjection|null>(null);
   const retryRequestRef=useRef<Readonly<{
     scene:SceneProjection;trigger:NarrativeDigestSceneTrigger;
   }>|null>(null);
-  const settingsWorkRef=useRef<EntityId<"Work">|null>(null);
   const queueRef=useRef<Promise<void>>(Promise.resolve());
+  const scopeRef=useRef({workId:input.activeWorkId,generation:0});
+  const nextRequestRef=useRef(0);
+  const activeRequestRef=useRef<number|null>(null);
+
+  useLayoutEffect(()=>{
+    const scope={workId:input.activeWorkId,generation:scopeRef.current.generation+1};
+    scopeRef.current=scope;
+    activeRequestRef.current=null;
+    activeSceneRef.current=null;
+    retryRequestRef.current=null;
+    queueRef.current=Promise.resolve();
+    return()=>{
+      scopeRef.current={workId:null,generation:scope.generation+1};
+      activeRequestRef.current=null;
+    };
+  },[input.activeWorkId]);
 
   useEffect(()=>{
     let cancelled=false;
     const workId=input.activeWorkId;
-    if(settingsWorkRef.current!==workId){
-      settingsWorkRef.current=workId;
-      activeSceneRef.current=null;
-      retryRequestRef.current=null;
-      setCanRetry(false);
-    }
     if(workId===null)return()=>{cancelled=true;};
     if(input.settingsEnabled!==null)return()=>{cancelled=true;};
     void input.settingsClient.getWorkSceneAnalysis({schemaVersion:1,workId}).then(
@@ -99,12 +113,19 @@ export function useAutomaticSceneAnalysisController(input: Readonly<{
   const analyze=useCallback(async(
     requestedScene:SceneProjection,
     trigger:NarrativeDigestSceneTrigger,
+    scope:typeof scopeRef.current,
+    requestId:number,
   )=>{
     const current=inputRef.current;
+    if(scopeRef.current!==scope||scope.workId!==requestedScene.workId||current.activeWorkId!==scope.workId)return;
+    activeRequestRef.current=requestId;
+    const isCurrent=()=>scopeRef.current===scope&&activeRequestRef.current===requestId&&
+      inputRef.current.activeWorkId===scope.workId;
     setState("running");setCanRetry(false);setStoredError(null);
     try{
       const result=await executeAutomaticSceneAnalysis({
         enabled:enabledRef.current,
+        isCurrent,
         requestedScene,
         trigger,
         activeWorkId:current.activeWorkId,
@@ -119,6 +140,7 @@ export function useAutomaticSceneAnalysisController(input: Readonly<{
         refreshSceneProjection:current.refreshSceneProjection,
         structureClient:current.structureClient,
       });
+      if(!isCurrent())return;
       setState(result==="skipped-disconnected"?"skipped-disconnected"
         :result==="permission-required"?"permission-required"
         :result==="stale"?"stale":"idle");
@@ -129,6 +151,7 @@ export function useAutomaticSceneAnalysisController(input: Readonly<{
       )?{scene:requestedScene,trigger}:null;
       setCanRetry(retryRequestRef.current!==null);
     }catch(reason){
+      if(!isCurrent())return;
       setState("failed");
       retryRequestRef.current={scene:requestedScene,trigger};
       setCanRetry(true);
@@ -140,7 +163,10 @@ export function useAutomaticSceneAnalysisController(input: Readonly<{
   },[]);
 
   const schedule=useCallback((scene:SceneProjection,trigger:NarrativeDigestSceneTrigger)=>{
-    const execution=queueRef.current.then(()=>analyze(scene,trigger));
+    const scope=scopeRef.current;
+    if(scope.workId!==scene.workId)return;
+    const requestId=++nextRequestRef.current;
+    const execution=queueRef.current.then(()=>analyze(scene,trigger,scope,requestId));
     queueRef.current=execution.then(()=>undefined,()=>undefined);
   },[analyze]);
 

@@ -41,7 +41,7 @@ export function DocumentRailHost(input: Readonly<{
   activeWork: WorkspaceWorkSummary | null;
   commands: Readonly<{
     clearWorkspaceError: () => void;
-    createDocument: () => Promise<unknown>;
+    createDocument: ComponentProps<typeof DocumentFolderTree>["onCreateDocument"];
     moveDocument: (
       workId: WorkspaceWorkSummary["workId"],
       ...args: Parameters<
@@ -143,6 +143,7 @@ export function DocumentRailHost(input: Readonly<{
               activeDocumentId={input.activeDocumentId}
               disabled={input.workspaceActionState !== "idle"}
               documentCreateControl={documentCreateControl}
+              onCreateDocument={input.commands.createDocument}
               onMoveDocument={async (documentId, direction) => {
                 await input.commands.moveDocument(
                   activeWork.workId,
@@ -207,6 +208,7 @@ export function DocumentRailHost(input: Readonly<{
               activeDocumentId={input.activeDocumentId}
               disabled={disabled}
               documentCreateControl={documentCreateControl}
+              onCreateDocument={input.commands.createDocument}
               onMoveDocument={async (documentId, direction) => {
                 await input.commands.moveDocument(
                   activeWork.workId,

@@ -12,6 +12,7 @@ import { createPortal } from "react-dom";
 import {
   ChevronDown,
   ChevronRight,
+  FilePlus,
   FileText,
   Folder,
   FolderPlus,
@@ -74,6 +75,7 @@ export function DocumentFolderTree({
   disabled,
   onActivateDocument,
   onRenameDocument,
+  onCreateDocument,
   onCreateFolder,
   onMoveDocument,
   onRenameFolder,
@@ -90,6 +92,9 @@ export function DocumentFolderTree({
   readonly onRenameDocument: (
     document: WorkspaceDocumentSummary,
     title: string,
+  ) => Promise<void>;
+  readonly onCreateDocument: (
+    folderId?: WorkspaceDocumentFolderSummary["folderId"] | null,
   ) => Promise<void>;
   readonly onCreateFolder: (
     title: string,
@@ -290,7 +295,7 @@ export function DocumentFolderTree({
           (document) =>
             document.documentId === targetDocumentElement.dataset.documentId,
         );
-        if (target !== undefined && target.folderId === source.folderId) {
+        if (target !== undefined) {
           const bounds = targetDocumentElement.getBoundingClientRect();
           return Object.freeze({
             kind: "document" as const,
@@ -377,6 +382,11 @@ export function DocumentFolderTree({
           (document) => document.documentId === preview.targetDocumentId,
         );
         if (sourceIndex < 0 || targetIndex < 0) return;
+        const target = work.documents[targetIndex];
+        if (target === undefined) return;
+        if (source.folderId !== target.folderId) {
+          await onPlaceDocument(source.documentId, target.folderId);
+        }
         let destinationIndex =
           targetIndex + (preview.placement === "after" ? 1 : 0);
         if (sourceIndex < destinationIndex) destinationIndex -= 1;
@@ -453,7 +463,7 @@ export function DocumentFolderTree({
       const preview = documentDropPreviewRef.current;
       const wasActive = drag.active;
       clearDocumentPointerDrag();
-      if (!wasActive || preview === null) return;
+      if (!wasActive) return;
       event.preventDefault();
       documentDragSuppressClickRef.current = drag.documentId;
       window.setTimeout(() => {
@@ -461,7 +471,9 @@ export function DocumentFolderTree({
           documentDragSuppressClickRef.current = null;
         }
       }, 0);
-      void requestDocumentDrop(preview).catch(() => undefined);
+      if (preview !== null) {
+        void requestDocumentDrop(preview).catch(() => undefined);
+      }
     }, [clearDocumentPointerDrag, requestDocumentDrop]);
 
   useEffect(() => () => {
@@ -669,6 +681,23 @@ export function DocumentFolderTree({
             <strong>{folder.title}</strong>
           )}
           <div className="document-folder-actions">
+            <button
+              aria-label={`${folder.title} 폴더에 새 문서 추가`}
+              disabled={disabled}
+              onClick={() => {
+                void onCreateDocument(folder.folderId).then(() => {
+                  setCollapsedFolderIds((current) => {
+                    const next = new Set(current);
+                    next.delete(folder.folderId);
+                    return next;
+                  });
+                }).catch(() => undefined);
+              }}
+              title="새 문서 추가"
+              type="button"
+            >
+              <FilePlus aria-hidden="true" size={13} />
+            </button>
             <button
               aria-label={`${folder.title} 하위 폴더 추가`}
               disabled={disabled}

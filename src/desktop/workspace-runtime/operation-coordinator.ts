@@ -1,3 +1,5 @@
+import { workspaceWindowContext } from "../workspace-window-context";
+
 /**
  * Owns the runtime's three operation tails. Each mutation receives the saves
  * preceding its enqueue point, so a later transfer cannot become its dependency.
@@ -18,13 +20,19 @@ export class WorkspaceOperationCoordinator {
   }
 
   enqueueSave<T>(run: () => T | PromiseLike<T>): Promise<T> {
-    const execution = this.#saveTail.then(run);
+    const preceding = workspaceWindowContext.getStore()?.multipleWindows === true
+      ? Promise.all([this.#saveTail, this.#mutationTail])
+      : this.#saveTail;
+    const execution = preceding.then(run);
     this.#saveTail = this.#settled(execution);
     return execution;
   }
 
   enqueueMutation<T>(run: (priorSaves: Promise<void>) => T | PromiseLike<T>): Promise<T> {
     const priorSaves = this.#saveTail;
+    if (workspaceWindowContext.getStore()?.multipleWindows === true) {
+      return this.enqueueTransfer(() => run(priorSaves));
+    }
     const execution = this.#mutationTail.then(() => run(priorSaves));
     this.#mutationTail = this.#settled(execution);
     return execution;

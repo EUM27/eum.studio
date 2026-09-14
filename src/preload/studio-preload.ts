@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
+import { SHARED_WORKSPACE_CHANGED_CHANNEL, SHARED_WORKSPACE_SNAPSHOT_CHANNEL, parseSharedWorkspaceSnapshot } from "../application/workspace/shared-workspace-snapshot";
+import { createSharedMusicBridge } from "./bridge/create-shared-music-bridge";
 import {
   ACTIVITY_EXPORT_RECORDS_CHANNEL,
   ACTIVITY_LIST_WORK_CHANNEL,
@@ -697,7 +699,7 @@ const studioBridge = createStudioBridge(
     foreshadowing: createPreloadForeshadowingBridge(invokeStudioBridge),
     lore: createPreloadLoreBridge(invokeStudioBridge),
     migration: createPreloadMigrationBridge(invokeStudioBridge),
-    musicPlayback: createPreloadMusicPlaybackBridge(invokeStudioBridge),
+    musicPlayback: createPreloadMusicPlaybackBridge(invokeStudioBridge, createSharedMusicBridge(ipcRenderer)),
     plots: createPreloadPlotsBridge(invokeStudioBridge),
     publishing: createPreloadPublishingBridge(invokeStudioBridge),
     schedule: createPreloadScheduleBridge(invokeStudioBridge),
@@ -705,7 +707,14 @@ const studioBridge = createStudioBridge(
     structure: createPreloadStructureBridge(invokeStudioBridge),
     system: createPreloadSystemBridge(invokeStudioBridge),
     version: createPreloadVersionBridge(invokeStudioBridge),
-    workspace: createPreloadWorkspaceBridge(invokeStudioBridge),
+    workspace: createPreloadWorkspaceBridge(invokeStudioBridge, {
+      getSnapshot: async () => parseSharedWorkspaceSnapshot(await ipcRenderer.invoke(SHARED_WORKSPACE_SNAPSHOT_CHANNEL)),
+      onChanged: (listener) => {
+        const handleChanged = () => listener();
+        ipcRenderer.on(SHARED_WORKSPACE_CHANGED_CHANNEL, handleChanged);
+        return () => { ipcRenderer.removeListener(SHARED_WORKSPACE_CHANGED_CHANNEL, handleChanged); };
+      },
+    }),
     quickTools: createPreloadQuickToolsBridge(invokeStudioBridge),
   },
 );

@@ -29,6 +29,7 @@ import {
 } from "./music-client";
 import {
   createMusicPlaybackRequest,
+  appendMusicTracksToQueue,
   withoutRegisteredLocalMedia,
   type MusicPlaybackRequest,
 } from "./music-state";
@@ -124,6 +125,25 @@ export function useMusicController(input: Readonly<{
     onLoaded: setYoutubeMusicProfile,
     onFailed: () => setYoutubeMusicProfile(null),
   }), [initialProfileClient]);
+
+  useEffect(() => {
+    const shared = input.operations?.playback.shared;
+    if (shared === undefined || input.activeWorkId === null) return;
+    let disposed = false;
+    let generation = 0;
+    const unsubscribe = shared.onSettingsChanged((workId) => {
+      if (workId !== input.activeWorkId) return;
+      const request = ++generation;
+      void input.settingsClient.getWorkMusic({ schemaVersion: 1, workId: input.activeWorkId }).then((projection) => {
+        if (disposed || request !== generation) return;
+        setWorkMusicSettings(projection);
+        libraryQueue.replacePlaylist(projection.settings.playlistTracks);
+      }).catch(() => {
+        if (!disposed) setMusicLibraryError("다른 창의 음악 목록을 불러오지 못했습니다.");
+      });
+    });
+    return () => { disposed = true; unsubscribe(); };
+  }, [input.activeWorkId, input.operations, input.settingsClient, libraryQueue]);
 
   useEffect(() => {
     let disposed = false;
@@ -665,6 +685,10 @@ export function useMusicController(input: Readonly<{
     )) return;
     void saveMusicLibraryQueue(Object.freeze([...musicLibraryQueue, track]));
   }, [musicLibraryQueue, saveMusicLibraryQueue]);
+  const addMusicLibraryTracks = useCallback((tracks: readonly MusicTrackProjection[]) => {
+    const next = appendMusicTracksToQueue(musicLibraryQueue, tracks);
+    if (next.length !== musicLibraryQueue.length) void saveMusicLibraryQueue(next);
+  }, [musicLibraryQueue, saveMusicLibraryQueue]);
   const clearMusicLibraryQueue = useCallback(() => {
     void saveMusicLibraryQueue(Object.freeze([]));
   }, [saveMusicLibraryQueue]);
@@ -684,7 +708,11 @@ export function useMusicController(input: Readonly<{
     nextQueue.splice(targetIndex, 0, track);
     void saveMusicLibraryQueue(Object.freeze(nextQueue));
   }, [musicLibraryQueue, saveMusicLibraryQueue]);
-  const playMusicLibraryTrack = useCallback((track: MusicTrackProjection) => {
+  const playMusicLibraryTrack = useCallback((track: MusicTrackProjection, sourceTracks?: readonly MusicTrackProjection[]) => {
+    if (sourceTracks !== undefined) {
+      const index = sourceTracks.findIndex((entry) => musicTrackIdentity(entry) === musicTrackIdentity(track));
+      if (index >= 0) { playMusicQueue(sourceTracks, index); return; }
+    }
     const queuedIndex = musicLibraryQueue.findIndex(
       (entry) => musicTrackIdentity(entry) === musicTrackIdentity(track),
     );
@@ -708,6 +736,7 @@ export function useMusicController(input: Readonly<{
   }), [replaceSceneMusicQueueProjection, replaceWorkMusicSettings]);
 
   return {
+    sharedPlayback: input.operations?.playback.shared,
     workMusicSettings,
     youtubeMusicProfile,
     musicPlaybackRequest,
@@ -737,6 +766,7 @@ export function useMusicController(input: Readonly<{
     openMusicLibrary,
     closeMusicLibrary,
     addMusicLibraryTrack,
+    addMusicLibraryTracks,
     clearMusicLibraryQueue,
     moveMusicLibraryQueueTrack,
     playMusicLibraryTrack,

@@ -30,6 +30,7 @@ export type DurableQueueDocument = {
   readonly workId: EntityId<"Work">;
   readonly documentId: EntityId<"Document">;
   readonly baseRevisionId: EntityId<"DocumentRevision">;
+  readonly currentRevisionId?: EntityId<"DocumentRevision">;
   readonly nextSequence: number;
 };
 
@@ -166,7 +167,7 @@ export class ManuscriptDurableSaveQueue {
     }
     this.#documents.set(document.documentId, {
       ...document,
-      currentRevisionId: document.baseRevisionId,
+      currentRevisionId: document.currentRevisionId ?? document.baseRevisionId,
       accumulator: new ManuscriptChangeAccumulator(),
       state: "saved",
       composing: false,
@@ -182,6 +183,21 @@ export class ManuscriptDurableSaveQueue {
     documentId: EntityId<"Document">,
   ): ManuscriptSaveState {
     return this.#getDocument(documentId).state;
+  }
+
+  /** Adopt another window's durable source only while this document is clean. */
+  adoptConfirmedDocument(document: DurableQueueDocument): boolean {
+    const current = this.#documents.get(document.documentId);
+    if (current !== undefined) {
+      if (current.workId !== document.workId) throw new Error("Document ownership conflict");
+      if (current.composing || current.state !== "saved" || this.hasPendingChanges(document.documentId)) return false;
+      if (current.currentRevisionId === document.currentRevisionId) return false;
+      this.#cancelTimer(current);
+      this.#documents.delete(document.documentId);
+    }
+    this.registerDocument(document);
+    this.#onStateChange(document.documentId, "saved");
+    return true;
   }
 
   getCurrentRevisionId(

@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 
 import type { StudioBridge } from "../../../application/contracts/studio-bridge";
-import { prepareManuscriptBulkTextExport } from "../../../application/editor/manuscript-bulk-export";
+import { prepareManuscriptBulkTextExport, selectManuscriptBulkExportDocuments } from "../../../application/editor/manuscript-bulk-export";
 import type { ManuscriptDocumentSource } from "../../../application/editor/manuscript-document-profile";
 import {
   sanitizeManuscriptTextFileNamePart,
@@ -227,9 +227,14 @@ export function useEditorToolsController(input: Readonly<{
   ) => {
     const pending = pendingManuscriptBulkExport;
     if (pending === null) throw new Error("No manuscript bulk export is open");
+    const selectedDocuments = selectManuscriptBulkExportDocuments({
+      workId: pending.workId,
+      orderedDocuments: pending.orderedDocuments,
+      selectedDocumentIds,
+    });
     const prepared = prepareManuscriptBulkTextExport({
       workId: pending.workId,
-      orderedDocuments: pending.orderedDocuments.map((document) => {
+      orderedDocuments: selectedDocuments.map((document) => {
         const text = input.editor.materializeDocumentText(document);
         if (text === undefined) {
           throw new Error(`Cannot materialize manuscript: ${document.documentId}`);

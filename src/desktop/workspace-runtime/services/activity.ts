@@ -28,6 +28,7 @@ import type { WorkspaceOperationCoordinator } from "../operation-coordinator";
 import type { WorkspaceRuntimeState } from "../state";
 import type { InfrastructureService } from "./infrastructure";
 import type { SettingsService } from "./settings";
+import { workspaceWindowContext } from "../../workspace-window-context";
 
 /** Owns activity commands and their existing transaction boundaries. */
 export class ActivityService {
@@ -817,8 +818,15 @@ export class ActivityService {
       this.#database,
       command.workId,
     );
-    if (sessions.some((session) => session.state === "active")) {
-      throw new Error(`Work already has an active WritingSession: ${command.workId}`);
+    const activeSession = sessions.find((session) => session.state === "active");
+    if (activeSession !== undefined) {
+      if (workspaceWindowContext.getStore() === undefined || command.note.length !== 0) {
+        throw new Error(`Work already has an active WritingSession: ${command.workId}`);
+      }
+      if (activeSession.documentId === command.documentId) {
+        return this.#listWorkActivitySerially({ schemaVersion: 1, workId: command.workId });
+      }
+      await this.#stopWritingSessionSerially({ schemaVersion: 1, workId: command.workId, sessionId: activeSession.sessionId });
     }
     const policies = readWorkActivityPolicyIds(this.#database, command.workId);
     const now = new Date().toISOString();
@@ -855,6 +863,9 @@ export class ActivityService {
       throw new Error(`Unknown WritingSession: ${command.sessionId}`);
     }
     if (session.state !== "active") {
+      if (workspaceWindowContext.getStore() !== undefined) {
+        return this.#listWorkActivitySerially({ schemaVersion: 1, workId: command.workId });
+      }
       throw new Error(`WritingSession is not active: ${command.sessionId}`);
     }
     if (session.documentId === null) {

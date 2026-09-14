@@ -75,6 +75,26 @@ export function useLibraryController(input: Readonly<{
     : null;
   const busy = actionState !== "idle";
 
+  useEffect(() => {
+    const shared = input.workspaceClient.shared;
+    if (shared === undefined) return;
+    let disposed = false;
+    const refresh = () => {
+      void input.workspaceClient.getCatalog().then((next) => {
+        if (!disposed) setCatalogState({ status: "ready", catalog: next });
+      }).catch(() => {
+        if (!disposed) setActionError("다른 창의 작품 목록을 불러오지 못했습니다.");
+      });
+    };
+    const unsubscribe = shared.onChanged(refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      disposed = true;
+      unsubscribe();
+      window.removeEventListener("focus", refresh);
+    };
+  }, [input.workspaceClient]);
+
   const loadCatalog = useCallback(async () => {
     setCatalogState({ status: "loading" });
     try {

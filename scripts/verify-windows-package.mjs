@@ -154,6 +154,7 @@ try {
   if (rendererRecovery === null) {
     throw new Error("Standalone renderer did not recover after process termination");
   }
+  const secondWindowReady = application.waitForEvent("window");
   const secondInstance = spawn(
     executablePath,
     [`--user-data-dir=${userDataRoot}`],
@@ -175,6 +176,15 @@ try {
   if (application.process().exitCode !== null) {
     throw new Error("Standalone primary app exited during second-instance activation");
   }
+  const secondPage = await secondWindowReady;
+  await secondPage.waitForLoadState("domcontentloaded");
+  const secondWindow = await secondPage.evaluate(async () => ({
+    hasBridge: typeof globalThis.window.eumStudio === "object",
+    catalog: await globalThis.window.eumStudio.workspace.getCatalog(),
+  }));
+  if (application.windows().length !== 2 || !secondWindow.hasBridge || !secondWindow.catalog.canCreateFirstWork) {
+    throw new Error("Standalone second launch did not open a working second window");
+  }
   process.stdout.write(`${JSON.stringify({
     executablePath,
     packageManifestPath,
@@ -189,6 +199,7 @@ try {
     main,
     rendererRecovery,
     secondInstanceExit,
+    secondWindow: { count: application.windows().length, hasBridge: secondWindow.hasBridge, canCreateFirstWork: secondWindow.catalog.canCreateFirstWork },
   }, null, 2)}\n`);
 } finally {
   if (application !== null) {

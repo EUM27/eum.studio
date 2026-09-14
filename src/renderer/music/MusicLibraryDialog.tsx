@@ -69,13 +69,14 @@ export function MusicLibraryDialog(input: {
     Record<string, LocalMediaAvailabilityStatus>
   >;
   readonly onAddToQueue: (track: MusicTrackProjection) => void;
+  readonly onAddTracksToQueue?: (tracks: readonly MusicTrackProjection[]) => void;
   readonly onClearQueue: () => void;
   readonly onClose: () => void;
   readonly onMoveQueueTrack: (index: number, direction: -1 | 1) => void;
   readonly onOpenConnectionSettings: () => void;
   readonly onPlayQueue: () => void;
   readonly onPlayQueueTrack: (index: number) => void;
-  readonly onPlayTrack: (track: MusicTrackProjection) => void;
+  readonly onPlayTrack: (track: MusicTrackProjection, sourceTracks?: readonly MusicTrackProjection[]) => void;
   readonly onRegisterLocalMedia: (mode: LocalMediaStorageMode) => void;
   readonly onRelinkLocalMedia: (track: LocalMediaTrackProjection) => void;
   readonly onRemoveLocalMedia: (track: LocalMediaTrackProjection) => void;
@@ -99,6 +100,12 @@ export function MusicLibraryDialog(input: {
       : "queue"
   );
   const [query, setQuery] = useState("");
+  const [selectedMedia, setSelectedMedia] = useState<ReadonlySet<string>>(() => new Set());
+  const available = (track: MusicTrackProjection) => !isLocalMediaTrack(track) ||
+    !["disconnected", "changed"].includes(input.localMediaAvailability[track.mediaId] ?? "");
+  const selectableMedia = input.localMedia.filter(available);
+  const selectedTracks = selectableMedia.filter((track) => selectedMedia.has(musicTrackIdentity(track)));
+  const allSelected = selectableMedia.length > 0 && selectedTracks.length === selectableMedia.length;
   const favoriteIds = new Set(input.favorites.map(musicTrackIdentity));
   const queueIds = new Set(input.queue.map(musicTrackIdentity));
   const busy = input.searching || input.queueSaving ||
@@ -139,7 +146,18 @@ export function MusicLibraryDialog(input: {
       ? favorite ? "즐겨찾기 해제" : "즐겨찾기 추가"
       : favorite ? "선호 영상 해제" : "선호 영상 저장";
     return (
-      <li key={`${mode}:${identity}`}>
+      <li key={`${mode}:${identity}`} className={mode === "local" ? "music-library-selectable-track" : undefined}>
+        {mode === "local" && input.onAddTracksToQueue !== undefined && (
+          <input type="checkbox" aria-label={`${track.title} 선택`} checked={selectedMedia.has(identity)}
+            disabled={busy || unavailable} onChange={(event) => {
+              const checked = event.currentTarget.checked;
+              setSelectedMedia((current) => {
+                const next = new Set(current);
+                if (checked) next.add(identity); else next.delete(identity);
+                return next;
+              });
+            }} />
+        )}
         {!isLocalMediaTrack(track) && track.thumbnailUrl !== null
           ? <img alt="" src={track.thumbnailUrl} />
           : (
@@ -165,7 +183,8 @@ export function MusicLibraryDialog(input: {
               if (mode === "queue" && queueIndex !== undefined) {
                 input.onPlayQueueTrack(queueIndex);
               } else {
-                input.onPlayTrack(track);
+                const sourceTracks = mode === "local" ? input.localMedia : mode === "favorite" ? input.favorites : input.results;
+                input.onPlayTrack(track, sourceTracks.filter(available));
               }
             }}
             title="재생"
@@ -432,6 +451,18 @@ export function MusicLibraryDialog(input: {
           {activeTab === "local" && (
             <section aria-label="내 미디어" className="music-library-local">
               <header><h3>내 미디어</h3><span>{input.localMedia.length}</span></header>
+              {input.localMedia.length > 0 && input.onAddTracksToQueue !== undefined && (
+                <div className="music-library-selection">
+                  <label><input type="checkbox" aria-label="내 미디어 전체 선택" checked={allSelected}
+                    ref={(element) => { if (element !== null) element.indeterminate = selectedTracks.length > 0 && !allSelected; }}
+                    disabled={busy || selectableMedia.length === 0}
+                    onChange={(event) => setSelectedMedia(event.currentTarget.checked
+                      ? new Set(selectableMedia.map(musicTrackIdentity)) : new Set())} />전체 선택</label>
+                  <span>{selectedTracks.length}곡 선택</span>
+                  <button type="button" disabled={busy || !selectedTracks.some((track) => !queueIds.has(musicTrackIdentity(track)))}
+                    onClick={() => input.onAddTracksToQueue?.(selectedTracks)}>선택 곡 재생목록에 추가</button>
+                </div>
+              )}
               {input.localMedia.length === 0
                 ? <p>등록한 MP3·MP4 파일이 여기에 표시됩니다.</p>
                 : <ul className="music-library-scroll-list">{

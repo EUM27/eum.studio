@@ -67,6 +67,7 @@ export type MusicPlaybackBridgePayload =
   | SelectSceneMusicQueueCommand;
 
 export type MusicPlaybackBridge = Readonly<{
+  shared?: import("../../music/shared-music-playback").SharedMusicBridge;
   getProfile: () => Promise<YouTubeMusicProfile>;
   searchVideos: (
     command: SearchYouTubeVideosCommand,

@@ -593,6 +593,31 @@
   background: var(--eum-bg);
 }
 
+.studio-app-shell .music-library-content li.music-library-selectable-track {
+  grid-template-columns: auto 36px minmax(0, 1fr) auto;
+}
+
+.studio-app-shell .music-library-selection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5em;
+  margin-block: 0.5em;
+}
+
+.studio-app-shell .music-library-selection label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+}
+
+.studio-app-shell .music-library-dialog input[type="checkbox"] {
+  width: auto;
+  min-width: 0;
+  flex: none;
+  accent-color: var(--eum-accent);
+}
+
 .studio-app-shell .music-library-content li img,
 .studio-app-shell .music-library-content .music-library-media-icon {
   width: 36px;

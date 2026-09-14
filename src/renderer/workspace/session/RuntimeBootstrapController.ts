@@ -29,7 +29,7 @@ export type RuntimeBootstrapClient = Readonly<{
   >;
   fragments: Pick<StudioBridge["fragments"], "getProfile">;
   foreshadowing: Pick<StudioBridge["foreshadowing"], "getPointProfile">;
-  workspace: Pick<StudioBridge["workspace"], "getCatalog">;
+  workspace: Pick<StudioBridge["workspace"], "getCatalog" | "shared">;
 }>;
 
 export type RuntimeProjection = {
@@ -78,6 +78,7 @@ export class RuntimeBootstrapController {
       this.client.editor.getManuscriptResumeCheckpoint(),
       this.client.workspace.getCatalog(),
     ]);
+    const shared = await this.client.workspace.shared?.getSnapshot();
     return Object.freeze({
       info,
       inputProfile,
@@ -90,6 +91,7 @@ export class RuntimeBootstrapController {
       startupRecovery,
       resumeCheckpoint,
       catalog,
+      ...shared,
     });
   }
 }

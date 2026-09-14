@@ -77,7 +77,10 @@ export function useWorkspaceCommandsController(input: Readonly<{
     }
   }, [currentRuntimeDocument, input]);
 
-  const createDocument = useCallback(async (title: string): Promise<void> => {
+  const createDocument = useCallback(async (
+    title: string,
+    folderId: WorkspaceDocumentFolderSummary["folderId"] | null = null,
+  ): Promise<void> => {
     if (input.runtime.status !== "ready" || input.activeWork === null) {
       throw new Error("The manuscript workspace is not ready");
     }
@@ -92,7 +95,14 @@ export function useWorkspaceCommandsController(input: Readonly<{
         workId: input.activeWork.workId,
         title,
       });
-      const catalog = await input.client.getCatalog();
+      const catalog = folderId === null
+        ? await input.client.getCatalog()
+        : await input.client.placeDocumentInFolder({
+            schemaVersion: 1,
+            workId: input.activeWork.workId,
+            documentId: created.documentId,
+            folderId,
+          });
       if (input.activeDocument === null) {
         input.ports.publishCatalog(
           await input.ports.reloadRuntime(created.documentId),

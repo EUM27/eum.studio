@@ -255,6 +255,7 @@ export function WorkspaceStatusToolsHost(input: Readonly<{
         )}
         {renderInHost(
           <MusicMiniPlayer
+            shared={music.sharedPlayback}
             connection={input.youtubeMusicConnectionStatus}
             focusText={input.focusText}
             onOpenLibrary={music.openMusicLibrary}
@@ -450,6 +451,7 @@ export function WorkspaceStatusToolsHost(input: Readonly<{
             localMedia={music.workMusicSettings?.settings.localMedia ?? []}
             localMediaAvailability={music.localMediaAvailability}
             onAddToQueue={music.addMusicLibraryTrack}
+            onAddTracksToQueue={music.addMusicLibraryTracks}
             onClose={music.closeMusicLibrary}
             onOpenConnectionSettings={() => {
               music.closeMusicLibrary();

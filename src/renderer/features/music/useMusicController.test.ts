@@ -18,11 +18,19 @@ import {
 } from "./music-client";
 import {
   createMusicPlaybackRequest,
+  appendMusicTracksToQueue,
   withoutRegisteredLocalMedia,
 } from "./music-state";
 
 const workA = entityId<"Work">("work-music-a");
 const workB = entityId<"Work">("work-music-b");
+
+it("adds a selection in one ordered queue update without duplicating existing tracks", () => {
+  const first = track("first"); const second = track("second"); const third = track("third");
+  const queue = appendMusicTracksToQueue([first], [second, first, third, second]);
+  expect(queue).toEqual([first, second, third]);
+  expect(createMusicPlaybackRequest(0, queue, 1)?.tracks).toEqual([first, second, third]);
+});
 
 function track(suffix: string): MusicTrackProjection {
   return Object.freeze({

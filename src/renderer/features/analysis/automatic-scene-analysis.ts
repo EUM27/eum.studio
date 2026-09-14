@@ -18,6 +18,7 @@ export type AutomaticSceneAnalysisExecutionStatus =
 
 export async function executeAutomaticSceneAnalysis(input: Readonly<{
   enabled:boolean;
+  isCurrent?:()=>boolean;
   requestedScene:SceneProjection;
   trigger:NarrativeDigestSceneTrigger;
   activeWorkId:EntityId<"Work">|null;
@@ -33,16 +34,21 @@ export async function executeAutomaticSceneAnalysis(input: Readonly<{
   structureClient:Pick<StudioBridge["structure"],"finalizeSceneCanonCheck">;
 }>):Promise<AutomaticSceneAnalysisExecutionStatus>{
   const scene=input.requestedScene;
+  const isCurrent=input.isCurrent??(()=>true);
+  if(!isCurrent())return "stale";
   if(!input.enabled)return "skipped-disabled";
   if(input.activeWorkId===null||scene.workId!==input.activeWorkId)return "skipped-invalid-scene";
   const requestedKey=sceneAnalysisOccurrenceKey(scene);
   if(scene.range===null||scene.integrity!=="resolved")return "skipped-invalid-scene";
   const status=await input.assistantClient.getChatGptOAuthStatus();
+  if(!isCurrent())return "stale";
   if(!status.connected)return "skipped-disconnected";
   const document=input.documents.find((entry)=>entry.documentId===scene.documentId);
   if(document===undefined)return "skipped-invalid-scene";
   await input.persistDocument(document);
+  if(!isCurrent())return "stale";
   const latest=await input.refreshSceneProjection(scene.workId);
+  if(!isCurrent())return "stale";
   const exact=latest.scenes.find((candidate)=>
     (sceneAnalysisOccurrenceKey(candidate)===requestedKey||(
       candidate.documentId===scene.documentId&&candidate.sceneKey===scene.sceneKey
@@ -59,6 +65,7 @@ export async function executeAutomaticSceneAnalysis(input: Readonly<{
     from:exact.range.start,
     to:exact.range.end,
   });
+  if(!isCurrent())return "stale";
   const result=await input.digestClient.runSceneAnalysis({
     schemaVersion:1,
     digestRequestId:entityId<"NarrativeDigestRequest">(crypto.randomUUID()),
@@ -70,6 +77,7 @@ export async function executeAutomaticSceneAnalysis(input: Readonly<{
     sourceRange:finalized.sourceRange,
     trigger:input.trigger,
   });
+  if(!isCurrent())return "stale";
   if(result.status==="disabled")return "skipped-disabled";
   if(result.status==="login-required"||result.status==="lore-login-required"){
     if("digest" in result)await input.refreshDigests();

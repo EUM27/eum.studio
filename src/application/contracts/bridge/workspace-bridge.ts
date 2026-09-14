@@ -143,6 +143,7 @@ export type WorkspaceBridgePayload =
   | CaptureWorkspaceResumeCommand;
 
 export type WorkspaceBridge = Readonly<{
+  shared?: import("../../workspace/shared-workspace-snapshot").SharedWorkspaceBridge;
   getCatalog: () => Promise<WorkspaceCatalogProjection>;
   getDocumentCompletion: (
     command: GetDocumentCompletionCommand,
