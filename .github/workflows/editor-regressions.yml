@@ -1,0 +1,57 @@
+name: Editor regression verification
+
+on:
+  push:
+    branches: [fix/editor-regressions-20260914]
+    paths: [.github/workflows/editor-regressions.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Export exact tracked source for isolated verification
+        run: git archive --format=tar.gz --output="$RUNNER_TEMP/editor-source.tar.gz" HEAD
+      - uses: actions/upload-artifact@v7
+        with:
+          name: editor-source
+          path: ${{ runner.temp }}/editor-source.tar.gz
+          retention-days: 1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install locked dependencies without upgrades
+        run: npm ci
+      - name: Export isolated verification runtime
+        run: |
+          mkdir -p "$RUNNER_TEMP/editor-runtime/bin" "$RUNNER_TEMP/editor-runtime/lib/node_modules"
+          cp "$(command -v node)" "$RUNNER_TEMP/editor-runtime/bin/node"
+          cp -a "$(npm root -g)/npm" "$RUNNER_TEMP/editor-runtime/lib/node_modules/npm"
+          tar -czf "$RUNNER_TEMP/editor-dependencies.tar.gz" node_modules
+          tar -czf "$RUNNER_TEMP/editor-node.tar.gz" -C "$RUNNER_TEMP" editor-runtime
+      - uses: actions/upload-artifact@v7
+        with:
+          name: editor-runtime
+          path: |
+            ${{ runner.temp }}/editor-dependencies.tar.gz
+            ${{ runner.temp }}/editor-node.tar.gz
+          retention-days: 1
+          compression-level: 0
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        if: success() || failure()
+        run: npm run lint
+      - name: Unit and integration tests
+        if: success() || failure()
+        run: npm run test:run
+      - name: Build
+        if: success() || failure()
+        run: npm run build
