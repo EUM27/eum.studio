@@ -16,19 +16,29 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - name: Export exact tracked source for isolated verification
-        run: git archive --format=tar.gz --output="$RUNNER_TEMP/editor-source.tar.gz" HEAD
-      - uses: actions/upload-artifact@v7
-        with:
-          name: editor-source
-          path: ${{ runner.temp }}/editor-source.tar.gz
-          retention-days: 1
       - uses: actions/setup-node@v7
         with:
-          node-version: '24'
+          node-version-file: .node-version
           package-manager-cache: false
       - name: Install locked dependencies without upgrades
-        run: npm ci
+        run: |
+          cp package-lock.json "$RUNNER_TEMP/original-lock.json"
+          trap 'cp "$RUNNER_TEMP/original-lock.json" package-lock.json' EXIT
+          # The committed lock omits the root entry required by wasm-runtime.
+          # Reuse the exact already-locked nested package, never a newer version.
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const path = 'package-lock.json';
+          const lock = JSON.parse(readFileSync(path, 'utf8'));
+          const root = 'node_modules/@emnapi/runtime';
+          const pinned = lock.packages['node_modules/@rolldown/binding-wasm32-wasi/node_modules/@emnapi/runtime'];
+          if (!lock.packages[root]) {
+            if (!pinned?.integrity || !pinned?.resolved) throw new Error('Missing pinned runtime');
+            lock.packages[root] = structuredClone(pinned);
+            writeFileSync(path, JSON.stringify(lock, null, 2) + '\n');
+          }
+          NODE
+          npm ci --no-audit --no-fund
       - name: Export isolated verification runtime
         run: |
           mkdir -p "$RUNNER_TEMP/editor-runtime/bin" "$RUNNER_TEMP/editor-runtime/lib/node_modules"
