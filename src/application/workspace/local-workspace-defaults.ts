@@ -4,11 +4,16 @@ import {
   type SceneBoundaryRule,
   type SceneRuleSetProjection,
 } from "../structure/scene-projection";
+import {
+  parseManuscriptBatchingPolicy,
+  type ManuscriptBatchingPolicy,
+} from "../persistence/manuscript-persistence-profile";
 
 export type LocalWorkspaceDefaults = {
   readonly schemaVersion: 1;
   readonly anchorPolicy: AnchorPolicy;
   readonly anchorEvidenceChecksumAlgorithm: string;
+  readonly manuscriptBatchingPolicy: ManuscriptBatchingPolicy;
   readonly activityPolicy: {
     readonly idleTimeout: number;
     readonly navigationGrace: number;
@@ -103,6 +108,7 @@ export function parseLocalWorkspaceDefaults(
       "schemaVersion",
       "anchorPolicy",
       "anchorEvidenceChecksumAlgorithm",
+      "manuscriptBatchingPolicy",
       "activityPolicy",
       "focusPolicy",
       "sceneRuleSet",
@@ -219,6 +225,9 @@ export function parseLocalWorkspaceDefaults(
     anchorEvidenceChecksumAlgorithm: readString(
       input.anchorEvidenceChecksumAlgorithm,
       "LocalWorkspaceDefaults.anchorEvidenceChecksumAlgorithm",
+    ),
+    manuscriptBatchingPolicy: parseManuscriptBatchingPolicy(
+      input.manuscriptBatchingPolicy,
     ),
     activityPolicy: Object.freeze({
       idleTimeout: readDuration(

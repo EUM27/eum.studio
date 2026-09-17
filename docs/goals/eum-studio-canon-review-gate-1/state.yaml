@@ -1,0 +1,873 @@
+# GoalBuddy v2 state.yaml
+version: 2
+
+goal:
+  title: "작품 별빛 변경 검토 Gate 1 독립 구현"
+  slug: "eum-studio-canon-review-gate-1"
+  kind: existing_plan
+  tranche: "Gate 0 독립 구현 봉인과 Gate 1 별빛 변경 검토 MVP를 현재 소스에 맞춰 구현·검증한다."
+  status: complete
+  intake:
+    original_request: "지정한 eum-studio-canon-continuity-independent-design.md를 기준으로 목표 잡고 실행"
+    interpreted_outcome: "정확한 설계 원문을 승인 기준으로 등록하고 Gate 1 별빛 검토 폐회로를 실제 제품 경로에 구현한다."
+    input_shape: existing_plan
+    audience: "이음 스튜디오 사용자"
+    authority: approved
+    proof_type: test
+    completion_proof: "Gate 0 artifact와 Gate 1 unit/integration/build/production Electron/process-kill/performance 증거가 원문 승인 기준을 모두 충족한다."
+    likely_misfire: "문서나 기존 Candidate 이름만 바꾸고 실제 strict parser·원자 승인·별빛 갱신·재실행 폐회로를 구현하지 않는 것."
+    blind_spots_considered:
+      - "설계 기준 커밋 19a7e74와 현재 HEAD 8f40406 및 dirty source 사이 drift"
+      - "현재 schema 16·17 stable scene identity와 분리된 bridge/IPC/controller 구조"
+      - "기존 unrelated Vitest 실패를 이번 기능 실패와 혼동하는 위험"
+      - "외부 connector credential 없이도 production path를 검증할 deterministic fixture 경계"
+    existing_plan_facts:
+      - "정확한 원문 경로: C:\\Users\\limoj\\OneDrive\\바탕 화면\\eum-studio-canon-continuity-independent-design.md"
+      - "원문 SHA-256: 343577C44367C4E38A61913822A13400B5DAA028BE2EA76123F7BBF6A31F3FC5"
+      - "Gate 0 후 Gate 1만 구현"
+      - "Character, CharacterRelation, LoreEntry create/update Candidate"
+      - "exact evidence, field-level edit/partial approval/rejection, source and target stale guards"
+      - "one SQLite transaction approval, typed bridge, React feature boundary"
+
+rules:
+  pm_owns_state: true
+  one_active_task: true
+  max_write_workers: 1
+  no_implementation_without_worker_or_pm_task: true
+  no_completion_without_judge_or_pm_audit: true
+  planning_is_not_completion: true
+  queued_required_worker_blocks_completion: true
+  continuous_until_full_outcome: true
+  missing_input_or_credentials_do_not_stop_goal: true
+  preserve_and_validate_existing_plan: true
+  intake_misfire_must_be_audited: true
+
+agents:
+  scout: installed
+  worker: installed
+  judge: bundled_not_installed
+
+visual_board:
+  selected: none
+  local:
+    status: not_requested
+    url: null
+    command: "npx goalbuddy board docs/goals/eum-studio-canon-review-gate-1"
+  github_projects:
+    status: not_requested
+    url: null
+    command: "npx goalbuddy extend github-projects"
+    missing: []
+
+active_task: null
+
+tasks:
+  - id: T001
+    type: scout
+    assignee: Scout
+    status: done
+    reasoning_hint: high
+    objective: "Validate the supplied design against the exact current source, schema, architecture, manifest, dirty diff, tests, and production paths; produce an implementation map and bounded Worker slices."
+    inputs:
+      - "C:\\Users\\limoj\\OneDrive\\바탕 화면\\eum-studio-canon-continuity-independent-design.md"
+      - "README.md"
+      - "plan.md"
+      - "docs/design-baseline.md"
+      - "current source and tests"
+    constraints:
+      - "Read-only outside GoalBuddy control files."
+      - "Treat current source as truth when the document's old commit layout has drifted."
+      - "Preserve all existing dirty entries."
+      - "PM fallback performs this Scout task without spawning a subagent."
+    expected_output:
+      - "Current schema and migration map"
+      - "Existing Candidate, Anchor, ContextReceipt, Character, Relation, Lore, connector, bridge, IPC, and renderer reuse map"
+      - "Design drift and conflict decisions"
+      - "Exact bounded Worker tasks with allowed files, verification, and stop conditions"
+    receipt:
+      result: done
+      note: "notes/T001-current-source-map.md"
+      summary: "Exact design/hash, manifest 11/11, schema 17, dirty fingerprint, Candidate/Anchor/ContextReceipt/canonical reuse paths, ten drift decisions, fresh baseline, and nine bounded implementation slices were mapped."
+      evidence:
+        - "C:\\Users\\limoj\\OneDrive\\바탕 화면\\eum-studio-canon-continuity-independent-design.md"
+        - "docs/design-baseline.md"
+        - "src/application/assistant/assistant-context-permission.ts"
+        - "src/application/characters/character-extraction-contract.ts"
+        - "src/desktop/local-workspace-runtime.ts"
+        - "src/platform/storage/node-sqlite-ledger.ts"
+      commands:
+        - cmd: "npm run architecture:check"
+          status: pass
+        - cmd: "npm run test:run -- <six canon dependency contract files>"
+          status: pass
+          result: "91 passed"
+        - cmd: "npm run typecheck"
+          status: pass
+        - cmd: "npm run test:run"
+          status: baseline-red
+          result: "985 passed, 1 skipped, 2 pre-existing failures"
+  - id: T002
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "Review T001 and select the exact Gate 0 and first Gate 1 Worker slice without weakening the supplied acceptance criteria."
+    inputs:
+      - "T001 receipt or note"
+    constraints:
+      - "Read-only."
+      - "PM fallback performs this Judge task without spawning a subagent."
+    expected_output:
+      - "Decision"
+      - "Exact Worker objective"
+      - "allowed_files"
+      - "verify"
+      - "stop_if"
+      - "Deferred follow-up slices"
+    receipt:
+      result: done
+      next_allowed_task: T003
+      allowed_files:
+        - "docs/design-baseline.md"
+        - "package.json"
+        - "README.md"
+        - "plan.md"
+      verify:
+        - "Recompute supplied design SHA-256 and baseline manifest 11/11."
+        - "git diff --check -- <T003 files>"
+      stop_if:
+        - "Supplied design hash differs from 343577C44367C4E38A61913822A13400B5DAA028BE2EA76123F7BBF6A31F3FC5."
+        - "A required edit would touch implementation source."
+  - id: T003
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: medium
+    inputs:
+      - "T001 source map"
+      - "T002 decision"
+      - "Exact supplied design and SHA-256"
+    constraints:
+      - "Do not rewrite the supplied external design."
+      - "Preserve current README and plan history; prepend/add only the new current Gate record."
+    expected_output:
+      - "Approved feature design manifest entry"
+      - "README and plan Gate 0 status"
+    allowed_files:
+      - "docs/design-baseline.md"
+      - "package.json"
+      - "README.md"
+      - "plan.md"
+    verify:
+      - "Recompute supplied design SHA-256 and baseline manifest 11/11."
+    stop_if:
+      - "Supplied design hash changes."
+      - "Implementation source would need modification."
+    receipt:
+      result: done
+      changed_files:
+        - "docs/design-baseline.md"
+        - "package.json"
+        - "README.md"
+        - "plan.md"
+      commands:
+        - cmd: "recompute supplied design SHA-256 and baseline manifest"
+          status: pass
+          result: "design match; baseline 11/11"
+          status: pass
+          result: "921 files, 3 patterns, 0 violations"
+          status: pass
+        - cmd: "git diff --check -- <T003 files>"
+          status: pass
+      spawned_tasks:
+        - T004
+  - id: T004
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: high
+    objective: "Implement strict canon review commands, projections, model payload parsing, exact quote resolution, and deterministic target/no-op/duplicate planning with failing tests first."
+    inputs:
+      - "T001 source map"
+      - "Gate 1 domain and test sections in the supplied design"
+    constraints:
+      - "Pure application TypeScript only."
+      - "No Electron, React, DB, file, or provider import."
+    expected_output:
+      - "Strict contract/model/planner implementation"
+      - "Focused unit tests"
+    allowed_files:
+      - "src/application/canon/"
+      - "src/application/assistant/assistant-context-permission.ts"
+      - "src/application/assistant/assistant-context-permission.test.ts"
+      - "src/renderer/assistant/AssistantContextDialog.tsx"
+    verify:
+      - "npm run test:run -- src/application/canon src/application/assistant/assistant-context-permission.test.ts"
+      - "npx tsc -p tsconfig.test.json --noEmit"
+    stop_if:
+      - "A domain choice cannot be resolved from the supplied design and current canonical contracts."
+      - "A required file falls outside allowed_files."
+      - "The same focused failure repeats twice without a new cause."
+    receipt:
+      result: done
+      changed_files:
+        - "src/application/canon/canon-review-contract.ts"
+        - "src/application/canon/canon-review-contract.test.ts"
+        - "src/application/canon/canon-review-model-output.ts"
+        - "src/application/canon/canon-review-model-output.test.ts"
+        - "src/application/canon/canon-review-planner.ts"
+        - "src/application/canon/canon-review-planner.test.ts"
+        - "src/application/assistant/assistant-context-permission.ts"
+        - "src/application/assistant/assistant-context-permission.test.ts"
+        - "src/renderer/assistant/AssistantContextDialog.tsx"
+      commands:
+        - cmd: "npm run test:run -- src/application/canon src/application/assistant/assistant-context-permission.test.ts"
+          status: pass
+          result: "4 files, 22 tests"
+        - cmd: "npx tsc -p tsconfig.test.json --noEmit"
+          status: pass
+        - cmd: "npx eslint <T004 files>"
+          status: pass
+        - cmd: "git diff --check -- <T004 files>"
+          status: pass
+      summary: "Strict field-level contract, model payload parser, exact paragraph quote resolution, deterministic unique/create/unresolved planner, no-op and pending duplicate removal, Work/retirement/relation endpoint guards, requested-kind enforcement, target re-resolution, and canon.review capability are implemented."
+      spawned_tasks:
+        - T005
+  - id: T005
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: high
+    objective: "Add schema 18 normalized canon review tables, canon.review grant/receipt support, ledger record kinds, and relation endpoint updates with migration and storage tests first."
+    inputs:
+      - "T004 contracts"
+      - "Current schema 17 and migration runner"
+    constraints:
+      - "Add tables; do not transform existing canonical rows."
+      - "Preserve all schema 17 data and logical checksums."
+      - "Approval-capable write kinds must be usable in one ledger transaction."
+    expected_output:
+      - "17 to 18 migration"
+      - "Fresh schema 18 tables"
+      - "Ledger record support"
+      - "Migration/storage regression tests"
+    allowed_files:
+      - "src/desktop/local-workspace-canon-migration.ts"
+      - "src/desktop/local-workspace-canon-migration.test.ts"
+      - "src/domain/poc-3-storage-ledger.ts"
+      - "src/platform/storage/node-sqlite-ledger.ts"
+      - "src/platform/storage/node-sqlite-ledger.canon.test.ts"
+      - "src/platform/storage/canon-review-schema.ts"
+      - "src/application/characters/character-relation-contract.ts"
+      - "src/application/characters/character-relation-contract.test.ts"
+      - "tests/fixtures/storage/poc-3-ledger.manifest.json"
+    verify:
+      - "npm run test:run -- src/desktop/local-workspace-canon-migration.test.ts src/application/characters/character-relation-contract.test.ts"
+      - "npx tsc -p tsconfig.test.json --noEmit"
+    stop_if:
+      - "Migration cannot preserve existing assistant grant/receipt foreign keys."
+      - "A write path cannot be made atomic through the existing ledger transaction."
+      - "A required file falls outside allowed_files."
+    receipt:
+      result: done
+      changed_files:
+        - "src/desktop/local-workspace-canon-migration.ts"
+        - "src/desktop/local-workspace-canon-migration.test.ts"
+        - "src/platform/storage/canon-review-schema.ts"
+        - "src/platform/storage/node-sqlite-ledger.ts"
+        - "src/platform/storage/node-sqlite-ledger.canon.test.ts"
+        - "src/domain/poc-3-storage-ledger.ts"
+        - "src/application/characters/character-relation-contract.ts"
+        - "src/application/characters/character-relation-contract.test.ts"
+        - "tests/fixtures/storage/poc-3-ledger.manifest.json"
+      commands:
+        - cmd: "npm run test:run -- <canon migration, canon ledger, relation contract>"
+          status: pass
+          result: "3 files, 7 tests"
+        - cmd: "npx tsc -p tsconfig.test.json --noEmit"
+          status: pass
+        - cmd: "npx eslint <T005 files>"
+          status: pass
+        - cmd: "compare base schema SQL with POC-3 table manifest"
+          status: pass
+          result: "105/105, missing 0, extra 0"
+        - cmd: "git diff --check -- <T005 files>"
+          status: pass
+      summary: "A checksum-pinned 17-to-18 migration preserves existing context records and the complete FK graph, adds canon.review, five normalized canon review tables and immutable receipts, four transaction write kinds, Lore update support, and relation endpoint updates. Runtime activation is intentionally left to T006 service composition."
+      spawned_tasks:
+        - T006
+  - id: T006
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: high
+    objective: "Implement the bounded local canon service and compose it into the local workspace runtime for prepare/execute/record, list/edit/resolve/decide, and atomic canonical approval."
+    inputs:
+      - "T004 contracts/planner"
+      - "T005 schema/ledger"
+    constraints:
+      - "Keep detailed SQL and logic out of local-workspace-runtime.ts."
+      - "Use current source/target Work and revision truth."
+      - "Create no canonical write before explicit approval."
+    expected_output:
+      - "LocalCanonService"
+      - "Atomic approval implementation"
+      - "Focused service/runtime tests"
+    allowed_files:
+      - "src/desktop/canon/"
+      - "src/desktop/local-workspace-runtime.ts"
+      - "src/desktop/local-workspace-runtime.test.ts"
+      - "src/application/canon/canon-review-model-output.ts"
+      - "src/desktop/bootstrap.ts"
+    verify:
+      - "npm run test:run -- src/desktop/canon src/desktop/local-workspace-runtime.test.ts"
+      - "npx tsc -p tsconfig.test.json --noEmit"
+    stop_if:
+      - "Canonical, Anchor, Candidate, and receipt writes cannot share one SQLite transaction."
+      - "The service would require renderer/provider imports."
+      - "A required file falls outside allowed_files."
+    receipt:
+      result: done
+      changed_files:
+        - "src/desktop/canon/local-canon-runtime.ts"
+        - "src/desktop/local-workspace-runtime.ts"
+        - "src/desktop/local-workspace-runtime.test.ts"
+        - "src/application/canon/canon-review-model-output.ts"
+        - "src/desktop/bootstrap.ts"
+        - "src/platform/storage/node-sqlite-ledger.canon.test.ts"
+      commands:
+        - cmd: "npm run test:run -- <local runtime, migration, canon ledger, application canon>"
+          status: pass
+          result: "6 files, 112 tests"
+        - cmd: "npm run typecheck"
+          status: pass
+        - cmd: "npx eslint <T006 files>"
+          status: pass
+        - cmd: "npm run architecture:check"
+          status: pass
+        - cmd: "git diff --check -- <T006 files>"
+          status: pass
+      summary: "LocalCanonService now owns prepare/execute/record, normalized reads, item edits, target resolution, decisions, exact source/target guards, duplicate defense, Anchor creation, and one-transaction canonical/evidence/history/Candidate/receipt approval. Schema 18 is activated in the local migration chain and runtime methods are serialized around durable saves."
+      evidence:
+        - "Character update, relation create, Lore create, edited field approval, and full reopen"
+        - "no-change, deselection noop, rejection, inference block, unresolved resolution, duplicate create"
+        - "target stale, source stale, connector-concurrent source stale"
+        - "forced decision-receipt conflict rolls canonical and Candidate writes back together"
+      spawned_tasks:
+        - T007
+  - id: T007
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: high
+    objective: "Wire an independently authored canon review structured connector plus typed bridge, preload, authenticated IPC, runtime picker, and configured-runtime fallback."
+    inputs:
+      - "T004 contracts"
+      - "T006 local service API"
+    constraints:
+      - "No reference prompt text or fixed provider/model/endpoint."
+      - "Do not expose token, DB, file path, full prompt, or full model response to renderer."
+    expected_output:
+      - "Connector adapter"
+      - "Typed canon bridge"
+      - "Preload and IPC wiring"
+      - "Focused bridge/platform tests"
+    allowed_files:
+      - "src/platform/assistant/node-chatgpt-codex.ts"
+      - "src/platform/assistant/node-chatgpt-codex.test.ts"
+      - "src/application/contracts/bridge/canon-bridge.ts"
+      - "src/application/contracts/bridge/canon-bridge.test.ts"
+      - "src/application/contracts/studio-bridge-core.ts"
+      - "src/application/contracts/studio-bridge.test.ts"
+      - "src/preload/bridge/create-canon-bridge.ts"
+      - "src/preload/studio-preload.ts"
+      - "src/desktop/ipc/register-canon-ipc.ts"
+      - "src/desktop/ipc/register-studio-ipc.ts"
+      - "src/desktop/runtime/canon-runtime.ts"
+      - "src/desktop/runtime/create-application-runtimes.ts"
+      - "src/desktop/bootstrap.ts"
+    verify:
+      - "npm run test:run -- src/platform/assistant/node-chatgpt-codex.test.ts src/application/contracts/studio-bridge.test.ts"
+      - "npm run architecture:check"
+      - "npm run typecheck"
+    stop_if:
+      - "Connector would transmit data outside the approved exact selection and locally matched identifiers."
+      - "A channel is duplicated or lacks sender authorization."
+      - "A required file falls outside allowed_files."
+    receipt:
+      result: done
+      changed_files:
+        - "src/platform/assistant/node-chatgpt-codex.ts"
+        - "src/platform/assistant/node-chatgpt-codex.test.ts"
+        - "src/application/contracts/bridge/canon-bridge.ts"
+        - "src/application/contracts/bridge/canon-bridge.test.ts"
+        - "src/application/contracts/studio-bridge-core.ts"
+        - "src/application/contracts/studio-bridge.test.ts"
+        - "src/preload/bridge/create-canon-bridge.ts"
+        - "src/preload/studio-preload.ts"
+        - "src/desktop/ipc/register-canon-ipc.ts"
+        - "src/desktop/ipc/register-studio-ipc.ts"
+        - "src/desktop/runtime/canon-runtime.ts"
+        - "src/desktop/runtime/create-application-runtimes.ts"
+        - "src/desktop/bootstrap.ts"
+      commands:
+        - cmd: "npm run test:run -- <node ChatGPT, canon bridge, studio bridge>"
+          status: pass
+          result: "3 files, 74 tests"
+        - cmd: "npm run typecheck"
+          status: pass
+        - cmd: "npx eslint <T007 files>"
+          status: pass
+        - cmd: "npm run architecture:check"
+          status: pass
+        - cmd: "git diff --check -- <T007 files>"
+          status: pass
+      summary: "An independently authored structured canon prompt/schema sends only requested kinds, exact paragraph text, and locally matched character identifiers; wire fields are normalized and strict-parsed in main. Five typed channels now traverse StudioBridge, preload whitelist, authenticated IPC, runtime picker, and production OAuth connector wiring."
+      spawned_tasks:
+        - T008
+  - id: T008
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: medium
+    objective: "Implement the Work-scoped canon review renderer controller, authoritative canonical refresh, permission retry, and state tests."
+    inputs:
+      - "T007 StudioBridge canon namespace"
+    constraints:
+      - "No direct global bridge access from leaf TSX."
+      - "No DB/file/model payload parsing in renderer."
+    expected_output:
+      - "Canon client/controller"
+      - "Work isolation and authoritative refresh"
+      - "Focused controller tests"
+    allowed_files:
+      - "src/renderer/features/canon/"
+      - "src/renderer/features/characters/useCharactersController.ts"
+      - "src/renderer/features/characters/useCharactersController.test.ts"
+      - "src/renderer/features/characters/characters-client.ts"
+      - "src/renderer/features/lore/useLoreController.ts"
+      - "src/renderer/features/lore/useLoreController.test.ts"
+      - "src/renderer/features/lore/lore-client.ts"
+      - "src/renderer/workspace/useWorkspaceCoreFeatureKernel.ts"
+    verify:
+      - "npm run test:run -- src/renderer/features/canon src/renderer/features/characters/useCharactersController.test.ts src/renderer/features/lore/useLoreController.test.ts"
+      - "npx tsc -p tsconfig.renderer.json --noEmit"
+    stop_if:
+      - "Canonical screens cannot refresh without exposing raw setters."
+      - "A required file falls outside allowed_files."
+    receipt:
+      result: done
+      changed_files:
+        - "src/renderer/features/canon/canon-client.ts"
+        - "src/renderer/features/canon/canon-client.test.ts"
+        - "src/renderer/features/canon/canon-state.ts"
+        - "src/renderer/features/canon/canon-state.test.ts"
+        - "src/renderer/features/canon/useCanonReviewController.ts"
+        - "src/renderer/features/characters/characters-client.ts"
+        - "src/renderer/features/characters/useCharactersController.ts"
+        - "src/renderer/features/characters/useCharactersController.test.ts"
+        - "src/renderer/features/lore/lore-client.ts"
+        - "src/renderer/features/lore/useLoreController.ts"
+        - "src/renderer/features/lore/useLoreController.test.ts"
+        - "src/renderer/workspace/useWorkspaceCoreFeatureKernel.ts"
+      commands:
+        - cmd: "npm run test:run -- src/renderer/features/canon src/renderer/features/characters/useCharactersController.test.ts src/renderer/features/lore/useLoreController.test.ts"
+          status: pass
+          result: "4 files, 26 tests"
+        - cmd: "npx tsc -p tsconfig.renderer.json --noEmit"
+          status: pass
+        - cmd: "npx eslint <T008 files>"
+          status: pass
+        - cmd: "npm run architecture:check"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      summary: "The Work-scoped renderer now loads and isolates canon Candidates, retries the identical exact-selection request after a one-use canon.review grant, replaces returned Candidate revisions for every decision path, and refreshes Character, relation, and Lore projections through public controller ports after canonical decisions."
+      spawned_tasks:
+        - T009
+  - id: T009
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: medium
+    objective: "Add the Canon work section and accessible 3-column canonical browser/review/evidence workspace using current theme tokens."
+    inputs:
+      - "T008 controller"
+      - "Current work navigation and WorkspaceView"
+    constraints:
+      - "Keep manuscript mounted."
+      - "Use current IA and theme tokens."
+      - "Do not implement Gate 2 continuity, Gate 3 knowledge, or Gate 5 digest."
+    expected_output:
+      - "CanonWorkspace"
+      - "Canonical browser and field/evidence review UI"
+      - "Navigation and render tests"
+    allowed_files:
+      - "src/renderer/canon/"
+      - "src/renderer/navigation/studio-location.ts"
+      - "src/renderer/navigation/WorkPrimaryNavigation.tsx"
+      - "src/renderer/navigation/WorkPrimaryNavigation.test.ts"
+      - "src/renderer/workspace/navigation/useWorkspaceNavigationController.ts"
+      - "src/renderer/workspace/WorkspaceView.tsx"
+      - "src/renderer/workspace/header/WorkspaceHeaderRecoveryHost.tsx"
+      - "src/renderer/styles/canon-workspace.css"
+      - "src/renderer/main.tsx"
+      - "src/renderer/shell/studio-app-shell-layout.test.ts"
+    verify:
+      - "npm run test:run -- src/renderer/canon src/renderer/navigation/WorkPrimaryNavigation.test.ts src/renderer/shell/studio-app-shell-layout.test.ts"
+      - "npx tsc -p tsconfig.renderer.json --noEmit"
+    stop_if:
+      - "The workspace would destroy/remount the manuscript editor."
+      - "The layout cannot fit 1280x800 without a product-level design change."
+      - "A required file falls outside allowed_files."
+    receipt:
+      result: done
+      changed_files:
+        - "src/renderer/canon/CanonWorkspace.tsx"
+        - "src/renderer/canon/CanonWorkspace.test.ts"
+        - "src/renderer/navigation/studio-location.ts"
+        - "src/renderer/navigation/WorkPrimaryNavigation.tsx"
+        - "src/renderer/navigation/WorkPrimaryNavigation.test.ts"
+        - "src/renderer/workspace/navigation/useWorkspaceNavigationController.ts"
+        - "src/renderer/workspace/WorkspaceView.tsx"
+        - "src/renderer/workspace/header/WorkspaceHeaderRecoveryHost.tsx"
+        - "src/renderer/styles/canon-workspace.css"
+        - "src/renderer/main.tsx"
+        - "src/renderer/shell/studio-app-shell-layout.test.ts"
+      commands:
+        - cmd: "npm run test:run -- src/renderer/canon src/renderer/navigation/WorkPrimaryNavigation.test.ts src/renderer/shell/studio-app-shell-layout.test.ts"
+          status: pass
+          result: "3 files, 8 tests"
+        - cmd: "npx tsc -p tsconfig.renderer.json --noEmit"
+          status: pass
+        - cmd: "npx eslint <T009 files>"
+          status: pass
+        - cmd: "npm run architecture:check"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      summary: "The primary Work navigation now includes Canon. Its canonical browser and Candidate review tabs render authoritative Character, relation, and Lore data with search/filtering, editable selected fields, explicit target resolution, approval/rejection, and exact evidence in a bounded three-column theme-aware surface while the manuscript component remains mounted and hidden."
+      spawned_tasks:
+        - T010
+  - id: T010
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: medium
+    objective: "Connect exact manuscript-selection context-menu execution, permission retry, Candidate workspace transition, and exact evidence DocumentNavigator navigation."
+    inputs:
+      - "T008 controller"
+      - "T009 workspace"
+    constraints:
+      - "Persist selection source before command."
+      - "Block during IME composition."
+      - "Never widen the selected range."
+    expected_output:
+      - "Context menu entry"
+      - "Exact current revision execution"
+      - "Exact evidence navigation"
+      - "Focused editor/navigation tests"
+    allowed_files:
+      - "src/renderer/editor/ManuscriptContextMenu.tsx"
+      - "src/renderer/editor/ManuscriptEditor.tsx"
+      - "src/renderer/editor/ManuscriptEditor.test.tsx"
+      - "src/renderer/editor/ManuscriptEditor.test.ts"
+      - "src/renderer/workspace/editor/ManuscriptWorkspaceSurface.tsx"
+      - "src/renderer/workspace/editor/useWorkspaceManuscriptActionsController.ts"
+      - "src/renderer/workspace/editor/useWorkspaceManuscriptActionsController.test.ts"
+      - "src/renderer/workspace/useWorkspaceStoryFeatureKernel.ts"
+      - "src/renderer/workspace/navigation/useWorkspaceFeatureNavigationController.ts"
+      - "src/renderer/workspace/navigation/document-navigator.test.ts"
+      - "src/renderer/features/canon/useCanonReviewController.ts"
+      - "src/renderer/App.tsx"
+    verify:
+      - "npm run test:run -- src/renderer/editor src/renderer/workspace/navigation"
+      - "npx tsc -p tsconfig.renderer.json --noEmit"
+    stop_if:
+      - "The command would use a stale or widened selection."
+      - "Evidence navigation cannot enforce exact revision."
+      - "A required file falls outside allowed_files."
+    receipt:
+      result: done
+      changed_files:
+        - "src/renderer/editor/ManuscriptContextMenu.tsx"
+        - "src/renderer/editor/ManuscriptEditor.tsx"
+        - "src/renderer/editor/ManuscriptEditor.test.ts"
+        - "src/renderer/workspace/editor/ManuscriptWorkspaceSurface.tsx"
+        - "src/renderer/workspace/editor/useWorkspaceManuscriptActionsController.ts"
+        - "src/renderer/workspace/editor/useWorkspaceManuscriptActionsController.test.ts"
+        - "src/renderer/workspace/useWorkspaceStoryFeatureKernel.ts"
+        - "src/renderer/workspace/navigation/useWorkspaceFeatureNavigationController.ts"
+        - "src/renderer/workspace/navigation/document-navigator.test.ts"
+        - "src/renderer/features/canon/useCanonReviewController.ts"
+        - "src/renderer/workspace/WorkspaceView.tsx"
+        - "src/renderer/App.tsx"
+      commands:
+        - cmd: "npm run test:run -- src/renderer/editor src/renderer/workspace/navigation src/renderer/workspace/editor/useWorkspaceManuscriptActionsController.test.ts"
+          status: pass
+          result: "36 files, 103 tests"
+        - cmd: "npx tsc -p tsconfig.renderer.json --noEmit"
+          status: pass
+        - cmd: "npx eslint <T010 files>"
+          status: pass
+        - cmd: "npm run architecture:check"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      summary: "The manuscript context menu captures a non-empty exact CodeMirror selection, remains unavailable during IME composition, verifies the exact quote before and after durable persistence, binds the request to the current DocumentRevision, and opens Canon review for Candidate or permission handling. Canon evidence uses DocumentNavigator exact-selection with the recorded revision and restores the Canon review surface on any navigation failure."
+      spawned_tasks:
+        - T011
+  - id: T011
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: high
+    objective: "Add and run Gate 1 migration, production Electron, process-kill, performance, security, and full regression evidence; repair only canon-caused failures."
+    inputs:
+      - "T003 through T010 receipts"
+    constraints:
+      - "Use isolated caller-owned workspace/profile/artifact paths."
+      - "Do not write the live user DB."
+      - "Do not weaken unrelated tests."
+    expected_output:
+      - "Production Electron E2E"
+      - "Process-kill restart consistency"
+      - "Performance JSON"
+    allowed_files:
+      - "tests/e2e/canon-review.spec.ts"
+      - "tests/canon/"
+      - "tests/performance/canon-review-performance.test.ts"
+      - "tests/fixtures/canon-review-performance-profile.json"
+      - "vitest.canon-process.config.ts"
+      - "docs/goals/eum-studio-canon-review-gate-1/artifacts/"
+      - "src/renderer/canon/CanonWorkspace.tsx"
+      - "src/renderer/canon/CanonWorkspace.test.ts"
+      - "src/renderer/workspace/navigation/useWorkspaceFeatureNavigationController.ts"
+      - "src/renderer/workspace/WorkspaceView.tsx"
+      - "src/desktop/bootstrap.ts"
+      - "src/desktop/window-policy.ts"
+      - "src/desktop/window-policy.test.ts"
+      - "package.json"
+      - "README.md"
+      - "plan.md"
+    verify:
+      - "npm run lint"
+      - "npm run typecheck"
+      - "npm run test:run"
+      - "npm run build"
+      - "npm run architecture:check"
+      - "npm run test:e2e -- tests/e2e/canon-review.spec.ts"
+      - "npm run test:process:canon-review"
+      - "npm run performance:canon-review"
+      - "git diff --check"
+    stop_if:
+      - "A live user workspace would be modified."
+      - "A failure requires changing an unrelated product behavior."
+      - "The same failure repeats twice without a new cause."
+    receipt:
+      result: done
+      changed_files:
+        - "tests/e2e/canon-review.spec.ts"
+        - "tests/canon/canon-review-process.test.ts"
+        - "tests/performance/canon-review-performance.test.ts"
+        - "tests/fixtures/canon-review-performance-profile.json"
+        - "vitest.canon-process.config.ts"
+        - "docs/goals/eum-studio-canon-review-gate-1/artifacts/canon-review-process-kill.json"
+        - "docs/goals/eum-studio-canon-review-gate-1/artifacts/canon-review-performance.json"
+        - "src/renderer/canon/CanonWorkspace.tsx"
+        - "src/renderer/canon/CanonWorkspace.test.ts"
+        - "src/desktop/bootstrap.ts"
+        - "src/desktop/window-policy.ts"
+        - "src/desktop/window-policy.test.ts"
+        - "package.json"
+        - "README.md"
+        - "plan.md"
+      commands:
+        - cmd: "npm run lint"
+          status: pass
+        - cmd: "npm run typecheck"
+          status: pass
+        - cmd: "npm run test:run -- src/desktop/local-workspace-runtime.test.ts src/desktop/local-workspace-canon-migration.test.ts src/platform/storage/node-sqlite-ledger.canon.test.ts"
+          status: pass
+          result: "3 files, 96 tests"
+        - cmd: "npm run test:run"
+          status: preexisting_failure
+          result: "267 files pass, 1 file fails; 1033 tests pass, 1 skipped, 1 pre-existing RuntimeBootstrapController AST expectation fails"
+        - cmd: "npm run build"
+          status: pass
+        - cmd: "npm run architecture:check"
+          status: pass
+        - cmd: "npm run test:e2e -- tests/e2e/canon-review.spec.ts"
+          status: pass
+          result: "1 production Electron test"
+        - cmd: "npm run test:process:canon-review"
+          status: pass
+          result: "1 actual-process-kill test; rollback and committed reopen states verified"
+        - cmd: "npm run performance:canon-review"
+          status: pass
+          result: "1 measurement harness; DB growth 1228800 bytes, search p95 0.446 ms, 1000-candidate projection p95 147.116 ms, planner p95 9.116 ms"
+          status: pass
+          result: "1248 files, 3 patterns, 0 violations"
+        - cmd: "git diff --check"
+          status: pass
+      spawned_tasks:
+        - T999
+  - id: T999
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "Audit Gate 0 and Gate 1 against the supplied design, current source, fresh verification, artifacts, and dirty diff."
+    inputs:
+      - "All done receipts"
+      - "Fresh verification and generated artifacts"
+      - "Current source and dirty diff"
+    constraints:
+      - "Do not implement."
+      - "Reject completion if any required Gate 0 or Gate 1 Worker work remains queued or active."
+      - "PM fallback performs this Judge task without spawning a subagent."
+    expected_output:
+      - "complete | not_complete"
+      - "full_outcome_complete: true | false"
+      - "acceptance criteria mapping"
+      - "missing evidence"
+      - "next task if not complete"
+    receipt:
+      result: not_complete
+      full_outcome_complete: false
+      acceptance_mapping:
+        gate_0: pass
+        candidate_write_boundary: pass
+        work_and_revision_guards: pass
+        field_review_and_partial_approval: pass
+        restart_and_transaction_evidence: pass
+        security_and_privacy: pass
+        canonical_detail_exact_evidence: partial
+      missing_evidence:
+        - "Approved CharacterRelation Candidate evidence remains durable and openable in Candidate review, but CanonWorkspace maps relation canonical records to an empty evidence list, so the exact evidence is not openable from the relation canonical detail required by section 27."
+      next_task: T012
+      summary: "Gate 0 and all other Gate 1 boundaries map to current source and fresh evidence, but final completion is rejected until approved relation evidence is projected into canonical detail without creating a second canonical source."
+      spawned_tasks:
+        - T012
+  - id: T012
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: medium
+    objective: "Project durable approved CharacterRelation Candidate evidence into the relation canonical detail and prove that it opens the exact recorded revision and range."
+    inputs:
+      - "T999 not-complete receipt"
+      - "Section 27 canonical-detail exact-evidence requirement"
+      - "Existing approved Candidate evidence and appliedTargetId"
+    constraints:
+      - "Do not add a second CharacterRelation canonical source or duplicate evidence table."
+      - "Use only completed approved Candidate items bound to the exact applied relation target."
+      - "Preserve Work isolation and exact DocumentRevision navigation."
+    expected_output:
+      - "Relation canonical detail lists approved exact evidence"
+      - "Evidence uses the existing CanonReviewEvidence anchor-backed record"
+      - "Focused regression and production Electron evidence"
+    allowed_files:
+      - "src/renderer/canon/CanonWorkspace.tsx"
+      - "src/renderer/canon/CanonWorkspace.test.ts"
+      - "tests/e2e/canon-review.spec.ts"
+      - "plan.md"
+      - "README.md"
+    verify:
+      - "npm run test:run -- src/renderer/canon/CanonWorkspace.test.ts"
+      - "npm run typecheck"
+      - "npm run lint"
+      - "npm run test:e2e -- tests/e2e/canon-review.spec.ts"
+      - "npm run architecture:check"
+      - "git diff --check"
+    stop_if:
+      - "The projection would use a non-approved item or another Work."
+      - "The fix would require changing canonical relation ownership."
+    receipt:
+      result: done
+      changed_files:
+        - "src/renderer/canon/CanonWorkspace.tsx"
+        - "src/renderer/canon/CanonWorkspace.test.ts"
+        - "tests/e2e/canon-review.spec.ts"
+      commands:
+        - cmd: "npm run test:run -- src/renderer/canon/CanonWorkspace.test.ts"
+          status: pass
+          result: "1 file, 3 tests"
+        - cmd: "npm run test:e2e -- tests/e2e/canon-review.spec.ts"
+          status: pass
+          result: "1 production Electron test; approved relation evidence reopened and selected its exact revision range after restart"
+        - cmd: "npm run lint"
+          status: pass
+        - cmd: "npm run typecheck"
+          status: pass
+        - cmd: "npm run architecture:check"
+          status: pass
+          status: pass
+          result: "1248 files, 3 patterns, 0 violations"
+      summary: "CanonWorkspace now derives relation-detail evidence only from same-Work approved items whose appliedTargetId matches the relation and whose durable CanonReviewEvidence has an Anchor. The focused renderer test and a three-launch production Electron flow prove the relation detail opens the exact recorded DocumentRevision range without adding another canonical source or evidence table."
+      spawned_tasks:
+        - T013
+  - id: T013
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "Re-audit Gate 0 and Gate 1 after the relation canonical-evidence repair."
+    inputs:
+      - "T012 receipt"
+      - "All earlier receipts and fresh artifacts"
+    constraints:
+      - "Do not implement."
+      - "Require full_outcome_complete true before goal completion."
+      - "PM fallback performs this Judge task without spawning a subagent."
+    expected_output:
+      - "complete | not_complete"
+      - "full_outcome_complete: true | false"
+      - "final acceptance mapping"
+    receipt:
+      result: complete
+      full_outcome_complete: true
+      acceptance_mapping:
+        character_relation_lore_create_update: pass
+        exact_selection_and_evidence: pass
+        strict_model_parse_noop_and_duplicate_filter: pass
+        field_diff_edit_partial_approval_and_rejection: pass
+        work_source_target_revision_guards: pass
+        single_transaction_canonical_anchor_candidate_receipt: pass
+        canonical_detail_evidence_and_exact_navigation: pass
+        typed_main_preload_renderer_boundaries: pass
+        security_and_privacy: pass
+        restart_process_kill_and_performance_artifacts: pass
+        production_electron: pass
+      missing_evidence: []
+      residual_evidence:
+        - "The performance artifact explicitly leaves renderer commit count unmeasured in the storage/application harness; production Electron separately proves the bounded 1280x800 UI and exact interaction path."
+      final_source_review:
+        - "Character, CharacterRelation, and LoreEntry remain the only canonical ledgers; approved relation evidence is projected from the existing anchor-backed approved Candidate rather than duplicated."
+        - "The exact supplied design still matches 53225 bytes, 1688 lines, and SHA-256 343577C44367C4E38A61913822A13400B5DAA028BE2EA76123F7BBF6A31F3FC5; all 11 baseline manifest documents match."
+        - "All Worker tasks are done, no required task is queued, no Electron process remains, and generated temporary E2E directories were removed."
+      summary: "The re-audit maps every Gate 0 and Gate 1 approval criterion to current production source and fresh evidence. The relation-detail evidence gap found by T999 is repaired and verified through a complete Electron restart, so the original scoped outcome is complete without implementing Gates 2 through 8."
+
+checks:
+  dirty_fingerprint: "sha256:5A58A320DD4F7714873A5EA8B3DAC3468D0503041286FA4771012663688A212E; entries:122; branch:codex/complete-studio-workflows; head:8f40406a29ebdeb5c1cc0726934ddff771d752c3"
+  baseline_manifest:
+    result: pass
+    matched: 11
+    total: 11
+  supplied_design:
+    path: "C:\\Users\\limoj\\OneDrive\\바탕 화면\\eum-studio-canon-continuity-independent-design.md"
+    sha256: "343577C44367C4E38A61913822A13400B5DAA028BE2EA76123F7BBF6A31F3FC5"
+    line_count: 1688
+  last_verification:
+    result: pass_with_preexisting_unrelated_failure
+    task: T013
+    commands:
+      - "npm run lint"
+      - "npm run typecheck"
+      - "npm run test:run"
+      - "npm run build"
+      - "npm run architecture:check"
+      - "npm run test:e2e -- tests/e2e/canon-review.spec.ts"
+      - "npm run test:process:canon-review"
+      - "npm run performance:canon-review"
+      - "git diff --check"

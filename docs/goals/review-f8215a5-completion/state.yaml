@@ -1,0 +1,253 @@
+# Based on the GoalBuddy v2 template. PM owns this board.
+version: 2
+goal:
+  title: "Complete the f8215a5 review findings"
+  slug: review-f8215a5-completion
+  kind: existing_plan
+  tranche: "Complete all eight review findings through verified implementation"
+  status: done
+  oracle:
+    signal: "Production-path regressions, full check, Electron core E2E, isolated package and archive hashes"
+    cadence: "After each work package and final audit"
+    final_proof: "All eight acceptance criteria mapped to fresh commands and source fingerprints"
+  intake:
+    original_request: "목표잡고 끝까지 진행"
+    interpreted_outcome: "Implement and verify all eight review findings while preserving manuscript integrity"
+    input_shape: existing_plan
+    audience: "Eum Studio user"
+    authority: requested
+    proof_type: test
+    completion_proof: "Fresh regression and packaged execution evidence for the actual production paths"
+    likely_misfire: "Helper-only tests, disguised incomplete backups, or moving the monolith without reducing responsibilities"
+    blind_spots_considered:
+      - "Windows file locks and rollback semantics"
+      - "Legacy backup compatibility and orphan media preservation"
+      - "Cancelled HTTP requests must not publish late state"
+      - "Recovery archives must survive source separation byte for byte"
+    existing_plan_facts:
+      - "Review baseline f8215a5 and user priority order preserved"
+      - "No commits, pushes, live user-data changes or installed app replacement"
+rules:
+  pm_owns_state: true
+  one_active_task: true
+  max_write_workers: 1
+  no_implementation_without_worker_or_pm_task: true
+  no_completion_without_judge_or_pm_audit: true
+  planning_is_not_completion: true
+  queued_required_worker_blocks_completion: true
+  continuous_until_full_outcome: true
+  missing_input_or_credentials_do_not_stop_goal: true
+  exact_human_approval_can_terminal_wait: true
+  preserve_and_validate_existing_plan: true
+  intake_misfire_must_be_audited: true
+  goal_pressure_requires_oracle: true
+  no_completion_on_weak_proof: true
+  slice_policy:
+    max_consecutive_tiny_tasks: 2
+    prefer_vertical_slices: true
+    judge_picks_largest_safe_slice: true
+    worker_completes_whole_slice: true
+agents:
+  scout: installed
+  worker: installed
+  judge: bundled_not_installed
+visual_board:
+  selected: local
+  local:
+    status: live
+    url: "http://goalbuddy.localhost:41737/review-f8215a5-completion/"
+    command: "node C:/Users/limoj/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/review-f8215a5-completion"
+active_task: null
+tasks:
+  - id: T001
+    type: pm
+    assignee: PM
+    status: done
+    objective: "Validate current source and implement TXT preservation and selected-only materialization with regression evidence"
+    inputs: ["User review", "README.md", "plan.md", "docs/design-baseline.md"]
+    allowed_files: ["src/platform/export/**", "src/application/editor/manuscript-bulk-export*", "src/renderer/features/editor-tools/**", "tests/e2e/manuscript-bulk-export.spec.ts", "docs/goals/review-f8215a5-completion/**"]
+    verify: ["Targeted Vitest", "Typecheck", "Production Electron export flows"]
+    receipt:
+      result: done
+      harness: codex
+      summary: "Exact reviewed HEAD verified; 12 approved design checksums match. TXT uses exclusive sibling staging, sync and byte readback then rename. Controller validates all metadata before reading selected episodes only. Initial production regressions reproduced 6 failures; all pass after implementation."
+      changed_files: ["src/platform/export/node-manuscript-text-export.ts", "src/platform/export/node-manuscript-text-export.test.ts", "src/application/editor/manuscript-bulk-export.ts", "src/renderer/features/editor-tools/useEditorToolsController.ts", "src/renderer/features/editor-tools/useEditorToolsController.test.ts"]
+      commands:
+        - cmd: "npx vitest run src/platform/export/node-manuscript-text-export.test.ts src/application/editor/manuscript-bulk-export.test.ts src/renderer/features/editor-tools/useEditorToolsController.test.ts"
+          status: pass
+        - cmd: "Targeted ESLint (5 changed source/test files)"
+          status: pass
+        - cmd: "npm run build (includes all TypeScript projects)"
+          status: pass
+        - cmd: "npx playwright test tests/e2e/manuscript-activity.spec.ts --grep 'exports selected|preflights an exact|downloads selected'"
+          status: pass
+      evidence: ["11 focused tests; native Windows sharing lock included", "2 production Electron flows passed in 53.8s"]
+  - id: T002
+    type: pm
+    assignee: PM
+    status: done
+    objective: "Implement explicit media-excluded backup and empty-target restore through contracts, service, bridge and UI"
+    receipt:
+      result: done
+      harness: codex
+      summary: "Explicit manuscript-only mode travels from scope selector through typed/authorized IPC to the backup service. A distinct config-owned core manifest identity excludes media without suppressing complete-backup validation; restore identifies mode and preserves the SQLite/revision data. Legacy formats remain supported."
+      changed_files: ["config/local-workspace-backup.json", "src/application/storage/local-workspace-backup-contract.ts", "src/application/storage/local-workspace-backup-profile.ts", "src/application/contracts/bridge/backup-bridge.ts", "src/desktop/local-workspace-backup-service.ts", "src/desktop/local-workspace-runtime.ts", "src/desktop/bootstrap.ts", "src/desktop/ipc/register-backup-ipc.ts", "src/desktop/ipc/register-studio-ipc.ts", "src/preload/bridge/create-backup-bridge.ts", "src/renderer/features/backup/useBackupMigrationController.ts", "src/renderer/shell/StudioShellDialogs.tsx", "src/renderer/StudioShell.tsx", "tests/e2e/local-media-backup.spec.ts"]
+      commands:
+        - cmd: "Focused backup Vitest: 5 files, 10 passed (other tests excluded by name filter)"
+          status: pass
+        - cmd: "Changed TypeScript and E2E ESLint"
+          status: pass
+        - cmd: "npm run build"
+          status: pass
+        - cmd: "npx playwright test tests/e2e/local-media-backup.spec.ts"
+          status: pass
+      evidence: ["External mutation, managed mutation and managed missing file: complete refused, manuscript-only created/restored", "2 production Electron flows passed in 58.9s: explicit excluded-mode UI with failed full backup and reopened manuscript; existing managed/external full restore/relink"]
+  - id: T003
+    type: pm
+    assignee: PM
+    status: done
+    objective: "Isolate automatic analysis generations and wire HTTP timeouts, cancellation and response limits end to end"
+    receipt:
+      result: done
+      harness: codex
+      summary: "Work/generation/request checks isolate automatic analysis state and queued work. Manifest-owned HTTP deadlines and byte limits, monotonic completion checks, authorized cancellation before queueing, transport abort, safe typed failures and post-await candidate guards are connected through the actual preload and UI. Root fixed a missing preload allowlist entry discovered by Electron, and malformed operation payload translation. Existing access audit receipts remain valid; cancelled late responses produce no new connector-success or candidate records."
+      changed_files: ["src/renderer/features/analysis/useAutomaticSceneAnalysisController.ts", "src/renderer/features/analysis/automatic-scene-analysis.ts", "src/application/assistant/assistant-request-lifecycle.ts", "src/application/assistant/assistant-connector-manifest.ts", "src/platform/assistant/structured-json-http-connector.ts", "src/desktop/local-workspace-runtime.ts", "src/desktop/bootstrap.ts", "src/desktop/ipc/register-assistant-ipc.ts", "src/desktop/runtime/assistant-runtime.ts", "src/preload/studio-preload.ts", "src/application/contracts/bridge/assistant-bridge.ts", "src/application/contracts/studio-bridge-core.ts", "src/renderer/features/assistant/useAssistantWorkspaceController.ts", "src/renderer/features/assistant/AssistantDialogHost.tsx", "src/renderer/assistant/AssistantContextDialog.tsx", "config/assistant-connectors.json", ".gitignore", "eslint.config.mjs"]
+      commands:
+        - cmd: "Automatic analysis focused Vitest: 2 files, 10 passed"
+          status: pass
+        - cmd: "HTTP/executor/runtime/IPC/controller focused Vitest: 7 files, 18 passed"
+          status: pass
+        - cmd: "npm run check: lint, four TypeScript projects, 346 files/1251 passed/1 pre-existing skip, production build"
+          status: pass
+        - cmd: "npx playwright test tests/e2e/automatic-scene-analysis-lifecycle.spec.ts tests/e2e/automatic-scene-analysis.spec.ts"
+          status: pass
+        - cmd: "npx playwright test tests/e2e/structured-http-assistant.spec.ts --output=artifacts/http-lifecycle-e2e"
+          status: pass
+        - cmd: "npm run architecture:check; changed E2E ESLint; git diff --check"
+          status: pass
+      evidence: ["Automatic Electron 3 passed in 1.2m", "HTTP Electron 1 passed in 51.7s with cancellation, timeout, oversized/invalid/server errors, successful explicit retry and restart", "HTTP policy: 120000ms and 4194304 bytes in runtime manifest; test policy is separate", "Generated GoalBuddy browser assets excluded from source lint; no product lint rule weakened"]
+  - id: T004
+    type: pm
+    assignee: PM
+    status: done
+    inputs: ["notes/T004-runtime-service-map.md", "notes/T004-method-groups.md", "Current verified source and T003 receipts"]
+    allowed_files: ["src/desktop/local-workspace-runtime.ts", "src/desktop/workspace-runtime/**", "src/desktop/bootstrap.ts", "src/desktop/runtime/**", "src/desktop/ipc/**", "scripts/architecture-report.mjs", "scripts/check-architecture-boundaries.mjs", "tests/unit/**", "src/desktop/**/*.test.ts", "docs/goals/review-f8215a5-completion/**"]
+    objective: "Extract transaction-owned runtime services and enforce real runtime and IPC boundaries"
+    receipt:
+      result: done
+      harness: codex
+      summary: "All 545 methods moved into 24 invoked services with one state owner and three operation lanes. Facade is 1145 bytes; bootstrap reduced to 78376 bytes through typed profile/configured-runtime factories and a close-request IPC adapter. Architecture inventory covers all production source and service dependencies. Real SQL bodies, prepare calls and transaction boundary strings match the preserved source."
+      evidence: ["651 production files; 168 desktop files; 51 workspace runtime modules", "545 methods preserved; 293 prepare calls; 99 transaction boundaries; 271 SQL literals match", "24 services; largest assistant 151291 bytes and publishing 108062 bytes; zero dependency cycles", "40-character typing p50 6.38ms, p95 11.44ms, max 17.92ms in isolated Electron", "Source provenance ENOBUFS on actual large diff resolved by streaming its checksum; 3 regression tests pass"]
+      commands:
+        - cmd: "npm run check: 349 files, 1263 passed, 1 existing skip, all type/lint/build checks pass"
+          status: pass
+        - cmd: "Runtime/coordinator/assistant/continuity focused suites: 5 coordinator and 128 runtime tests"
+          status: pass
+        - cmd: "Architecture and configured factory focused tests: 7 passed"
+          status: pass
+        - cmd: "npm run architecture:check: 651 production files; no violations"
+          status: pass
+        - cmd: "Runtime refactor Electron scenarios: 9 passed, then original default-profile collision corrected and isolated durable receipt rerun passed"
+          status: pass
+        - cmd: "npx playwright test tests/e2e/persistence-editor.spec.ts --grep 'returns a durable receipt' --output=artifacts/runtime-refactor-isolated-save"
+          status: pass
+        - cmd: "npx vitest run tests/evidence/git-source-provenance.test.ts; test TypeScript and changed ESLint"
+          status: pass
+  - id: T005
+    type: pm
+    assignee: PM
+    status: done
+    allowed_files: ["package.json", ".github/**", "scripts/**", "tests/unit/**", "tests/evidence/**", "tests/e2e/support/**", "playwright.core.config.ts", "recovery/**", ".gitignore", "README.md", "plan.md", "docs/**"]
+    objective: "Bind mandatory checks and core E2E to source evidence; preserve recovery originals outside source"
+    receipt:
+      result: done
+      harness: codex
+      summary: "Mandatory architecture and exact eight core Electron scenarios are bound to real stage commands, source commit/current file fingerprint, edit/revert detection and logs. Separate heavy verification uses caller process deadline and a unique isolated Windows candidate. Official Actions are pinned with read-only credentials. Recovery scripts are parameterized and independently exercised with synthetic PowerShell files; all 17 original archive copies match sealed hashes and restricted ACL. All 13 raw data paths are untracked and ignored; 12 protected local originals and one separately preserved variant remain without deletion/history rewrite."
+      changed_files: ["package.json", "scripts/run-verification.mjs", "scripts/verification-source.mjs", "playwright.core.config.ts", ".github/workflows/required-core.yml", ".github/workflows/heavy-verification.yml", "tests/unit/verification-runner.test.ts", "tests/unit/recovery-scripts.test.ts", "recovery/.gitignore", "recovery/*.ps1", "recovery/README.md", "README.md", "plan.md", "docs/verification.md", "docs/workspace-runtime-structure.md", "docs/poc-3-storage-decisions.md"]
+      commands:
+        - cmd: "npm run test:run -- tests/unit/recovery-scripts.test.ts tests/unit/verification-runner.test.ts"
+          status: pass
+        - cmd: "Scoped ESLint, test TypeScript, PowerShell parser (5 scripts), git diff --check"
+          status: pass
+        - cmd: "Archive SHA256 and current-user/SYSTEM ACL readback; git ls-files/check-ignore of 13 data paths"
+          status: pass
+      evidence: ["19 runner and real PowerShell regressions passed", "4 recovery path/time defects reproduced then fixed", "17 original archive files, 1105362438 bytes, all checksums match", "recovery-archive-receipt.json and notes/T005-recovery-preservation.md preserve exact separation limitations", "No GitHub execution or branch protection change claimed"]
+  - id: T006
+    type: pm
+    assignee: PM
+    status: done
+    objective: "Resolve actual Windows source-watch metadata false positives without weakening real code edit/revert detection"
+    allowed_files: ["scripts/verification-source.mjs", "tests/unit/verification-runner.test.ts", "docs/verification.md", "docs/goals/review-f8215a5-completion/**"]
+    receipt:
+      result: done
+      harness: codex
+      summary: "Actual NTFS reproduction proved atime-only changes emit fs.watch change and alter ctime while bytes/size/mtimeNs/dev/ino stay fixed. Event qualification now checks bigint file version and SHA256, records ignored metadata, and retains create/delete/rename/edit-revert detection plus final full file fingerprint. Directory metadata is distinguished from identity/rename changes."
+      changed_files: ["scripts/verification-source.mjs", "tests/unit/verification-runner.test.ts", "docs/verification.md"]
+      commands:
+        - cmd: "Fresh verification-runner Vitest: 19 passed in 37.32s"
+          status: pass
+        - cmd: "Targeted ESLint, test TypeScript, git diff --check"
+          status: pass
+      evidence: ["Initial core report 2026-09-04T23-38-48-761Z-55a6e87c-91d1-4396-9c38-e2ca482b4e34 retained as failed", "Read/atime/attributes and directory metadata accepted; real creation/deletion/rename, directory rename-back, same-byte replacement and preserved-mtime content edit rejected", "Existing edit-revert check retained; no source code changed during initial core"]
+  - id: T007
+    type: pm
+    assignee: PM
+    status: done
+    objective: "Make verification source observation robust under real build output and validate actual Electron workflows"
+    allowed_files: ["scripts/verification-source.mjs", "scripts/run-verification.mjs", "tests/unit/verification-runner.test.ts", "docs/verification.md", "docs/workspace-runtime-structure.md", "tests/e2e/**", "src/renderer/styles/document-rail-compat.css", ".tmp/review-*", "docs/goals/review-f8215a5-completion/**"]
+    receipt:
+      result: done
+      harness: codex
+      summary: "Root nonrecursive plus 11 source-subtree watches exclude build/package/dependency traffic without blocking Windows directory rename. Filename-less events trigger awaited full metadata/hash/directory/Git inventory reconciliation. Existing eight Electron flows exposed an obsolete event-open selector and a real compact timer overlay; selectors now target the open action and unmoved compact timers reuse the status-row layout when review is open."
+      changed_files: ["scripts/verification-source.mjs", "scripts/run-verification.mjs", "tests/unit/verification-runner.test.ts", "docs/verification.md", "tests/e2e/manuscript-activity.spec.ts", "src/renderer/styles/document-rail-compat.css", "docs/workspace-runtime-structure.md"]
+      commands:
+        - cmd: "Fresh verification-runner Vitest: 26 passed in 50.63s; generated 1536-file traffic and six native pathless-event scenarios included"
+          status: pass
+        - cmd: "Actual repository watcher read-only smoke: 1235 code files, unchanged fingerprint, no changed paths/error; 12 subscriptions"
+          status: pass
+        - cmd: "Targeted ESLint, test TypeScript, production renderer build"
+          status: pass
+        - cmd: "Direct core Electron: seven passed; first-Work exact flow passed after selector/layout correction in 1.5m"
+          status: pass
+        - cmd: "Isolated Electron screenshot/hit-test and real mouse drag: scene action unoccluded, user-moved position retained and scene added"
+          status: pass
+      evidence: ["notes/T007-integration-progress.md", "artifacts/review-f8215a5/first-work-reopen-layout-fixed", "artifacts/review-f8215a5/ui-layout-probe.png", "artifacts/review-f8215a5/ui-layout-moved.json", "Original failed core reports and UI traces retained"]
+  - id: T999
+    type: pm
+    assignee: PM
+    status: done
+    objective: "Audit all eight outcomes against current source, full checks, production E2E, isolated Windows package and artifact hashes"
+    expected_output: ["full_outcome_complete: true or false", "Fresh evidence for every acceptance criterion"]
+    receipt:
+      result: done
+      harness: codex
+      full_outcome_complete: true
+      decision: complete
+      summary: "PM audited all eight outcomes against actual production paths, current source, preserved SQL/queue contracts, negative regressions, a complete required core run, actual process failure recovery, a separately built Windows candidate, all eight packaged core flows and four packaged asynchronous/HTTP flows. Core/heavy/final source fingerprints match. Archive originals and the running default install are preserved; local cache/history/variant limitations are explicitly recorded."
+      evidence:
+        - "notes/final-audit.md"
+        - "Code SHA256 efbb9772ed6b1cc9ef1983309f69999c3f2ad18f8a1232b7d60eb7283e8f69a4 over 1235 current code files; base HEAD f8215a5 remains uncommitted"
+        - "Core report: artifacts/verification/2026-09-05T00-20-03-041Z-a03098d3-7b6f-48fe-9965-1937a9c55b49/verification.json"
+        - "Heavy report: artifacts/verification/2026-09-05T00-27-07-293Z-3ae7a525-af2d-49d9-89fe-f7a1fc86b97d/verification.json"
+        - "Final evidence/log hash index: artifacts/review-f8215a5/final-verification-index.json"
+        - "Candidate: 906 files, 377032263 bytes; 830 build/config files match current output and remain unchanged after all E2E"
+        - "Primary recovery archive: 17 original hashes match, 1105362438 bytes; 12 ignored local originals and 1 separately preserved variant match recorded hashes"
+        - "Existing installed EXE and package manifest hashes unchanged; PID 24336 still runs the original default path"
+      commands:
+        - cmd: "npm run verification:core"
+          status: pass
+        - cmd: "npm run verification:heavy -- --process-budget-ms 1800000"
+          status: pass
+        - cmd: "Packaged automatic-scene-analysis-lifecycle, automatic-scene-analysis and structured-http-assistant Playwright: 4 passed, zero skipped/flaky/failed"
+          status: pass
+        - cmd: "npm run performance:poc-3 with explicit source fixture/output and 300000ms caller timeout: correctness-pass, 2 iterations"
+          status: pass
+        - cmd: "Final source fingerprint, stage/log hashes, 830 packaged files and original archive/install readback"
+          status: pass
+      limitations: ["One pre-existing real-legacy-source rehearsal requires explicit environment input and remains skipped", "No commit/push, remote Actions execution, branch-protection configuration or default-install promotion", "Recovery source-control separation retains protected local cache and old Git history; moved readable-bin hash variant is preserved separately with unknown cause"]
+checks:
+  dirty_fingerprint: "initial tree clean at f8215a5bcb8fdab7f2970583fad3122a4382f020"
+  last_verification:
+    result: pass
+    task: T999
+    commands: ["core: lint/typecheck/1299 unit/architecture/build/8 Electron pass", "heavy: 4 process tests/package/smoke/8 packaged Electron pass", "4 additional packaged asynchronous/HTTP tests pass", "POC-3 raw performance correctness-pass", "final source, package and original preservation hashes agree"]

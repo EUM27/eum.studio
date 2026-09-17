@@ -1,0 +1,38 @@
+import { randomUUID } from "node:crypto";
+import { once } from "node:events";
+import {
+  mkdtemp,tmpdir,path,DatabaseSync,expect,test,electron,continueFromMain,
+  removeVerifiedTemporaryDirectory,type Page,
+} from "./support/desktop-shell-suite";
+
+type RunningElectron=Awaited<ReturnType<typeof electron.launch>>;
+function diagnostics(app:RunningElectron):void{app.process().stderr?.on("data",(chunk)=>process.stderr.write(`[scene-canon-e2e stderr] ${String(chunk)}`));}
+async function closeElectron(app:RunningElectron):Promise<void>{const child=app.process();const closed=await Promise.race([app.close().then(()=>true,()=>true),new Promise<false>((resolve)=>setTimeout(()=>resolve(false),8_000))]);if(!closed&&child.exitCode===null&&child.signalCode===null){const exit=once(child,"exit").catch(()=>undefined);child.kill("SIGKILL");await exit;}}
+async function openScenes(page:Page):Promise<void>{await page.getByRole("navigation",{name:"작품 작업면"}).getByRole("button",{name:"구조",exact:true}).click();const workspace=page.getByRole("region",{name:"구조 작업"});await workspace.getByRole("tab",{name:"장면",exact:true}).click();await expect(workspace.getByRole("tab",{name:"장면",exact:true})).toHaveAttribute("aria-selected","true");}
+
+test("manually finalizes a stable Scene check and projects scene Continuity, Knowledge, and split review without auto-inheritance",async()=>{
+  test.setTimeout(150_000);const directory=await mkdtemp(path.join(tmpdir(),"eum-scene-canon-e2e-"));const suffix=randomUUID().slice(0,8);
+  const args=[".",`--user-data-dir=${path.join(directory,"electron-user-data")}`];const env={...process.env,EUM_STUDIO_TEST_EPHEMERAL_WORKSPACE:"0",EUM_STUDIO_LOCAL_WORKSPACE_ROOT_PATH:directory,EUM_STUDIO_WINDOW_VISIBILITY:"hidden",EUM_STUDIO_DISABLE_SANDBOX:"1"};
+  let app=await electron.launch({args,cwd:process.cwd(),env});diagnostics(app);let complete=false;let sourceSceneId="";
+  try{
+    let page=await app.firstWindow();await page.setViewportSize({width:1280,height:800});
+    await page.getByRole("button",{name:"작품 만들기",exact:true}).click();const dialog=page.getByRole("dialog",{name:"새 작품 만들기"});await dialog.getByLabel("작품 제목").fill(`장면 별빛 ${suffix}`);await dialog.getByLabel("첫 회차 제목").fill(`1화 ${suffix}`);await dialog.getByRole("button",{name:"작품 만들기",exact:true}).click();
+    const manuscript=page.getByRole("textbox",{name:"원고"});await manuscript.pressSequentially(`윤서는 열쇠를 들었다 ${suffix}. 민호가 문을 닫았다.`);await expect(page.getByTestId("save-state")).toHaveText("저장됨");
+    await page.evaluate(async()=>{const catalog=await window.eumStudio.workspace.getCatalog();if(catalog.activeWorkId===null)throw new Error("Expected Work");await window.eumStudio.characters.create({schemaVersion:1,workId:catalog.activeWorkId,name:"윤서",aliases:[],role:"주인공",summary:"",appearance:"",personality:"",speech:"",goal:"",conflict:"",note:""});});
+    await openScenes(page);const sceneList=page.getByRole("region",{name:"현재 회차 장면",exact:true});
+    await expect(sceneList.getByRole("button",{name:"이 장면 별빛 점검",exact:true})).toBeEnabled();
+    await sceneList.getByRole("button",{name:"이 장면 별빛 점검",exact:true}).click();
+    const canon=page.getByRole("region",{name:"별빛 작업"});await expect(canon.getByRole("tab",{name:"변경 검토",exact:true})).toHaveAttribute("aria-selected","true");
+    sourceSceneId=await page.evaluate(async()=>{const catalog=await window.eumStudio.workspace.getCatalog();if(catalog.activeWorkId===null)throw new Error("Expected Work");const projection=await window.eumStudio.structure.listSceneProjection({schemaVersion:1,workId:catalog.activeWorkId});const sceneId=projection.scenes[0]?.sceneIdentity?.sceneId;if(sceneId===undefined)throw new Error("Manual Scene check did not finalize identity");const characters=await window.eumStudio.characters.list({schemaVersion:1,workId:catalog.activeWorkId});const character=characters.characters[0];if(character===undefined)throw new Error("Expected Character");await window.eumStudio.continuity.create({schemaVersion:1,workId:catalog.activeWorkId,kind:"promise",title:"문을 다시 열기",note:"",subjectRefs:[{kind:"scene",id:sceneId}],openedEvidenceRange:null});await window.eumStudio.characterKnowledge.create({schemaVersion:1,workId:catalog.activeWorkId,characterId:character.characterId,statement:"문이 잠겼다",stance:"knows",truthStatus:"true",aboutRefs:[{kind:"scene",id:sceneId}],evidenceRange:null});return sceneId;});
+    await openScenes(page);const refreshedList=page.getByRole("region",{name:"현재 회차 장면",exact:true});await refreshedList.getByRole("button",{name:"별빛 연결 새로고침",exact:true}).click();await expect(refreshedList).toContainText("연속성 1건 보기");await expect(refreshedList).toContainText("지식 변화 1건 보기");await expect(refreshedList).toContainText("문을 다시 열기");await expect(refreshedList).toContainText("문이 잠겼다");
+    await page.evaluate(async()=>{const catalog=await window.eumStudio.workspace.getCatalog();if(catalog.activeWorkId===null)throw new Error("Expected Work");const projection=await window.eumStudio.structure.listSceneProjection({schemaVersion:1,workId:catalog.activeWorkId});const scene=projection.scenes[0];if(scene===undefined||scene.range===null)throw new Error("Expected Scene");const split=Math.floor((scene.range.start+scene.range.end)/2);await window.eumStudio.structure.createSceneOverride({schemaVersion:1,workId:catalog.activeWorkId,documentId:scene.documentId,expectedDocumentRevisionId:scene.documentRevisionId,selection:{anchor:split,head:split},exactQuote:"",operation:"split",note:"Gate 6 E2E"});});
+    await closeElectron(app);app=await electron.launch({args,cwd:process.cwd(),env});diagnostics(app);page=await app.firstWindow();await page.setViewportSize({width:1280,height:800});await continueFromMain(page);await openScenes(page);
+    const restarted=page.getByRole("region",{name:"현재 회차 장면",exact:true});await expect(restarted.getByText("분할·병합 뒤 별빛 연결 검토 필요").first()).toBeVisible();await expect(restarted).toContainText("자동 계승하지 않았습니다.");await expect(restarted.getByRole("button",{name:"이 장면 별빛 점검",exact:true}).first()).toBeEnabled();
+    const canonSurface=page.locator(".scene-canon-context").first();await canonSurface.scrollIntoViewIfNeeded();const layout=await canonSurface.evaluate((element)=>{const rect=element.getBoundingClientRect();return{right:rect.right,bottom:rect.bottom,width:window.innerWidth,height:window.innerHeight};});expect(layout.right).toBeLessThanOrEqual(layout.width+1);expect(layout.bottom).toBeLessThanOrEqual(layout.height+1);
+    complete=true;
+  }finally{
+    await closeElectron(app).catch(()=>undefined);
+    if(complete){const audit=new DatabaseSync(path.join(directory,"workspace.sqlite3"),{readOnly:true});try{const result=audit.prepare(`SELECT (SELECT COUNT(*) FROM scene_identities) AS scenes,(SELECT COUNT(*) FROM scene_lineage_operations WHERE operation='split') AS splits,(SELECT COUNT(*) FROM continuity_thread_entity_refs WHERE entity_kind='scene' AND entity_id=?) AS continuitySourceRefs,(SELECT COUNT(*) FROM character_knowledge_entity_refs WHERE entity_kind='scene' AND entity_id=?) AS knowledgeSourceRefs,(SELECT COUNT(*) FROM continuity_thread_entity_refs WHERE entity_kind='scene' AND entity_id<>?) AS continuityAutoInherited,(SELECT COUNT(*) FROM character_knowledge_entity_refs WHERE entity_kind='scene' AND entity_id<>?) AS knowledgeAutoInherited,(SELECT COUNT(*) FROM pragma_foreign_key_check) AS foreignKeyViolations`).get(sourceSceneId,sourceSceneId,sourceSceneId,sourceSceneId);expect(result).toMatchObject({scenes:2,splits:1,continuitySourceRefs:1,knowledgeSourceRefs:1,continuityAutoInherited:0,knowledgeAutoInherited:0,foreignKeyViolations:0});}finally{audit.close();}}
+    await removeVerifiedTemporaryDirectory(directory);
+  }
+});

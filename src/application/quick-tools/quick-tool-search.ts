@@ -5,6 +5,7 @@ export type QuickToolTarget = {
   readonly detail: string;
   readonly workId: string | null;
   readonly documentId: string | null;
+  readonly keywords?: readonly string[];
 };
 
 function normalize(value: string): string {
@@ -21,8 +22,9 @@ export function searchQuickToolTargets(input: {
   return Object.freeze(
     query.length === 0
       ? [...input.targets]
-      : input.targets.filter((target) =>
-          normalize(`${target.label}\n${target.detail}`).includes(query),
-        ),
+      : input.targets.filter((target) => {
+          const searchable = normalize(`${target.label}\n${target.detail}\n${target.keywords?.join(" ") ?? ""}`);
+          return query.split(/\s+/u).every((term) => searchable.includes(term));
+        }),
   );
 }

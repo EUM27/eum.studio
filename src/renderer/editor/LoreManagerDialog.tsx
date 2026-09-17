@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
 import type {
   CreateLoreEntryCommand,
@@ -223,10 +224,11 @@ function EvidenceItem(input: {
   );
 }
 
-export function LoreManagerDialog(input: {
+export type LoreManagerDialogProps = {
   readonly actionState: LoreManagerActionState;
   readonly canCaptureEvidence: boolean;
   readonly documentLabels: Readonly<Record<string, string>>;
+  readonly embedded?: boolean;
   readonly entries: readonly LoreEntryProjection[];
   readonly error: string | null;
   readonly foreshadowLines: readonly ForeshadowLineProjection[];
@@ -247,10 +249,23 @@ export function LoreManagerDialog(input: {
   ) => void;
   readonly onUnlinkForeshadow: (link: LoreForeshadowLinkProjection) => void;
   readonly selectedLoreEntryId: string | null;
-}) {
+};
+
+export type LoreManagerContentProps = Omit<
+  LoreManagerDialogProps,
+  "embedded" | "onClose"
+>;
+
+export function LoreManagerDialog(input: LoreManagerDialogProps) {
   const [query, setQuery] = useState("");
+  const [draftRevision, setDraftRevision] = useState(0);
   const [linkLineId, setLinkLineId] = useState("");
   const busy = input.actionState !== "idle";
+  const onBackdropPointerDown = useDialogDismiss({
+    active: !input.embedded,
+    disabled: busy,
+    onClose: input.onClose,
+  });
   const selectedEntry = input.entries.find(
     (entry) => entry.loreEntryId === input.selectedLoreEntryId,
   ) ?? null;
@@ -279,16 +294,16 @@ export function LoreManagerDialog(input: {
     ? linkLineId
     : (availableForeshadowLines[0]?.lineId ?? "");
 
-  return (
-    <div
-      className="dialog-backdrop character-manager-backdrop lore-manager-backdrop"
-      role="presentation"
-    >
+  const content = (
       <section
         aria-labelledby="lore-manager-heading"
-        aria-modal="true"
-        className="character-manager-dialog lore-manager-dialog"
-        role="dialog"
+        aria-modal={input.embedded ? undefined : "true"}
+        className={
+          input.embedded
+            ? "character-manager-dialog lore-manager-dialog lore-manager-content"
+            : "character-manager-dialog lore-manager-dialog"
+        }
+        role={input.embedded ? "region" : "dialog"}
       >
         <header className="character-manager-header lore-manager-header">
           <div>
@@ -296,15 +311,17 @@ export function LoreManagerDialog(input: {
             <h2 id="lore-manager-heading">별빛 관리</h2>
             <p>현재 작품에서 확정한 설정과 정확한 원고 근거를 관리합니다.</p>
           </div>
-          <button
-            aria-label="별빛 관리 닫기"
-            className="dialog-close"
-            disabled={busy}
-            onClick={input.onClose}
-            type="button"
-          >
-            ×
-          </button>
+          {!input.embedded && (
+            <button
+              aria-label="별빛 관리 닫기"
+              className="dialog-close"
+              disabled={busy}
+              onClick={input.onClose}
+              type="button"
+            >
+              ×
+            </button>
+          )}
         </header>
 
         <div className="character-manager-body lore-manager-body">
@@ -317,7 +334,14 @@ export function LoreManagerDialog(input: {
                 placeholder="이름·분류·별칭 검색"
                 value={query}
               />
-              <button disabled={busy} onClick={() => input.onSelect(null)} type="button">
+              <button
+                disabled={busy}
+                onClick={() => {
+                  input.onSelect(null);
+                  setDraftRevision((current) => current + 1);
+                }}
+                type="button"
+              >
                 새 별빛
               </button>
             </div>
@@ -352,7 +376,7 @@ export function LoreManagerDialog(input: {
               actionState={input.actionState}
               canCaptureEvidence={input.canCaptureEvidence}
               entry={selectedEntry}
-              key={selectedEntry?.loreEntryId ?? "new-lore-entry"}
+              key={selectedEntry?.loreEntryId ?? `new-lore-entry-${draftRevision}`}
               onCreate={input.onCreate}
               onRetire={input.onRetire}
               onUpdate={input.onUpdate}
@@ -477,6 +501,18 @@ export function LoreManagerDialog(input: {
           </p>
         )}
       </section>
+  );
+  return input.embedded ? content : (
+    <div
+      className="dialog-backdrop character-manager-backdrop lore-manager-backdrop"
+      onPointerDown={onBackdropPointerDown}
+      role="presentation"
+    >
+      {content}
     </div>
   );
+}
+
+export function LoreManagerContent(input: LoreManagerContentProps) {
+  return <LoreManagerDialog {...input} embedded onClose={() => undefined} />;
 }

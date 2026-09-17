@@ -1,0 +1,254 @@
+/* Schedule */
+
+.studio-app-shell .workspace-tool-dialog {
+  position: relative;
+  padding: 0;
+  background: var(--eum-bg);
+}
+
+.studio-app-shell .workspace-tool-dialog-close {
+  z-index: 4;
+  top: 12px;
+  right: 12px;
+  color: var(--eum-text-muted);
+  background: var(--eum-panel);
+  border-color: var(--eum-line);
+}
+
+.studio-app-shell .schedule-dashboard {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.studio-app-shell .schedule-dashboard-header {
+  padding-right: 62px;
+}
+
+.studio-app-shell .schedule-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.studio-app-shell .schedule-quick-actions button,
+.studio-app-shell .schedule-empty-action,
+.studio-app-shell .schedule-completion-button {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  color: var(--eum-text-muted);
+  background: #ffffff;
+}
+
+.studio-app-shell .schedule-dashboard-grid {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+  gap: 12px;
+  overflow: auto;
+  padding: 14px;
+}
+
+.studio-app-shell :is(.schedule-calendar-panel, .schedule-agenda-panel, .schedule-dday-panel) {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--eum-line);
+  border-radius: 8px;
+  background: var(--eum-panel);
+}
+
+.studio-app-shell .schedule-calendar-panel {
+  grid-row: span 2;
+}
+
+.studio-app-shell :is(.schedule-calendar-panel, .schedule-agenda-panel, .schedule-dday-panel) > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 34px;
+  margin-bottom: 10px;
+}
+
+.studio-app-shell .schedule-calendar-panel > header {
+  justify-content: flex-start;
+}
+
+.studio-app-shell .schedule-calendar-panel > header strong {
+  min-width: 108px;
+  text-align: center;
+}
+
+.studio-app-shell .schedule-calendar-panel > header button,
+.studio-app-shell .schedule-agenda-panel > header button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--eum-line);
+  border-radius: 6px;
+  color: var(--eum-text-muted);
+  background: var(--eum-panel);
+}
+
+.studio-app-shell .schedule-calendar-panel .schedule-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  margin-bottom: 5px;
+  color: var(--eum-text-faint);
+  font-size: 10px;
+  text-align: center;
+}
+
+.studio-app-shell .schedule-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.studio-app-shell .schedule-calendar-grid > button {
+  position: relative;
+  display: grid;
+  min-height: 50px;
+  padding: 7px;
+  place-items: start;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--eum-text);
+  background: var(--eum-bg);
+  font-size: 11px;
+  text-align: left;
+}
+
+.studio-app-shell .schedule-calendar-grid > button:hover {
+  border-color: var(--eum-line-strong);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .schedule-calendar-grid > button.is-outside {
+  color: var(--eum-text-faint);
+  background: var(--eum-panel);
+}
+
+.studio-app-shell .schedule-calendar-grid > button.is-today {
+  color: var(--eum-accent-strong);
+  font-weight: 700;
+}
+
+.studio-app-shell .schedule-calendar-grid > button.is-selected {
+  border-color: var(--eum-accent-border);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .schedule-calendar-grid > button i {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  display: grid;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  place-items: center;
+  border-radius: 999px;
+  color: #ffffff;
+  background: var(--eum-accent);
+  font-size: 9px;
+  font-style: normal;
+}
+
+.studio-app-shell .schedule-agenda-panel > header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.studio-app-shell .schedule-agenda-panel > header span,
+.studio-app-shell .schedule-dday-panel > header span {
+  color: var(--eum-text-faint);
+  font-size: 10px;
+}
+
+.studio-app-shell .schedule-empty {
+  margin: 18px 0;
+  color: var(--eum-text-faint);
+  font-size: 11px;
+  text-align: center;
+}
+
+.studio-app-shell .schedule-empty-action {
+  width: 100%;
+  border-style: dashed;
+}
+
+.studio-app-shell .schedule-agenda-list > div,
+.studio-app-shell .schedule-agenda-list > button,
+.studio-app-shell .schedule-dday-list > button {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  background: var(--eum-panel);
+  text-align: left;
+}
+
+.studio-app-shell .schedule-agenda-content {
+  display: grid;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.studio-app-shell .schedule-agenda-content span,
+.studio-app-shell .schedule-dday-list small {
+  color: var(--eum-text-faint);
+  font-size: 10px;
+}
+
+.studio-app-shell .schedule-dday-list > button {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.studio-app-shell .schedule-dday-list > button small {
+  grid-column: 2;
+}
+
+.studio-app-shell .schedule-agenda-list,
+.studio-app-shell .schedule-dday-list {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.studio-app-shell .schedule-item-dialog {
+  width: min(520px, calc(100vw - 48px));
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+  padding: 20px;
+}
+
+.studio-app-shell .schedule-item-dialog form {
+  display: grid;
+  gap: 12px;
+}
+
+.studio-app-shell .schedule-dialog-split,
+.studio-app-shell .schedule-weekdays {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+

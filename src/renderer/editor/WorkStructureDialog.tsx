@@ -7,6 +7,7 @@ import type {
   WorkStructureOverviewProjection,
   WorkStructureOverviewScene,
 } from "../../application/structure/work-structure-overview";
+import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
 function integrityLabel(
   integrity: "resolved" | "needsReview" | "broken",
@@ -25,8 +26,9 @@ function eventSourceStateLabel(
   return "위치 연결 손상";
 }
 
-export function WorkStructureDialog(input: {
+export type WorkStructureDialogProps = {
   readonly busy: boolean;
+  readonly embedded?: boolean;
   readonly error: string | null;
   readonly loreEntryCount: number;
   readonly onClose: () => void;
@@ -38,7 +40,19 @@ export function WorkStructureDialog(input: {
   readonly onOpenPlotSource: (source: WorkStructureOverviewPlotSource) => void;
   readonly onOpenScene: (scene: WorkStructureOverviewScene) => void;
   readonly projection: WorkStructureOverviewProjection;
-}) {
+};
+
+export type WorkStructureContentProps = Omit<
+  WorkStructureDialogProps,
+  "embedded" | "onClose"
+>;
+
+export function WorkStructureDialog(input: WorkStructureDialogProps) {
+  const onBackdropPointerDown = useDialogDismiss({
+    active: !input.embedded,
+    disabled: input.busy,
+    onClose: input.onClose,
+  });
   const labels = new Map(
     input.projection.documents.map((document) => [
       document.documentId,
@@ -47,13 +61,16 @@ export function WorkStructureDialog(input: {
   );
   const totals = input.projection.totals;
 
-  return (
-    <div className="dialog-backdrop work-structure-backdrop" role="presentation">
+  const content = (
       <section
         aria-labelledby="work-structure-heading"
-        aria-modal="true"
-        className="work-structure-dialog"
-        role="dialog"
+        aria-modal={input.embedded ? undefined : "true"}
+        className={
+          input.embedded
+            ? "work-structure-dialog work-structure-content"
+            : "work-structure-dialog"
+        }
+        role={input.embedded ? "region" : "dialog"}
       >
         <header className="work-structure-header">
           <div>
@@ -61,15 +78,17 @@ export function WorkStructureDialog(input: {
             <h2 id="work-structure-heading">작품 구조</h2>
             <p>{input.projection.workTitle}</p>
           </div>
-          <button
-            aria-label="작품 구조 닫기"
-            className="dialog-close"
-            disabled={input.busy}
-            onClick={input.onClose}
-            type="button"
-          >
-            ×
-          </button>
+          {!input.embedded && (
+            <button
+              aria-label="작품 구조 닫기"
+              className="dialog-close"
+              disabled={input.busy}
+              onClick={input.onClose}
+              type="button"
+            >
+              ×
+            </button>
+          )}
         </header>
 
         <section aria-label="작품 구조 요약" className="work-structure-metrics">
@@ -301,6 +320,18 @@ export function WorkStructureDialog(input: {
           <p className="work-structure-error" role="alert">{input.error}</p>
         )}
       </section>
+  );
+  return input.embedded ? content : (
+    <div
+      className="dialog-backdrop work-structure-backdrop"
+      onPointerDown={onBackdropPointerDown}
+      role="presentation"
+    >
+      {content}
     </div>
   );
+}
+
+export function WorkStructureContent(input: WorkStructureContentProps) {
+  return <WorkStructureDialog {...input} embedded onClose={() => undefined} />;
 }

@@ -3,10 +3,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import type { EventRailProjection } from "../../application/structure/event-rail-projection";
+import type { SceneProjectionList } from "../../application/structure/scene-projection";
 import { entityId } from "../../domain/writing";
 import { BottomEventRail } from "./BottomEventRail";
 
 const documentId = entityId<"Document">("document-a");
+const otherDocumentId = entityId<"Document">("document-b");
 const eventBlockId = entityId<"EventBlock">("event-a");
 const source = {
   eventSourceId: entityId<"EventSource">("source-a"),
@@ -59,6 +61,8 @@ describe("BottomEventRail", () => {
     const markup = renderToStaticMarkup(createElement(BottomEventRail, {
       activeDocumentId: documentId,
       cursorOffset: 12,
+      eventBusy: false,
+      onMoveEvent: vi.fn(),
       onOpenSource: vi.fn(),
       projection,
     }));
@@ -66,8 +70,10 @@ describe("BottomEventRail", () => {
     expect(markup).toContain('aria-label="사건 레일"');
     expect(markup).toContain('aria-label="사건 레일 접기"');
     expect(markup).toContain('aria-current="location"');
+    expect(markup).toContain('data-event-block-id="event-a"');
+    expect(markup).toContain('draggable="true"');
     expect(markup).toContain("닫힌 문");
-    expect(markup).toContain("1화 · 1");
+    expect(markup).toContain("1화 · 장면 0 · 사건 1");
     expect(markup).not.toContain("플롯 순서");
   });
 
@@ -75,6 +81,8 @@ describe("BottomEventRail", () => {
     const markup = renderToStaticMarkup(createElement(BottomEventRail, {
       activeDocumentId: documentId,
       cursorOffset: 12,
+      eventBusy: false,
+      onMoveEvent: vi.fn(),
       onOpenSource: vi.fn(),
       projection: {
         ...projection,
@@ -85,6 +93,56 @@ describe("BottomEventRail", () => {
 
     expect(markup).toContain('aria-label="사건 레일 펼치기"');
     expect(markup).not.toContain("disabled");
+    expect(markup).not.toContain("bottom-event-rail-content");
+  });
+
+  it("stays collapsed when structure exists only in another document", () => {
+    const markup = renderToStaticMarkup(createElement(BottomEventRail, {
+      activeDocumentId: otherDocumentId,
+      cursorOffset: 12,
+      eventBusy: false,
+      onMoveEvent: vi.fn(),
+      onOpenSource: vi.fn(),
+      projection: {
+        ...projection,
+        documents: [
+          ...projection.documents,
+          { documentId: otherDocumentId, title: "2화", documentIndex: 1 },
+        ],
+      },
+    }));
+
+    expect(markup).toContain('aria-label="사건 레일 펼치기"');
+    expect(markup).not.toContain("bottom-event-rail-content");
+  });
+
+  it("does not expand for an empty derived scene in the active document", () => {
+    const markup = renderToStaticMarkup(createElement(BottomEventRail, {
+      activeDocumentId: documentId,
+      cursorOffset: 0,
+      eventBusy: false,
+      onMoveEvent: vi.fn(),
+      onOpenSource: vi.fn(),
+      projection: {
+        ...projection,
+        eventBlocks: [],
+        manuscriptEvents: [],
+      },
+      sceneProjection: {
+        scenes: [{
+          documentId,
+          documentIndex: 0,
+          documentTitle: "1화",
+          sceneIndex: 0,
+          sceneKey: "empty-scene",
+          source: "rule",
+          integrity: "resolved",
+          range: { start: 0, end: 0 },
+        }],
+      } as unknown as SceneProjectionList,
+    }));
+
+    expect(markup).toContain('aria-label="사건 레일 펼치기"');
     expect(markup).not.toContain("bottom-event-rail-content");
   });
 });

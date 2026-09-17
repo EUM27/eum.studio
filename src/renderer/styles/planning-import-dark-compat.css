@@ -1,0 +1,409 @@
+/* Planning surfaces use the full application width instead of the manuscript rail. */
+
+.studio-app-shell.is-editor:has(
+  .writing-workspace[data-workspace-surface="characters"]
+),
+.studio-app-shell.is-editor:has(
+  .writing-workspace[data-workspace-surface="plots"]
+) {
+  --eum-sidebar-width: 0px;
+}
+
+.studio-app-shell.is-editor:has(
+  .writing-workspace[data-workspace-surface="characters"]
+) .sidebar,
+.studio-app-shell.is-editor:has(
+  .writing-workspace[data-workspace-surface="plots"]
+) .sidebar {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.studio-app-shell.is-editor:has(
+  .writing-workspace[data-workspace-surface="characters"]
+) .workspace,
+.studio-app-shell.is-editor:has(
+  .writing-workspace[data-workspace-surface="plots"]
+) .workspace {
+  grid-column: 1 / -1;
+}
+
+.studio-app-shell .writing-workspace[data-workspace-surface="characters"]
+  > .manuscript-header,
+.studio-app-shell .writing-workspace[data-workspace-surface="plots"]
+  > .manuscript-header {
+  min-height: 44px;
+  padding-block: 5px;
+}
+
+.studio-app-shell .writing-workspace[data-workspace-surface="characters"]
+  > .manuscript-header
+  .manuscript-title-block
+  > .manuscript-title-line:not(.manuscript-work-title-line),
+.studio-app-shell .writing-workspace[data-workspace-surface="plots"]
+  > .manuscript-header
+  .manuscript-title-block
+  > .manuscript-title-line:not(.manuscript-work-title-line),
+.studio-app-shell .writing-workspace[data-workspace-surface="characters"]
+  > .manuscript-header
+  .manuscript-tools,
+.studio-app-shell .writing-workspace[data-workspace-surface="plots"]
+  > .manuscript-header
+  .manuscript-tools {
+  display: none;
+}
+
+.studio-app-shell .writing-workspace[data-workspace-surface="characters"]
+  .manuscript-work-title-line::after,
+.studio-app-shell .writing-workspace[data-workspace-surface="plots"]
+  .manuscript-work-title-line::after {
+  display: none;
+}
+
+.studio-app-shell .planning-surface-navigation {
+  min-width: 0;
+  margin-left: auto;
+}
+
+.studio-app-shell .planning-surface-navigation
+  .workspace-section-navigation {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  margin: 0;
+  border: 0;
+  background: #f2f2f3;
+}
+
+.studio-app-shell .planning-surface-navigation
+  .workspace-section-navigation button {
+  min-width: 64px;
+  min-height: 28px;
+  padding-inline: 10px;
+}
+
+.studio-app-shell .writing-workspace[data-workspace-surface="characters"]
+  > .workspace-statusbar,
+.studio-app-shell .writing-workspace[data-workspace-surface="plots"]
+  > .workspace-statusbar {
+  height: 36px;
+  min-height: 36px;
+  max-height: 36px;
+}
+
+.studio-app-shell .character-workspace-body,
+.studio-app-shell .plot-manager-body.has-utility {
+  gap: 12px;
+  padding: 12px;
+  background: #f6f6f7;
+}
+
+.studio-app-shell .character-workspace-list,
+.studio-app-shell .character-workspace-detail,
+.studio-app-shell .character-draw-tool,
+.studio-app-shell .plot-manager-body.has-utility .plot-manager-list,
+.studio-app-shell .plot-manager-body.has-utility .plot-manager-detail,
+.studio-app-shell .plot-manager-body.has-utility .event-draw-tool {
+  border: 1px solid var(--eum-line);
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.studio-app-shell .plot-manager-body.has-utility .plot-manager-detail {
+  border-right: 1px solid var(--eum-line);
+}
+
+.studio-app-shell .document-quick-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-bottom: 12px;
+}
+
+.studio-app-shell .workspace-rail-right
+  .document-quick-actions
+  .create-event-button {
+  min-height: 36px;
+  padding: 7px 8px;
+  border-color: var(--eum-line);
+  color: var(--eum-text);
+  background: #ffffff;
+  font-size: 10px;
+}
+
+.studio-app-shell .workspace-rail-right
+  .document-quick-actions
+  .create-event-button:hover:not(:disabled) {
+  border-color: var(--eum-accent-border);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .manuscript-import-backdrop {
+  z-index: 92;
+}
+
+.studio-app-shell .manuscript-import-dialog {
+  width: min(760px, calc(100vw - 32px));
+  max-height: min(760px, calc(100vh - 32px));
+  overflow: hidden;
+  border: 1px solid var(--eum-line);
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 24px 70px rgb(24 18 30 / 22%);
+}
+
+.studio-app-shell .manuscript-import-dialog > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--eum-line);
+}
+
+.studio-app-shell .manuscript-import-dialog > header h2,
+.studio-app-shell .manuscript-import-dialog > header p {
+  margin: 0;
+}
+
+.studio-app-shell .manuscript-import-dialog > header h2 {
+  font-size: 18px;
+}
+
+.studio-app-shell .manuscript-import-dialog > header p:last-child {
+  margin-top: 3px;
+  color: var(--eum-text-muted);
+  font-size: 12px;
+}
+
+.studio-app-shell .manuscript-import-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 14px 16px 0;
+}
+
+.studio-app-shell .manuscript-import-summary > div {
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+  border-radius: 9px;
+  background: #f7f5f8;
+}
+
+.studio-app-shell .manuscript-import-summary span {
+  color: var(--eum-text-muted);
+  font-size: 10px;
+}
+
+.studio-app-shell .manuscript-import-summary strong {
+  font-size: 13px;
+}
+
+.studio-app-shell .manuscript-import-preview {
+  margin: 12px 16px;
+  border: 1px solid var(--eum-line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.studio-app-shell .manuscript-import-preview > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 11px;
+  border-bottom: 1px solid var(--eum-line);
+  background: #faf9fb;
+}
+
+.studio-app-shell .manuscript-import-preview h3 {
+  margin: 0;
+  font-size: 12px;
+}
+
+.studio-app-shell .manuscript-import-preview header span {
+  color: var(--eum-text-muted);
+  font-size: 10px;
+}
+
+.studio-app-shell .manuscript-import-preview pre {
+  max-height: min(48vh, 420px);
+  margin: 0;
+  overflow: auto;
+  padding: 14px;
+  color: var(--eum-text);
+  background: #ffffff;
+  font-family: var(--manuscript-font-family, "Noto Serif KR", serif);
+  font-size: 13px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.studio-app-shell .manuscript-import-dialog > .dialog-error {
+  margin: 8px 16px;
+}
+
+.studio-app-shell .manuscript-import-dialog > .dialog-actions {
+  padding: 0 16px 16px;
+}
+
+@media (max-width: 620px) {
+  .studio-app-shell .manuscript-import-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.studio-app-shell:has(.writing-workspace-dark-mode) {
+  --eum-accent: #b59acb;
+  --eum-accent-strong: #cdb4df;
+  --eum-accent-soft: #382f40;
+  --eum-accent-border: #665772;
+  --eum-bg: #1a1a1a;
+  --eum-panel: #242424;
+  --eum-sidebar: #202020;
+  --eum-line: #3a3a3a;
+  --eum-line-strong: #4a4a4a;
+  --eum-text: #f5f3e8;
+  --eum-text-muted: #aaa5ad;
+  --eum-text-faint: #77727b;
+
+  color-scheme: dark;
+  color: var(--eum-text);
+  background: var(--eum-bg);
+}
+
+.studio-app-shell:has(.writing-workspace-dark-mode) > .app-topbar,
+.studio-app-shell:has(.writing-workspace-dark-mode) > .sidebar,
+.studio-app-shell:has(.writing-workspace-dark-mode) > .workspace,
+.studio-app-shell:has(.writing-workspace-dark-mode) .writing-workspace,
+.studio-app-shell:has(.writing-workspace-dark-mode) .manuscript-header,
+.studio-app-shell:has(.writing-workspace-dark-mode) .workspace-body,
+.studio-app-shell:has(.writing-workspace-dark-mode) .workspace-center,
+.studio-app-shell:has(.writing-workspace-dark-mode) .manuscript-workspace-surface,
+.studio-app-shell:has(.writing-workspace-dark-mode) .manuscript-editor-shell,
+.studio-app-shell:has(.writing-workspace-dark-mode) .manuscript-editor-canvas,
+.studio-app-shell:has(.writing-workspace-dark-mode) .manuscript-formatting-toolbar,
+.studio-app-shell:has(.writing-workspace-dark-mode) .workspace-rail,
+.studio-app-shell:has(.writing-workspace-dark-mode) .workspace-statusbar,
+.studio-app-shell:has(.writing-workspace-dark-mode) .bottom-event-rail,
+.studio-app-shell:has(.writing-workspace-dark-mode) .session-feedback-panel,
+.studio-app-shell:has(.writing-workspace-dark-mode) .character-workspace-body,
+.studio-app-shell:has(.writing-workspace-dark-mode) .plot-manager-body.has-utility {
+  color: var(--eum-text);
+  background: var(--eum-bg);
+  border-color: var(--eum-line);
+}
+
+.studio-app-shell:has(.writing-workspace-dark-mode) .cm-editor,
+.studio-app-shell:has(.writing-workspace-dark-mode) .cm-scroller,
+.studio-app-shell:has(.writing-workspace-dark-mode) .cm-gutters {
+  color: #f5f3e8;
+  background: #1a1a1a;
+}
+
+.studio-app-shell:has(.writing-workspace-dark-mode) .cm-content,
+.studio-app-shell:has(.writing-workspace-dark-mode) .cm-line {
+  color: #f5f3e8 !important;
+  caret-color: #d6b8ed;
+}
+
+.studio-app-shell:has(.writing-workspace-dark-mode) .cm-cursor {
+  border-left-color: #d6b8ed;
+}
+
+.studio-app-shell:has(.writing-workspace-dark-mode) .cm-selectionBackground,
+.studio-app-shell:has(.writing-workspace-dark-mode) .cm-content ::selection {
+  background: rgb(150 116 176 / 42%) !important;
+}
+
+.studio-app-shell:has(.writing-workspace-dark-mode) input,
+.studio-app-shell:has(.writing-workspace-dark-mode) select,
+.studio-app-shell:has(.writing-workspace-dark-mode) textarea,
+.studio-app-shell:has(.writing-workspace-dark-mode)
+  .manuscript-formatting-toolbar button,
+.studio-app-shell:has(.writing-workspace-dark-mode)
+  .session-feedback-controls button,
+.studio-app-shell:has(.writing-workspace-dark-mode)
+  .session-feedback-writing button,
+.studio-app-shell:has(.writing-workspace-dark-mode)
+  .session-feedback-memo button {
+  border-color: var(--eum-line-strong);
+  color: var(--eum-text);
+  background: #292929;
+}
+
+.studio-app-shell:has(.writing-workspace-dark-mode) .session-feedback-body,
+.studio-app-shell:has(.writing-workspace-dark-mode) .session-feedback-history,
+.studio-app-shell:has(.writing-workspace-dark-mode) .session-feedback-writing,
+.studio-app-shell:has(.writing-workspace-dark-mode) .session-feedback-progress,
+.studio-app-shell:has(.writing-workspace-dark-mode) .document-tab-strip {
+  border-color: var(--eum-line);
+}
+
+.studio-app-shell:has(.writing-workspace-dark-mode)
+  .session-feedback-metrics > div,
+.studio-app-shell:has(.writing-workspace-dark-mode)
+  .session-feedback-history li,
+.studio-app-shell:has(.writing-workspace-dark-mode)
+  .manuscript-analysis-summary,
+.studio-app-shell:has(.writing-workspace-dark-mode)
+  .manuscript-analysis-card,
+.studio-app-shell:has(.writing-workspace-dark-mode)
+  .manuscript-analysis-metrics > div {
+  color: var(--eum-text);
+  background: #252329;
+  border-color: var(--eum-line);
+}
+
+.studio-app-shell:has(.writing-workspace-dark-mode)
+  .session-feedback-phase output,
+.studio-app-shell:has(.writing-workspace-dark-mode)
+  .session-feedback-metrics strong,
+.studio-app-shell:has(.writing-workspace-dark-mode)
+  .manuscript-analysis-summary strong,
+.studio-app-shell:has(.writing-workspace-dark-mode)
+  .manuscript-analysis-card h3,
+.studio-app-shell:has(.writing-workspace-dark-mode)
+  .manuscript-analysis-metrics dd {
+  color: var(--eum-text);
+}
+
+.studio-app-shell:has(.writing-workspace-dark-mode) [role="dialog"] {
+  color: var(--eum-text);
+  background: #242424;
+  border-color: var(--eum-line);
+}
+
+.studio-app-shell:has(.writing-workspace-dark-mode)
+  .character-workspace-list,
+.studio-app-shell:has(.writing-workspace-dark-mode)
+  .character-workspace-detail,
+.studio-app-shell:has(.writing-workspace-dark-mode)
+  .character-draw-tool,
+.studio-app-shell:has(.writing-workspace-dark-mode)
+  .plot-manager-list,
+.studio-app-shell:has(.writing-workspace-dark-mode)
+  .plot-manager-detail,
+.studio-app-shell:has(.writing-workspace-dark-mode)
+  .event-draw-tool {
+  color: var(--eum-text);
+  background: #242424;
+  border-color: var(--eum-line);
+}
+
+.studio-app-shell:has(.writing-workspace-dark-mode)
+  .workspace-section-navigation button.is-active,
+.studio-app-shell:has(.writing-workspace-dark-mode)
+  .document-tree-open.is-active {
+  color: var(--eum-text);
+  background: #39363d;
+}
+
+.studio-app-shell:has(.writing-workspace-dark-mode) .manuscript-search {
+  border-color: var(--eum-line);
+  background: #242424;
+}
+

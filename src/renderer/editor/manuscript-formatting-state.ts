@@ -55,6 +55,24 @@ export type ActiveManuscriptFormatting = {
   readonly paragraphAlignment: ManuscriptParagraphAlignment | "mixed";
 };
 
+export function activeManuscriptFormattingEqual(
+  left: ActiveManuscriptFormatting,
+  right: ActiveManuscriptFormatting,
+): boolean {
+  return left.bold === right.bold &&
+    left.italic === right.italic &&
+    left.underline === right.underline &&
+    left.fontFamilyId === right.fontFamilyId &&
+    left.fontSizePx === right.fontSizePx &&
+    left.textColor === right.textColor &&
+    left.highlightColor === right.highlightColor &&
+    left.contentWidthPx === right.contentWidthPx &&
+    left.lineHeight === right.lineHeight &&
+    left.paragraphSpacingPx === right.paragraphSpacingPx &&
+    left.letterSpacingEm === right.letterSpacingEm &&
+    left.paragraphAlignment === right.paragraphAlignment;
+}
+
 export const toggleManuscriptStyleEffect =
   StateEffect.define<BooleanStyleKey>();
 export const setManuscriptFontFamilyEffect =

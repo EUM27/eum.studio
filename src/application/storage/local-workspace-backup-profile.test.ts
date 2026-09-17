@@ -17,11 +17,17 @@ describe("local workspace backup profile", () => {
     );
 
     expect(profile).toMatchObject({
-      schemaVersion: 1,
+      schemaVersion: 2,
+      format: { version: "2" },
       checksum: { identity: "eum-studio-ledger-sha256-v1" },
       sqlite: { sourceDatabaseName: "main", targetDatabaseName: "main" },
       restoreLayout: {
         databaseEntrySegments: ["workspace.sqlite3"],
+      },
+      localMedia: {
+        format: { identity: "eum-studio-local-media-backup", version: "1" },
+        legacyCoreFormatVersions: ["1"],
+        restoreRootSegments: ["local-media-library-v1"],
       },
     });
   });

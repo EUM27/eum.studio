@@ -33,6 +33,29 @@ function createDocument(
   };
 }
 
+describe("shared window durable sources", () => {
+  it("adopts a clean remote revision and saves from its current sequence and original base", async () => {
+    const document = createDocument();
+    const saveChangeBatch = vi.fn(async (batch: ChangeBatch) => receiptFor(batch));
+    const { queue } = createQueue({ documents: [document], saveChangeBatch });
+    const remote = { ...document, currentRevisionId: entityId<"DocumentRevision">(randomUUID()), nextSequence: document.nextSequence + 1 };
+    expect(queue.adoptConfirmedDocument(remote)).toBe(true);
+    expect(queue.getCurrentRevisionId(document.documentId)).toBe(remote.currentRevisionId);
+    queue.record(document.documentId, appendTransaction("remote").transaction, { composing: false });
+    await queue.flush(document.documentId);
+    expect(saveChangeBatch.mock.calls[0]?.[0]).toMatchObject({ baseRevisionId: document.baseRevisionId, sequence: remote.nextSequence });
+  });
+
+  it("preserves an in-progress local composition when another window saves", () => {
+    const document = createDocument();
+    const { queue } = createQueue({ documents: [document] });
+    queue.record(document.documentId, appendTransaction("").transaction, { composing: true });
+    expect(queue.adoptConfirmedDocument({ ...document, currentRevisionId: entityId<"DocumentRevision">(randomUUID()) })).toBe(false);
+    expect(queue.hasPendingChanges(document.documentId)).toBe(true);
+    expect(queue.getCurrentRevisionId(document.documentId)).toBe(document.baseRevisionId);
+  });
+});
+
 function appendTransaction(
   beforeText: string,
   insertedText = randomUUID(),
@@ -398,6 +421,48 @@ describe("ManuscriptDurableSaveQueue", () => {
     expect(compositionFlush).not.toBeNull();
     await compositionFlush;
     expect(saveChangeBatch).toHaveBeenCalledOnce();
+    expect(queue.getState(document.documentId)).toBe("saved");
+  });
+
+  it("rejects navigation instead of retaining an unbounded IME wait", async () => {
+    const document = createDocument();
+    const saveGate = deferred<SaveReceipt>();
+    const saveChangeBatch = vi.fn(
+      (batch: ChangeBatch) => saveGate.promise.then((receipt) => ({
+        ...receipt,
+        workId: batch.workId,
+        documentId: batch.documentId,
+        baseRevisionId: batch.baseRevisionId,
+        batchId: batch.batchId,
+        sequence: batch.sequence,
+      })),
+    );
+    const { queue } = createQueue({
+      documents: [document],
+      saveChangeBatch,
+    });
+    const edit = appendTransaction(randomUUID());
+    queue.record(document.documentId, edit.transaction, {
+      composing: true,
+      editorStateJson: randomUUID(),
+    });
+
+    await expect(
+      queue.flushForNavigation(document.documentId),
+    ).rejects.toThrow(ManuscriptDurableSaveQueueError);
+    expect(saveChangeBatch).not.toHaveBeenCalled();
+
+    const compositionFlush = queue.compositionEnd(document.documentId);
+    expect(compositionFlush).not.toBeNull();
+    await Promise.resolve();
+    expect(saveChangeBatch).toHaveBeenCalledOnce();
+
+    const batch = saveChangeBatch.mock.calls[0]![0];
+    saveGate.resolve(receiptFor(batch));
+    await expect(compositionFlush).resolves.toBeUndefined();
+    await expect(
+      queue.flushForNavigation(document.documentId),
+    ).resolves.toBeUndefined();
     expect(queue.getState(document.documentId)).toBe("saved");
   });
 

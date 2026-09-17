@@ -42,6 +42,15 @@ export type CreateAnchorlessEventCommand = {
   readonly note: string;
 };
 
+export type MoveEventBlockCommand = {
+  readonly schemaVersion: 1;
+  readonly workId: EntityId<"Work">;
+  readonly eventBlockId: EntityId<"EventBlock">;
+  readonly beforeEventBlockId?: EntityId<"EventBlock">;
+  readonly afterEventBlockId?: EntityId<"EventBlock">;
+  readonly expectedRevision: number;
+};
+
 export type LinkEventSourceCommand = ExactEventSourceSelection & {
   readonly schemaVersion: 1;
   readonly workId: EntityId<"Work">;
@@ -138,6 +147,25 @@ function assertExactFields(
     }
   }
   for (const field of fields) {
+    if (!(field in input)) {
+      throw new Error(`${label} is missing ${field}`);
+    }
+  }
+}
+
+function assertCommandFields(
+  input: Record<string, unknown>,
+  required: readonly string[],
+  optional: readonly string[],
+  label: string,
+): void {
+  const allowed = new Set([...required, ...optional]);
+  for (const field of Object.keys(input)) {
+    if (!allowed.has(field)) {
+      throw new Error(`Unsupported ${label} field: ${field}`);
+    }
+  }
+  for (const field of required) {
     if (!(field in input)) {
       throw new Error(`${label} is missing ${field}`);
     }
@@ -314,6 +342,45 @@ export function parseCreateAnchorlessEventCommand(
     workId: readEntityId<"Work">(input, "workId", label),
     title: readNonEmptyString(input, "title", label).trim(),
     note: readString(input, "note", label),
+  });
+}
+
+export function parseMoveEventBlockCommand(
+  value: unknown,
+): MoveEventBlockCommand {
+  const label = "MoveEventBlockCommand";
+  const input = readRecord(value, label);
+  assertCommandFields(
+    input,
+    ["schemaVersion", "workId", "eventBlockId", "expectedRevision"],
+    ["beforeEventBlockId", "afterEventBlockId"],
+    label,
+  );
+  readSchemaVersion(input, label);
+  const beforeEventBlockId = Object.hasOwn(input, "beforeEventBlockId")
+    ? readEntityId<"EventBlock">(input, "beforeEventBlockId", label)
+    : undefined;
+  const afterEventBlockId = Object.hasOwn(input, "afterEventBlockId")
+    ? readEntityId<"EventBlock">(input, "afterEventBlockId", label)
+    : undefined;
+  if (
+    beforeEventBlockId !== undefined &&
+    afterEventBlockId !== undefined &&
+    beforeEventBlockId === afterEventBlockId
+  ) {
+    throw new Error(`${label} neighbors must be different EventBlocks`);
+  }
+  return Object.freeze({
+    schemaVersion: 1,
+    workId: readEntityId<"Work">(input, "workId", label),
+    eventBlockId: readEntityId<"EventBlock">(
+      input,
+      "eventBlockId",
+      label,
+    ),
+    ...(beforeEventBlockId === undefined ? {} : { beforeEventBlockId }),
+    ...(afterEventBlockId === undefined ? {} : { afterEventBlockId }),
+    expectedRevision: readPositiveInteger(input, "expectedRevision", label),
   });
 }
 

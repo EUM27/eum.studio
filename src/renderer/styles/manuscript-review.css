@@ -1,0 +1,120 @@
+/* Manuscript inspection and continuous reading */
+
+.studio-app-shell .manuscript-preflight-layout {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: minmax(280px, 0.7fr) minmax(0, 1.3fr);
+  overflow: hidden;
+}
+
+.studio-app-shell :is(.preflight-settings-panel, .preflight-result-panel) {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+
+.studio-app-shell .preflight-settings-panel {
+  border-right: 1px solid var(--eum-line);
+  background: #fafafa;
+}
+
+.studio-app-shell .preflight-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.studio-app-shell .preflight-settings-grid label,
+.studio-app-shell .preflight-scope-fieldset {
+  display: grid;
+  gap: 6px;
+}
+
+.studio-app-shell .preflight-wide-field,
+.studio-app-shell .preflight-check-row {
+  grid-column: 1 / -1;
+}
+
+.studio-app-shell .preflight-findings {
+  display: grid;
+  gap: 7px;
+  padding: 0;
+  list-style: none;
+}
+
+.studio-app-shell .preflight-preview {
+  max-height: 280px;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  background: #fafafa;
+  white-space: pre-wrap;
+}
+
+.studio-app-shell .manuscript-preflight-actions {
+  padding-top: 12px;
+}
+
+.studio-app-shell .continuous-reading-dialog {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.studio-app-shell .continuous-reading-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.studio-app-shell .continuous-reading-header-actions output {
+  color: var(--eum-text-faint);
+  font-size: 11px;
+}
+
+.studio-app-shell .continuous-reading-scroll {
+  min-height: 0;
+  overflow: auto;
+  background: #f7f7f7;
+}
+
+.studio-app-shell .continuous-reading-document {
+  width: min(720px, calc(100% - 40px));
+  margin: 20px auto;
+  padding: 48px clamp(28px, 7vw, 72px);
+  border: 1px solid var(--eum-line);
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 5%);
+}
+
+.studio-app-shell .continuous-reading-document > header {
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--eum-line);
+}
+
+.studio-app-shell .continuous-reading-document h3 {
+  margin: 5px 0 0;
+  font-size: 22px;
+}
+
+.studio-app-shell .continuous-reading-text {
+  display: grid;
+  gap: 0;
+  margin-top: 24px;
+  font-family: MaruBuri, "Noto Serif KR", serif;
+  font-size: 16px;
+  line-height: 2;
+}
+
+.studio-app-shell .continuous-reading-notice,
+.studio-app-shell .continuous-reading-load-hint {
+  margin: 0;
+  padding: 10px 16px;
+  color: var(--eum-text-muted);
+  background: #fafafa;
+  font-size: 11px;
+  text-align: center;
+}
+

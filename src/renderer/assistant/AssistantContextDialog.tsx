@@ -9,6 +9,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
 import {
   ASSISTANT_CAPABILITIES,
@@ -64,6 +65,9 @@ const CAPABILITY_LABELS: Readonly<Record<AssistantCapability, string>> = {
   "lore-review": "설정 검토",
   "character.extract": "캐릭터 추출",
   "scene.extract": "장면 구분",
+  "canon.review": "별빛 변경 검토",
+  "continuity.review": "열린 연속성 점검",
+  "narrative.digest": "이야기 흐름 요약",
   "publishing-operations": "투고 운영",
 };
 
@@ -153,6 +157,7 @@ export function AssistantContextDialog(input: {
   readonly documentLabels: Readonly<Record<string, string>>;
   readonly error: string | null;
   readonly onClose: () => void;
+  readonly onCancelRequest: () => void;
   readonly onGrant: (draft: AssistantPermissionDraft) => void;
   readonly onOpenVocabularyOccurrence: (
     occurrence: AssistantVocabularyOccurrence,
@@ -227,6 +232,10 @@ export function AssistantContextDialog(input: {
     input.connections.find((connection) =>
       connection.connectionId === reviewConnectionId
     ) ?? input.connections[0] ?? null;
+  const onBackdropPointerDown = useDialogDismiss({
+    disabled: busy,
+    onClose: input.onClose,
+  });
 
   function submit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
@@ -241,7 +250,11 @@ export function AssistantContextDialog(input: {
   }
 
   return (
-    <div className="dialog-backdrop assistant-context-backdrop" role="presentation">
+    <div
+      className="dialog-backdrop assistant-context-backdrop"
+      onPointerDown={onBackdropPointerDown}
+      role="presentation"
+    >
       <section
         aria-labelledby="assistant-context-title"
         aria-modal="true"
@@ -260,6 +273,11 @@ export function AssistantContextDialog(input: {
             </div>
           </div>
           <div className="assistant-context-header-actions">
+            {(input.actionState === "running-vocabulary-suggestion" || input.actionState === "running-external-setting-review") && (
+              <button className="assistant-context-connections-button" onClick={input.onCancelRequest} type="button">
+                요청 취소
+              </button>
+            )}
             <button
               className="assistant-context-connections-button"
               disabled={busy}

@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "gate": 6,
+  "designSha256": "343577C44367C4E38A61913822A13400B5DAA028BE2EA76123F7BBF6A31F3FC5",
+  "acceptance": {
+    "usesExistingStableSceneId": true,
+    "secondSceneIdentitySystem": false,
+    "manualFinalizationOnly": true,
+    "exactSceneRangeRevalidated": true,
+    "sceneContinuityProjection": true,
+    "sceneKnowledgeProjection": true,
+    "splitMergeLineageReview": true,
+    "automaticFactInference": false,
+    "automaticReferenceInheritanceWrites": 0
+  },
+  "freshVerification": {
+    "focused": "scene contract/UI 6 tests and real local workspace Scene Continuity/Knowledge/split/reopen test passed",
+    "fullVitest": "310 files and 1137 tests passed, 1 skipped; same pre-existing RuntimeBootstrapController.test.ts:343 failure only",
+    "electron": "manual stable Scene finalization, exact Canon check entry, scene Continuity/Knowledge, split review, no auto-inherited rows, relaunch, scroll reachability, FK=0 passed",
+    "regressions": "CharacterKnowledge, Continuity, NarrativeDigest, and Scene Canon production Electron tests all passed in the same build",
+    "lint": "pass",
+    "typecheck": "pass",
+    "architecture": "pass",
+    "build": "pass; existing large-chunk warning only",
+    "diffCheck": "pass"
+  },
+  "performanceArtifact": "gate-6-scene-canon-performance.json",
+  "performance": {
+    "scenes": 500,
+    "references": 1000,
+    "lineageReviews": 1000,
+    "p50Ms": 7.444999999999993,
+    "p95Ms": 9.12809999999999,
+    "automaticReferenceMutations": 0
+  }
+}

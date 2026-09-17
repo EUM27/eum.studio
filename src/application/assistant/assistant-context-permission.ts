@@ -5,6 +5,9 @@ export const ASSISTANT_CAPABILITIES = [
   "lore-review",
   "character.extract",
   "scene.extract",
+  "canon.review",
+  "continuity.review",
+  "narrative.digest",
   "publishing-operations",
 ] as const;
 

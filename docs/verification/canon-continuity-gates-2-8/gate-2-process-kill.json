@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "scenario": "continuity-approval-process-kill",
+  "rollbackKillState": {
+    "candidate": {
+      "revision": 1,
+      "status": "ready"
+    },
+    "item": {
+      "status": "pending",
+      "appliedThreadId": null
+    },
+    "candidateEvidence": {
+      "anchorId": null
+    },
+    "counts": {
+      "threads": 0,
+      "history": 0,
+      "evidence": 0,
+      "anchors": 0,
+      "decisions": 0,
+      "foreignKeyViolations": 0
+    }
+  },
+  "committedKillState": {
+    "candidate": {
+      "revision": 2,
+      "status": "completed"
+    },
+    "item": {
+      "status": "approved",
+      "appliedThreadId": "40887c99-00d4-4676-8fee-f063115233be"
+    },
+    "candidateEvidence": {
+      "anchorId": "d005672e-7ec6-4dee-b8c9-db90b9ef349a"
+    },
+    "counts": {
+      "threads": 1,
+      "history": 1,
+      "evidence": 1,
+      "anchors": 1,
+      "decisions": 1,
+      "foreignKeyViolations": 0
+    }
+  }
+}

@@ -260,13 +260,37 @@ describe("scene projection", () => {
       throw new Error("Expected two scenes");
     }
     const now = new Date().toISOString();
+    const firstSceneId = entityId<"Scene">(randomUUID());
+    const secondSceneId = entityId<"Scene">(randomUUID());
+    const binding = (
+      metadataId: ReturnType<typeof entityId<"SceneEventOverride">>,
+      sourceSceneKey: string,
+      sceneId: ReturnType<typeof entityId<"Scene">>,
+    ) => ({
+      schemaVersion: 1 as const,
+      sceneMetadataBindingId: entityId<"SceneMetadataBinding">(randomUUID()),
+      revision: 1,
+      workId,
+      metadataKind: "event-override" as const,
+      metadataId,
+      sourceSceneKey,
+      sceneId,
+      status: "current" as const,
+      proposedSceneId: null,
+      lineageOperationId: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const firstOverrideId = entityId<"SceneEventOverride">(randomUUID());
+    const secondOverrideId = entityId<"SceneEventOverride">(randomUUID());
     const exceptions: readonly SceneEventOverrideProjection[] = [
       {
         schemaVersion: 1,
-        sceneEventOverrideId: entityId<"SceneEventOverride">(randomUUID()),
+        sceneEventOverrideId: firstOverrideId,
         revision: 1,
         workId,
         sceneKey: firstScene.sceneKey,
+        binding: binding(firstOverrideId, firstScene.sceneKey, firstSceneId),
         eventBlockId: automatic.eventBlockId,
         operation: "exclude",
         createdAt: now,
@@ -274,10 +298,11 @@ describe("scene projection", () => {
       },
       {
         schemaVersion: 1,
-        sceneEventOverrideId: entityId<"SceneEventOverride">(randomUUID()),
+        sceneEventOverrideId: secondOverrideId,
         revision: 1,
         workId,
-        sceneKey: secondScene.sceneKey,
+        sceneKey: firstScene.sceneKey,
+        binding: binding(secondOverrideId, firstScene.sceneKey, secondSceneId),
         eventBlockId: planned.eventBlockId,
         operation: "include",
         createdAt: now,
@@ -293,6 +318,28 @@ describe("scene projection", () => {
       eventBlocks: [automatic, planned],
       eventSources: [source],
       sceneEventOverrides: exceptions,
+      sceneSegments: [
+        {
+          segmentId: entityId<"EpisodeSceneSegment">(randomUUID()),
+          sceneId: firstSceneId,
+          documentId,
+          documentRevisionId: document.documentRevisionId,
+          documentTitle: document.title,
+          documentIndex: document.documentIndex,
+          range: firstScene.range,
+          integrity: "resolved",
+        },
+        {
+          segmentId: entityId<"EpisodeSceneSegment">(randomUUID()),
+          sceneId: secondSceneId,
+          documentId,
+          documentRevisionId: document.documentRevisionId,
+          documentTitle: document.title,
+          documentIndex: document.documentIndex,
+          range: secondScene.range,
+          integrity: "resolved",
+        },
+      ],
     });
 
     expect(projection.scenes[0]?.events).toEqual([]);

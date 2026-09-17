@@ -1,0 +1,468 @@
+.studio-app-shell .app-settings-dialog {
+  position: fixed;
+  z-index: 80;
+  top: calc(var(--eum-topbar-height) + 12px);
+  right: 12px;
+  bottom: 12px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(360px, calc(100vw - 24px));
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--eum-line);
+  border-radius: 10px;
+  color: var(--eum-text);
+  background: #ffffff;
+  box-shadow: var(--eum-shadow-panel);
+}
+
+.studio-app-shell .app-settings-dialog > header,
+.studio-app-shell .app-settings-dialog > header > div,
+.studio-app-shell .app-settings-dialog footer {
+  display: flex;
+  align-items: center;
+}
+
+.studio-app-shell .app-settings-dialog > header {
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--eum-line);
+}
+
+.studio-app-shell .app-settings-dialog > header > div {
+  min-width: 0;
+  gap: 10px;
+}
+
+.studio-app-shell .app-settings-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--eum-accent);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .app-settings-dialog .panel-kicker {
+  margin: 0 0 4px;
+  color: var(--eum-accent);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+}
+
+.studio-app-shell .app-settings-dialog h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.studio-app-shell .app-settings-dialog > header button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--eum-line-strong);
+  border-radius: 7px;
+  color: var(--eum-text-muted);
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.studio-app-shell .app-settings-dialog > header button:hover:not(:disabled) {
+  border-color: var(--eum-accent);
+  color: var(--eum-accent);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .app-settings-dialog form {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.studio-app-shell .app-settings-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 16px;
+}
+
+.studio-app-shell .app-settings-dialog label {
+  display: grid;
+  gap: 7px;
+}
+
+.studio-app-shell .app-settings-dialog label > span {
+  color: var(--eum-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.studio-app-shell .app-settings-dialog input {
+  width: 100%;
+  height: 40px;
+  padding: 0 11px;
+  border: 1px solid var(--eum-line-strong);
+  border-radius: 7px;
+  outline: 0;
+  color: var(--eum-text);
+  background: #ffffff;
+  font: inherit;
+  font-size: 13px;
+}
+
+.studio-app-shell .app-settings-dialog input:focus {
+  border-color: var(--eum-accent);
+  box-shadow: 0 0 0 3px rgb(136 117 164 / 12%);
+}
+
+.studio-app-shell .app-settings-section {
+  display: grid;
+  gap: 12px;
+  padding: 18px 0;
+  border-top: 1px solid var(--eum-line);
+}
+
+.studio-app-shell .app-settings-section:first-child {
+  border-top: 0;
+}
+
+.studio-app-shell .app-settings-work-section {
+  margin-top: 4px;
+}
+
+.studio-app-shell .app-settings-section h3,
+.studio-app-shell .app-settings-section p {
+  margin: 0;
+}
+
+.studio-app-shell .app-settings-section h3 {
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.studio-app-shell .app-settings-section p,
+.studio-app-shell .app-settings-inline-status {
+  color: var(--eum-text-faint);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.studio-app-shell .app-settings-check-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px 14px;
+}
+
+.studio-app-shell .app-settings-check-grid label,
+.studio-app-shell .app-settings-section fieldset label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.studio-app-shell .app-settings-check-grid input,
+.studio-app-shell .app-settings-section fieldset input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  padding: 0;
+}
+
+.studio-app-shell .app-settings-section fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0;
+  padding: 10px 0 0;
+  border: 0;
+  border-top: 1px solid var(--eum-line);
+}
+
+.studio-app-shell .app-settings-section fieldset legend {
+  padding: 0 0 8px;
+  color: var(--eum-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.studio-app-shell .app-settings-inline-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.studio-app-shell .app-settings-inline-status button {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border: 1px solid var(--eum-line-strong);
+  border-radius: 6px;
+  color: var(--eum-text-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+@media (max-width: 620px) {
+  .studio-app-shell .app-settings-check-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.studio-app-shell .app-settings-scroll > p,
+.studio-app-shell .app-settings-loading {
+  margin: 0;
+  color: var(--eum-text-faint);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.studio-app-shell .app-settings-loading {
+  padding: 18px 16px;
+}
+
+.studio-app-shell .app-settings-dialog .dialog-error {
+  color: #a64c4c;
+}
+
+.studio-app-shell .app-settings-dialog footer {
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--eum-line);
+  background: var(--eum-panel);
+}
+
+.studio-app-shell .scene-draft-panel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--eum-line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.studio-app-shell .scene-draft-panel > header,
+.studio-app-shell .scene-draft-candidate > header,
+.studio-app-shell .scene-draft-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.studio-app-shell .assistant-connection-form > :is(
+  .assistant-connection-remove-secret,
+  .dialog-error,
+  footer
+) {
+  grid-column: 1 / -1;
+}
+
+.studio-app-shell .assistant-connection-new[aria-pressed="true"] {
+  border-style: solid;
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .assistant-connection-empty-editor {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--eum-text-muted);
+  text-align: center;
+}
+
+.studio-app-shell .assistant-connection-empty-editor :is(h3, p) {
+  margin: 0;
+}
+
+.studio-app-shell .assistant-connection-empty-editor button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 0 12px;
+  border: 1px solid var(--eum-line-strong);
+  border-radius: 7px;
+  color: var(--eum-text);
+  background: var(--eum-panel);
+}
+
+.studio-app-shell .scene-draft-panel > header > div,
+.studio-app-shell .scene-draft-candidate > header > div,
+.studio-app-shell .scene-draft-generate form,
+.studio-app-shell .scene-draft-candidates,
+.studio-app-shell .scene-draft-candidate {
+  display: grid;
+  gap: 8px;
+}
+
+.studio-app-shell .scene-draft-generate fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 9px;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+}
+
+.studio-app-shell .scene-draft-generate fieldset label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.studio-app-shell .scene-draft-candidate {
+  padding-top: 10px;
+  border-top: 1px solid var(--eum-line);
+}
+
+.studio-app-shell .scene-draft-candidate textarea {
+  width: 100%;
+  min-height: 180px;
+  resize: vertical;
+}
+
+.studio-app-shell .scene-draft-diff pre {
+  max-height: 220px;
+  overflow: auto;
+  margin: 8px 0 0;
+  padding: 9px;
+  border-radius: 6px;
+  color: #315f48;
+  background: #f2f8f4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.studio-app-shell .scene-draft-context dl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 8px;
+}
+
+.studio-app-shell .scene-draft-context dd {
+  margin: 0;
+}
+
+.studio-app-shell .scene-draft-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.studio-app-shell .app-settings-dialog footer > span {
+  min-width: 0;
+  margin-right: auto;
+  color: var(--eum-text-faint);
+  font-size: 10px;
+}
+
+.studio-app-shell .app-settings-dialog footer button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--eum-line-strong);
+  border-radius: 7px;
+  color: var(--eum-text-muted);
+  background: #ffffff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.studio-app-shell .app-settings-dialog footer button.primary-button {
+  border-color: var(--eum-accent);
+  color: #ffffff;
+  background: var(--eum-accent);
+}
+
+.studio-app-shell .app-settings-dialog button:disabled {
+  opacity: 0.45;
+  cursor: wait;
+}
+
+.studio-app-shell .create-work-dialog {
+  width: min(460px, 100%);
+  padding: 24px;
+}
+
+.studio-app-shell .create-work-dialog header h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.studio-app-shell .create-work-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.studio-app-shell .create-work-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.studio-app-shell .create-work-form input,
+.studio-app-shell .title-rename-form input {
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--eum-line-strong);
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+.studio-app-shell .dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.studio-app-shell .dialog-close {
+  position: static;
+}
+
+.studio-app-shell .workspace-tool-dialog-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+
+@media (max-width: 760px) {
+  .studio-app-shell .quick-tools-dialog,
+  .studio-app-shell .quick-tools-dialog.is-memo-open {
+    width: calc(100vw - 24px);
+    height: calc(100dvh - 24px);
+  }
+
+  .studio-app-shell .quick-tools-dialog.is-memo-open .quick-tools-body {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  .studio-app-shell .quick-tools-dialog.is-memo-open .quick-switch-panel {
+    min-height: 260px;
+    border-right: 0;
+    border-bottom: 1px solid var(--eum-line);
+  }
+
+  .studio-app-shell .quick-tools-footer {
+    display: none;
+  }
+}
+

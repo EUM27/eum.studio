@@ -1,0 +1,442 @@
+/* Existing feature dialogs adopt the same neutral surface. */
+
+.studio-app-shell .dialog-backdrop {
+  position: fixed;
+  z-index: 200;
+  inset: 0;
+  display: grid;
+  padding: 28px;
+  place-items: center;
+  background: rgb(18 18 18 / 36%);
+  backdrop-filter: blur(2px);
+}
+
+.studio-app-shell [role="dialog"] {
+  position: relative;
+  max-width: min(100%, 1180px);
+  max-height: min(100%, 860px);
+  border: 1px solid var(--eum-line);
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 24px 70px rgb(0 0 0 / 20%);
+}
+
+/* Shared dialog grammar. Feature dialogs keep their existing behavior and DOM,
+ * while this sheet owns their visible geometry now that the legacy renderer
+ * styles are no longer loaded. */
+
+.studio-app-shell .dialog-backdrop > [role="dialog"] {
+  min-width: 0;
+  min-height: 0;
+  color: var(--eum-text);
+}
+
+.studio-app-shell .panel-kicker {
+  margin: 0 0 5px;
+  color: var(--eum-accent);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+}
+
+.studio-app-shell .dialog-description,
+.studio-app-shell .dialog-error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.studio-app-shell .dialog-description {
+  color: var(--eum-text-muted);
+}
+
+.studio-app-shell .dialog-error,
+.studio-app-shell .character-manager-error,
+.studio-app-shell .fragment-shelf-error,
+.studio-app-shell .foreshadow-line-error,
+.studio-app-shell .work-structure-error,
+.studio-app-shell .assistant-context-error,
+.studio-app-shell .publishing-partner-error,
+.studio-app-shell .schedule-error {
+  color: #a34f4f;
+}
+
+.studio-app-shell .dialog-backdrop [role="dialog"] input:not([type="checkbox"]):not([type="radio"]),
+.studio-app-shell .dialog-backdrop [role="dialog"] select,
+.studio-app-shell .dialog-backdrop [role="dialog"] textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--eum-line-strong);
+  border-radius: 7px;
+  outline: 0;
+  color: var(--eum-text);
+  background: #ffffff;
+  font-size: 12px;
+}
+
+.studio-app-shell .dialog-backdrop [role="dialog"] input:not([type="checkbox"]):not([type="radio"]),
+.studio-app-shell .dialog-backdrop [role="dialog"] select {
+  min-height: 36px;
+}
+
+.studio-app-shell .dialog-backdrop [role="dialog"] textarea {
+  min-height: 88px;
+  resize: vertical;
+  line-height: 1.55;
+}
+
+.studio-app-shell .dialog-backdrop [role="dialog"] input:focus,
+.studio-app-shell .dialog-backdrop [role="dialog"] select:focus,
+.studio-app-shell .dialog-backdrop [role="dialog"] textarea:focus {
+  border-color: var(--eum-accent);
+  box-shadow: 0 0 0 3px rgb(125 108 152 / 12%);
+}
+
+.studio-app-shell .dialog-backdrop [role="dialog"] label {
+  color: var(--eum-text-muted);
+  font-size: 12px;
+}
+
+.studio-app-shell .dialog-backdrop [role="dialog"] label > span:first-child {
+  font-weight: 650;
+}
+
+.studio-app-shell .primary-action,
+.studio-app-shell .danger-action,
+.studio-app-shell .dialog-backdrop [role="dialog"] .secondary-button,
+.studio-app-shell .dialog-backdrop [role="dialog"] .primary-button {
+  min-height: 36px;
+  padding: 0 13px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.studio-app-shell .primary-action {
+  border: 1px solid var(--eum-accent);
+  color: #ffffff;
+  background: var(--eum-accent);
+}
+
+.studio-app-shell .danger-action {
+  border: 1px solid #ead6d6;
+  color: #9f4c4c;
+  background: #fffafa;
+}
+
+.studio-app-shell .dialog-backdrop [role="dialog"] button {
+  font: inherit;
+}
+
+.studio-app-shell .dialog-backdrop [role="dialog"] button:disabled,
+.studio-app-shell .dialog-backdrop [role="dialog"] input:disabled,
+.studio-app-shell .dialog-backdrop [role="dialog"] select:disabled,
+.studio-app-shell .dialog-backdrop [role="dialog"] textarea:disabled {
+  opacity: 0.48;
+  cursor: default;
+}
+
+.studio-app-shell .dialog-close,
+.studio-app-shell .continuous-reading-header-actions > button,
+.studio-app-shell .assistant-connections-header > button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  color: var(--eum-text-muted);
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.studio-app-shell .dialog-close:hover:not(:disabled),
+.studio-app-shell .continuous-reading-header-actions > button:hover:not(:disabled),
+.studio-app-shell .assistant-connections-header > button:hover:not(:disabled) {
+  border-color: var(--eum-accent-border);
+  color: var(--eum-accent-strong);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell :is(
+  .records-dialog-header,
+  .manuscript-preflight-header,
+  .continuous-reading-header,
+  .fragment-shelf-header,
+  .work-structure-header,
+  .character-manager-header,
+  .lore-candidate-header,
+  .foreshadow-line-header,
+  .snapshot-comparison-header,
+  .assistant-context-header,
+  .assistant-connections-header,
+  .publishing-partner-header,
+  .schedule-dashboard-header
+) {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--eum-line);
+}
+
+.studio-app-shell :is(
+  .records-dialog-header,
+  .manuscript-preflight-header,
+  .continuous-reading-header,
+  .fragment-shelf-header,
+  .work-structure-header,
+  .character-manager-header,
+  .lore-candidate-header,
+  .foreshadow-line-header,
+  .snapshot-comparison-header,
+  .assistant-context-header,
+  .assistant-connections-header,
+  .publishing-partner-header,
+  .schedule-dashboard-header
+) h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.studio-app-shell :is(
+  .records-dialog-header,
+  .manuscript-preflight-header,
+  .continuous-reading-header,
+  .fragment-shelf-header,
+  .work-structure-header,
+  .character-manager-header,
+  .lore-candidate-header,
+  .foreshadow-line-header,
+  .snapshot-comparison-header,
+  .assistant-context-header,
+  .assistant-connections-header,
+  .publishing-partner-header,
+  .schedule-dashboard-header
+) p:not(.panel-kicker) {
+  margin: 4px 0 0;
+  color: var(--eum-text-faint);
+  font-size: 11px;
+}
+
+/* Small forms */
+
+.studio-app-shell :is(.create-work-dialog, .daily-goal-dialog) {
+  width: min(480px, calc(100vw - 48px));
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+  padding: 20px;
+}
+
+.studio-app-shell :is(.create-work-dialog, .daily-goal-dialog) > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.studio-app-shell :is(.create-work-dialog, .daily-goal-dialog) > header h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.studio-app-shell :is(.create-work-dialog, .daily-goal-dialog) > header .dialog-close {
+  position: static;
+}
+
+.studio-app-shell :is(.create-work-dialog, .daily-goal-dialog) form {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.studio-app-shell :is(.create-work-dialog, .daily-goal-dialog) form > label {
+  display: grid;
+  gap: 6px;
+}
+
+.studio-app-shell .manuscript-bulk-export-selection {
+  display: grid;
+  max-height: min(52vh, 420px);
+  margin: 0;
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid var(--eum-line);
+  border-radius: 8px;
+}
+
+.studio-app-shell .manuscript-bulk-export-selection legend {
+  padding: 0 5px;
+  color: var(--eum-text);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.studio-app-shell .manuscript-bulk-export-selection label {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+
+.studio-app-shell .manuscript-bulk-export-selection label:hover {
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .manuscript-bulk-export-selection input {
+  accent-color: var(--eum-accent);
+}
+
+.studio-app-shell .manuscript-bulk-export-summary,
+.studio-app-shell .manuscript-bulk-export-message {
+  margin: 0;
+  color: var(--eum-text-muted);
+  font-size: 12px;
+}
+
+.studio-app-shell .manuscript-bulk-export-message {
+  color: var(--eum-text);
+}
+
+.studio-app-shell .daily-goal-description {
+  margin: 14px 0 0;
+  color: var(--eum-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.studio-app-shell .daily-goal-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.studio-app-shell .daily-goal-summary article {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  padding: 11px;
+  border: 1px solid var(--eum-line);
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.studio-app-shell .daily-goal-summary article progress {
+  width: 100%;
+  height: 5px;
+  grid-column: 1 / -1;
+  accent-color: var(--eum-accent);
+}
+
+.studio-app-shell .daily-goal-summary article div {
+  display: grid;
+  gap: 2px;
+}
+
+.studio-app-shell .daily-goal-summary article div > span {
+  color: var(--eum-text-faint);
+  font-size: 10px;
+}
+
+.studio-app-shell .daily-goal-summary strong {
+  font-size: 13px;
+}
+
+.studio-app-shell .daily-goal-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 7px;
+  color: var(--eum-accent);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell .daily-goal-pomodoro {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 10px 0 0;
+  padding: 9px 10px;
+  border-radius: 7px;
+  color: var(--eum-text-muted);
+  background: #f7f7f7;
+  font-size: 11px;
+}
+
+.studio-app-shell .daily-goal-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Large work surfaces */
+
+.studio-app-shell :is(
+  .records-dialog,
+  .manuscript-preflight-dialog,
+  .continuous-reading-dialog,
+  .fragment-shelf-dialog,
+  .work-structure-dialog,
+  .character-manager-dialog,
+  .lore-candidate-dialog,
+  .foreshadow-line-dialog,
+  .snapshot-comparison-dialog,
+  .assistant-context-dialog,
+  .assistant-connections-dialog,
+  .publishing-partner-dialog,
+  .workspace-tool-dialog
+) {
+  width: min(1080px, calc(100vw - 48px));
+  height: min(760px, calc(100dvh - 48px));
+  overflow: hidden;
+}
+
+.studio-app-shell :is(
+  .records-dialog,
+  .manuscript-preflight-dialog,
+  .continuous-reading-dialog,
+  .fragment-shelf-dialog,
+  .work-structure-dialog,
+  .character-manager-dialog,
+  .lore-candidate-dialog,
+  .foreshadow-line-dialog,
+  .snapshot-comparison-dialog,
+  .assistant-context-dialog,
+  .assistant-connections-dialog,
+  .publishing-partner-dialog
+) {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.studio-app-shell :is(.assistant-context-dialog, .publishing-partner-dialog, .records-dialog) {
+  width: min(1180px, calc(100vw - 48px));
+  height: min(820px, calc(100dvh - 48px));
+}
+
+.studio-app-shell :is(
+  .manuscript-preflight-header,
+  .fragment-shelf-header,
+  .work-structure-header,
+  .character-manager-header,
+  .lore-candidate-header,
+  .foreshadow-line-header,
+  .snapshot-comparison-header,
+  .publishing-partner-header,
+  .records-dialog-header
+) .dialog-close {
+  position: static;
+}
+

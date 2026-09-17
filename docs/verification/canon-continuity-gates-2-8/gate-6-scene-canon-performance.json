@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "fixtureUse": "Measurement-only fixture. Counts and timings are not product limits or user-data defaults.",
+  "environment": {
+    "platform": "win32",
+    "architecture": "x64",
+    "node": "v24.13.0"
+  },
+  "rowCounts": {
+    "scenes": 500,
+    "references": 1000,
+    "lineageReviews": 1000
+  },
+  "timings": {
+    "lineageReviewProjectionMs": {
+      "raw": [
+        17.131700000000023,
+        9.12809999999999,
+        6.724899999999991,
+        7.703399999999988,
+        7.149400000000014,
+        7.7882999999999925,
+        6.992799999999988,
+        7.965599999999995,
+        7.081299999999999,
+        7.668300000000045,
+        7.7590999999999894,
+        8.32099999999997,
+        7.102599999999995,
+        7.444999999999993,
+        6.997700000000009,
+        7.784500000000037,
+        6.993999999999971,
+        7.293600000000026,
+        6.987300000000005,
+        7.861500000000035
+      ],
+      "p50": 7.444999999999993,
+      "p95": 9.12809999999999
+    }
+  },
+  "automaticReferenceMutations": 0,
+  "databaseBytes": {
+    "measured": false,
+    "growth": null,
+    "reason": "pure-application-harness"
+  },
+  "rendererCommitCount": {
+    "measured": false,
+    "value": null,
+    "reason": "application-harness"
+  }
+}

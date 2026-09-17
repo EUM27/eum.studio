@@ -3,12 +3,18 @@ import {
   type EntityId,
 } from "../../domain/writing";
 
-export type SceneOverrideOperation = "add" | "ignore" | "merge" | "split";
+export type SceneOverrideOperation =
+  | "add"
+  | "delete"
+  | "ignore"
+  | "merge"
+  | "split";
 
 export type CreateSceneOverrideCommand = {
   readonly schemaVersion: 1;
   readonly workId: EntityId<"Work">;
   readonly documentId: EntityId<"Document">;
+  readonly expectedDocumentRevisionId: EntityId<"DocumentRevision">;
   readonly selection: {
     readonly anchor: number;
     readonly head: number;
@@ -21,6 +27,20 @@ export type CreateSceneOverrideCommand = {
 export type ListSceneOverridesCommand = {
   readonly schemaVersion: 1;
   readonly workId: EntityId<"Work">;
+};
+
+export type RelocateSceneSegmentCommand = {
+  readonly schemaVersion: 1;
+  readonly workId: EntityId<"Work">;
+  readonly documentId: EntityId<"Document">;
+  readonly sceneId: EntityId<"Scene"> | null;
+  readonly startAnchorId: EntityId<"Anchor">;
+  readonly endAnchorId: EntityId<"Anchor"> | null;
+  readonly previousFrom: number;
+  readonly previousTo: number;
+  readonly from: number;
+  readonly to: number;
+  readonly exactQuote: string;
 };
 
 export type SceneOverrideBoundaryProjection = {
@@ -125,7 +145,13 @@ function id<TEntity extends string>(
 }
 
 function operation(value: unknown, label: string): SceneOverrideOperation {
-  if (value !== "add" && value !== "ignore" && value !== "merge" && value !== "split") {
+  if (
+    value !== "add" &&
+    value !== "delete" &&
+    value !== "ignore" &&
+    value !== "merge" &&
+    value !== "split"
+  ) {
     throw new Error(`${label} is invalid`);
   }
   return value;
@@ -142,6 +168,7 @@ export function parseCreateSceneOverrideCommand(
       "schemaVersion",
       "workId",
       "documentId",
+      "expectedDocumentRevisionId",
       "selection",
       "exactQuote",
       "operation",
@@ -157,6 +184,11 @@ export function parseCreateSceneOverrideCommand(
     schemaVersion: 1,
     workId: id<"Work">(input, "workId", label),
     documentId: id<"Document">(input, "documentId", label),
+    expectedDocumentRevisionId: id<"DocumentRevision">(
+      input,
+      "expectedDocumentRevisionId",
+      label,
+    ),
     selection: Object.freeze({
       anchor: integer(selection, "anchor", selectionLabel),
       head: integer(selection, "head", selectionLabel),
@@ -177,6 +209,59 @@ export function parseListSceneOverridesCommand(
   return Object.freeze({
     schemaVersion: 1,
     workId: id<"Work">(input, "workId", label),
+  });
+}
+
+export function parseRelocateSceneSegmentCommand(
+  value: unknown,
+): RelocateSceneSegmentCommand {
+  const label = "RelocateSceneSegmentCommand";
+  const input = record(value, label);
+  exactFields(
+    input,
+    [
+      "schemaVersion",
+      "workId",
+      "documentId",
+      "sceneId",
+      "startAnchorId",
+      "endAnchorId",
+      "previousFrom",
+      "previousTo",
+      "from",
+      "to",
+      "exactQuote",
+    ],
+    label,
+  );
+  schema(input, label);
+  const from = integer(input, "from", label);
+  const to = integer(input, "to", label);
+  const previousFrom = integer(input, "previousFrom", label);
+  const previousTo = integer(input, "previousTo", label);
+  if (to <= from) {
+    throw new Error(`${label}.to must be greater than from`);
+  }
+  if (previousTo <= previousFrom) {
+    throw new Error(`${label}.previousTo must be greater than previousFrom`);
+  }
+  const sceneId = input.sceneId === null
+    ? null
+    : id<"Scene">(input, "sceneId", label);
+  return Object.freeze({
+    schemaVersion: 1,
+    workId: id<"Work">(input, "workId", label),
+    documentId: id<"Document">(input, "documentId", label),
+    sceneId,
+    startAnchorId: id<"Anchor">(input, "startAnchorId", label),
+    endAnchorId: input.endAnchorId === null
+      ? null
+      : id<"Anchor">(input, "endAnchorId", label),
+    previousFrom,
+    previousTo,
+    from,
+    to,
+    exactQuote: stringValue(input, "exactQuote", label),
   });
 }
 

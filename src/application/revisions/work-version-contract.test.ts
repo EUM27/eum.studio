@@ -5,6 +5,8 @@ import { entityId } from "../../domain/writing";
 import {
   parseCreateWorkSnapshotCommand,
   parseDocumentRevisionListProjection,
+  parseDocumentRevisionContentProjection,
+  parseReadDocumentRevisionCommand,
   parseRestoreDocumentRevisionCommand,
   parseWorkSnapshotListProjection,
 } from "./work-version-contract";
@@ -39,6 +41,20 @@ describe("Work version contract", () => {
       revisionId: currentRevisionId,
       parentRevisionId: firstRevisionId,
       isCurrent: true,
+    });
+    expect(parseReadDocumentRevisionCommand({
+      schemaVersion: 1,
+      workId,
+      documentId,
+      revisionId: firstRevisionId,
+    })).toMatchObject({ revisionId: firstRevisionId });
+    expect(parseDocumentRevisionContentProjection({
+      schemaVersion: 1,
+      revision: revisions.revisions[0],
+      text: "완료 당시 원고",
+    })).toMatchObject({
+      revision: { revisionId: currentRevisionId },
+      text: "완료 당시 원고",
     });
     expect(
       parseRestoreDocumentRevisionCommand({

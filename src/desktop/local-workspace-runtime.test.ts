@@ -1,16 +1,29 @@
 import {
+  createHash,
   randomUUID,
 } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
+  cp,
+  mkdir,
   mkdtemp,
+  readFile,
   rm,
+  stat,
+  writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import * as fileSystem from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { workspaceWindowContext } from "./workspace-window-context";
+
+vi.mock("node:fs/promises", async (load) => {
+  const actual = await load<typeof import("node:fs/promises")>();
+  return { ...actual, readFile: vi.fn(actual.readFile) };
+});
 
 import {
   parseManuscriptDocumentProfile,
@@ -46,13 +59,39 @@ import {
 import { parseAppSettingsProfile } from "../application/settings/app-settings";
 import { parseAssistantDestinationProfile } from "../application/assistant/assistant-destination-profile";
 import { parseMusicSettingsProfile } from "../application/music/work-music-settings";
-import { entityId } from "../domain/writing";
+import { entityId, type EntityId } from "../domain/writing";
+import { CANON_REVIEW_PROMPT_VERSION } from "../application/canon/canon-review-contract";
+import { CONTINUITY_REVIEW_PROMPT_VERSION } from "../application/continuity/continuity-review-contract";
+import {
+  localMediaPlaybackUrl,
+} from "../application/music/media-track";
+import {
+  openNodeLocalMediaLibrary,
+} from "../platform/music/node-local-media-library";
+
+function canonicalJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(canonicalJsonValue);
+  }
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, entry]) => [key, canonicalJsonValue(entry)]),
+    );
+  }
+  return value;
+}
 
 function createOptions(rootDirectoryPath: string) {
   const workId = randomUUID();
   const documentId = randomUUID();
   return {
     rootDirectoryPath,
+    localMediaLibraryRootDirectoryPath: path.join(
+      rootDirectoryPath,
+      "local-media-library-v1",
+    ),
     studioDisplayName: randomUUID(),
     locale: "ko-KR",
     timezone: "Asia/Seoul",
@@ -175,10 +214,46 @@ function downgradeCharacterStorageToSchemaFiveFixture(
     PRAGMA foreign_keys = OFF;
     PRAGMA legacy_alter_table = ON;
     BEGIN IMMEDIATE;
+    DROP TABLE scene_information_update_batches;
+    DROP TABLE narrative_digest_documents;
+    DROP TABLE narrative_digests;
+    DROP TABLE assistant_context_activities;
+    DROP TABLE assistant_context_manifests;
+    DROP TABLE assistant_entity_context_policies;
+    DROP TABLE character_knowledge_evidence;
+    DROP TABLE character_knowledge_history;
+    DROP TABLE character_knowledge_entity_refs;
+    DROP TABLE character_knowledge;
+    DROP TABLE assistant_continuity_review_decisions;
+    DROP TABLE assistant_continuity_review_evidence;
+    DROP TABLE assistant_continuity_review_items;
+    DROP TABLE assistant_continuity_review_candidates;
+    DROP TABLE continuity_thread_evidence;
+    DROP TABLE continuity_thread_history;
+    DROP TABLE continuity_thread_entity_refs;
+    DROP TABLE continuity_threads;
+    DROP TABLE assistant_canon_review_decision_receipts;
+    DROP TABLE assistant_canon_review_evidence;
+    DROP TABLE assistant_canon_review_field_changes;
+    DROP TABLE assistant_canon_review_items;
+    DROP TABLE assistant_canon_review_candidates;
+    DROP TABLE scene_trash_bindings;
+    DROP TABLE scene_trash_overrides;
+    DROP TABLE scene_trash_segments;
+    DROP TABLE scene_trash_documents;
+    DROP TABLE scene_trash_entries;
+    DROP TABLE scene_metadata_bindings;
+    DROP TABLE scene_lineage_members;
+    DROP TABLE scene_lineage_operations;
+    DROP TABLE scene_episode_segments;
+    DROP TABLE scene_identities;
+    DROP TABLE episode_range_moves;
+    DROP TABLE document_completion_status;
     DROP TABLE work_manuscript_layout_settings;
     DROP TABLE assistant_scene_draft_candidates;
     DROP TABLE scene_music_queue_candidates;
     DROP TABLE scene_annotations;
+    DROP TABLE manuscript_annotations;
     DROP TABLE assistant_character_generation_candidates;
     DROP TABLE assistant_scene_extraction_candidates;
     DROP TABLE character_relations;
@@ -928,6 +1003,356 @@ describe("local workspace runtime", () => {
     }
   });
 
+  it("persists explicit Document completion, derives edited state, and cancels without a Schedule item", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-document-completion-"),
+    );
+    const completionInstant = "2026-01-31T15:30:00.000Z";
+    const options = {
+      ...createOptions(rootDirectoryPath),
+      documentCompletionClock: { now: () => completionInstant },
+    } satisfies LocalWorkspaceRuntimeOptions;
+    let runtime = await openLocalWorkspaceRuntime(options);
+
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "완료 작품",
+        firstDocumentTitle: "1화",
+      });
+      const initial = await runtime.getDocumentCompletion({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+      });
+      expect(initial).toMatchObject({ revision: 0, state: "incomplete" });
+
+      const completed = await runtime.completeDocument({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        expectedCompletionRevision: 0,
+        expectedDocumentRevisionId: created.revisionId,
+      });
+      expect(completed).toMatchObject({
+        revision: 1,
+        completedAt: completionInstant,
+        completedDate: "2026-02-01",
+        completedTimeZone: "Asia/Seoul",
+        completedDocumentRevisionId: created.revisionId,
+        state: "current",
+      });
+
+      await expect(runtime.completeDocument({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        expectedCompletionRevision: 1,
+        expectedDocumentRevisionId: created.revisionId,
+      })).resolves.toEqual(completed);
+
+      const insertedText = "완료 뒤 수정";
+      const saveReceipt = await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: created.workId,
+        documentId: created.documentId,
+        baseRevisionId: created.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: insertedText.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText }],
+      }));
+      if (!("revisionId" in saveReceipt)) {
+        throw new Error("Expected a durable local revision receipt");
+      }
+      const savedRevisionId = saveReceipt.revisionId;
+      expect(await runtime.getDocumentCompletion({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+      })).toMatchObject({ revision: 1, state: "edited-after-completion" });
+      expect(runtime.getWorkspaceCatalog().works[0]?.documents[0]).toMatchObject({
+        currentRevisionId: savedRevisionId,
+        completion: { revision: 1, state: "edited-after-completion" },
+      });
+
+      const recompleted = await runtime.completeDocument({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        expectedCompletionRevision: 1,
+        expectedDocumentRevisionId: savedRevisionId,
+      });
+      expect(recompleted).toMatchObject({
+        revision: 2,
+        completedDocumentRevisionId: savedRevisionId,
+        state: "current",
+      });
+
+      const cancelled = await runtime.clearDocumentCompletion({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        expectedCompletionRevision: 2,
+      });
+      expect(cancelled).toMatchObject({
+        revision: 3,
+        completedAt: null,
+        completedDate: null,
+        completedTimeZone: null,
+        completedDocumentRevisionId: null,
+        state: "incomplete",
+      });
+      await expect(runtime.clearDocumentCompletion({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        expectedCompletionRevision: 3,
+      })).resolves.toEqual(cancelled);
+
+      const profiles = createLocalWorkspaceStorageProfiles(rootDirectoryPath);
+      runtime.close();
+      const database = new DatabaseSync(profiles.databasePath, { readOnly: true });
+      try {
+        expect(database.prepare(`
+          SELECT COUNT(*) AS count FROM document_completion_status
+        `).get()).toEqual({ count: 1 });
+        expect(database.prepare(`
+          SELECT COUNT(*) AS count FROM work_schedule_items
+        `).get()).toEqual({ count: 0 });
+      } finally {
+        database.close();
+      }
+
+      runtime = await openLocalWorkspaceRuntime(options);
+      await expect(runtime.getDocumentCompletion({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+      })).resolves.toEqual(cancelled);
+      expect(runtime.getWorkspaceCatalog().works[0]?.documents[0]?.completion)
+        .toEqual(cancelled);
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("includes current Document completion in backup and restore", async () => {
+    const parent = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-document-completion-backup-"),
+    );
+    const sourceRoot = path.join(parent, "source");
+    const bundleRoot = path.join(parent, "bundle");
+    const restoredRoot = path.join(parent, "restored");
+    const sourceOptions = createOptions(sourceRoot);
+    const source = await openLocalWorkspaceRuntime(sourceOptions);
+    let restored: Awaited<ReturnType<typeof openLocalWorkspaceRuntime>> | null = null;
+
+    try {
+      const created = await source.createFirstWork({
+        schemaVersion: 1,
+        title: "백업 작품",
+        firstDocumentTitle: "완료 회차",
+      });
+      const completed = await source.completeDocument({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        expectedCompletionRevision: 0,
+        expectedDocumentRevisionId: created.revisionId,
+      });
+      await source.createBackupBundle(bundleRoot);
+      await source.restoreBackupBundle(bundleRoot, restoredRoot);
+      source.close();
+
+      restored = await openLocalWorkspaceRuntime(createOptions(restoredRoot));
+      await expect(restored.getDocumentCompletion({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+      })).resolves.toEqual(completed);
+      expect(restored.getWorkspaceCatalog().works[0]?.documents[0]?.completion)
+        .toEqual(completed);
+    } finally {
+      source.close();
+      restored?.close();
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects stale completion and manuscript revisions while allowing clear after manuscript edits", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-document-completion-conflicts-"),
+    );
+    const runtime = await openLocalWorkspaceRuntime(
+      createOptions(rootDirectoryPath),
+    );
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "완료 충돌 작품",
+        firstDocumentTitle: "1화",
+      });
+      const firstCompletion = await runtime.completeDocument({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        expectedCompletionRevision: 0,
+        expectedDocumentRevisionId: created.revisionId,
+      });
+
+      await expect(runtime.clearDocumentCompletion({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        expectedCompletionRevision: 0,
+      })).rejects.toThrow("completion revision conflict");
+
+      const insertedText = "완료 후 바뀐 원고";
+      const saveReceipt = await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: created.workId,
+        documentId: created.documentId,
+        baseRevisionId: created.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: insertedText.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText }],
+      }));
+      if (!("revisionId" in saveReceipt)) {
+        throw new Error("Expected a durable local revision receipt");
+      }
+
+      await expect(runtime.completeDocument({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        expectedCompletionRevision: firstCompletion.revision,
+        expectedDocumentRevisionId: created.revisionId,
+      })).rejects.toThrow("Document revision conflict");
+
+      await expect(runtime.clearDocumentCompletion({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        expectedCompletionRevision: firstCompletion.revision,
+      })).resolves.toMatchObject({ state: "incomplete", revision: 2 });
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("serializes two completion requests into one success and one revision conflict", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-document-completion-concurrency-"),
+    );
+    const runtime = await openLocalWorkspaceRuntime(
+      createOptions(rootDirectoryPath),
+    );
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "완료 동시성 작품",
+        firstDocumentTitle: "1화",
+      });
+      const command = {
+        schemaVersion: 1 as const,
+        workId: created.workId,
+        documentId: created.documentId,
+        expectedCompletionRevision: 0,
+        expectedDocumentRevisionId: created.revisionId,
+      };
+      const results = await Promise.allSettled([
+        runtime.completeDocument(command),
+        runtime.completeDocument(command),
+      ]);
+
+      expect(results.filter((result) => result.status === "fulfilled"))
+        .toHaveLength(1);
+      expect(results.filter((result) => result.status === "rejected"))
+        .toHaveLength(1);
+      await expect(runtime.getDocumentCompletion({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+      })).resolves.toMatchObject({ revision: 1, state: "current" });
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps a committed completion and preserves a post-commit catalog error", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-document-completion-post-commit-"),
+    );
+    const runtime = await openLocalWorkspaceRuntime(
+      createOptions(rootDirectoryPath),
+    );
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "완료 커밋 작품",
+        firstDocumentTitle: "1화",
+      });
+      const completed = await runtime.completeDocument({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        expectedCompletionRevision: 0,
+        expectedDocumentRevisionId: created.revisionId,
+      });
+      const catalogWorks = runtime.getWorkspaceCatalog().works;
+      const originalMap = Array.prototype.map;
+      Object.defineProperty(Array.prototype, "map", {
+        configurable: true,
+        writable: true,
+        value: function mapWithCatalogFailure<T, U>(
+          this: T[],
+          callback: (value: T, index: number, array: T[]) => U,
+          thisArg?: unknown,
+        ): U[] {
+          if (this as unknown === catalogWorks) {
+            throw new Error("catalog projection failed");
+          }
+          return originalMap.call(this, callback, thisArg) as U[];
+        },
+      });
+      try {
+        await expect(runtime.completeDocument({
+          schemaVersion: 1,
+          workId: created.workId,
+          documentId: created.documentId,
+          expectedCompletionRevision: completed.revision,
+          expectedDocumentRevisionId: created.revisionId,
+        })).rejects.toThrow("catalog projection failed");
+      } finally {
+        Object.defineProperty(Array.prototype, "map", {
+          configurable: true,
+          writable: true,
+          value: originalMap,
+        });
+      }
+
+      await expect(runtime.getDocumentCompletion({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+      })).resolves.toMatchObject({ revision: 1, state: "current" });
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
   it("persists the exact untitled label for blank first and additional Document titles", async () => {
     const rootDirectoryPath = await mkdtemp(
       path.join(tmpdir(), "eum-studio-untitled-documents-"),
@@ -1298,7 +1723,7 @@ describe("local workspace runtime", () => {
     }
   });
 
-  it("activates the requested Document after repeated resume capture and reordering", async () => {
+  it("reuses loaded manuscripts while repeatedly activating Documents after resume capture and reordering", async () => {
     const rootDirectoryPath = await mkdtemp(
       path.join(tmpdir(), "eum-studio-reorder-resume-activation-"),
     );
@@ -1340,19 +1765,29 @@ describe("local workspace runtime", () => {
         direction: "earlier",
       });
       await captureThirdResume();
-
-      const activated = await runtime.activateWorkspaceLocation({
-        schemaVersion: 1,
-        workId: first.workId,
-        documentId: second.documentId,
-      });
+      const loadedDocuments =
+        runtime.getManuscriptDocumentProfile().documents;
+      let activated = runtime.getWorkspaceCatalog();
+      for (let index = 0; index < 120; index += 1) {
+        const documentId = index % 2 === 0
+          ? second.documentId
+          : third.documentId;
+        activated = await runtime.activateWorkspaceLocation({
+          schemaVersion: 1,
+          workId: first.workId,
+          documentId,
+        });
+        expect(runtime.getManuscriptDocumentProfile().documents).toBe(
+          loadedDocuments,
+        );
+      }
 
       expect(activated).toMatchObject({
         activeWorkId: first.workId,
-        activeDocumentId: second.documentId,
+        activeDocumentId: third.documentId,
       });
       expect(runtime.getManuscriptDocumentProfile().initialDocumentId).toBe(
-        second.documentId,
+        third.documentId,
       );
     } finally {
       runtime.close();
@@ -2002,6 +2437,7 @@ describe("local workspace runtime", () => {
       expect(persistenceProfile?.documentSequences).toContainEqual({
           documentId: first.documentId,
           nextSequence: 2,
+          baseRevisionId: first.revisionId,
         });
       expect(runtime.getWorkspaceCatalog()).toMatchObject({
         activeWorkId: first.workId,
@@ -2295,14 +2731,14 @@ describe("local workspace runtime", () => {
       const audit = new DatabaseSync(profiles.databasePath, { readOnly: true });
       try {
         expect(audit.prepare("PRAGMA user_version").get()).toEqual({
-          user_version: 13,
+          user_version: 26,
         });
         expect(
           audit.prepare(`
             SELECT target_schema_version AS "targetSchemaVersion"
             FROM storage_ledger_identity
           `).get(),
-        ).toEqual({ targetSchemaVersion: 13 });
+      ).toEqual({ targetSchemaVersion: 26 });
         expect(audit.prepare(`
           SELECT COUNT(*) AS count
           FROM migration_receipts
@@ -2443,12 +2879,12 @@ describe("local workspace runtime", () => {
       const audit = new DatabaseSync(profiles.databasePath, { readOnly: true });
       try {
         expect(audit.prepare("PRAGMA user_version").get()).toEqual({
-          user_version: 13,
+          user_version: 26,
         });
         expect(audit.prepare(`
           SELECT target_schema_version AS "targetSchemaVersion"
           FROM storage_ledger_identity
-        `).get()).toEqual({ targetSchemaVersion: 13 });
+        `).get()).toEqual({ targetSchemaVersion: 26 });
         expect(audit.prepare(`
           SELECT COUNT(*) AS count
           FROM migration_receipts
@@ -2629,6 +3065,68 @@ describe("local workspace runtime", () => {
       });
       expect(projection.eventBlocks).toHaveLength(1);
       expect(projection.eventSources).toEqual([]);
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("moves EventBlocks in outline order and restores that order after reopen", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-event-outline-move-runtime-"),
+    );
+    const options = createOptions(rootDirectoryPath);
+    let runtime = await openLocalWorkspaceRuntime(options);
+
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: randomUUID(),
+        firstDocumentTitle: randomUUID(),
+      });
+      const first = await runtime.createAnchorlessEvent({
+        schemaVersion: 1,
+        workId: created.workId,
+        title: "첫 사건",
+        note: "",
+      });
+      await runtime.createAnchorlessEvent({
+        schemaVersion: 1,
+        workId: created.workId,
+        title: "둘째 사건",
+        note: "",
+      });
+      const third = await runtime.createAnchorlessEvent({
+        schemaVersion: 1,
+        workId: created.workId,
+        title: "셋째 사건",
+        note: "",
+      });
+
+      const moved = await runtime.moveEventBlock({
+        schemaVersion: 1,
+        workId: created.workId,
+        eventBlockId: third.eventBlockId,
+        afterEventBlockId: first.eventBlockId,
+        expectedRevision: third.revision,
+      });
+      expect(moved.eventBlocks.map((event) => event.title)).toEqual([
+        "셋째 사건",
+        "첫 사건",
+        "둘째 사건",
+      ]);
+
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      const reopened = await runtime.listEventBlocks({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(reopened.eventBlocks.map((event) => event.title)).toEqual([
+        "셋째 사건",
+        "첫 사건",
+        "둘째 사건",
+      ]);
     } finally {
       runtime.close();
       await rm(rootDirectoryPath, { recursive: true, force: true });
@@ -3307,6 +3805,7 @@ describe("local workspace runtime", () => {
     const rootDirectoryPath = await mkdtemp(
       path.join(tmpdir(), "eum-studio-scene-extraction-runtime-"),
     );
+    const profiles = createLocalWorkspaceStorageProfiles(rootDirectoryPath);
     const destinationId = `chatgpt-${randomUUID()}`;
     const sceneMusicQueries: string[] = [];
     const options = {
@@ -3578,6 +4077,55 @@ describe("local workspace runtime", () => {
         ["video1", "video2"],
         ["video3", "video4"],
       ]);
+      const bindingAudit = new DatabaseSync(profiles.databasePath, {
+        readOnly: true,
+      });
+      try {
+        const bindings = bindingAudit.prepare(`
+          SELECT metadata_kind AS "metadataKind", metadata_id AS "metadataId",
+            scene_id AS "sceneId", status
+          FROM scene_metadata_bindings
+          ORDER BY metadata_kind, metadata_id
+        `).all() as readonly Record<string, unknown>[];
+        expect(bindings).toHaveLength(3);
+        const firstAnnotationBinding = bindings.find(
+          (binding) => binding.metadataId === approvedFirstAnnotation.sceneAnnotationId,
+        );
+        const secondApprovedAnnotation = secondAnnotation.status === "applied"
+          ? secondAnnotation.annotations.annotations.find(
+              (annotation) => annotation.sceneKey === secondProjection.sceneKey,
+            )
+          : undefined;
+        if (secondApprovedAnnotation === undefined) {
+          throw new Error("Expected an approved second Scene annotation");
+        }
+        const secondAnnotationBinding = bindings.find(
+          (binding) => binding.metadataId === secondApprovedAnnotation.sceneAnnotationId,
+        );
+        const musicBinding = bindings.find(
+          (binding) => binding.metadataId === musicSearch.candidate.candidateId,
+        );
+        expect(firstAnnotationBinding).toMatchObject({
+          metadataKind: "annotation",
+          sceneId: expect.any(String),
+          status: "current",
+        });
+        expect(secondAnnotationBinding).toMatchObject({
+          metadataKind: "annotation",
+          sceneId: expect.any(String),
+          status: "current",
+        });
+        expect(secondAnnotationBinding?.sceneId).not.toBe(
+          firstAnnotationBinding?.sceneId,
+        );
+        expect(musicBinding).toMatchObject({
+          metadataKind: "music-queue",
+          sceneId: firstAnnotationBinding?.sceneId,
+          status: "current",
+        });
+      } finally {
+        bindingAudit.close();
+      }
       const selectedMusicQueue = await runtime.selectSceneMusicQueue({
         schemaVersion: 1,
         workId: created.workId,
@@ -5129,6 +5677,139 @@ describe("local workspace runtime", () => {
       runtime = await openLocalWorkspaceRuntime(options);
       expect((await runtime.listPublishingPartners({ schemaVersion: 1 })).partners)
         .toEqual([updated, parent]);
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("persists one editable base form, a partner copy, and Work-owned answers across restart", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-publishing-form-runtime-"),
+    );
+    const options = createOptions(rootDirectoryPath);
+    let runtime = await openLocalWorkspaceRuntime(options);
+
+    try {
+      const work = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "양식 검증 작품",
+        firstDocumentTitle: "첫 회차",
+      });
+      const partner = await runtime.createPublishingPartner({
+        schemaVersion: 1,
+        name: "양식 검증 투고처",
+        parentPartnerId: null,
+        submissionMethod: "",
+        websiteUrl: "",
+        email: "",
+        genres: [],
+        requiredLength: "",
+        priority: "",
+        note: "",
+      });
+      const sectionId = randomUUID();
+      const penNameFieldId = randomUUID();
+      const base = await runtime.createPublishingFormTemplate({
+        schemaVersion: 1,
+        scope: "base",
+        partnerId: null,
+        sourceTemplateId: null,
+        name: "기본 양식",
+        description: "공통 출발점",
+        sections: [{
+          sectionId,
+          title: "작가 정보",
+          description: "",
+          fields: [{
+            fieldId: penNameFieldId,
+            label: "필명",
+            fieldType: "text",
+            required: false,
+            helpText: "",
+            placeholder: "",
+            options: [],
+          }],
+        }],
+      });
+      const partnerTemplate = await runtime.createPublishingFormTemplate({
+        schemaVersion: 1,
+        scope: "partner",
+        partnerId: partner.partnerId,
+        sourceTemplateId: base.templateId,
+        name: "투고처 전용 양식",
+        description: "",
+        sections: base.sections,
+      });
+      const saved = await runtime.savePublishingFormResponse({
+        schemaVersion: 1,
+        workId: work.workId,
+        partnerId: partner.partnerId,
+        templateId: partnerTemplate.templateId,
+        expectedTemplateRevision: partnerTemplate.revision,
+        expectedRevision: null,
+        answers: [{ fieldId: penNameFieldId, value: "은하" }],
+      });
+
+      expect((await runtime.listPublishingFormTemplates({ schemaVersion: 1 })).templates)
+        .toEqual([base, partnerTemplate]);
+      expect((await runtime.listPublishingFormResponses({
+        schemaVersion: 1,
+        workId: work.workId,
+      })).responses).toEqual([saved]);
+
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      expect((await runtime.listPublishingFormTemplates({ schemaVersion: 1 })).templates)
+        .toEqual([base, partnerTemplate]);
+      expect((await runtime.listPublishingFormResponses({
+        schemaVersion: 1,
+        workId: work.workId,
+      })).responses).toEqual([saved]);
+
+      const loglineFieldId = randomUUID();
+      const updatedTemplate = await runtime.updatePublishingFormTemplate({
+        schemaVersion: 1,
+        templateId: partnerTemplate.templateId,
+        expectedRevision: partnerTemplate.revision,
+        name: partnerTemplate.name,
+        description: "작품 항목 추가",
+        sections: [{
+          ...partnerTemplate.sections[0]!,
+          fields: [
+            ...partnerTemplate.sections[0]!.fields,
+            {
+              fieldId: loglineFieldId,
+              label: "로그라인",
+              fieldType: "textarea",
+              required: true,
+              helpText: "",
+              placeholder: "",
+              options: [],
+            },
+          ],
+        }],
+      });
+      const revised = await runtime.savePublishingFormResponse({
+        schemaVersion: 1,
+        workId: work.workId,
+        partnerId: partner.partnerId,
+        templateId: updatedTemplate.templateId,
+        expectedTemplateRevision: updatedTemplate.revision,
+        expectedRevision: saved.revision,
+        answers: [
+          { fieldId: penNameFieldId, value: "은하" },
+          { fieldId: loglineFieldId, value: "한 문장 소개" },
+        ],
+      });
+      expect(revised).toMatchObject({
+        revision: 2,
+        templateRevision: 2,
+        answers: [
+          { fieldId: penNameFieldId, value: "은하" },
+          { fieldId: loglineFieldId, value: "한 문장 소개" },
+        ],
+      });
     } finally {
       runtime.close();
       await rm(rootDirectoryPath, { recursive: true, force: true });
@@ -7703,10 +8384,26 @@ describe("local workspace runtime", () => {
         }),
       );
       const offset = manuscript.indexOf("다음");
+      const currentDocumentRevisionId = runtime
+        .getManuscriptDocumentProfile().documents[0]?.documentRevisionId;
+      if (currentDocumentRevisionId === null || currentDocumentRevisionId === undefined) {
+        throw new Error("Expected a current manuscript revision");
+      }
+      await expect(runtime.createSceneOverride({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        expectedDocumentRevisionId: created.revisionId,
+        selection: { anchor: offset, head: offset },
+        exactQuote: "",
+        operation: "add",
+        note: "stale boundary",
+      })).rejects.toThrow("SceneOverride document revision conflict");
       const createdOverride = await runtime.createSceneOverride({
         schemaVersion: 1,
         workId: created.workId,
         documentId: created.documentId,
+        expectedDocumentRevisionId: currentDocumentRevisionId,
         selection: { anchor: offset, head: offset },
         exactQuote: "",
         operation: "add",
@@ -7802,6 +8499,10 @@ describe("local workspace runtime", () => {
         schemaVersion: 1,
         workId: created.workId,
       });
+      const currentDocumentRevisionId = initial.scenes[0]?.documentRevisionId;
+      if (currentDocumentRevisionId === undefined) {
+        throw new Error("Expected a current Scene document revision");
+      }
       expect(initial.status).toBe("clean");
       expect(initial.scenes).toHaveLength(2);
       expect(initial.scenes[0]?.events).toMatchObject([
@@ -7816,6 +8517,7 @@ describe("local workspace runtime", () => {
         schemaVersion: 1,
         workId: created.workId,
         documentId: created.documentId,
+        expectedDocumentRevisionId: currentDocumentRevisionId,
         selection: {
           anchor: separatorFrom,
           head: separatorFrom + "***\n".length,
@@ -7833,6 +8535,7 @@ describe("local workspace runtime", () => {
         schemaVersion: 1,
         workId: created.workId,
         documentId: created.documentId,
+        expectedDocumentRevisionId: currentDocumentRevisionId,
         selection: { anchor: separatorFrom, head: separatorFrom },
         exactQuote: "",
         operation: "split",
@@ -7888,6 +8591,1157 @@ describe("local workspace runtime", () => {
         { eventBlockId: firstEvent.eventBlockId },
       ]);
       expect(reopened.scenes[1]?.events).toEqual(projection.scenes[1]?.events);
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("binds new Scene metadata atomically and reconciles a legacy missing binding once", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-scene-metadata-reconcile-runtime-"),
+    );
+    const options = createOptions(rootDirectoryPath);
+    const profiles = createLocalWorkspaceStorageProfiles(rootDirectoryPath);
+    let runtime = await openLocalWorkspaceRuntime(options);
+
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: randomUUID(),
+        firstDocumentTitle: "장면 binding 회차",
+      });
+      const manuscript = "identity 없는 장면 metadata";
+      await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: created.workId,
+        documentId: created.documentId,
+        baseRevisionId: created.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: manuscript.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: manuscript }],
+      }));
+      const before = await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(before.scenes).toHaveLength(1);
+      expect(before.scenes[0]?.sceneIdentity).toBeUndefined();
+      const event = await runtime.createAnchorlessEvent({
+        schemaVersion: 1,
+        workId: created.workId,
+        title: "장면 binding 사건",
+        note: "",
+      });
+      const bindingFault = new DatabaseSync(profiles.databasePath);
+      try {
+        bindingFault.exec(`
+          CREATE TRIGGER fail_scene_metadata_binding_insert
+          BEFORE INSERT ON scene_metadata_bindings
+          BEGIN
+            SELECT RAISE(ABORT, 'injected binding failure');
+          END;
+        `);
+      } finally {
+        bindingFault.close();
+      }
+      await expect(runtime.setSceneEventOverride({
+        schemaVersion: 1,
+        workId: created.workId,
+        sceneKey: before.scenes[0]!.sceneKey,
+        eventBlockId: event.eventBlockId,
+        operation: "include",
+        expectedRevision: null,
+      })).rejects.toThrow("injected binding failure");
+      const rollbackAudit = new DatabaseSync(profiles.databasePath);
+      try {
+        expect(rollbackAudit.prepare(`
+          SELECT
+            (SELECT COUNT(*) FROM scene_event_overrides) AS "overrideCount",
+            (SELECT COUNT(*) FROM scene_identities) AS "identityCount",
+            (SELECT COUNT(*) FROM scene_episode_segments) AS "segmentCount",
+            (SELECT COUNT(*) FROM scene_metadata_bindings) AS "bindingCount"
+        `).get()).toEqual({
+          overrideCount: 0,
+          identityCount: 0,
+          segmentCount: 0,
+          bindingCount: 0,
+        });
+        rollbackAudit.exec("DROP TRIGGER fail_scene_metadata_binding_insert");
+      } finally {
+        rollbackAudit.close();
+      }
+      const immediate = await runtime.setSceneEventOverride({
+        schemaVersion: 1,
+        workId: created.workId,
+        sceneKey: before.scenes[0]!.sceneKey,
+        eventBlockId: event.eventBlockId,
+        operation: "include",
+        expectedRevision: null,
+      });
+      const immediateSceneId = immediate.scenes[0]?.sceneIdentity?.sceneId;
+      expect(immediateSceneId).toBeDefined();
+      const immediateAudit = new DatabaseSync(profiles.databasePath, {
+        readOnly: true,
+      });
+      try {
+        expect(immediateAudit.prepare(`
+          SELECT scene_id AS "sceneId", status, revision
+          FROM scene_metadata_bindings
+        `).get()).toEqual({
+          sceneId: immediateSceneId,
+          status: "current",
+          revision: 1,
+        });
+      } finally {
+        immediateAudit.close();
+      }
+      runtime.close();
+
+      const legacyPreparation = new DatabaseSync(profiles.databasePath);
+      try {
+        legacyPreparation.exec(`
+          PRAGMA foreign_keys = ON;
+          BEGIN IMMEDIATE;
+          DELETE FROM scene_metadata_bindings;
+          DELETE FROM scene_episode_segments;
+          DELETE FROM scene_identities;
+          COMMIT;
+        `);
+      } finally {
+        legacyPreparation.close();
+      }
+
+      runtime = await openLocalWorkspaceRuntime(options);
+      const reconciled = await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      const sceneId = reconciled.scenes[0]?.sceneIdentity?.sceneId;
+      expect(sceneId).toBeDefined();
+      expect(sceneId).not.toBe(immediateSceneId);
+      if (sceneId === undefined) {
+        throw new Error("Expected a reconciled Scene identity");
+      }
+      expect(reconciled.scenes[0]?.events).toMatchObject([{
+        eventBlockId: event.eventBlockId,
+        membership: "manual",
+      }]);
+      runtime.close();
+
+      const firstAudit = new DatabaseSync(profiles.databasePath, {
+        readOnly: true,
+      });
+      try {
+        expect(firstAudit.prepare(`
+          SELECT metadata_kind AS "metadataKind", metadata_id AS "metadataId",
+            source_scene_key AS "sourceSceneKey", scene_id AS "sceneId", status,
+            revision
+          FROM scene_metadata_bindings
+        `).all()).toEqual([{
+          metadataKind: "event-override",
+          metadataId: expect.any(String),
+          sourceSceneKey: before.scenes[0]!.sceneKey,
+          sceneId,
+          status: "current",
+          revision: 1,
+        }]);
+        expect(firstAudit.prepare(`
+          SELECT
+            (SELECT COUNT(*) FROM scene_identities) AS "identityCount",
+            (SELECT COUNT(*) FROM scene_episode_segments) AS "segmentCount",
+            (SELECT COUNT(*) FROM scene_metadata_bindings) AS "bindingCount"
+        `).get()).toEqual({
+          identityCount: 1,
+          segmentCount: 1,
+          bindingCount: 1,
+        });
+      } finally {
+        firstAudit.close();
+      }
+
+      runtime = await openLocalWorkspaceRuntime(options);
+      const reopened = await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(reopened.scenes[0]?.sceneIdentity?.sceneId).toBe(sceneId);
+
+      const secondAudit = new DatabaseSync(profiles.databasePath, {
+        readOnly: true,
+      });
+      try {
+        expect(secondAudit.prepare(`
+          SELECT
+            (SELECT COUNT(*) FROM scene_identities) AS "identityCount",
+            (SELECT COUNT(*) FROM scene_episode_segments) AS "segmentCount",
+            (SELECT COUNT(*) FROM scene_metadata_bindings) AS "bindingCount"
+        `).get()).toEqual({
+          identityCount: 1,
+          segmentCount: 1,
+          bindingCount: 1,
+        });
+      } finally {
+        secondAudit.close();
+      }
+
+      const splitOffset = manuscript.indexOf(" metadata");
+      await runtime.createSceneOverride({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        expectedDocumentRevisionId: reopened.scenes[0]!.documentRevisionId,
+        selection: { anchor: splitOffset, head: splitOffset },
+        exactQuote: "",
+        operation: "split",
+        note: "lineage split",
+      });
+      const splitProjection = await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(splitProjection.scenes).toHaveLength(2);
+      const leftScene = splitProjection.scenes[0]!;
+      const rightScene = splitProjection.scenes[1]!;
+      const rightSceneId = rightScene.sceneIdentity?.sceneId;
+      expect(leftScene.sceneIdentity?.sceneId).toBe(sceneId);
+      expect(rightSceneId).toBeDefined();
+      if (rightSceneId === undefined) {
+        throw new Error("Expected a right split Scene identity");
+      }
+      expect(rightSceneId).not.toBe(sceneId);
+
+      let bindingId: EntityId<"SceneMetadataBinding"> | null = null;
+      let sourceSceneKey = "";
+      const splitAudit = new DatabaseSync(profiles.databasePath, {
+        readOnly: true,
+      });
+      try {
+        const splitOperation = splitAudit.prepare(`
+          SELECT id, operation FROM scene_lineage_operations
+          WHERE operation = 'split'
+        `).get() as { readonly id: string; readonly operation: string };
+        expect(splitOperation.operation).toBe("split");
+        expect(splitAudit.prepare(`
+          SELECT role, ordinal, scene_id AS "sceneId"
+          FROM scene_lineage_members
+          WHERE lineage_operation_id = ?
+          ORDER BY CASE role WHEN 'parent' THEN 0 ELSE 1 END, ordinal
+        `).all(splitOperation.id)).toEqual([
+          { role: "parent", ordinal: 0, sceneId },
+          { role: "child", ordinal: 0, sceneId },
+          { role: "child", ordinal: 1, sceneId: rightSceneId },
+        ]);
+        const splitBinding = splitAudit.prepare(`
+          SELECT id, revision, metadata_kind AS "metadataKind",
+            metadata_id AS "metadataId", source_scene_key AS "sourceSceneKey",
+            scene_id AS "sceneId", status,
+            proposed_scene_id AS "proposedSceneId",
+            lineage_operation_id AS "lineageOperationId"
+          FROM scene_metadata_bindings
+        `).get() as {
+          readonly id: string;
+          readonly revision: number;
+          readonly metadataKind: string;
+          readonly metadataId: string;
+          readonly sourceSceneKey: string;
+          readonly sceneId: string;
+          readonly status: string;
+          readonly proposedSceneId: string | null;
+          readonly lineageOperationId: string | null;
+        };
+        bindingId = entityId<"SceneMetadataBinding">(splitBinding.id);
+        sourceSceneKey = splitBinding.sourceSceneKey;
+        expect(splitBinding).toEqual({
+          id: bindingId,
+          revision: 2,
+          metadataKind: "event-override",
+          metadataId: expect.any(String),
+          sourceSceneKey: before.scenes[0]!.sceneKey,
+          sceneId,
+          status: "needs-review",
+          proposedSceneId: sceneId,
+          lineageOperationId: splitOperation.id,
+        });
+      } finally {
+        splitAudit.close();
+      }
+      if (bindingId === null) {
+        throw new Error("Expected a Scene metadata binding after split");
+      }
+
+      const accepted = await runtime.rebindSceneMetadata({
+        schemaVersion: 1,
+        workId: created.workId,
+        sceneMetadataBindingId: bindingId,
+        expectedBindingRevision: 2,
+        targetSceneId: sceneId,
+      });
+      expect(accepted).toMatchObject({
+        revision: 3,
+        sourceSceneKey,
+        sceneId,
+        status: "current",
+        proposedSceneId: null,
+        lineageOperationId: null,
+      });
+      const acceptedProjection = await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(acceptedProjection.scenes[0]?.events).toMatchObject([{
+        eventBlockId: event.eventBlockId,
+        membership: "manual",
+      }]);
+      expect(acceptedProjection.scenes[1]?.events).toEqual([]);
+      await expect(runtime.rebindSceneMetadata({
+        schemaVersion: 1,
+        workId: created.workId,
+        sceneMetadataBindingId: bindingId,
+        expectedBindingRevision: 2,
+        targetSceneId: rightSceneId,
+      })).rejects.toThrow("Scene metadata binding revision conflict");
+
+      const rebound = await runtime.rebindSceneMetadata({
+        schemaVersion: 1,
+        workId: created.workId,
+        sceneMetadataBindingId: bindingId,
+        expectedBindingRevision: 3,
+        targetSceneId: rightSceneId,
+      });
+      expect(rebound).toMatchObject({
+        revision: 4,
+        sourceSceneKey,
+        sceneId: rightSceneId,
+        status: "current",
+      });
+      const reboundProjection = await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(reboundProjection.scenes[0]?.events).toEqual([]);
+      expect(reboundProjection.scenes[1]?.events).toMatchObject([{
+        eventBlockId: event.eventBlockId,
+        membership: "manual",
+      }]);
+
+      if (leftScene.range === null || rightScene.range === null) {
+        throw new Error("Expected resolved split Scene ranges");
+      }
+      await runtime.createSceneOverride({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        expectedDocumentRevisionId: leftScene.documentRevisionId,
+        selection: {
+          anchor: leftScene.range.end,
+          head: rightScene.range.start,
+        },
+        exactQuote: manuscript.slice(
+          leftScene.range.end,
+          rightScene.range.start,
+        ),
+        operation: "merge",
+        note: "lineage merge",
+      });
+      const mergedProjection = await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(mergedProjection.scenes).toHaveLength(1);
+      expect(mergedProjection.scenes[0]?.sceneIdentity?.sceneId).toBe(sceneId);
+      runtime.close();
+
+      const lineageAudit = new DatabaseSync(profiles.databasePath, {
+        readOnly: true,
+      });
+      try {
+        expect(lineageAudit.prepare(`
+          SELECT operation, role, COUNT(*) AS count
+          FROM scene_lineage_operations AS operation
+          JOIN scene_lineage_members AS member
+            ON member.work_id = operation.work_id
+            AND member.lineage_operation_id = operation.id
+          GROUP BY operation, role
+          ORDER BY operation, role
+        `).all()).toEqual([
+          { operation: "merge", role: "child", count: 1 },
+          { operation: "merge", role: "parent", count: 2 },
+          { operation: "split", role: "child", count: 2 },
+          { operation: "split", role: "parent", count: 1 },
+        ]);
+        expect(lineageAudit.prepare(`
+          SELECT binding.revision, binding.scene_id AS "sceneId",
+            binding.status,
+            binding.proposed_scene_id AS "proposedSceneId",
+            operation.operation AS "lineageOperation"
+          FROM scene_metadata_bindings AS binding
+          JOIN scene_lineage_operations AS operation
+            ON operation.work_id = binding.work_id
+            AND operation.id = binding.lineage_operation_id
+        `).get()).toEqual({
+          revision: 5,
+          sceneId: rightSceneId,
+          status: "needs-review",
+          proposedSceneId: sceneId,
+          lineageOperation: "merge",
+        });
+        expect(lineageAudit.prepare(`
+          SELECT COUNT(*) AS count FROM scene_identities
+          WHERE id = ? AND retired_at IS NOT NULL
+        `).get(rightSceneId)).toEqual({ count: 1 });
+        expect(lineageAudit.prepare(`
+          SELECT
+            (SELECT COUNT(*) FROM scene_lineage_operations) AS "operationCount",
+            (SELECT COUNT(*) FROM scene_lineage_members) AS "memberCount"
+        `).get()).toEqual({ operationCount: 2, memberCount: 6 });
+      } finally {
+        lineageAudit.close();
+      }
+
+      runtime = await openLocalWorkspaceRuntime(options);
+      await expect(runtime.rebindSceneMetadata({
+        schemaVersion: 1,
+        workId: created.workId,
+        sceneMetadataBindingId: bindingId,
+        expectedBindingRevision: 5,
+        targetSceneId: rightSceneId,
+      })).rejects.toThrow("Scene metadata target is unavailable");
+      const detached = await runtime.rebindSceneMetadata({
+        schemaVersion: 1,
+        workId: created.workId,
+        sceneMetadataBindingId: bindingId,
+        expectedBindingRevision: 5,
+        targetSceneId: null,
+      });
+      expect(detached).toMatchObject({
+        revision: 6,
+        sourceSceneKey,
+        sceneId: null,
+        status: "detached",
+        proposedSceneId: null,
+        lineageOperationId: null,
+      });
+      const persistedLineageProjection = await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(persistedLineageProjection.scenes).toHaveLength(1);
+      expect(persistedLineageProjection.scenes[0]?.sceneIdentity?.sceneId)
+        .toBe(sceneId);
+      expect(persistedLineageProjection.scenes[0]?.events).toEqual([]);
+      const sourceAudit = new DatabaseSync(profiles.databasePath, {
+        readOnly: true,
+      });
+      try {
+        expect(sourceAudit.prepare(`
+          SELECT override.scene_key AS "overrideSceneKey",
+            binding.source_scene_key AS "bindingSourceSceneKey",
+            binding.revision, binding.status
+          FROM scene_event_overrides AS override
+          JOIN scene_metadata_bindings AS binding
+            ON binding.work_id = override.work_id
+            AND binding.metadata_kind = 'event-override'
+            AND binding.metadata_id = override.id
+        `).get()).toEqual({
+          overrideSceneKey: sourceSceneKey,
+          bindingSourceSceneKey: sourceSceneKey,
+          revision: 6,
+          status: "detached",
+        });
+      } finally {
+        sourceAudit.close();
+      }
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("deletes a Scene atomically, rolls back faults, and restores it from durable trash", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-scene-trash-runtime-"),
+    );
+    const options = createOptions(rootDirectoryPath);
+    const profiles = createLocalWorkspaceStorageProfiles(rootDirectoryPath);
+    let runtime = await openLocalWorkspaceRuntime(options);
+
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: randomUUID(),
+        firstDocumentTitle: "장면 휴지통 회차",
+      });
+      const manuscript = "첫 장면\n***\n둘째 장면";
+      await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: created.workId,
+        documentId: created.documentId,
+        baseRevisionId: created.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: manuscript.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: manuscript }],
+      }));
+      const event = await runtime.createAnchorlessEvent({
+        schemaVersion: 1,
+        workId: created.workId,
+        title: "휴지통 연결 사건",
+        note: "",
+      });
+      let projection = await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(projection.scenes).toHaveLength(2);
+      projection = await runtime.setSceneEventOverride({
+        schemaVersion: 1,
+        workId: created.workId,
+        sceneKey: projection.scenes[0]!.sceneKey,
+        eventBlockId: event.eventBlockId,
+        operation: "include",
+        expectedRevision: null,
+      });
+      const firstScene = projection.scenes[0]!;
+      const firstSceneId = firstScene.sceneIdentity?.sceneId;
+      if (firstSceneId === undefined) {
+        throw new Error("Expected a stable Scene identity before deletion");
+      }
+      const preview = await runtime.prepareSceneDeletion({
+        schemaVersion: 1,
+        workId: created.workId,
+        target: {
+          sceneId: firstSceneId,
+          documentId: firstScene.documentId,
+          sceneKey: firstScene.sceneKey,
+        },
+      });
+      expect(preview.documents).toMatchObject([{
+        documentId: created.documentId,
+        sceneContentUtf16Length: "첫 장면\n".length,
+        deletedUtf16Length: "첫 장면\n***\n".length,
+        firstExcerpt: "첫 장면",
+        lastExcerpt: "첫 장면",
+      }]);
+      expect(preview.metadata).toContainEqual({
+        kind: "event",
+        metadataId: event.eventBlockId,
+        label: "휴지통 연결 사건",
+      });
+
+      const fault = new DatabaseSync(profiles.databasePath);
+      try {
+        fault.exec(`
+          CREATE TRIGGER fail_scene_trash_insert
+          BEFORE INSERT ON scene_trash_entries
+          BEGIN
+            SELECT RAISE(ABORT, 'injected Scene trash failure');
+          END;
+        `);
+      } finally {
+        fault.close();
+      }
+      await expect(runtime.deleteScene({ schemaVersion: 1, preview }))
+        .rejects.toThrow("injected Scene trash failure");
+      const rollbackAudit = new DatabaseSync(profiles.databasePath);
+      try {
+        expect(rollbackAudit.prepare(`
+          SELECT
+            (SELECT COUNT(*) FROM scene_trash_entries) AS "trashCount",
+            (SELECT COUNT(*) FROM scene_lineage_operations
+              WHERE operation = 'delete') AS "deleteLineageCount",
+            (SELECT COUNT(*) FROM scene_identities
+              WHERE id = ? AND retired_at IS NULL) AS "activeIdentityCount",
+            (SELECT COUNT(*) FROM scene_metadata_bindings
+              WHERE scene_id = ? AND status = 'current') AS "currentBindingCount"
+        `).get(firstSceneId, firstSceneId)).toEqual({
+          trashCount: 0,
+          deleteLineageCount: 0,
+          activeIdentityCount: 1,
+          currentBindingCount: 1,
+        });
+        rollbackAudit.exec("DROP TRIGGER fail_scene_trash_insert");
+      } finally {
+        rollbackAudit.close();
+      }
+      expect(runtime.getManuscriptDocumentProfile().documents[0]?.initialText)
+        .toBe(manuscript);
+
+      const deleted = await runtime.deleteScene({ schemaVersion: 1, preview });
+      expect(deleted.status).toBe("deleted");
+      expect(deleted.entry).toMatchObject({
+        sceneId: firstSceneId,
+        status: "active",
+        canRestore: true,
+      });
+      expect(runtime.getManuscriptDocumentProfile().documents[0]?.initialText)
+        .toBe("둘째 장면");
+      projection = await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(projection.scenes).toHaveLength(1);
+      expect(projection.scenes[0]?.events).toEqual([]);
+      runtime.close();
+
+      runtime = await openLocalWorkspaceRuntime(options);
+      let trash = await runtime.listSceneTrash({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(trash.entries).toHaveLength(1);
+      expect(trash.entries[0]).toMatchObject({ status: "active", canRestore: true });
+      const undone = await runtime.undoSceneDeletion({
+        schemaVersion: 1,
+        workId: created.workId,
+        sceneTrashEntryId: deleted.entry.sceneTrashEntryId,
+        expectedRevision: deleted.entry.revision,
+      });
+      expect(undone.status).toBe("undone");
+      expect(runtime.getManuscriptDocumentProfile().documents[0]?.initialText)
+        .toBe(manuscript);
+      projection = await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(projection.scenes).toHaveLength(2);
+      expect(projection.scenes[0]?.sceneIdentity?.sceneId).toBe(firstSceneId);
+      expect(projection.scenes[0]?.events).toMatchObject([{
+        eventBlockId: event.eventBlockId,
+        membership: "manual",
+      }]);
+
+      const secondPreview = await runtime.prepareSceneDeletion({
+        schemaVersion: 1,
+        workId: created.workId,
+        target: {
+          sceneId: firstSceneId,
+          documentId: projection.scenes[0]!.documentId,
+          sceneKey: projection.scenes[0]!.sceneKey,
+        },
+      });
+      const deletedAgain = await runtime.deleteScene({
+        schemaVersion: 1,
+        preview: secondPreview,
+      });
+      runtime.close();
+
+      runtime = await openLocalWorkspaceRuntime(options);
+      const restored = await runtime.restoreSceneTrash({
+        schemaVersion: 1,
+        workId: created.workId,
+        sceneTrashEntryId: deletedAgain.entry.sceneTrashEntryId,
+        expectedRevision: deletedAgain.entry.revision,
+      });
+      expect(restored.status).toBe("restored");
+      expect(runtime.getManuscriptDocumentProfile().documents[0]?.initialText)
+        .toBe(manuscript);
+      trash = await runtime.listSceneTrash({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(trash.entries.map((entry) => entry.status).sort())
+        .toEqual(["restored", "undone"]);
+      const finalAudit = new DatabaseSync(profiles.databasePath, {
+        readOnly: true,
+      });
+      try {
+        expect(finalAudit.prepare(`
+          SELECT operation, COUNT(*) AS count
+          FROM scene_lineage_operations
+          WHERE operation IN ('delete', 'restore')
+          GROUP BY operation
+          ORDER BY operation
+        `).all()).toEqual([
+          { operation: "delete", count: 2 },
+          { operation: "restore", count: 2 },
+        ]);
+        expect(finalAudit.prepare(`
+          SELECT status, scene_id AS "sceneId"
+          FROM scene_metadata_bindings
+        `).get()).toEqual({ status: "current", sceneId: firstSceneId });
+        expect(finalAudit.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+      } finally {
+        finalAudit.close();
+      }
+      projection = await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      const conflictPreview = await runtime.prepareSceneDeletion({
+        schemaVersion: 1,
+        workId: created.workId,
+        target: {
+          sceneId: projection.scenes[0]!.sceneIdentity?.sceneId ?? null,
+          documentId: projection.scenes[0]!.documentId,
+          sceneKey: projection.scenes[0]!.sceneKey,
+        },
+      });
+      const conflictDeletion = await runtime.deleteScene({
+        schemaVersion: 1,
+        preview: conflictPreview,
+      });
+      const deletedDocument = runtime.getManuscriptDocumentProfile().documents[0]!;
+      await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: created.workId,
+        documentId: created.documentId,
+        baseRevisionId: deletedDocument.documentRevisionId!,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: deletedDocument.initialText.length,
+        afterTextLengthUtf16: deletedDocument.initialText.length + 3,
+        changes: [{
+          fromUtf16: deletedDocument.initialText.length,
+          toUtf16: deletedDocument.initialText.length,
+          insertedText: " 수정",
+        }],
+      }));
+      trash = await runtime.listSceneTrash({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      const conflicted = trash.entries.find(
+        (entry) => entry.sceneTrashEntryId === conflictDeletion.entry.sceneTrashEntryId,
+      );
+      expect(conflicted).toMatchObject({
+        canRestore: false,
+        conflictReason: "삭제 후 회차 원고가 변경되었습니다.",
+      });
+      await expect(runtime.restoreSceneTrash({
+        schemaVersion: 1,
+        workId: created.workId,
+        sceneTrashEntryId: conflictDeletion.entry.sceneTrashEntryId,
+        expectedRevision: conflictDeletion.entry.revision,
+      })).rejects.toThrow("삭제 후 회차 원고가 변경되었습니다.");
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("provisions identity for an unbound Scene before deleting and restoring it", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-unbound-scene-trash-runtime-"),
+    );
+    const options = createOptions(rootDirectoryPath);
+    const runtime = await openLocalWorkspaceRuntime(options);
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: randomUUID(),
+        firstDocumentTitle: "독립 장면 회차",
+      });
+      const manuscript = "독립 장면";
+      await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: created.workId,
+        documentId: created.documentId,
+        baseRevisionId: created.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: manuscript.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: manuscript }],
+      }));
+      let projection = await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(projection.scenes[0]?.sceneIdentity).toBeUndefined();
+      const preview = await runtime.prepareSceneDeletion({
+        schemaVersion: 1,
+        workId: created.workId,
+        target: {
+          sceneId: null,
+          documentId: created.documentId,
+          sceneKey: projection.scenes[0]!.sceneKey,
+        },
+      });
+      const deleted = await runtime.deleteScene({ schemaVersion: 1, preview });
+      expect(runtime.getManuscriptDocumentProfile().documents[0]?.initialText)
+        .toBe("");
+      await runtime.restoreSceneTrash({
+        schemaVersion: 1,
+        workId: created.workId,
+        sceneTrashEntryId: deleted.entry.sceneTrashEntryId,
+        expectedRevision: deleted.entry.revision,
+      });
+      expect(runtime.getManuscriptDocumentProfile().documents[0]?.initialText)
+        .toBe(manuscript);
+      projection = await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(projection.scenes[0]?.sceneIdentity?.sceneId)
+        .toBe(deleted.entry.sceneId);
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("deletes and restores every episode segment of one stable Scene in one transaction", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-multi-episode-scene-trash-runtime-"),
+    );
+    const options = createOptions(rootDirectoryPath);
+    const runtime = await openLocalWorkspaceRuntime(options);
+    try {
+      const first = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: randomUUID(),
+        firstDocumentTitle: "1화",
+      });
+      const second = await runtime.createDocument({
+        schemaVersion: 1,
+        workId: first.workId,
+        title: "2화",
+      });
+      const originalText = "앞 뒤";
+      const firstSaved = await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: first.workId,
+        documentId: first.documentId,
+        baseRevisionId: first.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: originalText.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: originalText }],
+      }));
+      if (!("revisionId" in firstSaved)) {
+        throw new Error("Expected the first episode durable revision");
+      }
+      const moved = await runtime.moveRangeToEpisode({
+        schemaVersion: 1,
+        workId: first.workId,
+        sourceEpisodeId: first.documentId,
+        targetEpisodeId: second.documentId,
+        expectedSourceRevisionId: firstSaved.revisionId,
+        expectedTargetRevisionId: second.revisionId,
+        from: "앞 ".length,
+        to: originalText.length,
+        placement: "start",
+      });
+      expect(moved.sceneIds).toHaveLength(1);
+      let projection = await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: first.workId,
+      });
+      const sharedSceneId = moved.sceneIds[0]!;
+      const sharedSegments = projection.scenes.filter(
+        (scene) => scene.sceneIdentity?.sceneId === sharedSceneId,
+      );
+      expect(sharedSegments).toHaveLength(2);
+      const preview = await runtime.prepareSceneDeletion({
+        schemaVersion: 1,
+        workId: first.workId,
+        target: {
+          sceneId: sharedSceneId,
+          documentId: sharedSegments[0]!.documentId,
+          sceneKey: sharedSegments[0]!.sceneKey,
+        },
+      });
+      expect(preview.documents).toHaveLength(2);
+      const deleted = await runtime.deleteScene({ schemaVersion: 1, preview });
+      expect(runtime.getManuscriptDocumentProfile().documents
+        .filter((document) =>
+          document.documentId === first.documentId ||
+          document.documentId === second.documentId
+        )
+        .map((document) => document.initialText)).toEqual(["", ""]);
+      projection = await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: first.workId,
+      });
+      expect(projection.scenes.some(
+        (scene) => scene.sceneIdentity?.sceneId === sharedSceneId,
+      )).toBe(false);
+      await runtime.restoreSceneTrash({
+        schemaVersion: 1,
+        workId: first.workId,
+        sceneTrashEntryId: deleted.entry.sceneTrashEntryId,
+        expectedRevision: deleted.entry.revision,
+      });
+      expect(runtime.getManuscriptDocumentProfile().documents
+        .filter((document) =>
+          document.documentId === first.documentId ||
+          document.documentId === second.documentId
+        )
+        .map((document) => document.initialText)).toEqual(["앞 ", "뒤"]);
+      projection = await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: first.workId,
+      });
+      expect(projection.scenes.filter(
+        (scene) => scene.sceneIdentity?.sceneId === sharedSceneId,
+      )).toHaveLength(2);
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("retires hidden active segments when deleting the visible part of a stable Scene", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-hidden-segment-scene-trash-runtime-"),
+    );
+    const options = createOptions(rootDirectoryPath);
+    const profiles = createLocalWorkspaceStorageProfiles(rootDirectoryPath);
+    const runtime = await openLocalWorkspaceRuntime(options);
+    try {
+      const first = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: randomUUID(),
+        firstDocumentTitle: "1화",
+      });
+      const second = await runtime.createDocument({
+        schemaVersion: 1,
+        workId: first.workId,
+        title: "2화",
+      });
+      const originalText = "앞 뒤";
+      const firstSaved = await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: first.workId,
+        documentId: first.documentId,
+        baseRevisionId: first.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: originalText.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: originalText }],
+      }));
+      if (!("revisionId" in firstSaved)) {
+        throw new Error("Expected the first episode durable revision");
+      }
+      const moved = await runtime.moveRangeToEpisode({
+        schemaVersion: 1,
+        workId: first.workId,
+        sourceEpisodeId: first.documentId,
+        targetEpisodeId: second.documentId,
+        expectedSourceRevisionId: firstSaved.revisionId,
+        expectedTargetRevisionId: second.revisionId,
+        from: "앞 ".length,
+        to: originalText.length,
+        placement: "start",
+      });
+      const sharedSceneId = moved.sceneIds[0]!;
+      await runtime.retireDocument({
+        schemaVersion: 1,
+        workId: first.workId,
+        documentId: second.documentId,
+      });
+      const legacyFixture = new DatabaseSync(profiles.databasePath);
+      try {
+        legacyFixture.prepare(`
+          UPDATE scene_episode_segments
+          SET retired_at = NULL, updated_at = ?
+          WHERE work_id = ? AND scene_id = ? AND document_id = ?
+        `).run(
+          new Date().toISOString(),
+          first.workId,
+          sharedSceneId,
+          second.documentId,
+        );
+      } finally {
+        legacyFixture.close();
+      }
+      const projection = await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: first.workId,
+      });
+      const carrier = projection.scenes.find(
+        (scene) => scene.sceneIdentity?.sceneId === sharedSceneId,
+      );
+      expect(carrier?.sceneIdentity?.segments).toHaveLength(1);
+      if (carrier === undefined) {
+        throw new Error("Expected the visible stable Scene carrier");
+      }
+      const preview = await runtime.prepareSceneDeletion({
+        schemaVersion: 1,
+        workId: first.workId,
+        target: {
+          sceneId: sharedSceneId,
+          documentId: carrier.documentId,
+          sceneKey: carrier.sceneKey,
+        },
+      });
+      expect(preview.documents).toHaveLength(1);
+      const deleted = await runtime.deleteScene({ schemaVersion: 1, preview });
+      expect(runtime.getManuscriptDocumentProfile().documents)
+        .toHaveLength(1);
+      expect(runtime.getManuscriptDocumentProfile().documents[0]?.initialText)
+        .toBe("");
+      const deletedAudit = new DatabaseSync(profiles.databasePath, {
+        readOnly: true,
+      });
+      try {
+        expect(deletedAudit.prepare(`
+          SELECT COUNT(*) AS count FROM scene_episode_segments
+          WHERE work_id = ? AND scene_id = ? AND retired_at IS NULL
+        `).get(first.workId, sharedSceneId)).toEqual({ count: 0 });
+      } finally {
+        deletedAudit.close();
+      }
+      await runtime.restoreSceneTrash({
+        schemaVersion: 1,
+        workId: first.workId,
+        sceneTrashEntryId: deleted.entry.sceneTrashEntryId,
+        expectedRevision: deleted.entry.revision,
+      });
+      const restoredAudit = new DatabaseSync(profiles.databasePath, {
+        readOnly: true,
+      });
+      try {
+        expect(restoredAudit.prepare(`
+          SELECT COUNT(*) AS count FROM scene_episode_segments
+          WHERE work_id = ? AND scene_id = ? AND retired_at IS NULL
+        `).get(first.workId, sharedSceneId)).toEqual({ count: 2 });
+      } finally {
+        restoredAudit.close();
+      }
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("deletes and restores an edited unresolved continuation of a cross-episode Scene", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-edited-multi-episode-scene-trash-runtime-"),
+    );
+    const options = createOptions(rootDirectoryPath);
+    const runtime = await openLocalWorkspaceRuntime(options);
+    try {
+      const first = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: randomUUID(),
+        firstDocumentTitle: "1화",
+      });
+      const second = await runtime.createDocument({
+        schemaVersion: 1,
+        workId: first.workId,
+        title: "2화",
+      });
+      const originalText = "앞 뒤";
+      const firstSaved = await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: first.workId,
+        documentId: first.documentId,
+        baseRevisionId: first.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: originalText.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: originalText }],
+      }));
+      if (!("revisionId" in firstSaved)) {
+        throw new Error("Expected the first episode durable revision");
+      }
+      const moved = await runtime.moveRangeToEpisode({
+        schemaVersion: 1,
+        workId: first.workId,
+        sourceEpisodeId: first.documentId,
+        targetEpisodeId: second.documentId,
+        expectedSourceRevisionId: firstSaved.revisionId,
+        expectedTargetRevisionId: second.revisionId,
+        from: "앞 ".length,
+        to: originalText.length,
+        placement: "start",
+      });
+      const editedText = "바뀐 장면";
+      await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: first.workId,
+        documentId: second.documentId,
+        baseRevisionId: moved.targetRevisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: "뒤".length,
+        afterTextLengthUtf16: editedText.length,
+        changes: [{
+          fromUtf16: 0,
+          toUtf16: "뒤".length,
+          insertedText: editedText,
+        }],
+      }));
+
+      let projection = await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: first.workId,
+      });
+      const sharedSceneId = moved.sceneIds[0]!;
+      const carrier = projection.scenes.find(
+        (scene) => scene.sceneIdentity?.sceneId === sharedSceneId,
+      );
+      expect(carrier).toBeDefined();
+      expect(projection.scenes.filter(
+        (scene) => scene.sceneIdentity?.sceneId === sharedSceneId,
+      )).toHaveLength(1);
+      expect(projection.scenes.find(
+        (scene) => scene.documentId === second.documentId,
+      )?.sceneIdentity).toBeUndefined();
+      if (carrier === undefined) {
+        throw new Error("Expected the remaining stable Scene carrier");
+      }
+      const preview = await runtime.prepareSceneDeletion({
+        schemaVersion: 1,
+        workId: first.workId,
+        target: {
+          sceneId: sharedSceneId,
+          documentId: carrier.documentId,
+          sceneKey: carrier.sceneKey,
+        },
+      });
+      expect(preview.documents.map((document) => document.documentId).sort())
+        .toEqual([first.documentId, second.documentId].sort());
+      const deleted = await runtime.deleteScene({ schemaVersion: 1, preview });
+      expect(runtime.getManuscriptDocumentProfile().documents
+        .filter((document) =>
+          document.documentId === first.documentId ||
+          document.documentId === second.documentId
+        )
+        .map((document) => document.initialText)).toEqual(["", ""]);
+      projection = await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: first.workId,
+      });
+      expect(projection.scenes.some(
+        (scene) => scene.sceneIdentity?.sceneId === sharedSceneId,
+      )).toBe(false);
+      await runtime.restoreSceneTrash({
+        schemaVersion: 1,
+        workId: first.workId,
+        sceneTrashEntryId: deleted.entry.sceneTrashEntryId,
+        expectedRevision: deleted.entry.revision,
+      });
+      expect(runtime.getManuscriptDocumentProfile().documents
+        .filter((document) =>
+          document.documentId === first.documentId ||
+          document.documentId === second.documentId
+        )
+        .map((document) => document.initialText)).toEqual(["앞 ", editedText]);
     } finally {
       runtime.close();
       await rm(rootDirectoryPath, { recursive: true, force: true });
@@ -8004,10 +9858,16 @@ describe("local workspace runtime", () => {
         note: "schema 4 입력",
       });
       const splitOffset = manuscript.indexOf("둘째") + 2;
+      const currentDocumentRevisionId = runtime
+        .getManuscriptDocumentProfile().documents[0]?.documentRevisionId;
+      if (currentDocumentRevisionId === null || currentDocumentRevisionId === undefined) {
+        throw new Error("Expected a current manuscript revision");
+      }
       const sceneOverride = await runtime.createSceneOverride({
         schemaVersion: 1,
         workId: created.workId,
         documentId: created.documentId,
+        expectedDocumentRevisionId: currentDocumentRevisionId,
         selection: { anchor: splitOffset, head: splitOffset },
         exactQuote: "",
         operation: "split",
@@ -8063,12 +9923,12 @@ describe("local workspace runtime", () => {
       const audit = new DatabaseSync(profiles.databasePath, { readOnly: true });
       try {
         expect(audit.prepare("PRAGMA user_version").get()).toEqual({
-          user_version: 13,
+          user_version: 26,
         });
         expect(audit.prepare(`
           SELECT target_schema_version AS "targetSchemaVersion"
           FROM storage_ledger_identity
-        `).get()).toEqual({ targetSchemaVersion: 13 });
+        `).get()).toEqual({ targetSchemaVersion: 26 });
         expect(audit.prepare(`
           SELECT COUNT(*) AS count
           FROM migration_receipts
@@ -8090,6 +9950,56 @@ describe("local workspace runtime", () => {
         audit.close();
       }
       runtime = await openLocalWorkspaceRuntime(options);
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("moves and undoes manuscript text while earlier catalog mutations are queued", async () => {
+    const rootDirectoryPath = await mkdtemp(path.join(tmpdir(), "eum-move-queued-mutations-"));
+    const runtime = await openLocalWorkspaceRuntime(createOptions(rootDirectoryPath));
+    try {
+      const source = await runtime.createFirstWork({ schemaVersion: 1, title: randomUUID(), firstDocumentTitle: randomUUID() });
+      const target = await runtime.createDocument({ schemaVersion: 1, workId: source.workId, title: randomUUID() });
+      const text = randomUUID(); const split = Math.floor(text.length / 2);
+      const saved = await runtime.saveChangeBatch(parseChangeBatch({ schemaVersion: 1, textRepresentation: DURABLE_TEXT_REPRESENTATION_V1, batchId: randomUUID(), workId: source.workId, documentId: source.documentId, baseRevisionId: source.revisionId, sequence: 0, createdAt: new Date().toISOString(), beforeTextLengthUtf16: 0, afterTextLengthUtf16: text.length, changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: text }] }));
+      if (!("revisionId" in saved)) throw new Error("Expected a durable revision");
+      const [, , moved] = await Promise.all([
+        runtime.renameWork({ schemaVersion: 1, workId: source.workId, title: randomUUID() }),
+        runtime.renameDocument({ schemaVersion: 1, workId: source.workId, documentId: source.documentId, title: randomUUID() }),
+        runtime.moveRangeToEpisode({ schemaVersion: 1, workId: source.workId, sourceEpisodeId: source.documentId, targetEpisodeId: target.documentId, expectedSourceRevisionId: saved.revisionId, expectedTargetRevisionId: target.revisionId, from: split, to: text.length, placement: "start" }),
+      ]);
+      const contents = () => new Map(runtime.getManuscriptDocumentProfile().documents.map((document) => [document.documentId, document.initialText]));
+      expect(contents().get(source.documentId)).toBe(text.slice(0, split));
+      expect(contents().get(target.documentId)).toBe(text.slice(split));
+      await runtime.undoMoveRangeToEpisode({ schemaVersion: 1, workId: source.workId, moveId: moved.moveId, expectedSourceRevisionId: moved.sourceRevisionId, expectedTargetRevisionId: moved.targetRevisionId });
+      expect(contents().get(source.documentId)).toBe(text);
+      expect(contents().get(target.documentId)).toBe("");
+    } finally { runtime.close(); await rm(rootDirectoryPath, { recursive: true, force: true }); }
+  });
+
+  it("derives historical character deltas without rereading manuscript blobs", async () => {
+    const rootDirectoryPath = await mkdtemp(path.join(tmpdir(), "eum-activity-metadata-"));
+    const runtime = await openLocalWorkspaceRuntime(createOptions(rootDirectoryPath));
+    try {
+      const created = await runtime.createFirstWork({ schemaVersion: 1, title: randomUUID(), firstDocumentTitle: randomUUID() });
+      const started = await runtime.startWritingSession({ schemaVersion: 1, workId: created.workId, documentId: created.documentId, note: "" });
+      const text = `${randomUUID()}가🙂`;
+      await runtime.saveChangeBatch(parseChangeBatch({ schemaVersion: 1, textRepresentation: DURABLE_TEXT_REPRESENTATION_V1, batchId: randomUUID(), workId: created.workId, documentId: created.documentId, baseRevisionId: created.revisionId, sequence: 0, createdAt: new Date().toISOString(), beforeTextLengthUtf16: 0, afterTextLengthUtf16: text.length, changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: text }] }));
+      await runtime.stopWritingSession({ schemaVersion: 1, workId: created.workId, sessionId: started.activeSessionId });
+      for (let index = 0; index < 5; index += 1) {
+        const session = await runtime.startWritingSession({ schemaVersion: 1, workId: created.workId, documentId: created.documentId, note: "" });
+        await runtime.stopWritingSession({ schemaVersion: 1, workId: created.workId, sessionId: session.activeSessionId });
+      }
+      const read = vi.mocked(fileSystem.readFile);
+      read.mockClear();
+      try {
+        const activity = await runtime.listWorkActivity({ schemaVersion: 1, workId: created.workId });
+        expect(activity.sessions).toHaveLength(6);
+        expect(activity.sessions.find((session) => session.sessionId === started.activeSessionId)?.characterDelta).toBe(text.length);
+        expect(read.mock.calls.filter(([file]) => String(file).endsWith(".blob"))).toHaveLength(0);
+      } finally { read.mockClear(); }
     } finally {
       runtime.close();
       await rm(rootDirectoryPath, { recursive: true, force: true });
@@ -8213,6 +10123,71 @@ describe("local workspace runtime", () => {
     }
   });
 
+  it("keeps retired-Document writing history without exposing an unavailable Document link", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-retired-document-activity-runtime-"),
+    );
+    const options = createOptions(rootDirectoryPath);
+    const runtime = await openLocalWorkspaceRuntime(options);
+
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: randomUUID(),
+        firstDocumentTitle: randomUUID(),
+      });
+      const started = await runtime.startWritingSession({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        note: "은퇴 전 기록",
+      });
+      if (started.activeSessionId === null) {
+        throw new Error("Expected an active WritingSession");
+      }
+      await runtime.stopWritingSession({
+        schemaVersion: 1,
+        workId: created.workId,
+        sessionId: started.activeSessionId,
+      });
+      await runtime.retireDocument({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+      });
+
+      const activity = await runtime.listWorkActivity({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(activity.sessions).toHaveLength(1);
+      expect(activity.sessions[0]).toMatchObject({
+        sessionId: started.activeSessionId,
+        workId: created.workId,
+        documentId: null,
+        state: "completed",
+        note: "은퇴 전 기록",
+      });
+
+      const profiles = createLocalWorkspaceStorageProfiles(rootDirectoryPath);
+      const audit = new DatabaseSync(profiles.databasePath, { readOnly: true });
+      try {
+        expect(audit.prepare(`
+          SELECT document_id AS "documentId"
+          FROM writing_sessions
+          WHERE id = ?
+        `).get(started.activeSessionId)).toEqual({
+          documentId: created.documentId,
+        });
+      } finally {
+        audit.close();
+      }
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
   it("runs one Work-owned Pomodoro through pause, restore, work-break deadlines, and completion", async () => {
     const rootDirectoryPath = await mkdtemp(
       path.join(tmpdir(), "eum-studio-pomodoro-runtime-"),
@@ -8240,7 +10215,7 @@ describe("local workspace runtime", () => {
       });
 
       const workDurationMs = 160;
-      const breakDurationMs = 140;
+      const breakDurationMs = 2_000;
       const workCycleCount = 2;
       const started = await runtime.configureAndStartPomodoro({
         schemaVersion: 1,
@@ -8580,6 +10555,15 @@ describe("local workspace runtime", () => {
       expect(
         beforeRestore.revisions.find((revision) => revision.isCurrent),
       ).toMatchObject({ revisionId: secondReceipt.revisionId });
+      await expect(runtime.readDocumentRevision({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        revisionId: firstReceipt.revisionId,
+      })).resolves.toMatchObject({
+        revision: { revisionId: firstReceipt.revisionId },
+        text: firstText,
+      });
 
       const restored = await runtime.restoreDocumentRevision({
         schemaVersion: 1,
@@ -8664,6 +10648,214 @@ describe("local workspace runtime", () => {
     }
   });
 
+  it("projects every Work's Today schedule and exact completed Document without a global source", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-today-runtime-"),
+    );
+    const runtime = await openLocalWorkspaceRuntime(createOptions(rootDirectoryPath));
+
+    try {
+      const first = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "작품 A",
+        firstDocumentTitle: "5화",
+      });
+      const second = await runtime.createWork({
+        schemaVersion: 1,
+        title: "작품 B",
+        firstDocumentTitle: "2화",
+      });
+      const firstCompletion = await runtime.completeDocument({
+        schemaVersion: 1,
+        workId: first.workId,
+        documentId: first.documentId,
+        expectedCompletionRevision: 0,
+        expectedDocumentRevisionId: first.revisionId,
+      });
+      const secondCompletion = await runtime.completeDocument({
+        schemaVersion: 1,
+        workId: second.workId,
+        documentId: second.documentId,
+        expectedCompletionRevision: 0,
+        expectedDocumentRevisionId: second.revisionId,
+      });
+      if (
+        firstCompletion.completedDate === null ||
+        secondCompletion.completedDate !== firstCompletion.completedDate
+      ) {
+        throw new Error("Expected both completions on the same runtime date");
+      }
+      await runtime.createWorkScheduleItem({
+        schemaVersion: 1,
+        workId: second.workId,
+        item: {
+          kind: "task",
+          label: "표지 확인",
+          date: firstCompletion.completedDate,
+          time: null,
+        },
+      });
+
+      const today = await runtime.getStudioToday({
+        schemaVersion: 1,
+        date: firstCompletion.completedDate,
+      });
+      expect(today.works.map((work) => work.workTitle)).toEqual(
+        expect.arrayContaining(["작품 A", "작품 B"]),
+      );
+      expect(today.works).toHaveLength(2);
+      expect(today.completedDocumentCount).toBe(2);
+      expect(
+        today.works.flatMap((work) => work.calendar.occurrences),
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "document-completion",
+            workId: first.workId,
+            documentId: first.documentId,
+          }),
+          expect.objectContaining({
+            kind: "document-completion",
+            workId: second.workId,
+            documentId: second.documentId,
+          }),
+          expect.objectContaining({
+            kind: "task",
+            workId: second.workId,
+            label: "표지 확인",
+          }),
+        ]),
+      );
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("unions Schedule items with Document completion facts without duplicating either ledger", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-work-calendar-runtime-"),
+    );
+    const options = createOptions(rootDirectoryPath);
+    const runtime = await openLocalWorkspaceRuntime(options);
+
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "달력 합성 작품",
+        firstDocumentTitle: "5화",
+      });
+      const completed = await runtime.completeDocument({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        expectedCompletionRevision: 0,
+        expectedDocumentRevisionId: created.revisionId,
+      });
+      if (completed.completedDate === null) {
+        throw new Error("Expected a completed calendar date");
+      }
+      const task = await runtime.createWorkScheduleItem({
+        schemaVersion: 1,
+        workId: created.workId,
+        item: {
+          kind: "task",
+          label: "6화 초고",
+          date: completed.completedDate,
+          time: null,
+        },
+      });
+
+      const calendar = await runtime.listWorkCalendar({
+        schemaVersion: 1,
+        workId: created.workId,
+        range: {
+          from: completed.completedDate,
+          to: completed.completedDate,
+        },
+      });
+      expect(calendar.completedDocumentCount).toBe(1);
+      expect(calendar.items).toHaveLength(1);
+      expect(calendar.occurrences).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "task",
+            itemId: task.itemId,
+            label: "6화 초고",
+          }),
+          expect.objectContaining({
+            kind: "document-completion",
+            occurrenceId: `document-completion:${created.documentId}`,
+            documentId: created.documentId,
+            documentTitle: "5화",
+            label: "5화 완료",
+            completedDocumentRevisionId: created.revisionId,
+            state: "current",
+          }),
+        ]),
+      );
+
+      const editedText = "완료 이후 수정";
+      const editedReceipt = await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: created.workId,
+        documentId: created.documentId,
+        baseRevisionId: created.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: editedText.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: editedText }],
+      }));
+      if (!("revisionId" in editedReceipt)) {
+        throw new Error("Expected a durable local revision receipt");
+      }
+      const afterEdit = await runtime.listWorkCalendar({
+        schemaVersion: 1,
+        workId: created.workId,
+        range: {
+          from: completed.completedDate,
+          to: completed.completedDate,
+        },
+      });
+      expect(afterEdit.occurrences).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          kind: "document-completion",
+          documentId: created.documentId,
+          state: "edited-after-completion",
+        }),
+      ]));
+
+      await runtime.clearDocumentCompletion({
+        schemaVersion: 1,
+        workId: created.workId,
+        documentId: created.documentId,
+        expectedCompletionRevision: completed.revision,
+      });
+      const afterCancel = await runtime.listWorkCalendar({
+        schemaVersion: 1,
+        workId: created.workId,
+        range: {
+          from: completed.completedDate,
+          to: completed.completedDate,
+        },
+      });
+      expect(afterCancel.completedDocumentCount).toBe(0);
+      expect(afterCancel.items.map((item) => item.itemId)).toEqual([task.itemId]);
+      expect(
+        afterCancel.occurrences.some(
+          (occurrence) => occurrence.kind === "document-completion",
+        ),
+      ).toBe(false);
+      expect(afterCancel.occurrences).toHaveLength(1);
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
   it("persists Work-owned tasks, daily routines, D-DAY values, and exact completions across reopen", async () => {
     const rootDirectoryPath = await mkdtemp(
       path.join(tmpdir(), "eum-studio-work-schedule-runtime-"),
@@ -8714,6 +10906,35 @@ describe("local workspace runtime", () => {
             mode: "episodeCount",
             targetEpisodeCount: 37,
             baselineCompletedCount: 12,
+          },
+        },
+      });
+      const explicitTotalDday = await runtime.createWorkScheduleItem({
+        schemaVersion: 1,
+        workId: first.workId,
+        item: {
+          kind: "dday",
+          label: "명시 완료 목표",
+          date: "2026-08-22",
+          time: null,
+          workload: {
+            mode: "totalCompletedDocuments",
+            targetCount: 20,
+          },
+        },
+      });
+      const explicitAdditionalDday = await runtime.createWorkScheduleItem({
+        schemaVersion: 1,
+        workId: first.workId,
+        item: {
+          kind: "dday",
+          label: "추가 완료 목표",
+          date: "2026-08-23",
+          time: null,
+          workload: {
+            mode: "additionalCompletedDocuments",
+            targetCount: 10,
+            baselineCompletedCount: 5,
           },
         },
       });
@@ -8796,6 +11017,18 @@ describe("local workspace runtime", () => {
             itemId: renamedDday.itemId,
             label: "장편 공모 마감",
             date: "2026-08-21",
+          }),
+          expect.objectContaining({
+            itemId: explicitTotalDday.itemId,
+            workload: { mode: "totalCompletedDocuments", targetCount: 20 },
+          }),
+          expect.objectContaining({
+            itemId: explicitAdditionalDday.itemId,
+            workload: {
+              mode: "additionalCompletedDocuments",
+              targetCount: 10,
+              baselineCompletedCount: 5,
+            },
           }),
         ]),
       );
@@ -9428,6 +11661,7 @@ describe("local workspace runtime", () => {
       });
 
       expect(connectorCalls).toEqual([{
+        signal: expect.any(AbortSignal),
         requestId: expect.any(String),
         connectionId,
         query,
@@ -10065,6 +12299,62 @@ describe("local workspace runtime", () => {
         },
       });
 
+      const legacyBundleRootDirectoryPath = path.join(
+        parentDirectoryPath,
+        "legacy-v1-backup",
+      );
+      const legacyRestoredRootDirectoryPath = path.join(
+        parentDirectoryPath,
+        "legacy-v1-restored",
+      );
+      await cp(bundleRootDirectoryPath, legacyBundleRootDirectoryPath, {
+        recursive: true,
+      });
+      const legacyManifestPath = path.join(
+        legacyBundleRootDirectoryPath,
+        ...options.backupProfile.bundleLayout.manifestEntrySegments,
+      );
+      const legacyManifest = JSON.parse(
+        await readFile(legacyManifestPath, "utf8"),
+      ) as { format: { identity: string; version: string } };
+      legacyManifest.format.version = "1";
+      const legacyManifestBytes = Buffer.from(
+        JSON.stringify(canonicalJsonValue(legacyManifest)),
+        "utf8",
+      );
+      await writeFile(legacyManifestPath, legacyManifestBytes);
+      const legacySidecarPath = path.join(
+        legacyBundleRootDirectoryPath,
+        ...options.backupProfile.bundleLayout.manifestChecksumEntrySegments,
+      );
+      await writeFile(
+        legacySidecarPath,
+        JSON.stringify(canonicalJsonValue({
+          checksumIdentity: options.backupProfile.checksum.identity,
+          checksumValue: createHash(
+            options.backupProfile.checksum.algorithm,
+          ).update(legacyManifestBytes).digest("hex"),
+          byteLength: legacyManifestBytes.byteLength,
+          manifestEntrySegments:
+            options.backupProfile.bundleLayout.manifestEntrySegments,
+        })),
+        "utf8",
+      );
+      await rm(path.join(legacyBundleRootDirectoryPath, "local-media"), {
+        recursive: true,
+        force: true,
+      });
+      const legacyRestored = await runtime.restoreBackupBundle(
+        legacyBundleRootDirectoryPath,
+        legacyRestoredRootDirectoryPath,
+      );
+      expect(legacyRestored.media).toEqual({
+        managedFileCount: 0,
+        externalReferenceCount: 0,
+        disconnectedExternalReferenceCount: 0,
+        managedByteLength: 0,
+      });
+
       const restoredBackup = await runtime.restoreBackupBundle(
         bundleRootDirectoryPath,
         restoredRootDirectoryPath,
@@ -10093,6 +12383,294 @@ describe("local workspace runtime", () => {
         documentId: created.documentId,
         initialText: manuscript,
       });
+    } finally {
+      restoredRuntime?.close();
+      runtime.close();
+      await rm(parentDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    { storageMode: "external-reference", missing: false },
+    { storageMode: "managed-copy", missing: false },
+    { storageMode: "managed-copy", missing: true },
+  ] as const)("rejects altered media for complete backup but creates and restores an explicitly media-excluded manuscript backup ($storageMode, missing=$missing)", async ({ storageMode, missing }) => {
+    const directory = await mkdtemp(path.join(tmpdir(), "eum-manuscript-backup-"));
+    const options = createOptions(path.join(directory, "source"));
+    const runtime = await openLocalWorkspaceRuntime(options);
+    let restored: Awaited<ReturnType<typeof openLocalWorkspaceRuntime>> | null = null;
+    try {
+      const created = await runtime.createFirstWork({ schemaVersion: 1, title: randomUUID(), firstDocumentTitle: randomUUID() });
+      const manuscript = `${randomUUID()} 원고\n보존`;
+      const saved = await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1, textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(), workId: created.workId, documentId: created.documentId,
+        baseRevisionId: created.revisionId, sequence: 0, createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0, afterTextLengthUtf16: manuscript.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: manuscript }],
+      }));
+      if (!("revisionId" in saved)) throw new Error("Expected a durable revision receipt");
+      const mediaPath = path.join(directory, `${randomUUID()}.mp3`);
+      await writeFile(mediaPath, Buffer.from([0x49, 0x44, 0x33, 0x03, 0x11]));
+      const library = await openNodeLocalMediaLibrary({ rootDirectoryPath: options.localMediaLibraryRootDirectoryPath, checksum: options.backupProfile.checksum });
+      const [track] = await library.register({ workId: created.workId, storageMode, filePaths: [mediaPath] });
+      const current = await runtime.getWorkMusicSettings({ schemaVersion: 1, workId: created.workId });
+      await runtime.saveWorkMusicSettings({ schemaVersion: 1, workId: created.workId, expectedRevision: current.revision,
+        settings: { ...current.settings, localMedia: [track!], playlistTracks: [track!] } });
+      const registeredPath = (await library.resolvePlaybackUrl(localMediaPlaybackUrl(track!))).filePath;
+      if (missing) await rm(registeredPath);
+      else await writeFile(registeredPath, randomUUID());
+      const completePath = path.join(directory, "complete");
+      await expect(runtime.createBackupBundle(completePath)).rejects.toThrow();
+      await expect(stat(completePath)).rejects.toMatchObject({ code: "ENOENT" });
+
+      const bundle = path.join(directory, "manuscript-only");
+      const summary = await runtime.createBackupBundle(bundle, "manuscript-only");
+      expect(summary).toMatchObject({ mode: "manuscript-only", counts: { revisionCount: 2, documentCount: 1 } });
+      expect(summary.media.managedFileCount).toBe(0);
+      const manifest = JSON.parse(await readFile(path.join(bundle, ...options.backupProfile.bundleLayout.manifestEntrySegments), "utf8"));
+      expect(manifest.format).toEqual(options.backupProfile.manuscriptOnlyFormat);
+      const target = path.join(directory, "restored");
+      const receipt = await runtime.restoreBackupBundle(bundle, target);
+      expect(receipt.mode).toBe("manuscript-only");
+      restored = await openLocalWorkspaceRuntime(createOptions(target));
+      expect(restored.getManuscriptDocumentProfile().documents[0]).toMatchObject({
+        workId: created.workId, documentId: created.documentId,
+        documentRevisionId: saved.revisionId, initialText: manuscript,
+      });
+      expect((await restored.getWorkMusicSettings({ schemaVersion: 1, workId: created.workId })).settings.localMedia).toEqual([track]);
+      const restoredLibrary = await openNodeLocalMediaLibrary({ rootDirectoryPath: createOptions(target).localMediaLibraryRootDirectoryPath, checksum: options.backupProfile.checksum });
+      expect((await restoredLibrary.inspect({ schemaVersion: 1, workId: created.workId, mediaIds: [track!.mediaId] })).entries[0]?.status).toBe("disconnected");
+    } finally {
+      restored?.close();
+      runtime.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("backs up managed media, records external checksums, and restores disconnected references for exact relinking", async () => {
+    const parentDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-local-media-backup-"),
+    );
+    const sourceRootDirectoryPath = path.join(parentDirectoryPath, "source");
+    const sourceFilesDirectoryPath = path.join(parentDirectoryPath, "media");
+    const bundleRootDirectoryPath = path.join(parentDirectoryPath, "backup");
+    const restoredRootDirectoryPath = path.join(parentDirectoryPath, "restored");
+    await mkdir(sourceFilesDirectoryPath, { recursive: true });
+    const externalPath = path.join(sourceFilesDirectoryPath, "rain.mp3");
+    const managedSourcePath = path.join(sourceFilesDirectoryPath, "scene.mp4");
+    const externalBytes = Buffer.from([0x49, 0x44, 0x33, 0x03, 0x11]);
+    const managedBytes = Buffer.from([
+      0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70,
+    ]);
+    await writeFile(externalPath, externalBytes);
+    await writeFile(managedSourcePath, managedBytes);
+    const options = createOptions(sourceRootDirectoryPath);
+    const mediaLibrary = await openNodeLocalMediaLibrary({
+      rootDirectoryPath: options.localMediaLibraryRootDirectoryPath,
+      checksum: options.backupProfile.checksum,
+      createId: (() => {
+        const ids = ["external-media", "managed-media", "orphan-media"];
+        return () => ids.shift()!;
+      })(),
+    });
+    const runtime = await openLocalWorkspaceRuntime(options);
+    let restoredRuntime: Awaited<
+      ReturnType<typeof openLocalWorkspaceRuntime>
+    > | null = null;
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "미디어 백업 작품",
+        firstDocumentTitle: "1화",
+      });
+      const [external] = await mediaLibrary.register({
+        workId: created.workId,
+        storageMode: "external-reference",
+        filePaths: [externalPath],
+      });
+      const [managed] = await mediaLibrary.register({
+        workId: created.workId,
+        storageMode: "managed-copy",
+        filePaths: [managedSourcePath],
+      });
+      const [orphan] = await mediaLibrary.register({
+        workId: created.workId,
+        storageMode: "managed-copy",
+        filePaths: [managedSourcePath],
+      });
+      const currentSettings = await runtime.getWorkMusicSettings({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      await runtime.saveWorkMusicSettings({
+        schemaVersion: 1,
+        workId: created.workId,
+        expectedRevision: currentSettings.revision,
+        settings: {
+          ...currentSettings.settings,
+          localMedia: [external!, managed!],
+          playlistTracks: [external!, managed!],
+        },
+      });
+
+      const createdBackup = await runtime.createBackupBundle(
+        bundleRootDirectoryPath,
+      );
+      expect(createdBackup.media).toEqual({
+        managedFileCount: 1,
+        externalReferenceCount: 1,
+        disconnectedExternalReferenceCount: 0,
+        managedByteLength: managedBytes.byteLength,
+      });
+      const mediaManifestPath = path.join(
+        bundleRootDirectoryPath,
+        ...options.backupProfile.localMedia.bundleLayout.manifestEntrySegments,
+      );
+      const mediaManifest = JSON.parse(await readFile(mediaManifestPath, "utf8"));
+      expect(mediaManifest.entries).toHaveLength(2);
+      expect(
+        mediaManifest.entries.some(
+          (entry: { track: { mediaId: string } }) =>
+            entry.track.mediaId === orphan!.mediaId,
+        ),
+      ).toBe(false);
+      expect(mediaManifest.entries).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          track: expect.objectContaining({ mediaId: external!.mediaId }),
+          integrity: expect.objectContaining({
+            checksumIdentity: options.backupProfile.checksum.identity,
+            byteLength: externalBytes.byteLength,
+          }),
+          storage: expect.objectContaining({
+            kind: "external-path",
+            filePath: externalPath,
+            sourceFileName: "rain.mp3",
+          }),
+        }),
+        expect.objectContaining({
+          track: expect.objectContaining({ mediaId: managed!.mediaId }),
+          storage: expect.objectContaining({ kind: "managed-file" }),
+        }),
+      ]));
+
+      await rm(externalPath);
+      const restoredBackup = await runtime.restoreBackupBundle(
+        bundleRootDirectoryPath,
+        restoredRootDirectoryPath,
+      );
+      expect(restoredBackup.media).toEqual({
+        managedFileCount: 1,
+        externalReferenceCount: 1,
+        disconnectedExternalReferenceCount: 1,
+        managedByteLength: managedBytes.byteLength,
+      });
+
+      const restoredOptions = createOptions(restoredRootDirectoryPath);
+      const restoredLibrary = await openNodeLocalMediaLibrary({
+        rootDirectoryPath:
+          restoredOptions.localMediaLibraryRootDirectoryPath,
+        checksum: restoredOptions.backupProfile.checksum,
+      });
+      expect(await restoredLibrary.inspect({
+        schemaVersion: 1,
+        workId: created.workId,
+        mediaIds: [external!.mediaId, managed!.mediaId],
+      })).toMatchObject({
+        entries: [
+          { mediaId: external!.mediaId, status: "disconnected" },
+          { mediaId: managed!.mediaId, status: "available" },
+        ],
+      });
+      const managedPlayback = await restoredLibrary.resolvePlaybackUrl(
+        localMediaPlaybackUrl(managed!),
+      );
+      expect(await readFile(managedPlayback.filePath)).toEqual(managedBytes);
+
+      const relocatedExternalPath = path.join(
+        sourceFilesDirectoryPath,
+        "relocated-rain.mp3",
+      );
+      await writeFile(relocatedExternalPath, externalBytes);
+      expect(await restoredLibrary.relink({
+        schemaVersion: 1,
+        workId: created.workId,
+        mediaId: external!.mediaId,
+        filePath: relocatedExternalPath,
+      })).toMatchObject({ status: "available" });
+      expect((await restoredLibrary.resolvePlaybackUrl(
+        localMediaPlaybackUrl(external!),
+      )).filePath).toBe(relocatedExternalPath);
+
+      const tamperedBundlePath = path.join(
+        parentDirectoryPath,
+        "tampered-backup",
+      );
+      const rejectedRestorePath = path.join(
+        parentDirectoryPath,
+        "rejected-restore",
+      );
+      await cp(bundleRootDirectoryPath, tamperedBundlePath, {
+        recursive: true,
+      });
+      const managedManifestEntry = mediaManifest.entries.find(
+        (entry: {
+          track: { mediaId: string };
+          storage: { kind: string; bundleRelativeSegments?: string[] };
+        }) => entry.track.mediaId === managed!.mediaId,
+      );
+      expect(managedManifestEntry?.storage.kind).toBe("managed-file");
+      const managedBundleSegments =
+        managedManifestEntry?.storage.bundleRelativeSegments;
+      expect(managedBundleSegments).toBeDefined();
+      if (managedBundleSegments === undefined) {
+        throw new Error("Managed media bundle segments are missing");
+      }
+      await writeFile(
+        path.join(tamperedBundlePath, ...managedBundleSegments),
+        Buffer.from(managedBytes.map((value) => value ^ 0xff)),
+      );
+      await expect(runtime.restoreBackupBundle(
+        tamperedBundlePath,
+        rejectedRestorePath,
+      )).rejects.toThrow(
+        "Managed media bundle entry failed checksum verification",
+      );
+      await expect(stat(rejectedRestorePath)).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+
+      const missingManifestBundlePath = path.join(
+        parentDirectoryPath,
+        "missing-media-manifest-backup",
+      );
+      const missingManifestRestorePath = path.join(
+        parentDirectoryPath,
+        "missing-media-manifest-restore",
+      );
+      await cp(bundleRootDirectoryPath, missingManifestBundlePath, {
+        recursive: true,
+      });
+      await rm(path.join(
+        missingManifestBundlePath,
+        ...options.backupProfile.localMedia.bundleLayout
+          .manifestChecksumEntrySegments,
+      ));
+      await expect(runtime.restoreBackupBundle(
+        missingManifestBundlePath,
+        missingManifestRestorePath,
+      )).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(stat(missingManifestRestorePath)).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+
+      restoredRuntime = await openLocalWorkspaceRuntime(restoredOptions);
+      expect(
+        (await restoredRuntime.getWorkMusicSettings({
+          schemaVersion: 1,
+          workId: created.workId,
+        })).settings.localMedia.map((track) => track.mediaId),
+      ).toEqual([external!.mediaId, managed!.mediaId]);
     } finally {
       restoredRuntime?.close();
       runtime.close();
@@ -10136,7 +12714,7 @@ describe("local workspace runtime", () => {
         settings: {
           ...initial.settings,
           autoOnEpisodeTransition: true,
-          playlistVideos: [playlistVideo],
+          playlistTracks: [playlistVideo],
           transitionPlaybackMode: "ask",
         },
       });
@@ -10146,7 +12724,7 @@ describe("local workspace runtime", () => {
         revision: 1,
         settings: {
           autoOnEpisodeTransition: true,
-          playlistVideos: [playlistVideo],
+          playlistTracks: [playlistVideo],
           transitionPlaybackMode: "ask",
         },
       });
@@ -10228,6 +12806,2093 @@ describe("local workspace runtime", () => {
     } finally {
       runtime.close();
       await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("applies edited Character, relation, and Lore canon fields atomically and restores them", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-canon-review-runtime-"),
+    );
+    let characterIds: readonly string[] = [];
+    const options: LocalWorkspaceRuntimeOptions = {
+      ...createOptions(rootDirectoryPath),
+      canonReview: {
+        destinationId: "canon-provider",
+        contextTokenBudget: 10_000,
+        isConnected: () => true,
+        execute: async () => ({
+          providerId: "canon-provider",
+          modelId: "runtime-model",
+          promptVersion: CANON_REVIEW_PROMPT_VERSION,
+          payload: {
+            proposals: [
+              {
+                targetKind: "character",
+                targetHint: "윤서",
+                operationHint: "update",
+                assertionBasis: "explicit-evidence",
+                reason: "역할 변화가 직접 서술된다.",
+                fields: { role: "정식 기록관" },
+                evidence: [{ paragraphId: "p1", quote: "정식 기록관" }],
+              },
+              {
+                targetKind: "character-relation",
+                targetHint: "동료",
+                operationHint: "create",
+                assertionBasis: "explicit-evidence",
+                reason: "두 인물의 관계가 직접 서술된다.",
+                fields: {
+                  fromCharacterId: characterIds[0]!,
+                  toCharacterId: characterIds[1]!,
+                  kind: "동료",
+                  description: "같은 기록 임무를 맡는다.",
+                },
+                evidence: [{ paragraphId: "p1", quote: "동료" }],
+              },
+              {
+                targetKind: "lore-entry",
+                targetHint: "북문",
+                operationHint: "create",
+                assertionBasis: "explicit-evidence",
+                reason: "장소 규칙이 직접 서술된다.",
+                fields: {
+                  title: "북문",
+                  content: "밤에만 열린다.",
+                  category: "장소",
+                  aliases: [],
+                  enabled: true,
+                },
+                evidence: [{ paragraphId: "p1", quote: "북문" }],
+              },
+            ],
+          },
+        }),
+      },
+    };
+    let runtime = await openLocalWorkspaceRuntime(options);
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "별빛 작품",
+        firstDocumentTitle: "1화",
+      });
+      const first = await runtime.createCharacter({
+        schemaVersion: 1,
+        workId: created.workId,
+        name: "윤서",
+        aliases: [],
+        role: "수습",
+        summary: "",
+        appearance: "",
+        personality: "",
+        speech: "",
+        goal: "",
+        conflict: "",
+        note: "",
+      });
+      const second = await runtime.createCharacter({
+        schemaVersion: 1,
+        workId: created.workId,
+        name: "민호",
+        aliases: [],
+        role: "기록관",
+        summary: "",
+        appearance: "",
+        personality: "",
+        speech: "",
+        goal: "",
+        conflict: "",
+        note: "",
+      });
+      characterIds = [first.characterId, second.characterId];
+      const text =
+        "윤서는 정식 기록관이 되었고 민호와 동료가 되었다. 북문은 밤에만 열린다.";
+      const saved = await runtime.saveDocumentChange({
+        schemaVersion: 1,
+        batch: parseChangeBatch({
+          schemaVersion: 1,
+          textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+          batchId: randomUUID(),
+          workId: created.workId,
+          documentId: created.documentId,
+          baseRevisionId: created.revisionId,
+          sequence: 0,
+          createdAt: new Date().toISOString(),
+          beforeTextLengthUtf16: 0,
+          afterTextLengthUtf16: text.length,
+          changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: text }],
+        }),
+        editorStateJson: JSON.stringify({
+          schemaVersion: 1,
+          ranges: [],
+          contentWidthPx: 640,
+        }),
+      });
+      if (!("revisionId" in saved)) throw new Error("Expected durable revision");
+      const conversationId = entityId<"AssistantConversation">(randomUUID());
+      await runtime.grantAssistantContextPermission({
+        schemaVersion: 1,
+        workId: created.workId,
+        conversationId,
+        capability: "canon.review",
+        destinationId: "canon-provider",
+        localScope: "selection",
+        externalScope: "selection",
+        duration: "conversation",
+      });
+      const run = await runtime.runCanonReview({
+        schemaVersion: 1,
+        requestId: randomUUID(),
+        workId: created.workId,
+        conversationId,
+        sourceRange: {
+          documentId: created.documentId,
+          documentRevisionId: saved.revisionId,
+          from: 0,
+          to: text.length,
+        },
+        requestedTargetKinds: [
+          "character",
+          "character-relation",
+          "lore-entry",
+        ],
+      });
+      if (run.status !== "candidate") throw new Error("Expected Candidate");
+      await expect(runtime.listAssistantContextManifests({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).resolves.toMatchObject({
+        manifests: [expect.objectContaining({
+          receiptId: run.candidate.contextReceiptId,
+          entries: expect.any(Array),
+        })],
+      });
+      const canonActivities = await runtime.listAssistantContextActivities({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(canonActivities).toMatchObject({
+        activities: [expect.objectContaining({
+          receiptId: run.candidate.contextReceiptId,
+          capability: "canon.review",
+          providerId: "canon-provider",
+          modelId: "runtime-model",
+          candidateCount: 3,
+          readRanges: [expect.objectContaining({
+            documentRevisionId: saved.revisionId,
+          })],
+        })],
+      });
+      expect(JSON.stringify(canonActivities)).not.toMatch(/prompt|reasoning|api.?key|정식 기록관이 되었고/iu);
+      const characterItem = run.candidate.items.find(
+        (item) => item.target.kind === "character",
+      )!;
+      let candidate = await runtime.updateCanonReviewItem({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: run.candidate.candidateId,
+        expectedCandidateRevision: run.candidate.revision,
+        itemId: characterItem.itemId,
+        fieldChanges: characterItem.fieldChanges.map((change) => ({
+          ...change,
+          after: change.field === "role" ? "수석 기록관" : change.after,
+        })),
+      });
+      const appliedCharacter = await runtime.decideCanonReviewItem({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: candidate.candidateId,
+        expectedCandidateRevision: candidate.revision,
+        itemId: characterItem.itemId,
+        decision: { kind: "approve" },
+      });
+      expect(appliedCharacter.status).toBe("applied");
+      candidate = appliedCharacter.candidate;
+      const relationItem = candidate.items.find(
+        (item) => item.target.kind === "character-relation",
+      )!;
+      const appliedRelation = await runtime.decideCanonReviewItem({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: candidate.candidateId,
+        expectedCandidateRevision: candidate.revision,
+        itemId: relationItem.itemId,
+        decision: { kind: "approve" },
+      });
+      expect(appliedRelation.status).toBe("applied");
+      candidate = appliedRelation.candidate;
+      const loreItem = candidate.items.find(
+        (item) => item.target.kind === "lore-entry",
+      )!;
+      const appliedLore = await runtime.decideCanonReviewItem({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: candidate.candidateId,
+        expectedCandidateRevision: candidate.revision,
+        itemId: loreItem.itemId,
+        decision: { kind: "approve" },
+      });
+      expect(appliedLore).toMatchObject({
+        status: "applied",
+        candidate: { status: "completed" },
+      });
+      await expect(runtime.listCharacters({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).resolves.toMatchObject({
+        characters: [expect.objectContaining({
+          characterId: first.characterId,
+          role: "수석 기록관",
+          evidences: [expect.objectContaining({ exactText: "정식 기록관" })],
+        }), expect.anything()],
+      });
+      await expect(runtime.listCharacterRelations({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).resolves.toMatchObject({
+        relations: [expect.objectContaining({
+          fromCharacterId: first.characterId,
+          toCharacterId: second.characterId,
+          kind: "동료",
+        })],
+      });
+      await expect(runtime.listLoreEntries({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).resolves.toMatchObject({
+        entries: [expect.objectContaining({
+          title: "북문",
+          content: "밤에만 열린다.",
+          evidences: [expect.objectContaining({ exactText: "북문" })],
+        })],
+      });
+
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      await expect(runtime.listCanonReviewCandidates({
+        schemaVersion: 1,
+        workId: created.workId,
+        status: "all",
+      })).resolves.toMatchObject({
+        candidates: [expect.objectContaining({ status: "completed" })],
+      });
+      await expect(runtime.listCharacters({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).resolves.toMatchObject({
+        characters: [expect.objectContaining({ role: "수석 기록관" }), expect.anything()],
+      });
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("returns no-change, blocks inference, and resolves an ambiguous target explicitly", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-canon-review-guards-"),
+    );
+    let role = "수습";
+    let targetHint = "윤서";
+    let operationHint: "create" | "update" | "unresolved" = "update";
+    let assertionBasis: "explicit-evidence" | "model-inference" =
+      "explicit-evidence";
+    const options: LocalWorkspaceRuntimeOptions = {
+      ...createOptions(rootDirectoryPath),
+      canonReview: {
+        destinationId: "canon-provider",
+        contextTokenBudget: 10_000,
+        isConnected: () => true,
+        execute: async () => ({
+          providerId: "canon-provider",
+          modelId: "runtime-model",
+          promptVersion: CANON_REVIEW_PROMPT_VERSION,
+          payload: {
+            proposals: [{
+              targetKind: "character",
+              targetHint,
+              operationHint,
+              assertionBasis,
+              reason: "검토",
+              fields: operationHint === "create"
+                ? {
+                    name: "윤서",
+                    aliases: [],
+                    role,
+                    summary: "",
+                    appearance: "",
+                    personality: "",
+                    speech: "",
+                    goal: "",
+                    conflict: "",
+                    note: "",
+                  }
+                : { role },
+              evidence: [{ paragraphId: "p1", quote: "윤서" }],
+            }],
+          },
+        }),
+      },
+    };
+    const runtime = await openLocalWorkspaceRuntime(options);
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "별빛 보호",
+        firstDocumentTitle: "1화",
+      });
+      const character = await runtime.createCharacter({
+        schemaVersion: 1,
+        workId: created.workId,
+        name: "윤서",
+        aliases: [],
+        role: "수습",
+        summary: "",
+        appearance: "",
+        personality: "",
+        speech: "",
+        goal: "",
+        conflict: "",
+        note: "",
+      });
+      const text = "윤서는 떠났다.";
+      const saved = await runtime.saveDocumentChange({
+        schemaVersion: 1,
+        batch: parseChangeBatch({
+          schemaVersion: 1,
+          textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+          batchId: randomUUID(),
+          workId: created.workId,
+          documentId: created.documentId,
+          baseRevisionId: created.revisionId,
+          sequence: 0,
+          createdAt: new Date().toISOString(),
+          beforeTextLengthUtf16: 0,
+          afterTextLengthUtf16: text.length,
+          changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: text }],
+        }),
+        editorStateJson: JSON.stringify({
+          schemaVersion: 1,
+          ranges: [],
+          contentWidthPx: 640,
+        }),
+      });
+      if (!("revisionId" in saved)) throw new Error("Expected durable revision");
+      const conversationId = randomUUID();
+      await runtime.grantAssistantContextPermission({
+        schemaVersion: 1,
+        workId: created.workId,
+        conversationId: null,
+        capability: "canon.review",
+        destinationId: "canon-provider",
+        localScope: "selection",
+        externalScope: "selection",
+        duration: "work",
+      });
+      const run = () => runtime.runCanonReview({
+        schemaVersion: 1,
+        requestId: randomUUID(),
+        workId: created.workId,
+        conversationId,
+        sourceRange: {
+          documentId: created.documentId,
+          documentRevisionId: saved.revisionId,
+          from: 0,
+          to: text.length,
+        },
+        requestedTargetKinds: ["character"],
+      });
+
+      await expect(run()).resolves.toEqual({ schemaVersion: 1, status: "no-change" });
+      role = "여행자";
+      assertionBasis = "model-inference";
+      const inferred = await run();
+      if (inferred.status !== "candidate") throw new Error("Expected inferred Candidate");
+      await expect(runtime.decideCanonReviewItem({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: inferred.candidate.candidateId,
+        expectedCandidateRevision: inferred.candidate.revision,
+        itemId: inferred.candidate.items[0]!.itemId,
+        decision: { kind: "approve" },
+      })).resolves.toMatchObject({
+        status: "inference-requires-user-authorship",
+      });
+      await expect(runtime.decideCanonReviewItem({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: inferred.candidate.candidateId,
+        expectedCandidateRevision: inferred.candidate.revision,
+        itemId: inferred.candidate.items[0]!.itemId,
+        decision: { kind: "reject" },
+      })).resolves.toMatchObject({
+        status: "rejected",
+        candidate: { status: "completed" },
+      });
+
+      assertionBasis = "explicit-evidence";
+      targetHint = "모호한 인물";
+      operationHint = "unresolved";
+      const unresolved = await run();
+      if (unresolved.status !== "candidate") throw new Error("Expected unresolved Candidate");
+      const resolved = await runtime.resolveCanonReviewItemTarget({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: unresolved.candidate.candidateId,
+        expectedCandidateRevision: unresolved.candidate.revision,
+        itemId: unresolved.candidate.items[0]!.itemId,
+        target: {
+          kind: "update",
+          targetId: character.characterId,
+          expectedRevision: character.revision,
+        },
+      });
+      await expect(runtime.decideCanonReviewItem({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: resolved.candidateId,
+        expectedCandidateRevision: resolved.revision,
+        itemId: resolved.items[0]!.itemId,
+        decision: { kind: "approve" },
+      })).resolves.toMatchObject({ status: "applied" });
+
+      targetHint = "윤서";
+      operationHint = "update";
+      role = "항해자";
+      const deselected = await run();
+      if (deselected.status !== "candidate") {
+        throw new Error("Expected deselection Candidate");
+      }
+      const edited = await runtime.updateCanonReviewItem({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: deselected.candidate.candidateId,
+        expectedCandidateRevision: deselected.candidate.revision,
+        itemId: deselected.candidate.items[0]!.itemId,
+        fieldChanges: deselected.candidate.items[0]!.fieldChanges.map(
+          (change) => ({ ...change, selected: false }),
+        ),
+      });
+      await expect(runtime.decideCanonReviewItem({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: edited.candidateId,
+        expectedCandidateRevision: edited.revision,
+        itemId: edited.items[0]!.itemId,
+        decision: { kind: "approve" },
+      })).resolves.toMatchObject({ status: "nothing-selected" });
+      await expect(runtime.listCharacters({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).resolves.toMatchObject({
+        characters: [expect.objectContaining({ role: "여행자" })],
+      });
+
+      operationHint = "create";
+      role = "새 역할";
+      const duplicate = await run();
+      if (duplicate.status !== "candidate") {
+        throw new Error("Expected duplicate Candidate");
+      }
+      const forcedCreate = await runtime.resolveCanonReviewItemTarget({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: duplicate.candidate.candidateId,
+        expectedCandidateRevision: duplicate.candidate.revision,
+        itemId: duplicate.candidate.items[0]!.itemId,
+        target: { kind: "create" },
+      });
+      await expect(runtime.decideCanonReviewItem({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: forcedCreate.candidateId,
+        expectedCandidateRevision: forcedCreate.revision,
+        itemId: forcedCreate.items[0]!.itemId,
+        decision: { kind: "approve" },
+      })).resolves.toMatchObject({
+        status: "possible-duplicate",
+        matchingTargetIds: [character.characterId],
+      });
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("stops Canon review before permission and connector when required context exceeds its manifest budget", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-context-over-budget-"),
+    );
+    let connectorCalls = 0;
+    const options: LocalWorkspaceRuntimeOptions = {
+      ...createOptions(rootDirectoryPath),
+      canonReview: {
+        destinationId: "canon-provider",
+        contextTokenBudget: 1,
+        isConnected: () => true,
+        execute: async () => {
+          connectorCalls += 1;
+          return {
+            providerId: "canon-provider",
+            modelId: "runtime-model",
+            promptVersion: CANON_REVIEW_PROMPT_VERSION,
+            payload: { proposals: [] },
+          };
+        },
+      },
+    };
+    const runtime = await openLocalWorkspaceRuntime(options);
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "예산 작품",
+        firstDocumentTitle: "1화",
+      });
+      const character = await runtime.createCharacter({
+        schemaVersion: 1,
+        workId: created.workId,
+        name: "윤서",
+        aliases: [],
+        role: "긴 문맥",
+        summary: "필수 문맥은 무음 절단할 수 없다.",
+        appearance: "",
+        personality: "",
+        speech: "",
+        goal: "",
+        conflict: "",
+        note: "",
+      });
+      await runtime.saveAssistantEntityContextPolicy({
+        schemaVersion: 1,
+        workId: created.workId,
+        entity: { kind: "character", id: character.characterId },
+        expectedRevision: null,
+        mode: "required",
+      });
+      const text = "윤서";
+      const saved = await runtime.saveDocumentChange({
+        schemaVersion: 1,
+        batch: parseChangeBatch({
+          schemaVersion: 1,
+          textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+          batchId: randomUUID(),
+          workId: created.workId,
+          documentId: created.documentId,
+          baseRevisionId: created.revisionId,
+          sequence: 0,
+          createdAt: new Date().toISOString(),
+          beforeTextLengthUtf16: 0,
+          afterTextLengthUtf16: text.length,
+          changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: text }],
+        }),
+        editorStateJson: JSON.stringify({ schemaVersion: 1, ranges: [], contentWidthPx: 640 }),
+      });
+      if (!("revisionId" in saved)) throw new Error("Expected durable revision");
+      const conversationId = entityId<"AssistantConversation">(randomUUID());
+      await runtime.grantAssistantContextPermission({
+        schemaVersion: 1,
+        workId: created.workId,
+        conversationId,
+        capability: "canon.review",
+        destinationId: "canon-provider",
+        localScope: "selection",
+        externalScope: "selection",
+        duration: "conversation",
+      });
+      await expect(runtime.runCanonReview({
+        schemaVersion: 1,
+        requestId: randomUUID(),
+        workId: created.workId,
+        conversationId,
+        sourceRange: {
+          documentId: created.documentId,
+          documentRevisionId: saved.revisionId,
+          from: 0,
+          to: text.length,
+        },
+        requestedTargetKinds: ["character"],
+      })).rejects.toThrow(/required-context-over-budget/u);
+      expect(connectorCalls).toBe(0);
+      await expect(runtime.listAssistantContextManifests({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).resolves.toMatchObject({ manifests: [] });
+      await expect(runtime.listAssistantContextActivities({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).resolves.toMatchObject({ activities: [] });
+      const audit = new DatabaseSync(path.join(rootDirectoryPath, "workspace.sqlite3"), { readOnly: true });
+      try {
+        expect(audit.prepare(`SELECT COUNT(*) AS count FROM assistant_context_receipts`).get())
+          .toEqual({ count: 0 });
+      } finally {
+        audit.close();
+      }
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("marks the whole Candidate stale without canonical writes when source or target revisions change", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-canon-review-stale-"),
+    );
+    let proposedRole = "기록관";
+    const options: LocalWorkspaceRuntimeOptions = {
+      ...createOptions(rootDirectoryPath),
+      canonReview: {
+        destinationId: "canon-provider",
+        contextTokenBudget: 10_000,
+        isConnected: () => true,
+        execute: async () => ({
+          providerId: "canon-provider",
+          modelId: "runtime-model",
+          promptVersion: CANON_REVIEW_PROMPT_VERSION,
+          payload: {
+            proposals: [{
+              targetKind: "character",
+              targetHint: "윤서",
+              operationHint: "update",
+              assertionBasis: "explicit-evidence",
+              reason: "역할 변화",
+              fields: { role: proposedRole },
+              evidence: [{ paragraphId: "p1", quote: "기록관" }],
+            }],
+          },
+        }),
+      },
+    };
+    const runtime = await openLocalWorkspaceRuntime(options);
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "별빛 stale",
+        firstDocumentTitle: "1화",
+      });
+      const character = await runtime.createCharacter({
+        schemaVersion: 1,
+        workId: created.workId,
+        name: "윤서",
+        aliases: [],
+        role: "수습",
+        summary: "",
+        appearance: "",
+        personality: "",
+        speech: "",
+        goal: "",
+        conflict: "",
+        note: "",
+      });
+      const text = "윤서는 기록관이 되었다.";
+      const saved = await runtime.saveDocumentChange({
+        schemaVersion: 1,
+        batch: parseChangeBatch({
+          schemaVersion: 1,
+          textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+          batchId: randomUUID(),
+          workId: created.workId,
+          documentId: created.documentId,
+          baseRevisionId: created.revisionId,
+          sequence: 0,
+          createdAt: new Date().toISOString(),
+          beforeTextLengthUtf16: 0,
+          afterTextLengthUtf16: text.length,
+          changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: text }],
+        }),
+        editorStateJson: JSON.stringify({
+          schemaVersion: 1,
+          ranges: [],
+          contentWidthPx: 640,
+        }),
+      });
+      if (!("revisionId" in saved)) throw new Error("Expected durable revision");
+      const conversationId = randomUUID();
+      await runtime.grantAssistantContextPermission({
+        schemaVersion: 1,
+        workId: created.workId,
+        conversationId: null,
+        capability: "canon.review",
+        destinationId: "canon-provider",
+        localScope: "selection",
+        externalScope: "selection",
+        duration: "work",
+      });
+      const run = () => runtime.runCanonReview({
+        schemaVersion: 1,
+        requestId: randomUUID(),
+        workId: created.workId,
+        conversationId,
+        sourceRange: {
+          documentId: created.documentId,
+          documentRevisionId: saved.revisionId,
+          from: 0,
+          to: text.length,
+        },
+        requestedTargetKinds: ["character"],
+      });
+
+      const targetCandidate = await run();
+      if (targetCandidate.status !== "candidate") {
+        throw new Error("Expected target-stale Candidate");
+      }
+      const manuallyUpdated = await runtime.updateCharacter({
+        schemaVersion: 1,
+        workId: created.workId,
+        characterId: character.characterId,
+        expectedRevision: character.revision,
+        changes: { role: "선임 기록관" },
+      });
+      await expect(runtime.decideCanonReviewItem({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: targetCandidate.candidate.candidateId,
+        expectedCandidateRevision: targetCandidate.candidate.revision,
+        itemId: targetCandidate.candidate.items[0]!.itemId,
+        decision: { kind: "approve" },
+      })).resolves.toMatchObject({
+        status: "target-stale",
+        candidate: { status: "stale" },
+      });
+      expect(manuallyUpdated.role).toBe("선임 기록관");
+
+      proposedRole = "수석 기록관";
+      const sourceCandidate = await run();
+      if (sourceCandidate.status !== "candidate") {
+        throw new Error("Expected source-stale Candidate");
+      }
+      await runtime.saveDocumentChange({
+        schemaVersion: 1,
+        batch: parseChangeBatch({
+          schemaVersion: 1,
+          textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+          batchId: randomUUID(),
+          workId: created.workId,
+          documentId: created.documentId,
+          baseRevisionId: created.revisionId,
+          sequence: 1,
+          createdAt: new Date().toISOString(),
+          beforeTextLengthUtf16: text.length,
+          afterTextLengthUtf16: text.length + 1,
+          changes: [{
+            fromUtf16: text.length,
+            toUtf16: text.length,
+            insertedText: "!",
+          }],
+        }),
+        editorStateJson: JSON.stringify({
+          schemaVersion: 1,
+          ranges: [],
+          contentWidthPx: 640,
+        }),
+      });
+      await expect(runtime.decideCanonReviewItem({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: sourceCandidate.candidate.candidateId,
+        expectedCandidateRevision: sourceCandidate.candidate.revision,
+        itemId: sourceCandidate.candidate.items[0]!.itemId,
+        decision: { kind: "approve" },
+      })).resolves.toMatchObject({
+        status: "source-stale",
+        candidate: { status: "stale" },
+      });
+      await expect(runtime.listCharacters({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).resolves.toMatchObject({
+        characters: [expect.objectContaining({ role: "선임 기록관" })],
+      });
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("records a stale Candidate when the exact source changes during connector execution", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-canon-review-concurrent-source-"),
+    );
+    let releaseExecution!: () => void;
+    const executionGate = new Promise<void>((resolve) => {
+      releaseExecution = resolve;
+    });
+    let reportStarted!: () => void;
+    const executionStarted = new Promise<void>((resolve) => {
+      reportStarted = resolve;
+    });
+    const options: LocalWorkspaceRuntimeOptions = {
+      ...createOptions(rootDirectoryPath),
+      canonReview: {
+        destinationId: "canon-provider",
+        contextTokenBudget: 10_000,
+        isConnected: () => true,
+        execute: async () => {
+          reportStarted();
+          await executionGate;
+          return {
+            providerId: "canon-provider",
+            modelId: "runtime-model",
+            promptVersion: CANON_REVIEW_PROMPT_VERSION,
+            payload: {
+              proposals: [{
+                targetKind: "lore-entry",
+                targetHint: "북문",
+                operationHint: "create",
+                assertionBasis: "explicit-evidence",
+                reason: "장소 규칙",
+                fields: {
+                  title: "북문",
+                  content: "밤에 열린다.",
+                  category: "장소",
+                  aliases: [],
+                  enabled: true,
+                },
+                evidence: [{ paragraphId: "p1", quote: "북문" }],
+              }],
+            },
+          };
+        },
+      },
+    };
+    const runtime = await openLocalWorkspaceRuntime(options);
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "별빛 동시성",
+        firstDocumentTitle: "1화",
+      });
+      const text = "북문은 밤에 열린다.";
+      const saved = await runtime.saveDocumentChange({
+        schemaVersion: 1,
+        batch: parseChangeBatch({
+          schemaVersion: 1,
+          textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+          batchId: randomUUID(),
+          workId: created.workId,
+          documentId: created.documentId,
+          baseRevisionId: created.revisionId,
+          sequence: 0,
+          createdAt: new Date().toISOString(),
+          beforeTextLengthUtf16: 0,
+          afterTextLengthUtf16: text.length,
+          changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: text }],
+        }),
+        editorStateJson: JSON.stringify({
+          schemaVersion: 1,
+          ranges: [],
+          contentWidthPx: 640,
+        }),
+      });
+      if (!("revisionId" in saved)) throw new Error("Expected durable revision");
+      const conversationId = randomUUID();
+      await runtime.grantAssistantContextPermission({
+        schemaVersion: 1,
+        workId: created.workId,
+        conversationId,
+        capability: "canon.review",
+        destinationId: "canon-provider",
+        localScope: "selection",
+        externalScope: "selection",
+        duration: "conversation",
+      });
+      const pending = runtime.runCanonReview({
+        schemaVersion: 1,
+        requestId: randomUUID(),
+        workId: created.workId,
+        conversationId,
+        sourceRange: {
+          documentId: created.documentId,
+          documentRevisionId: saved.revisionId,
+          from: 0,
+          to: text.length,
+        },
+        requestedTargetKinds: ["lore-entry"],
+      });
+      await executionStarted;
+      await runtime.saveDocumentChange({
+        schemaVersion: 1,
+        batch: parseChangeBatch({
+          schemaVersion: 1,
+          textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+          batchId: randomUUID(),
+          workId: created.workId,
+          documentId: created.documentId,
+          baseRevisionId: created.revisionId,
+          sequence: 1,
+          createdAt: new Date().toISOString(),
+          beforeTextLengthUtf16: text.length,
+          afterTextLengthUtf16: text.length + 1,
+          changes: [{
+            fromUtf16: text.length,
+            toUtf16: text.length,
+            insertedText: "!",
+          }],
+        }),
+        editorStateJson: JSON.stringify({
+          schemaVersion: 1,
+          ranges: [],
+          contentWidthPx: 640,
+        }),
+      });
+      releaseExecution();
+      await expect(pending).resolves.toMatchObject({
+        status: "candidate",
+        candidate: { status: "stale" },
+      });
+    } finally {
+      releaseExecution();
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("runs the Continuity manual and Candidate paths through the local workspace and restart", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-continuity-runtime-"),
+    );
+    const options: LocalWorkspaceRuntimeOptions = {
+      ...createOptions(rootDirectoryPath),
+      continuityReview: {
+        destinationId: "continuity-provider",
+        contextTokenBudget: 10_000,
+        isConnected: () => true,
+        execute: async () => ({
+          providerId: "continuity-provider",
+          modelId: "runtime-model",
+          promptVersion: CONTINUITY_REVIEW_PROMPT_VERSION,
+          payload: {
+            proposals: [{
+              assertionBasis: "explicit-evidence",
+              kind: "open-question",
+              title: "열쇠의 주인은 누구인가",
+              note: "다음 회차에서 확인",
+              subjectRefs: [],
+              reason: "질문이 원고에 직접 남아 있다.",
+              evidence: [{ paragraphId: "p1", quote: "열쇠의 주인" }],
+            }],
+          },
+        }),
+      },
+    };
+    let runtime = await openLocalWorkspaceRuntime(options);
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "연속성 런타임",
+        firstDocumentTitle: "1화",
+      });
+      const text = "윤서는 열쇠의 주인을 찾기로 약속했다.";
+      const saved = await runtime.saveDocumentChange({
+        schemaVersion: 1,
+        batch: parseChangeBatch({
+          schemaVersion: 1,
+          textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+          batchId: randomUUID(),
+          workId: created.workId,
+          documentId: created.documentId,
+          baseRevisionId: created.revisionId,
+          sequence: 0,
+          createdAt: new Date().toISOString(),
+          beforeTextLengthUtf16: 0,
+          afterTextLengthUtf16: text.length,
+          changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: text }],
+        }),
+        editorStateJson: JSON.stringify({
+          schemaVersion: 1,
+          ranges: [],
+          contentWidthPx: 640,
+        }),
+      });
+      if (!("revisionId" in saved)) throw new Error("Expected durable revision");
+      const manual = await runtime.createContinuityThread({
+        schemaVersion: 1,
+        workId: created.workId,
+        kind: "promise",
+        title: "열쇠를 찾기",
+        note: "윤서의 약속",
+        subjectRefs: [],
+        openedEvidenceRange: {
+          documentId: created.documentId,
+          documentRevisionId: saved.revisionId,
+          from: 0,
+          to: 2,
+        },
+      });
+      expect(manual).toMatchObject({
+        status: "open",
+        openedEvidence: [{ exactText: "윤서", integrity: "resolved" }],
+      });
+      const conversationId = randomUUID();
+      await runtime.grantAssistantContextPermission({
+        schemaVersion: 1,
+        workId: created.workId,
+        conversationId,
+        capability: "continuity.review",
+        destinationId: "continuity-provider",
+        localScope: "selection",
+        externalScope: "selection",
+        duration: "conversation",
+      });
+      const run = await runtime.runContinuityReview({
+        schemaVersion: 1,
+        requestId: randomUUID(),
+        workId: created.workId,
+        conversationId,
+        sourceRange: {
+          documentId: created.documentId,
+          documentRevisionId: saved.revisionId,
+          from: 0,
+          to: text.length,
+        },
+      });
+      if (run.status !== "candidate") throw new Error("Expected Continuity Candidate");
+      await expect(runtime.listAssistantContextManifests({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).resolves.toMatchObject({
+        manifests: [expect.objectContaining({
+          receiptId: run.candidate.contextReceiptId,
+        })],
+      });
+      const continuityActivities = await runtime.listAssistantContextActivities({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(continuityActivities).toMatchObject({
+        activities: [expect.objectContaining({
+          receiptId: run.candidate.contextReceiptId,
+          capability: "continuity.review",
+          providerId: "continuity-provider",
+          modelId: "runtime-model",
+          candidateCount: 1,
+        })],
+      });
+      expect(JSON.stringify(continuityActivities)).not.toMatch(/prompt|reasoning|api.?key|열쇠의 주인을 찾기로/iu);
+      const approved = await runtime.decideContinuityReviewItem({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: run.candidate.candidateId,
+        expectedCandidateRevision: run.candidate.revision,
+        itemId: run.candidate.items[0]!.itemId,
+        decision: "approve",
+        acknowledgedDuplicateThreadIds: [],
+      });
+      expect(approved).toMatchObject({
+        status: "applied",
+        candidate: { status: "completed" },
+      });
+
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      await expect(runtime.listContinuityThreads({
+        schemaVersion: 1,
+        workId: created.workId,
+        status: "all",
+      })).resolves.toMatchObject({
+        threads: [
+          expect.objectContaining({ title: "열쇠의 주인은 누구인가" }),
+          expect.objectContaining({ title: "열쇠를 찾기" }),
+        ],
+      });
+      await expect(runtime.listContinuityReviewCandidates({
+        schemaVersion: 1,
+        workId: created.workId,
+        status: "all",
+      })).resolves.toMatchObject({
+        candidates: [expect.objectContaining({ status: "completed" })],
+      });
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("runs CharacterKnowledge evidence, supersession, POV, and restart through the local workspace", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-knowledge-runtime-"),
+    );
+    const options = createOptions(rootDirectoryPath);
+    let runtime = await openLocalWorkspaceRuntime(options);
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "지식 런타임",
+        firstDocumentTitle: "1화",
+      });
+      const character = await runtime.createCharacter({
+        schemaVersion: 1,
+        workId: created.workId,
+        name: "윤서",
+        aliases: [],
+        role: "",
+        summary: "",
+        appearance: "",
+        personality: "",
+        speech: "",
+        goal: "",
+        conflict: "",
+        note: "",
+      });
+      const text = "윤서는 열쇠가 북문을 연다고 믿었다.";
+      const saved = await runtime.saveDocumentChange({
+        schemaVersion: 1,
+        batch: parseChangeBatch({
+          schemaVersion: 1,
+          textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+          batchId: randomUUID(),
+          workId: created.workId,
+          documentId: created.documentId,
+          baseRevisionId: created.revisionId,
+          sequence: 0,
+          createdAt: new Date().toISOString(),
+          beforeTextLengthUtf16: 0,
+          afterTextLengthUtf16: text.length,
+          changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: text }],
+        }),
+        editorStateJson: JSON.stringify({
+          schemaVersion: 1,
+          ranges: [],
+          contentWidthPx: 640,
+        }),
+      });
+      if (!("revisionId" in saved)) throw new Error("Expected durable revision");
+      const belief = await runtime.createCharacterKnowledge({
+        schemaVersion: 1,
+        workId: created.workId,
+        characterId: character.characterId,
+        statement: "열쇠는 북문을 연다",
+        stance: "believes",
+        truthStatus: "false",
+        aboutRefs: [],
+        evidenceRange: {
+          documentId: created.documentId,
+          documentRevisionId: saved.revisionId,
+          from: 0,
+          to: 2,
+        },
+      });
+      const successor = await runtime.supersedeCharacterKnowledge({
+        schemaVersion: 1,
+        workId: created.workId,
+        knowledgeId: belief.knowledgeId,
+        expectedRevision: belief.revision,
+        statement: "열쇠는 남문을 연다",
+        stance: "knows",
+        truthStatus: "true",
+        aboutRefs: [],
+        evidenceRange: null,
+      });
+      expect(successor).toMatchObject({
+        status: "active",
+        supersedesKnowledgeId: belief.knowledgeId,
+      });
+
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      await expect(runtime.listCharacterKnowledge({
+        schemaVersion: 1,
+        workId: created.workId,
+        characterId: character.characterId,
+        status: "all",
+      })).resolves.toMatchObject({
+        entries: [
+          expect.objectContaining({ knowledgeId: successor.knowledgeId, status: "active" }),
+          expect.objectContaining({ knowledgeId: belief.knowledgeId, status: "superseded" }),
+        ],
+      });
+      await expect(runtime.projectPovCharacterKnowledge({
+        schemaVersion: 1,
+        workId: created.workId,
+        characterId: character.characterId,
+      })).resolves.toMatchObject({
+        objectiveFacts: [expect.objectContaining({ knowledgeId: successor.knowledgeId })],
+        povKnown: [expect.objectContaining({ knowledgeId: successor.knowledgeId })],
+        povFalseBeliefs: [],
+        povUnavailable: [],
+      });
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("runs Context policy and deterministic planning through the local workspace and restart", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-context-runtime-"),
+    );
+    const options = createOptions(rootDirectoryPath);
+    let runtime = await openLocalWorkspaceRuntime(options);
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "문맥 런타임",
+        firstDocumentTitle: "1화",
+      });
+      const character = await runtime.createCharacter({
+        schemaVersion: 1,
+        workId: created.workId,
+        name: "윤서",
+        aliases: [],
+        role: "기록관",
+        summary: "북문을 조사한다.",
+        appearance: "",
+        personality: "",
+        speech: "",
+        goal: "",
+        conflict: "",
+        note: "",
+      });
+      const initial = await runtime.listAssistantEntityContextPolicies({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      const virtual = initial.policies.find((policy) =>
+        policy.entity.kind === "character" && policy.entity.id === character.characterId
+      );
+      expect(virtual).toMatchObject({ revision: 0, mode: "relevant" });
+      const saved = await runtime.saveAssistantEntityContextPolicy({
+        schemaVersion: 1,
+        workId: created.workId,
+        entity: { kind: "character", id: character.characterId },
+        expectedRevision: null,
+        mode: "required",
+      });
+      expect(saved).toMatchObject({ revision: 1, mode: "required" });
+      const command = {
+        schemaVersion: 1 as const,
+        workId: created.workId,
+        capability: "canon.review" as const,
+        sourceRange: null,
+        sceneId: null,
+        povCharacterId: character.characterId,
+        userQuery: "북문",
+        tokenBudget: 1000,
+      };
+      const first = await runtime.planAssistantContext(command);
+      const second = await runtime.planAssistantContext(command);
+      expect(first).toEqual(second);
+      expect(first).toMatchObject({
+        status: "planned",
+        entries: [expect.objectContaining({
+          entity: { kind: "character", id: character.characterId },
+          inclusionReason: "required-policy",
+        })],
+      });
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      await expect(runtime.listAssistantEntityContextPolicies({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).resolves.toMatchObject({
+        policies: expect.arrayContaining([expect.objectContaining({
+          entity: { kind: "character", id: character.characterId },
+          revision: 1,
+          mode: "required",
+        })]),
+      });
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("runs NarrativeDigest through permission, planner, immutable persistence, stale projection, regeneration, and reopen", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-narrative-digest-runtime-"),
+    );
+    const connectorCalls: unknown[] = [];
+    const options = {
+      ...createOptions(rootDirectoryPath),
+      narrativeDigest: {
+        destinationId: "digest-provider",
+        contextTokenBudget: 32768,
+        isConnected: () => true,
+        execute: async (input: unknown) => {
+          connectorCalls.push(input);
+          return {
+            providerId: "digest-provider",
+            modelId: "digest-model",
+            promptVersion: "eum-narrative-digest-v2" as const,
+            text: `이야기 요약 ${connectorCalls.length}`,
+          };
+        },
+      },
+    };
+    let runtime = await openLocalWorkspaceRuntime(options);
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "이야기 흐름 런타임",
+        firstDocumentTitle: "1화",
+      });
+      await expect(runtime.getWorkSceneAnalysisSettings({
+        schemaVersion:1,workId:created.workId,
+      })).resolves.toMatchObject({revision:0,settings:{enabled:false}});
+      await expect(runtime.saveWorkSceneAnalysisSettings({
+        schemaVersion:1,workId:created.workId,expectedRevision:0,
+        settings:{enabled:true},
+      })).resolves.toMatchObject({revision:1,settings:{enabled:true}});
+      const text = "윤서는 북문 앞에서 오래된 열쇠를 들었다.";
+      const saved = await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: created.workId,
+        documentId: created.documentId,
+        baseRevisionId: created.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: text.length,
+        changes: [{ fromUtf16: 0,toUtf16: 0,insertedText: text }],
+      }));
+      if (!("revisionId" in saved)) throw new Error("Expected durable NarrativeDigest source");
+      await runtime.createCharacter({
+        schemaVersion: 1,workId: created.workId,name: "윤서",aliases: [],role: "주인공",
+        summary: "열쇠를 찾았다.",appearance: "",personality: "",speech: "",goal: "",conflict: "",note: "",
+      });
+      const conversationId = entityId<"AssistantConversation">(randomUUID());
+      await runtime.grantAssistantContextPermission({
+        schemaVersion: 1,workId: created.workId,conversationId,
+        capability: "narrative.digest",destinationId: "digest-provider",
+        localScope: "work",externalScope: "work",duration: "conversation",
+      });
+      const generated = await runtime.generateNarrativeDigest({
+        schemaVersion: 1,requestId: randomUUID(),workId: created.workId,conversationId,
+        scope: { kind: "work" },documentIds: [created.documentId],
+      });
+      expect(generated).toMatchObject({ status: "generated",digest: { text: "이야기 요약 1",integrity: "current" } });
+      expect(connectorCalls).toHaveLength(1);
+      expect(connectorCalls[0]).toMatchObject({
+        documents: [{ documentId: created.documentId,documentRevisionId: saved.revisionId,from:0,to:text.length,text }],
+        sceneSource:null,
+      });
+
+      await runtime.createCharacter({
+        schemaVersion: 1,workId: created.workId,name: "민호",aliases: [],role: "조력자",
+        summary: "함정을 경고한다.",appearance: "",personality: "",speech: "",goal: "",conflict: "",note: "",
+      });
+      const stale = await runtime.listNarrativeDigests({ schemaVersion: 1,workId: created.workId });
+      expect(stale.digests[0]).toMatchObject({ text: "이야기 요약 1",integrity: "stale" });
+      const regenerated = await runtime.regenerateNarrativeDigest({
+        schemaVersion: 1,requestId: randomUUID(),workId: created.workId,conversationId,
+        digestId: stale.digests[0]!.digestId,
+      });
+      expect(regenerated).toMatchObject({ status: "generated",digest: { text: "이야기 요약 2",integrity: "current" } });
+      expect((await runtime.listAssistantContextManifests({ schemaVersion: 1,workId: created.workId })).manifests).toHaveLength(2);
+      expect((await runtime.listAssistantContextActivities({ schemaVersion: 1,workId: created.workId })).activities).toMatchObject([
+        { capability: "narrative.digest",providerId: "digest-provider",modelId: "digest-model",candidateCount: 0 },
+        { capability: "narrative.digest",providerId: "digest-provider",modelId: "digest-model",candidateCount: 0 },
+      ]);
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      await expect(runtime.listNarrativeDigests({ schemaVersion: 1,workId: created.workId })).resolves.toMatchObject({
+        digests: [
+          { text: "이야기 요약 2",integrity: "current" },
+          { text: "이야기 요약 1",integrity: "stale" },
+        ],
+      });
+      const audit = new DatabaseSync(path.join(rootDirectoryPath,"workspace.sqlite3"),{ readOnly: true });
+      try {
+        expect(audit.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+        expect(audit.prepare(`SELECT COUNT(*) AS count FROM narrative_digests`).get()).toEqual({ count: 2 });
+      } finally { audit.close(); }
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath,{ recursive: true,force: true });
+    }
+  });
+
+  it("projects stable Scene Continuity and Knowledge references with split lineage review across reopen", async()=>{
+    const rootDirectoryPath=await mkdtemp(path.join(tmpdir(),"eum-studio-scene-canon-context-"));
+    const options=createOptions(rootDirectoryPath);let runtime=await openLocalWorkspaceRuntime(options);
+    try{
+      const created=await runtime.createFirstWork({schemaVersion:1,title:"장면 별빛",firstDocumentTitle:"1화"});
+      const text="윤서는 열쇠를 들었다. 민호가 문을 닫았다.";
+      const saved=await runtime.saveChangeBatch(parseChangeBatch({schemaVersion:1,textRepresentation:DURABLE_TEXT_REPRESENTATION_V1,batchId:randomUUID(),workId:created.workId,documentId:created.documentId,baseRevisionId:created.revisionId,sequence:0,createdAt:new Date().toISOString(),beforeTextLengthUtf16:0,afterTextLengthUtf16:text.length,changes:[{fromUtf16:0,toUtf16:0,insertedText:text}]}));
+      if(!("revisionId" in saved))throw new Error("Expected Scene Canon source revision");
+      const projection=await runtime.listSceneProjection({schemaVersion:1,workId:created.workId});
+      const scene=projection.scenes[0];
+      if(scene===undefined||scene.range===null)throw new Error("Expected resolved Scene");
+      const finalized=await runtime.finalizeSceneCanonCheck({schemaVersion:1,workId:created.workId,sceneKey:scene.sceneKey,documentId:scene.documentId,documentRevisionId:scene.documentRevisionId,from:scene.range.start,to:scene.range.end});
+      const sceneId=finalized.sceneId;
+      const character=await runtime.createCharacter({schemaVersion:1,workId:created.workId,name:"윤서",aliases:[],role:"주인공",summary:"",appearance:"",personality:"",speech:"",goal:"",conflict:"",note:""});
+      await runtime.createContinuityThread({schemaVersion:1,workId:created.workId,kind:"promise",title:"문을 다시 열기",note:"",subjectRefs:[{kind:"scene",id:sceneId}],openedEvidenceRange:null});
+      await runtime.createCharacterKnowledge({schemaVersion:1,workId:created.workId,characterId:character.characterId,statement:"문이 잠겼다",stance:"knows",truthStatus:"true",aboutRefs:[{kind:"scene",id:sceneId}],evidenceRange:null});
+      const initial=await runtime.listSceneCanonContexts({schemaVersion:1,workId:created.workId});
+      expect(initial.contexts.find((context)=>context.sceneId===sceneId)).toMatchObject({continuity:[{title:"문을 다시 열기"}],knowledge:[{statement:"문이 잠겼다"}],lineageReviews:[]});
+      const splitOffset=Math.floor((scene.range.start+scene.range.end)/2);
+      await runtime.createSceneOverride({schemaVersion:1,workId:created.workId,documentId:created.documentId,expectedDocumentRevisionId:saved.revisionId,selection:{anchor:splitOffset,head:splitOffset},exactQuote:"",operation:"split",note:"Gate 6 lineage"});
+      const splitProjection=await runtime.listSceneProjection({schemaVersion:1,workId:created.workId});
+      expect(splitProjection.scenes).toHaveLength(2);
+      const splitContexts=await runtime.listSceneCanonContexts({schemaVersion:1,workId:created.workId});
+      expect(splitContexts.contexts.flatMap((context)=>context.lineageReviews).some((review)=>review.referenceKind==="continuity-thread"&&review.status==="needs-review"&&review.candidateSceneIds.length===2)).toBe(true);
+      expect(splitContexts.contexts.flatMap((context)=>context.lineageReviews).some((review)=>review.referenceKind==="character-knowledge"&&review.status==="needs-review")).toBe(true);
+      runtime.close();runtime=await openLocalWorkspaceRuntime(options);
+      await expect(runtime.listSceneCanonContexts({schemaVersion:1,workId:created.workId})).resolves.toMatchObject({contexts:expect.arrayContaining([expect.objectContaining({lineageReviews:expect.arrayContaining([expect.objectContaining({status:"needs-review"})])})])});
+    }finally{runtime.close();await rm(rootDirectoryPath,{recursive:true,force:true});}
+  });
+
+  it("keeps named WorkSnapshot slot history and produces a read-only Scene selection plan across reopen",async()=>{
+    const rootDirectoryPath=await mkdtemp(path.join(tmpdir(),"eum-studio-snapshot-scene-plan-"));const options=createOptions(rootDirectoryPath);let runtime=await openLocalWorkspaceRuntime(options);
+    try{
+      const created=await runtime.createFirstWork({schemaVersion:1,title:"대체 전개",firstDocumentTitle:"1화"});const firstText="윤서는 북문을 열었다.";
+      const firstSave=await runtime.saveChangeBatch(parseChangeBatch({schemaVersion:1,textRepresentation:DURABLE_TEXT_REPRESENTATION_V1,batchId:randomUUID(),workId:created.workId,documentId:created.documentId,baseRevisionId:created.revisionId,sequence:0,createdAt:new Date().toISOString(),beforeTextLengthUtf16:0,afterTextLengthUtf16:firstText.length,changes:[{fromUtf16:0,toUtf16:0,insertedText:firstText}]}));if(!("revisionId" in firstSave))throw new Error("Expected first snapshot source");
+      const scene=(await runtime.listSceneProjection({schemaVersion:1,workId:created.workId})).scenes[0];if(scene===undefined||scene.range===null)throw new Error("Expected snapshot Scene");const finalized=await runtime.finalizeSceneCanonCheck({schemaVersion:1,workId:created.workId,sceneKey:scene.sceneKey,documentId:scene.documentId,documentRevisionId:scene.documentRevisionId,from:scene.range.start,to:scene.range.end});
+      const firstSnapshot=await runtime.createWorkSnapshot({schemaVersion:1,workId:created.workId,label:"대체 전개 A"});
+      const changedFrom=firstText.indexOf("열었다"),changedText=firstText.replace("열었다","닫았다");const secondSave=await runtime.saveChangeBatch(parseChangeBatch({schemaVersion:1,textRepresentation:DURABLE_TEXT_REPRESENTATION_V1,batchId:randomUUID(),workId:created.workId,documentId:created.documentId,baseRevisionId:created.revisionId,sequence:1,createdAt:new Date().toISOString(),beforeTextLengthUtf16:firstText.length,afterTextLengthUtf16:changedText.length,changes:[{fromUtf16:changedFrom,toUtf16:changedFrom+"열었다".length,insertedText:"닫았다"}]}));if(!("revisionId" in secondSave))throw new Error("Expected second snapshot source");
+      const currentScene=(await runtime.listSceneProjection({schemaVersion:1,workId:created.workId})).scenes.find((candidate)=>candidate.range!==null&&candidate.integrity==="resolved");if(currentScene===undefined||currentScene.range===null)throw new Error("Expected current alternative Scene");const currentFinalized=await runtime.finalizeSceneCanonCheck({schemaVersion:1,workId:created.workId,sceneKey:currentScene.sceneKey,documentId:currentScene.documentId,documentRevisionId:currentScene.documentRevisionId,from:currentScene.range.start,to:currentScene.range.end});
+      const secondSnapshot=await runtime.createWorkSnapshot({schemaVersion:1,workId:created.workId,label:"대체 전개 A"});expect(secondSnapshot.workSnapshotId).not.toBe(firstSnapshot.workSnapshotId);
+      const plan=await runtime.planWorkSnapshotSceneSelection({schemaVersion:1,workId:created.workId,workSnapshotId:firstSnapshot.workSnapshotId,selectedSceneIds:[]});expect(plan).toMatchObject({slotName:"대체 전개 A",mode:"read-only-selection-plan",automaticMergeAllowed:false,canApply:false,applyCommand:null,snapshotSceneMetadataAvailable:true,scenes:expect.arrayContaining([expect.objectContaining({sceneId:finalized.sceneId,status:"removed-after-snapshot",selected:false,snapshotSegments:[expect.objectContaining({excerpt:firstText})],currentSegments:[]}),expect.objectContaining({sceneId:currentFinalized.sceneId,status:"added-after-snapshot",selected:false,snapshotSegments:[],currentSegments:[expect.objectContaining({excerpt:changedText})]})])});
+      const selected=await runtime.planWorkSnapshotSceneSelection({schemaVersion:1,workId:created.workId,workSnapshotId:firstSnapshot.workSnapshotId,selectedSceneIds:[finalized.sceneId]});expect(selected.scenes.find((candidate)=>candidate.sceneId===finalized.sceneId)).toMatchObject({selected:true});
+      const auditBefore=new DatabaseSync(path.join(rootDirectoryPath,"workspace.sqlite3"),{readOnly:true});let countsBefore:unknown;try{countsBefore=auditBefore.prepare(`SELECT (SELECT COUNT(*) FROM work_snapshots) AS snapshots,(SELECT COUNT(*) FROM document_revisions) AS revisions`).get();}finally{auditBefore.close();}
+      await runtime.planWorkSnapshotSceneSelection({schemaVersion:1,workId:created.workId,workSnapshotId:firstSnapshot.workSnapshotId,selectedSceneIds:[finalized.sceneId]});runtime.close();runtime=await openLocalWorkspaceRuntime(options);
+      const reopened=await runtime.planWorkSnapshotSceneSelection({schemaVersion:1,workId:created.workId,workSnapshotId:firstSnapshot.workSnapshotId,selectedSceneIds:[finalized.sceneId]});expect(reopened).toEqual(selected);
+      const auditAfter=new DatabaseSync(path.join(rootDirectoryPath,"workspace.sqlite3"),{readOnly:true});try{expect(auditAfter.prepare(`SELECT (SELECT COUNT(*) FROM work_snapshots) AS snapshots,(SELECT COUNT(*) FROM document_revisions) AS revisions`).get()).toEqual(countsBefore);expect(auditAfter.prepare(`SELECT label,COUNT(*) AS count FROM work_snapshots GROUP BY label`).all()).toEqual([{label:"대체 전개 A",count:2}]);expect(auditAfter.prepare("PRAGMA foreign_key_check").all()).toEqual([]);}finally{auditAfter.close();}
+    }finally{runtime.close();await rm(rootDirectoryPath,{recursive:true,force:true});}
+  });
+
+  it("prepares a deterministic one-way Markdown bundle from all canonical ledgers across reopen", async () => {
+    const rootDirectoryPath = await mkdtemp(path.join(tmpdir(), "eum-studio-canonical-markdown-"));
+    const options = createOptions(rootDirectoryPath);
+    let runtime = await openLocalWorkspaceRuntime(options);
+    const createCharacter = (workId: string, name: string) => runtime.createCharacter({
+      schemaVersion: 1,
+      workId,
+      name,
+      aliases: [],
+      role: "",
+      summary: "",
+      appearance: "",
+      personality: "",
+      speech: "",
+      goal: "",
+      conflict: "",
+      note: "",
+    });
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "북문 연대기",
+        firstDocumentTitle: "1화",
+      });
+      const manuscript = "윤서는 북문의 열쇠를 찾았다.";
+      const saved = await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: created.workId,
+        documentId: created.documentId,
+        baseRevisionId: created.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: manuscript.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: manuscript }],
+      }));
+      if (!("revisionId" in saved)) throw new Error("Expected export source revision");
+      const [yunseo, keeper] = await Promise.all([
+        createCharacter(created.workId, "윤서"),
+        createCharacter(created.workId, "문지기"),
+      ]);
+      await runtime.createCharacterRelation({
+        schemaVersion: 1,
+        workId: created.workId,
+        fromCharacterId: yunseo.characterId,
+        toCharacterId: keeper.characterId,
+        kind: "동료",
+        description: "북문을 함께 지킨다.",
+      });
+      const lore = await runtime.createLoreEntry({
+        schemaVersion: 1,
+        workId: created.workId,
+        title: "북문",
+        content: "밤에는 닫힌다.",
+        category: "장소",
+        aliases: [],
+        enabled: true,
+        evidence: null,
+      });
+      await runtime.createAnchorlessEvent({
+        schemaVersion: 1,
+        workId: created.workId,
+        title: "열쇠 발견",
+        note: "윤서가 열쇠를 찾았다.",
+      });
+      await runtime.createPlotThread({
+        schemaVersion: 1,
+        workId: created.workId,
+        title: "북문 개방",
+        stage: "예정",
+        summary: "북문을 연다.",
+        note: "",
+      });
+      await runtime.createForeshadowLine({
+        schemaVersion: 1,
+        workId: created.workId,
+        title: "열쇠의 약속",
+        note: "후반부에 회수한다.",
+      });
+      const scene = (await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).scenes.find((candidate) => candidate.range !== null);
+      if (scene === undefined || scene.range === null) throw new Error("Expected export Scene");
+      await runtime.finalizeSceneCanonCheck({
+        schemaVersion: 1,
+        workId: created.workId,
+        sceneKey: scene.sceneKey,
+        documentId: scene.documentId,
+        documentRevisionId: scene.documentRevisionId,
+        from: scene.range.start,
+        to: scene.range.end,
+      });
+      await runtime.createContinuityThread({
+        schemaVersion: 1,
+        workId: created.workId,
+        kind: "promise",
+        title: "열쇠를 돌려주기",
+        note: "문지기와의 약속",
+        subjectRefs: [{ kind: "character", id: yunseo.characterId }],
+        openedEvidenceRange: null,
+      });
+      await runtime.createCharacterKnowledge({
+        schemaVersion: 1,
+        workId: created.workId,
+        characterId: yunseo.characterId,
+        statement: "북문은 밤에 닫힌다",
+        stance: "knows",
+        truthStatus: "true",
+        aboutRefs: [{ kind: "lore-entry", id: lore.loreEntryId }],
+        evidenceRange: null,
+      });
+
+      const prepared = await runtime.prepareCanonicalMarkdownExport({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(prepared).toMatchObject({
+        direction: "canonical-to-markdown",
+        importSupported: false,
+        entityCounts: {
+          character: 2,
+          "character-relation": 1,
+          "lore-entry": 1,
+          "event-block": 1,
+          "plot-thread": 1,
+          "foreshadow-line": 1,
+          scene: 1,
+          "continuity-thread": 1,
+          "character-knowledge": 1,
+        },
+      });
+      expect(prepared.files.every((file) => file.relativePath.endsWith(".md"))).toBe(true);
+      expect(prepared.files.find((file) => file.relativePath.startsWith("인물-관계/"))?.content)
+        .toContain("[[인물/");
+      expect(JSON.stringify(prepared)).not.toMatch(/importPath|markdownImport|writeBack/u);
+
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      const reopened = await runtime.prepareCanonicalMarkdownExport({
+        schemaVersion: 1,
+        workId: created.workId,
+      });
+      expect(reopened).toEqual(prepared);
+      const audit = new DatabaseSync(path.join(rootDirectoryPath, "workspace.sqlite3"), { readOnly: true });
+      try {
+        expect(audit.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+      } finally {
+        audit.close();
+      }
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("retries only the unfinished Lore stage of an automatic Scene analysis across reopen", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-automatic-scene-analysis-run-"),
+    );
+    let digestCalls = 0;
+    let canonCalls = 0;
+    const options: LocalWorkspaceRuntimeOptions = {
+      ...createOptions(rootDirectoryPath),
+      narrativeDigest: {
+        destinationId: "automatic-scene-provider",
+        contextTokenBudget: 10_000,
+        isConnected: () => true,
+        execute: async () => {
+          digestCalls += 1;
+          return {
+            providerId: "automatic-scene-provider",
+            modelId: "runtime-model",
+            promptVersion: "eum-narrative-digest-v2" as const,
+            text: "장면 요약",
+          };
+        },
+      },
+      canonReview: {
+        destinationId: "automatic-scene-provider",
+        contextTokenBudget: 10_000,
+        isConnected: () => true,
+        execute: async () => {
+          canonCalls += 1;
+          if (canonCalls === 1) throw new Error("temporary Lore connector failure");
+          return {
+            providerId: "automatic-scene-provider",
+            modelId: "runtime-model",
+            promptVersion: CANON_REVIEW_PROMPT_VERSION,
+            payload: { proposals: [] },
+          };
+        },
+      },
+    };
+    let runtime = await openLocalWorkspaceRuntime(options);
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "자동 장면 분석 재시도",
+        firstDocumentTitle: "1화",
+      });
+      const manuscript = "별빛문은 첫 장면에서 닫혔다.";
+      const saved = await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: created.workId,
+        documentId: created.documentId,
+        baseRevisionId: created.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: manuscript.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: manuscript }],
+      }));
+      if (!("revisionId" in saved)) throw new Error("Expected automatic Scene source");
+      const scene = (await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).scenes[0];
+      if (scene === undefined || scene.range === null) {
+        throw new Error("Expected resolved automatic Scene");
+      }
+      const finalized = await runtime.finalizeSceneCanonCheck({
+        schemaVersion: 1,
+        workId: created.workId,
+        sceneKey: scene.sceneKey,
+        documentId: scene.documentId,
+        documentRevisionId: scene.documentRevisionId,
+        from: scene.range.start,
+        to: scene.range.end,
+      });
+      for (const capability of ["narrative.digest", "canon.review"] as const) {
+        await runtime.grantAssistantContextPermission({
+          schemaVersion: 1,
+          workId: created.workId,
+          conversationId: null,
+          capability,
+          destinationId: "automatic-scene-provider",
+          localScope: "scene",
+          externalScope: "scene",
+          duration: "work",
+        });
+      }
+      const command = () => ({
+        schemaVersion: 1 as const,
+        digestRequestId: entityId<"NarrativeDigestRequest">(randomUUID()),
+        canonRequestId: entityId<"CanonReviewRequest">(randomUUID()),
+        continuityRequestId: entityId<"ContinuityReviewRequest">(randomUUID()),
+        workId: created.workId,
+        conversationId: entityId<"AssistantConversation">(randomUUID()),
+        sceneId: finalized.sceneId,
+        sourceRange: finalized.sourceRange,
+        trigger: "scene-transition" as const,
+      });
+
+      await expect(runtime.runAutomaticSceneAnalysis(command())).resolves.toEqual({
+        schemaVersion: 1,
+        status: "disabled",
+      });
+      expect({ digestCalls, canonCalls }).toEqual({ digestCalls: 0, canonCalls: 0 });
+      await runtime.saveWorkSceneAnalysisSettings({
+        schemaVersion: 1,
+        workId: created.workId,
+        expectedRevision: 0,
+        settings: { enabled: true },
+      });
+      await expect(runtime.runAutomaticSceneAnalysis(command())).resolves.toMatchObject({
+        status: "lore-failed",
+        run: { loreStatus: "failed", attemptCount: 1 },
+      });
+      expect({ digestCalls, canonCalls }).toEqual({ digestCalls: 1, canonCalls: 1 });
+      await expect(runtime.runAutomaticSceneAnalysis(command())).resolves.toMatchObject({
+        status: "completed",
+        run: { loreStatus: "no-change", attemptCount: 2 },
+      });
+      expect({ digestCalls, canonCalls }).toEqual({ digestCalls: 1, canonCalls: 2 });
+      await expect(runtime.runAutomaticSceneAnalysis(command())).resolves.toMatchObject({
+        status: "unchanged",
+        run: { loreStatus: "no-change", attemptCount: 2 },
+      });
+      expect({ digestCalls, canonCalls }).toEqual({ digestCalls: 1, canonCalls: 2 });
+
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      await expect(runtime.listSceneAnalysisRuns({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).resolves.toMatchObject({
+        runs: [{ loreStatus: "no-change", attemptCount: 2 }],
+      });
+      const audit = new DatabaseSync(
+        path.join(rootDirectoryPath, "workspace.sqlite3"),
+        { readOnly: true },
+      );
+      try {
+        expect(audit.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+      } finally {
+        audit.close();
+      }
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("records one integrated Scene information update as review-only candidates", async () => {
+    const rootDirectoryPath = await mkdtemp(
+      path.join(tmpdir(), "eum-studio-integrated-scene-information-"),
+    );
+    let characterId: EntityId<"Character"> | null = null;
+    let knowledgeId: EntityId<"CharacterKnowledge"> | null = null;
+    const narrativeExecute = vi.fn(async () => {
+      throw new Error("separate NarrativeDigest connector must not run");
+    });
+    const canonExecute = vi.fn(async () => {
+      throw new Error("separate Canon connector must not run");
+    });
+    const continuityExecute = vi.fn(async () => {
+      throw new Error("separate Continuity connector must not run");
+    });
+    const integratedExecute = vi.fn(async (input) => {
+      expect(input.canon.requestedTargetKinds).toEqual([
+        "character",
+        "character-relation",
+        "lore-entry",
+        "character-knowledge",
+      ]);
+      return {
+        providerId: "integrated-provider",
+        modelId: "integrated-model",
+        promptVersion: "eum-scene-information-update-v1" as const,
+        digest: { text: "윤서는 북문이 열린다는 사실을 확인했다." },
+        canon: {
+          proposals: [{
+            targetKind: "character-knowledge" as const,
+            targetHint: "북문은 열릴지도 모른다.",
+            operationHint: "update" as const,
+            assertionBasis: "explicit-evidence" as const,
+            reason: "인물이 직접 확인했다.",
+            fields: {
+              statement: "북문은 열린다.",
+              stance: "knows",
+              truthStatus: "true",
+            },
+            evidence: [{ paragraphId: "p1", quote: "직접 확인했다" }],
+          }],
+        },
+        continuity: {
+          proposals: [{
+            assertionBasis: "explicit-evidence" as const,
+            kind: "open-question" as const,
+            title: "북문을 연 사람",
+            note: "행위자는 아직 드러나지 않았다.",
+            subjectRefs: [{ kind: "character" as const, id: characterId! }],
+            reason: "행위자가 밝혀지지 않았다.",
+            evidence: [{ paragraphId: "p1", quote: "북문" }],
+          }],
+        },
+        reviewedEntities: [{
+          entity: { kind: "character-knowledge" as const, id: knowledgeId! },
+          outcome: "changed" as const,
+          reason: "추측이 확인된 지식으로 바뀌었다.",
+        }],
+      };
+    });
+    const options: LocalWorkspaceRuntimeOptions = {
+      ...createOptions(rootDirectoryPath),
+      narrativeDigest: {
+        destinationId: "integrated-provider",
+        contextTokenBudget: 10_000,
+        isConnected: () => true,
+        execute: narrativeExecute,
+      },
+      canonReview: {
+        destinationId: "integrated-provider",
+        contextTokenBudget: 10_000,
+        isConnected: () => true,
+        execute: canonExecute,
+      },
+      continuityReview: {
+        destinationId: "integrated-provider",
+        contextTokenBudget: 10_000,
+        isConnected: () => true,
+        execute: continuityExecute,
+      },
+      sceneInformationUpdate: {
+        destinationId: "integrated-provider",
+        isConnected: () => true,
+        execute: integratedExecute,
+      },
+    };
+    let runtime = await openLocalWorkspaceRuntime(options);
+    try {
+      const created = await runtime.createFirstWork({
+        schemaVersion: 1,
+        title: "통합 정보 갱신",
+        firstDocumentTitle: "1화",
+      });
+      const character = await runtime.createCharacter({
+        schemaVersion: 1,
+        workId: created.workId,
+        name: "윤서",
+        aliases: [],
+        role: "기록자",
+        summary: "북문을 조사한다.",
+        appearance: "",
+        personality: "신중함",
+        speech: "",
+        goal: "북문의 비밀을 밝힌다.",
+        conflict: "",
+        note: "",
+      });
+      characterId = character.characterId;
+      const priorKnowledge = await runtime.createCharacterKnowledge({
+        schemaVersion: 1,
+        workId: created.workId,
+        characterId: character.characterId,
+        statement: "북문은 열릴지도 모른다.",
+        stance: "suspects",
+        truthStatus: "unknown",
+        aboutRefs: [],
+        evidenceRange: null,
+      });
+      knowledgeId = priorKnowledge.knowledgeId;
+      const manuscript = "윤서는 북문이 열린다는 사실을 직접 확인했다.";
+      const saved = await runtime.saveChangeBatch(parseChangeBatch({
+        schemaVersion: 1,
+        textRepresentation: DURABLE_TEXT_REPRESENTATION_V1,
+        batchId: randomUUID(),
+        workId: created.workId,
+        documentId: created.documentId,
+        baseRevisionId: created.revisionId,
+        sequence: 0,
+        createdAt: new Date().toISOString(),
+        beforeTextLengthUtf16: 0,
+        afterTextLengthUtf16: manuscript.length,
+        changes: [{ fromUtf16: 0, toUtf16: 0, insertedText: manuscript }],
+      }));
+      if (!("revisionId" in saved)) throw new Error("Expected durable Scene source");
+      const scene = (await runtime.listSceneProjection({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).scenes[0];
+      if (scene === undefined || scene.range === null) {
+        throw new Error("Expected resolved integrated Scene");
+      }
+      const finalized = await runtime.finalizeSceneCanonCheck({
+        schemaVersion: 1,
+        workId: created.workId,
+        sceneKey: scene.sceneKey,
+        documentId: scene.documentId,
+        documentRevisionId: scene.documentRevisionId,
+        from: scene.range.start,
+        to: scene.range.end,
+      });
+      for (const capability of [
+        "narrative.digest",
+        "canon.review",
+        "continuity.review",
+      ] as const) {
+        await runtime.grantAssistantContextPermission({
+          schemaVersion: 1,
+          workId: created.workId,
+          conversationId: null,
+          capability,
+          destinationId: "integrated-provider",
+          localScope: "scene",
+          externalScope: "scene",
+          duration: "work",
+        });
+      }
+      await runtime.saveWorkSceneAnalysisSettings({
+        schemaVersion: 1,
+        workId: created.workId,
+        expectedRevision: 0,
+        settings: { enabled: true },
+      });
+      const result = await runtime.runAutomaticSceneAnalysis({
+        schemaVersion: 1,
+        digestRequestId: entityId<"NarrativeDigestRequest">(randomUUID()),
+        canonRequestId: entityId<"CanonReviewRequest">(randomUUID()),
+        continuityRequestId: entityId<"ContinuityReviewRequest">(randomUUID()),
+        workId: created.workId,
+        conversationId: entityId<"AssistantConversation">(randomUUID()),
+        sceneId: finalized.sceneId,
+        sourceRange: finalized.sourceRange,
+        trigger: "scene-transition",
+      });
+
+      expect(result).toMatchObject({
+        status: "completed",
+        run: {
+          loreStatus: "candidate",
+          informationUpdate: {
+            status: "complete",
+            promptVersion: "eum-scene-information-update-v1",
+            reviewedEntities: [{ outcome: "changed" }],
+          },
+        },
+      });
+      expect(integratedExecute).toHaveBeenCalledOnce();
+      expect(narrativeExecute).not.toHaveBeenCalled();
+      expect(canonExecute).not.toHaveBeenCalled();
+      expect(continuityExecute).not.toHaveBeenCalled();
+      const immutableAudit = new DatabaseSync(
+        path.join(rootDirectoryPath, "workspace.sqlite3"),
+      );
+      try {
+        expect(() => immutableAudit.prepare(`
+          UPDATE scene_information_update_batches SET revision = revision + 1
+        `).run()).toThrow(/immutable/u);
+        expect(() => immutableAudit.prepare(`
+          DELETE FROM scene_information_update_batches
+        `).run()).toThrow(/immutable/u);
+      } finally {
+        immutableAudit.close();
+      }
+      const canonCandidates = await runtime.listCanonReviewCandidates({
+        schemaVersion: 1,
+        workId: created.workId,
+        status: "all",
+      });
+      expect(canonCandidates.candidates[0]?.items[0]?.target.kind)
+        .toBe("character-knowledge");
+      const continuityCandidates = await runtime.listContinuityReviewCandidates({
+        schemaVersion: 1,
+        workId: created.workId,
+        status: "all",
+      });
+      expect(continuityCandidates.candidates[0]?.items[0]?.draft.title)
+        .toBe("북문을 연 사람");
+      await expect(runtime.listCharacterKnowledge({
+        schemaVersion: 1,
+        workId: created.workId,
+        characterId: character.characterId,
+        status: "all",
+      })).resolves.toMatchObject({
+        entries: [{
+          knowledgeId: priorKnowledge.knowledgeId,
+          statement: "북문은 열릴지도 모른다.",
+          status: "active",
+        }],
+      });
+      await expect(runtime.listContinuityThreads({
+        schemaVersion: 1,
+        workId: created.workId,
+        status: "all",
+      })).resolves.toMatchObject({ threads: [] });
+
+      await expect(runtime.runAutomaticSceneAnalysis({
+        schemaVersion: 1,
+        digestRequestId: entityId<"NarrativeDigestRequest">(randomUUID()),
+        canonRequestId: entityId<"CanonReviewRequest">(randomUUID()),
+        continuityRequestId: entityId<"ContinuityReviewRequest">(randomUUID()),
+        workId: created.workId,
+        conversationId: entityId<"AssistantConversation">(randomUUID()),
+        sceneId: finalized.sceneId,
+        sourceRange: finalized.sourceRange,
+        trigger: "scene-transition",
+      })).resolves.toMatchObject({ status: "unchanged" });
+      expect(integratedExecute).toHaveBeenCalledOnce();
+
+      const candidate = canonCandidates.candidates[0]!;
+      const item = candidate.items[0]!;
+      const decision = await runtime.decideCanonReviewItem({
+        schemaVersion: 1,
+        workId: created.workId,
+        candidateId: candidate.candidateId,
+        expectedCandidateRevision: candidate.revision,
+        itemId: item.itemId,
+        decision: { kind: "approve" },
+      });
+      expect(decision).toMatchObject({ status: "applied" });
+      const knowledgeAfterApproval = await runtime.listCharacterKnowledge({
+        schemaVersion: 1,
+        workId: created.workId,
+        characterId: character.characterId,
+        status: "all",
+      });
+      expect(knowledgeAfterApproval.entries).toHaveLength(2);
+      const activeKnowledge = knowledgeAfterApproval.entries.find(
+        (entry) => entry.status === "active",
+      );
+      const supersededKnowledge = knowledgeAfterApproval.entries.find(
+        (entry) => entry.status === "superseded",
+      );
+      expect(activeKnowledge).toMatchObject({
+        statement: "북문은 열린다.",
+        stance: "knows",
+        truthStatus: "true",
+        supersedesKnowledgeId: priorKnowledge.knowledgeId,
+      });
+      expect(supersededKnowledge).toMatchObject({
+        knowledgeId: priorKnowledge.knowledgeId,
+        statement: "북문은 열릴지도 모른다.",
+        supersededByKnowledgeId: activeKnowledge?.knowledgeId,
+      });
+
+      runtime.close();
+      runtime = await openLocalWorkspaceRuntime(options);
+      await expect(runtime.listSceneAnalysisRuns({
+        schemaVersion: 1,
+        workId: created.workId,
+      })).resolves.toMatchObject({
+        runs: [{ informationUpdate: { status: "complete" } }],
+      });
+      await expect(runtime.listCharacterKnowledge({
+        schemaVersion: 1,
+        workId: created.workId,
+        characterId: character.characterId,
+        status: "current",
+      })).resolves.toMatchObject({ entries: [{ statement: "북문은 열린다." }] });
+    } finally {
+      runtime.close();
+      await rm(rootDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+});
+
+
+describe("shared-window writing activity", () => {
+  it("serializes window changes into one work session and tolerates a stale stop", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "eum-window-activity-"));
+    const runtime = await openLocalWorkspaceRuntime(createOptions(directory));
+    try {
+      const work = await runtime.createFirstWork({ schemaVersion: 1, title: randomUUID(), firstDocumentTitle: randomUUID() });
+      const other = await runtime.createDocument({ schemaVersion: 1, workId: work.workId, title: randomUUID() });
+      const first = await workspaceWindowContext.run({ webContentsId: 1 }, () => runtime.startWritingSession({ schemaVersion: 1, workId: work.workId, documentId: work.documentId, note: "" }));
+      const second = await workspaceWindowContext.run({ webContentsId: 2 }, () => runtime.startWritingSession({ schemaVersion: 1, workId: work.workId, documentId: other.documentId, note: "" }));
+      expect(second.sessions.filter((session) => session.state === "active")).toHaveLength(1);
+      expect(second.sessions.find((session) => session.sessionId === second.activeSessionId)?.documentId).toBe(other.documentId);
+      const staleStop = await workspaceWindowContext.run({ webContentsId: 1 }, () => runtime.stopWritingSession({ schemaVersion: 1, workId: work.workId, sessionId: first.activeSessionId }));
+      expect(staleStop.activeSessionId).toBe(second.activeSessionId);
+    } finally {
+      runtime.close();
+      await rm(directory, { recursive: true, force: true });
     }
   });
 });

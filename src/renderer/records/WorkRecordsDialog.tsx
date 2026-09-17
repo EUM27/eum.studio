@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
 import {
   deriveWorkRecordsOverview,
@@ -93,9 +94,10 @@ function readthroughRateText(rate: WorkReadthroughRate): string {
   }).format(rate.percent ?? 0)}%`;
 }
 
-export function WorkRecordsDialog(input: {
+export type WorkRecordsDialogProps = {
   readonly activity: WorkActivityProjection;
   readonly busy: boolean;
+  readonly embedded?: boolean;
   readonly error: string | null;
   readonly exportActionState: "idle" | "exporting-json" | "exporting-csv";
   readonly exportError: string | null;
@@ -117,11 +119,23 @@ export function WorkRecordsDialog(input: {
   readonly readthroughError: string | null;
   readonly readthroughSettings: WorkReadthroughProjection | null;
   readonly work: WorkspaceWorkSummary;
-}) {
+};
+
+export type WorkRecordsContentProps = Omit<
+  WorkRecordsDialogProps,
+  "embedded" | "onClose"
+>;
+
+export function WorkRecordsDialog(input: WorkRecordsDialogProps) {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const today = localDateKey(new Date(input.nowMs).toISOString());
   const weekStart = localWeekStartDateKey(input.nowMs);
+  const onBackdropPointerDown = useDialogDismiss({
+    active: !input.embedded,
+    disabled: input.busy,
+    onClose: input.onClose,
+  });
   const projection = useMemo(
     () =>
       deriveWorkRecordsOverview({
@@ -172,13 +186,16 @@ export function WorkRecordsDialog(input: {
     [input.readthroughSettings, input.work],
   );
 
-  return (
-    <div className="dialog-backdrop records-dialog-backdrop" role="presentation">
+  const content = (
       <section
         aria-labelledby="work-records-heading"
-        aria-modal="true"
-        className="records-dialog"
-        role="dialog"
+        aria-modal={input.embedded ? undefined : "true"}
+        className={
+          input.embedded
+            ? "records-dialog records-content"
+            : "records-dialog"
+        }
+        role={input.embedded ? "region" : "dialog"}
       >
         <header className="records-dialog-header">
           <div>
@@ -186,15 +203,17 @@ export function WorkRecordsDialog(input: {
             <h2 id="work-records-heading">집필 기록 상세</h2>
             <p>{projection.workTitle}</p>
           </div>
-          <button
-            aria-label="집필 기록 상세 닫기"
-            className="dialog-close"
-            disabled={input.busy}
-            onClick={input.onClose}
-            type="button"
-          >
-            ×
-          </button>
+          {!input.embedded && (
+            <button
+              aria-label="집필 기록 상세 닫기"
+              className="dialog-close"
+              disabled={input.busy}
+              onClick={input.onClose}
+              type="button"
+            >
+              ×
+            </button>
+          )}
         </header>
 
         <div className="records-date-filter" aria-label="집필 기록 기간">
@@ -558,6 +577,18 @@ export function WorkRecordsDialog(input: {
           <p className="dialog-error" role="alert">{input.error}</p>
         )}
       </section>
+  );
+  return input.embedded ? content : (
+    <div
+      className="dialog-backdrop records-dialog-backdrop"
+      onPointerDown={onBackdropPointerDown}
+      role="presentation"
+    >
+      {content}
     </div>
   );
+}
+
+export function WorkRecordsContent(input: WorkRecordsContentProps) {
+  return <WorkRecordsDialog {...input} embedded onClose={() => undefined} />;
 }

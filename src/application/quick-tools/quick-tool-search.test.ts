@@ -51,4 +51,18 @@ describe("quick tool search", () => {
       }).map((target) => target.id),
     ).toEqual(["work:a", "document:b", "command:main"]);
   });
+
+  it("finds feature aliases and matches multiple words across the label and explanation", () => {
+    const feature: QuickToolTarget = {
+      id: "command:fragments", kind: "command", label: "파편 서랍",
+      detail: "남겨 둔 문장과 아이디어", keywords: ["보관", "메모"], workId: null, documentId: null,
+    };
+    const search = (query: string) => searchQuickToolTargets({
+      targets: [...targets, feature], query, activeWorkId: null, activeDocumentId: null,
+    });
+    expect(search("메모")).toEqual([feature]);
+    expect(search("보관 문장")).toEqual([feature]);
+    expect(search("보관 없는항목")).toEqual([]);
+    expect(feature.label).toBe("파편 서랍");
+  });
 });

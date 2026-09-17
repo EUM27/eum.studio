@@ -1,0 +1,116 @@
+name: Windows Early Access release
+
+on:
+  push:
+    branches:
+      - codex/complete-studio-workflows
+    paths:
+      - .github/workflows/windows-release.yml
+      - installer/eum-studio.iss
+      - release/windows-version.txt
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build Windows installer
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      EUM_STUDIO_WINDOWS_PACKAGE_DIRECTORY_NAME: eum-studio-win-x64
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: package.json
+          package-manager-cache: false
+
+      - name: Read release version
+        shell: pwsh
+        run: |
+          $version = (Get-Content "release/windows-version.txt" -Raw).Trim()
+          if ($version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
+            throw "Invalid release version: $version"
+          }
+          "VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Ensure Electron runtime is downloaded
+        shell: pwsh
+        run: |
+          $electronExe = "node_modules\electron\dist\electron.exe"
+          if (-not (Test-Path $electronExe)) {
+            node "node_modules\electron\install.js"
+          }
+          if (-not (Test-Path $electronExe)) {
+            throw "Electron runtime download did not produce $electronExe"
+          }
+
+      - name: Stamp release version
+        shell: pwsh
+        run: npm version $env:VERSION --no-git-tag-version --allow-same-version
+
+      - name: Build standalone Windows package
+        run: npm run package:win
+
+      - name: Verify standalone Windows package
+        run: npm run verify:package:win
+
+      - name: Install Inno Setup when needed
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup --yes --no-progress
+          }
+          if (-not (Test-Path $iscc)) {
+            throw "Inno Setup compiler was not found after installation"
+          }
+
+      - name: Build single-file installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          $env:EUM_STUDIO_RELEASE_VERSION = $env:VERSION
+          $env:EUM_STUDIO_PACKAGE_ROOT = (Resolve-Path "out\eum-studio-win-x64").Path
+          & $iscc "installer\eum-studio.iss"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Inno Setup failed with exit code $LASTEXITCODE"
+          }
+
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $installer = (Resolve-Path "out\installer\EumStudio-$env:VERSION-Setup.exe").Path
+          $hash = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+          $tag = "v$env:VERSION"
+
+          gh release view $tag --repo "${{ github.repository }}" 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            throw "Release $tag already exists; bump release/windows-version.txt before publishing again"
+          }
+
+          @"
+          Windows x64 Early Access installer for 이음 스튜디오.
+
+          - Single-file per-user installer
+          - Installs under the current user's Local AppData; administrator rights are not required
+          - Existing manuscripts and workspace data remain in the application's Roaming AppData storage
+          - This Early Access build is not code-signed, so Windows SmartScreen may show an Unknown publisher warning
+
+          SHA-256: $hash
+          "@ | Set-Content "release-notes.md" -Encoding utf8
+
+          gh release create $tag $installer `
+            --repo "${{ github.repository }}" `
+            --target "${{ github.sha }}" `
+            --title "이음 스튜디오 v$env:VERSION · Early Access" `
+            --notes-file "release-notes.md"

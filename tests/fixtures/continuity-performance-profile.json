@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "fixtureUse": {
+    "measurementInputOnly": true,
+    "productLimit": false,
+    "userDefault": false
+  },
+  "measurement": {
+    "iterationCount": 3,
+    "threadCount": 1000,
+    "candidateCount": 1000,
+    "plannerProposalCount": 200
+  }
+}

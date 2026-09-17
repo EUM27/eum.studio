@@ -1,5 +1,6 @@
 import {
   execFileSync,
+  spawn,
 } from "node:child_process";
 import {
   createHash,
@@ -45,6 +46,22 @@ function gitText(
   return gitBytes(cwd, args)
     .toString("utf8")
     .trim();
+}
+
+async function gitChecksum(cwd: string, args: readonly string[], algorithm: string): Promise<string> {
+  const hash = createHash(algorithm);
+  const child = spawn("git", [...args], { cwd, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+  let errorText = "";
+  child.stdout.on("data", (chunk: Buffer) => hash.update(chunk));
+  child.stderr.on("data", (chunk: Buffer) => { errorText += chunk.toString("utf8"); });
+  await new Promise<void>((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`Git provenance command exited ${code}: ${errorText.trim()}`));
+    });
+  });
+  return hash.digest("hex");
 }
 
 function digest(
@@ -125,14 +142,17 @@ export async function captureGitSourceProvenance(
       "--untracked-files=all",
     ],
   );
-  const trackedDiff = gitBytes(
+  const trackedDiffChecksum = await gitChecksum(
     input.cwd,
     [
       "diff",
+      "--no-ext-diff",
+      "--no-textconv",
       "--binary",
       "HEAD",
       "--",
     ],
+    input.checksumAlgorithm,
   );
   const untrackedPaths = [
     ...splitNullTerminatedPaths(
@@ -184,10 +204,6 @@ export async function captureGitSourceProvenance(
   const dirtyStatusChecksum = digest(
     input.checksumAlgorithm,
     status,
-  );
-  const trackedDiffChecksum = digest(
-    input.checksumAlgorithm,
-    trackedDiff,
   );
   const untrackedContentChecksum =
     digest(

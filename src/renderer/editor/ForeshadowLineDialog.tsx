@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
 import type {
   ForeshadowLineProjection,
@@ -128,10 +129,11 @@ function ForeshadowLoreLinks(input: {
   );
 }
 
-export function ForeshadowLineDialog(input: {
+export type ForeshadowLineDialogProps = {
   readonly actionState: ForeshadowLineActionState;
   readonly canCapture: boolean;
   readonly documentLabels: Readonly<Record<string, string>>;
+  readonly embedded?: boolean;
   readonly error: string | null;
   readonly lines: readonly ForeshadowLineProjection[];
   readonly loreEntries: readonly LoreEntryProjection[];
@@ -153,7 +155,14 @@ export function ForeshadowLineDialog(input: {
   readonly points: readonly ForeshadowPointProjection[];
   readonly profile: ForeshadowPointProfile;
   readonly selectedLineId: string | null;
-}) {
+};
+
+export type ForeshadowLineContentProps = Omit<
+  ForeshadowLineDialogProps,
+  "embedded" | "onClose"
+>;
+
+export function ForeshadowLineDialog(input: ForeshadowLineDialogProps) {
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
   const initialLineId = input.selectedLineId !== null && input.lines.some(
@@ -167,19 +176,27 @@ export function ForeshadowLineDialog(input: {
   );
   const [captureNote, setCaptureNote] = useState("");
   const busy = input.actionState !== "idle";
+  const onBackdropPointerDown = useDialogDismiss({
+    active: !input.embedded,
+    disabled: busy,
+    onClose: input.onClose,
+  });
   const selectedLineId = input.lines.some(
     (line) => line.lineId === captureLineId,
   )
     ? captureLineId
     : (input.lines[0]?.lineId ?? "");
 
-  return (
-    <div className="dialog-backdrop foreshadow-line-backdrop" role="presentation">
+  const content = (
       <section
         aria-labelledby="foreshadow-line-heading"
-        aria-modal="true"
-        className="foreshadow-line-dialog"
-        role="dialog"
+        aria-modal={input.embedded ? undefined : "true"}
+        className={
+          input.embedded
+            ? "foreshadow-line-dialog foreshadow-line-content"
+            : "foreshadow-line-dialog"
+        }
+        role={input.embedded ? "region" : "dialog"}
       >
         <header className="foreshadow-line-header">
           <div>
@@ -187,15 +204,17 @@ export function ForeshadowLineDialog(input: {
             <h2 id="foreshadow-line-heading">복선 라인</h2>
             <p>이 작품에서 이어 갈 복선과 정확한 원고 지점을 관리합니다.</p>
           </div>
-          <button
-            aria-label="복선 라인 닫기"
-            className="dialog-close"
-            disabled={busy}
-            onClick={input.onClose}
-            type="button"
-          >
-            ×
-          </button>
+          {!input.embedded && (
+            <button
+              aria-label="복선 라인 닫기"
+              className="dialog-close"
+              disabled={busy}
+              onClick={input.onClose}
+              type="button"
+            >
+              ×
+            </button>
+          )}
         </header>
 
         <div className="foreshadow-line-create">
@@ -404,6 +423,18 @@ export function ForeshadowLineDialog(input: {
           )}
         </div>
       </section>
+  );
+  return input.embedded ? content : (
+    <div
+      className="dialog-backdrop foreshadow-line-backdrop"
+      onPointerDown={onBackdropPointerDown}
+      role="presentation"
+    >
+      {content}
     </div>
   );
+}
+
+export function ForeshadowLineContent(input: ForeshadowLineContentProps) {
+  return <ForeshadowLineDialog {...input} embedded onClose={() => undefined} />;
 }

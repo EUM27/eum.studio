@@ -6,16 +6,16 @@ import {
 } from "./ui-preferences";
 
 describe("UI preferences contract", () => {
-  it("keeps theme and every focus setting together", () => {
+  it("keeps theme and every manuscript focus setting together", () => {
     const value = {
-      schemaVersion: 1 as const,
+      schemaVersion: 2 as const,
       themeKey: "focus-dark-theme",
-      focusMode: {
-        contentWidthPx: 820,
-        zoomPercent: 115,
-        currentBlockHighlight: true,
-        typewriterMode: true,
-        typewriterPositionPercent: 32,
+      manuscriptFocus: {
+        manuscriptWidthPx: 820,
+        textScalePercent: 115,
+        highlightCurrentParagraph: true,
+        cursorFollowEnabled: true,
+        cursorViewportPercent: 32,
       },
     };
     expect(parseSaveUiPreferencesCommand({

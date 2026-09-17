@@ -1,0 +1,9 @@
+{
+  "fixtureUse": "measurement-only; not a product limit or user-data default",
+  "measurement": {
+    "slotCount": 100,
+    "snapshotsPerSlot": 10,
+    "sceneCount": 500,
+    "iterationCount": 20
+  }
+}

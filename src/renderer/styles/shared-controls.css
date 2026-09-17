@@ -1,0 +1,15 @@
+.studio-app-shell .secondary-button,
+.studio-app-shell .library-more-button,
+.studio-app-shell .work-card-actions button {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 11px;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  background: #ffffff;
+  cursor: pointer;
+}
+

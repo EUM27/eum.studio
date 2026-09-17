@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "gate": 8,
+  "designSha256": "343577C44367C4E38A61913822A13400B5DAA028BE2EA76123F7BBF6A31F3FC5",
+  "acceptance": {
+    "canonicalLedgerRemainsSourceOfTruth": true,
+    "obsidianCompatibleExportAdapter": true,
+    "direction": "canonical-to-markdown",
+    "importSupported": false,
+    "markdownParserAdded": false,
+    "watcherOrSyncAdded": false,
+    "writeBackAdded": false,
+    "canonicalKindsExported": 9,
+    "collisionSafePublication": true,
+    "rendererReceivesAbsolutePath": false
+  },
+  "freshVerification": {
+    "focused": "7 application/platform/bridge/IPC/renderer files and 14 tests passed; all-kind runtime export test passed with 100 unrelated tests skipped",
+    "fullVitest": "314 files and 1146 tests passed, 1 skipped; same pre-existing RuntimeBootstrapController.test.ts:343 failure only",
+    "electron": "10 canonical rows across all 9 kinds produced 11 Markdown files; external edit did not import; relaunch produced identical clean bytes in a new -2 directory; FK=0",
+    "gateRegression": "all 8 Gate 2-8 production Electron specs passed in the same build across the seven-test batch and the host-adjusted canon review rerun",
+    "reversePathScan": "0 canon Markdown import, sync, watch, parser, or write-back surfaces",
+    "lint": "pass",
+    "typecheck": "pass",
+    "architecture": "pass",
+    "build": "pass; existing large-chunk warning only",
+    "diffCheck": "pass"
+  },
+  "performanceArtifact": "gate-8-canonical-markdown-performance.json",
+  "performance": {
+    "documents": 500,
+    "entities": 900,
+    "entitiesPerKind": 100,
+    "markdownFiles": 901,
+    "outputBytes": 914934,
+    "p50Ms": 21.99109999999996,
+    "p95Ms": 28.96799999999999,
+    "deterministicBundle": true,
+    "importSupported": false
+  }
+}

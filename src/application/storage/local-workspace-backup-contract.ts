@@ -1,3 +1,21 @@
+export type LocalWorkspaceBackupMode = "complete" | "manuscript-only";
+
+export type CreateLocalWorkspaceBackupCommand = Readonly<{
+  schemaVersion: 1;
+  mode: LocalWorkspaceBackupMode;
+}>;
+
+export function parseCreateLocalWorkspaceBackupCommand(value: unknown): CreateLocalWorkspaceBackupCommand {
+  if (value === undefined) return Object.freeze({ schemaVersion: 1, mode: "complete" });
+  const input = record(value, "CreateLocalWorkspaceBackupCommand");
+  exact(input, ["schemaVersion", "mode"], "CreateLocalWorkspaceBackupCommand");
+  schema(input, "CreateLocalWorkspaceBackupCommand");
+  if (input.mode !== "complete" && input.mode !== "manuscript-only") {
+    throw new Error("Unsupported backup mode");
+  }
+  return Object.freeze({ schemaVersion: 1, mode: input.mode });
+}
+
 export type LocalWorkspaceBackupCounts = {
   readonly workCount: number;
   readonly documentCount: number;
@@ -6,14 +24,23 @@ export type LocalWorkspaceBackupCounts = {
   readonly writingSessionCount: number;
 };
 
+export type LocalWorkspaceBackupMediaCounts = {
+  readonly managedFileCount: number;
+  readonly externalReferenceCount: number;
+  readonly disconnectedExternalReferenceCount: number;
+  readonly managedByteLength: number;
+};
+
 export type LocalWorkspaceBackupSummary = {
   readonly schemaVersion: 1;
+  readonly mode: LocalWorkspaceBackupMode | "legacy";
   readonly bundlePath: string;
   readonly targetPath: string | null;
   readonly createdAt: string;
   readonly verifiedAt: string;
   readonly lastAction: "created" | "restored";
   readonly counts: LocalWorkspaceBackupCounts;
+  readonly media: LocalWorkspaceBackupMediaCounts;
 };
 
 export type LocalWorkspaceBackupStatusProjection = {
@@ -113,36 +140,89 @@ function counts(value: unknown, label: string): LocalWorkspaceBackupCounts {
   );
 }
 
+function mediaCounts(
+  value: unknown,
+  label: string,
+): LocalWorkspaceBackupMediaCounts {
+  const input = record(value, label);
+  const fields = [
+    "managedFileCount",
+    "externalReferenceCount",
+    "disconnectedExternalReferenceCount",
+    "managedByteLength",
+  ] as const;
+  exact(input, fields, label);
+  const parsed = Object.freeze(
+    Object.fromEntries(
+      fields.map((field) => {
+        const entry = input[field];
+        if (
+          typeof entry !== "number" ||
+          !Number.isSafeInteger(entry) ||
+          entry < 0
+        ) {
+          throw new Error(`${label}.${field} must be a non-negative integer`);
+        }
+        return [field, entry];
+      }),
+    ) as unknown as LocalWorkspaceBackupMediaCounts,
+  );
+  if (
+    parsed.disconnectedExternalReferenceCount >
+      parsed.externalReferenceCount ||
+    (parsed.managedFileCount === 0 && parsed.managedByteLength !== 0)
+  ) {
+    throw new Error(`${label} values are inconsistent`);
+  }
+  return parsed;
+}
+
+export const EMPTY_LOCAL_WORKSPACE_BACKUP_MEDIA_COUNTS =
+  Object.freeze<LocalWorkspaceBackupMediaCounts>({
+    managedFileCount: 0,
+    externalReferenceCount: 0,
+    disconnectedExternalReferenceCount: 0,
+    managedByteLength: 0,
+  });
+
 export function parseLocalWorkspaceBackupSummary(
   value: unknown,
 ): LocalWorkspaceBackupSummary {
   const label = "LocalWorkspaceBackupSummary";
   const input = record(value, label);
-  exact(
-    input,
-    [
-      "schemaVersion",
-      "bundlePath",
-      "targetPath",
-      "createdAt",
-      "verifiedAt",
-      "lastAction",
-      "counts",
-    ],
-    label,
-  );
+  const fields = [
+    "schemaVersion",
+    "bundlePath",
+    "targetPath",
+    "createdAt",
+    "verifiedAt",
+    "lastAction",
+    "counts",
+  ];
+  exact(input, [...fields, ...(input.media === undefined ? [] : ["media"]), ...(input.mode === undefined ? [] : ["mode"])], label);
   schema(input, label);
+  const mode = input.mode === undefined ? (input.media === undefined ? "legacy" : "complete") : input.mode;
+  if (mode !== "complete" && mode !== "manuscript-only" && mode !== "legacy") {
+    throw new Error(`${label}.mode is unsupported`);
+  }
+  const media = input.media === undefined
+    ? EMPTY_LOCAL_WORKSPACE_BACKUP_MEDIA_COUNTS : mediaCounts(input.media, `${label}.media`);
+  if (mode === "manuscript-only" && Object.values(media).some((count) => count !== 0)) {
+    throw new Error("A manuscript-only backup cannot claim included media");
+  }
   if (input.lastAction !== "created" && input.lastAction !== "restored") {
     throw new Error(`${label}.lastAction is unsupported`);
   }
   return Object.freeze({
     schemaVersion: 1,
+    mode,
     bundlePath: stringValue(input, "bundlePath", label),
     targetPath: nullableString(input, "targetPath", label),
     createdAt: stringValue(input, "createdAt", label),
     verifiedAt: stringValue(input, "verifiedAt", label),
     lastAction: input.lastAction,
     counts: counts(input.counts, `${label}.counts`),
+    media,
   });
 }
 

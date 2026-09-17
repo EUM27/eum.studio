@@ -9,17 +9,20 @@ import {
 
 describe("scene override contract", () => {
   it("preserves a cursor or exact selected boundary without inserting manuscript text", () => {
+    const expectedDocumentRevisionId = randomUUID();
     expect(
       parseCreateSceneOverrideCommand({
         schemaVersion: 1,
         workId: randomUUID(),
         documentId: randomUUID(),
+        expectedDocumentRevisionId,
         selection: { anchor: 7, head: 7 },
         exactQuote: "",
         operation: "add",
         note: "커서 경계",
       }),
     ).toMatchObject({
+      expectedDocumentRevisionId,
       selection: { anchor: 7, head: 7 },
       exactQuote: "",
       operation: "add",

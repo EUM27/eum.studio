@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "gate": 3,
+  "verifiedAt": "2026-08-29",
+  "designSha256": "343577C44367C4E38A61913822A13400B5DAA028BE2EA76123F7BBF6A31F3FC5",
+  "storage": {
+    "targetSchemaVersion": 20,
+    "migrationId": "local-workspace-character-knowledge-v19-to-v20",
+    "migrationDefinitionSha256": "26636b137c36a7fadf7aea068f67e94fd787f014a96e860dee9632f228abf8cc",
+    "activeStatementInvariant": "unique Work/Character/statement where status=active; duplicate create requires explicit supersession",
+    "tables": [
+      "character_knowledge",
+      "character_knowledge_entity_refs",
+      "character_knowledge_evidence",
+      "character_knowledge_history"
+    ]
+  },
+  "electronE2E": {
+    "viewport": { "width": 1280, "height": 800 },
+    "tests": 1,
+    "passes": 1,
+    "fullRelaunches": 2,
+    "auditedRows": {
+      "knowledge": 2,
+      "history": 3,
+      "evidence": 1,
+      "linkedExactAnchors": 1,
+      "active": 1,
+      "superseded": 1,
+      "foreignKeyViolations": 0
+    },
+    "pov": {
+      "objectiveFacts": 1,
+      "known": 1,
+      "falseBeliefs": 0,
+      "unavailable": 0
+    },
+    "hostException": "Windows 10.0.26200 requires EUM_STUDIO_DISABLE_SANDBOX=1 only for the E2E child; the product default BrowserWindow policy remains sandboxed and isolated."
+  },
+  "regression": {
+    "focusedGate3": { "files": 15, "tests": 115, "status": "pass" },
+    "continuityElectron": { "tests": 1, "passes": 1 },
+    "fullVitest": {
+      "filesPassed": 289,
+      "testsPassed": 1091,
+      "testsSkipped": 1,
+      "baselineFailures": 1,
+      "baselineFailure": "src/renderer/workspace/session/RuntimeBootstrapController.test.ts:343"
+    },
+    "lint": "pass",
+    "typecheck": "pass",
+    "architecture": "pass",
+    "productionBuild": "pass"
+  }
+}

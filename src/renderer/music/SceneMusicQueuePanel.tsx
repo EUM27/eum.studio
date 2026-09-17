@@ -58,7 +58,10 @@ export function SceneMusicQueuePanel(input: {
     ? queryState.value
     : sceneSearchQuery(input.annotation);
   const candidates = input.candidates.filter((candidate) =>
-    candidate.sceneKey === input.annotation.sceneKey &&
+    input.annotation.binding.status === "current" &&
+    input.annotation.binding.sceneId !== null &&
+    candidate.binding.status === "current" &&
+    candidate.binding.sceneId === input.annotation.binding.sceneId &&
     candidate.status !== "superseded"
   );
   const selectedCandidate = candidates.find((candidate) =>

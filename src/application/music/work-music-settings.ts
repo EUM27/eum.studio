@@ -1,8 +1,12 @@
 import { entityId, type EntityId } from "../../domain/writing";
 import {
-  parseYouTubeVideoProjection,
-  type YouTubeVideoProjection,
-} from "./youtube-music";
+  isLocalMediaTrack,
+  musicTrackIdentity,
+  parseLocalMediaTrackProjection,
+  parseMusicTrackProjection,
+  type LocalMediaTrackProjection,
+  type MusicTrackProjection,
+} from "./media-track";
 
 export type MusicTransitionPlaybackMode = string;
 
@@ -10,8 +14,9 @@ export type WorkMusicSettings = {
   readonly autoOnEpisodeTransition: boolean;
   readonly autoOnSceneTransition: boolean;
   readonly autoPlayOnPomodoroStart: boolean;
-  readonly favoriteVideos: readonly YouTubeVideoProjection[];
-  readonly playlistVideos: readonly YouTubeVideoProjection[];
+  readonly favoriteTracks: readonly MusicTrackProjection[];
+  readonly playlistTracks: readonly MusicTrackProjection[];
+  readonly localMedia: readonly LocalMediaTrackProjection[];
   readonly preciseSelection: boolean;
   readonly transitionPlaybackMode: MusicTransitionPlaybackMode;
 };
@@ -101,23 +106,62 @@ function timestamp(value: unknown, label: string): string | null {
 function freezeSettings(settings: WorkMusicSettings): WorkMusicSettings {
   return Object.freeze({
     ...settings,
-    favoriteVideos: Object.freeze([...settings.favoriteVideos]),
-    playlistVideos: Object.freeze([...settings.playlistVideos]),
+    favoriteTracks: Object.freeze([...settings.favoriteTracks]),
+    playlistTracks: Object.freeze([...settings.playlistTracks]),
+    localMedia: Object.freeze([...settings.localMedia]),
   });
 }
 
-function parseUniqueVideos(value: unknown, label: string): readonly YouTubeVideoProjection[] {
+function parseUniqueTracks(
+  value: unknown,
+  label: string,
+): readonly MusicTrackProjection[] {
   const values = value ?? [];
   if (!Array.isArray(values)) {
     throw new Error(`${label} must be an array`);
   }
-  const videos = values.map((video, index) =>
-    parseYouTubeVideoProjection(video, `${label}[${index}]`)
+  const tracks = values.map((track, index) =>
+    parseMusicTrackProjection(track, `${label}[${index}]`)
   );
-  if (new Set(videos.map((video) => video.videoId)).size !== videos.length) {
+  if (
+    new Set(tracks.map((track) => musicTrackIdentity(track))).size !==
+      tracks.length
+  ) {
     throw new Error(`${label} must be unique`);
   }
-  return Object.freeze(videos);
+  return Object.freeze(tracks);
+}
+
+function parseUniqueLocalMedia(
+  value: unknown,
+  label: string,
+): readonly LocalMediaTrackProjection[] {
+  const values = value ?? [];
+  if (!Array.isArray(values)) {
+    throw new Error(`${label} must be an array`);
+  }
+  const tracks = values.map((track, index) =>
+    parseLocalMediaTrackProjection(track, `${label}[${index}]`)
+  );
+  if (new Set(tracks.map((track) => track.mediaId)).size !== tracks.length) {
+    throw new Error(`${label} must be unique`);
+  }
+  return Object.freeze(tracks);
+}
+
+function assertWorkOwnedLocalMedia(
+  settings: WorkMusicSettings,
+  workId: EntityId<"Work">,
+  label: string,
+): void {
+  const localTracks = [
+    ...settings.localMedia,
+    ...settings.favoriteTracks.filter(isLocalMediaTrack),
+    ...settings.playlistTracks.filter(isLocalMediaTrack),
+  ];
+  if (localTracks.some((track) => track.workId !== workId)) {
+    throw new Error(`${label} local media crosses the Work boundary`);
+  }
 }
 
 export function parseWorkMusicSettings(
@@ -133,13 +177,21 @@ export function parseWorkMusicSettings(
     "transitionPlaybackMode",
   ] as const;
   const fields = Object.keys(input);
+  const optionalFields = [
+    "favoriteTracks",
+    "playlistTracks",
+    "localMedia",
+    "favoriteVideos",
+    "playlistVideos",
+  ] as const;
   if (
     !fields.every((field) =>
       baseFields.includes(field as (typeof baseFields)[number]) ||
-      field === "favoriteVideos" ||
-      field === "playlistVideos"
+      optionalFields.includes(field as (typeof optionalFields)[number])
     ) ||
-    !baseFields.every((field) => fields.includes(field))
+    !baseFields.every((field) => fields.includes(field)) ||
+    (fields.includes("favoriteTracks") && fields.includes("favoriteVideos")) ||
+    (fields.includes("playlistTracks") && fields.includes("playlistVideos"))
   ) {
     throw new Error("WorkMusicSettings fields do not match the configured schema");
   }
@@ -162,13 +214,21 @@ export function parseWorkMusicSettings(
       input.autoPlayOnPomodoroStart,
       "WorkMusicSettings.autoPlayOnPomodoroStart",
     ),
-    favoriteVideos: parseUniqueVideos(
-      input.favoriteVideos,
-      "WorkMusicSettings.favoriteVideos",
+    favoriteTracks: parseUniqueTracks(
+      fields.includes("favoriteTracks")
+        ? input.favoriteTracks
+        : input.favoriteVideos,
+      "WorkMusicSettings.favoriteTracks",
     ),
-    playlistVideos: parseUniqueVideos(
-      input.playlistVideos,
-      "WorkMusicSettings.playlistVideos",
+    playlistTracks: parseUniqueTracks(
+      fields.includes("playlistTracks")
+        ? input.playlistTracks
+        : input.playlistVideos,
+      "WorkMusicSettings.playlistTracks",
+    ),
+    localMedia: parseUniqueLocalMedia(
+      input.localMedia,
+      "WorkMusicSettings.localMedia",
     ),
     preciseSelection: booleanValue(
       input.preciseSelection,
@@ -224,11 +284,14 @@ export function parseSaveWorkMusicSettingsCommand(
 ): SaveWorkMusicSettingsCommand {
   const input = record(value, "SaveWorkMusicSettingsCommand");
   exact(input, ["schemaVersion", "workId", "expectedRevision", "settings"], "SaveWorkMusicSettingsCommand");
+  const workId = identity<"Work">(input.workId, "SaveWorkMusicSettingsCommand.workId");
+  const settings = parseWorkMusicSettings(input.settings, profile);
+  assertWorkOwnedLocalMedia(settings, workId, "SaveWorkMusicSettingsCommand");
   return Object.freeze({
     schemaVersion: schemaVersion(input.schemaVersion, "SaveWorkMusicSettingsCommand"),
-    workId: identity<"Work">(input.workId, "SaveWorkMusicSettingsCommand.workId"),
+    workId,
     expectedRevision: revision(input.expectedRevision, "SaveWorkMusicSettingsCommand.expectedRevision"),
-    settings: parseWorkMusicSettings(input.settings, profile),
+    settings,
   });
 }
 
@@ -243,11 +306,14 @@ export function parseWorkMusicSettingsProjection(
   if ((parsedRevision === 0) !== (updatedAt === null)) {
     throw new Error("WorkMusicSettingsProjection revision and updatedAt are inconsistent");
   }
+  const workId = identity<"Work">(input.workId, "WorkMusicSettingsProjection.workId");
+  const settings = parseWorkMusicSettings(input.settings, profile);
+  assertWorkOwnedLocalMedia(settings, workId, "WorkMusicSettingsProjection");
   return Object.freeze({
     schemaVersion: schemaVersion(input.schemaVersion, "WorkMusicSettingsProjection"),
-    workId: identity<"Work">(input.workId, "WorkMusicSettingsProjection.workId"),
+    workId,
     revision: parsedRevision,
-    settings: parseWorkMusicSettings(input.settings, profile),
+    settings,
     updatedAt,
   });
 }

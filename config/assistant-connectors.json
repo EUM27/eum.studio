@@ -9,10 +9,32 @@
         "lore-review",
         "publishing-operations"
       ],
+      "contextTokenBudget": 32768,
+      "requestPolicy": {
+        "timeoutMs": 120000,
+        "maxResponseBytes": 4194304
+      },
       "credentialPolicy": "optional",
       "runtimeConfig": {
         "endpoint": "required",
         "model": "required"
+      }
+    },
+    {
+      "connectorKind": "openai-chatgpt-oauth",
+      "displayName": "GPT (공식 OAuth)",
+      "capabilities": [
+        "character.extract",
+        "scene.extract",
+        "canon.review",
+        "continuity.review",
+        "narrative.digest"
+      ],
+      "contextTokenBudget": 32768,
+      "credentialPolicy": "none",
+      "runtimeConfig": {
+        "endpoint": "forbidden",
+        "model": "forbidden"
       }
     }
   ]

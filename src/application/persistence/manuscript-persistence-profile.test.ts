@@ -32,6 +32,13 @@ function createPersistenceProfileInput() {
 }
 
 describe("manuscript persistence profile", () => {
+  it("retains an existing writer base when a second window starts from a later revision", () => {
+    const input = createPersistenceProfileInput();
+    const baseRevisionId = randomUUID();
+    const profile = parseManuscriptPersistenceProfile({ ...input, documentSequences: input.documentSequences.map((sequence) => ({ ...sequence, baseRevisionId })) });
+    expect(profile?.documentSequences[0]?.baseRevisionId).toBe(baseRevisionId);
+    expect(() => parseManuscriptPersistenceProfile({ ...input, documentSequences: [{ ...input.documentSequences[0], baseRevisionId: "" }] })).toThrow(/baseRevisionId/);
+  });
   it("strictly parses and freezes a caller batching policy", () => {
     const input = createBatchingPolicyInput();
     const policy = parseManuscriptBatchingPolicy(input);

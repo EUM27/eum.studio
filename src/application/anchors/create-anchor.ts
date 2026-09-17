@@ -86,6 +86,73 @@ function freezeAnchor(anchor: Anchor): Anchor {
   });
 }
 
+export function createAnchorForKnownRevisionContent(input: Readonly<{
+  meta: RecordMeta<"Anchor">;
+  documentId: EntityId<"Document">;
+  documentRevisionId: EntityId<"DocumentRevision">;
+  content: string;
+  startOffset: number;
+  endOffset: number;
+  policy: AnchorPolicy;
+  commandRef: string;
+  actorRef: string;
+  describeEvidence: DescribeAnchorEvidence;
+}>): Anchor {
+  assertPolicy(input.policy);
+  assertRange(input.startOffset, input.endOffset, input.content.length);
+  const contextLength = input.policy.contextOffsetLength;
+  const exactQuote = input.content.slice(input.startOffset, input.endOffset);
+  const prefixContext = input.content.slice(
+    Math.max(0, input.startOffset - contextLength),
+    input.startOffset,
+  );
+  const suffixContext = input.content.slice(
+    input.endOffset,
+    input.endOffset + contextLength,
+  );
+  const descriptor = input.describeEvidence({
+    exactQuote,
+    prefixContext,
+    suffixContext,
+  });
+  if (
+    descriptor.quoteHash.length === 0 ||
+    descriptor.contextHash.length === 0
+  ) {
+    throw new Error("Anchor evidence hashes must not be empty");
+  }
+  const matchedEvidence: AnchorMatchedEvidence[] = [
+    "origin-revision",
+    "quote",
+    "prefix-context",
+    "suffix-context",
+  ];
+  return freezeAnchor({
+    meta: input.meta,
+    documentId: input.documentId,
+    originRevisionId: input.documentRevisionId,
+    resolvedRevisionId: input.documentRevisionId,
+    startOffset: input.startOffset,
+    endOffset: input.endOffset,
+    exactQuote,
+    prefixContext,
+    suffixContext,
+    quoteHash: descriptor.quoteHash,
+    contextHash: descriptor.contextHash,
+    status: "resolved",
+    resolutionEvidence: {
+      targetRevisionId: input.documentRevisionId,
+      method: "created",
+      matchedEvidence,
+      candidateOffsets: [input.startOffset],
+      policyVersion: input.policy.version,
+      assessedAt: input.meta.createdAt,
+      commandRef: input.commandRef,
+      actorRef: input.actorRef,
+    },
+  });
+}
+
 export class CreateAnchor {
   readonly #catalog: WritingCatalog;
   readonly #revisionStore: RevisionStore;
@@ -126,69 +193,23 @@ export class CreateAnchor {
         `Anchor revision does not belong to document ${input.documentId}`,
       );
     }
-    assertPolicy(input.policy);
     const content = await this.#revisionStore.materialize(revision.id);
     if (content.length !== revision.length) {
       throw new Error(
         `Revision length integrity failure for ${revision.id}`,
       );
     }
-    assertRange(input.startOffset, input.endOffset, content.length);
-
-    const contextLength = input.policy.contextOffsetLength;
-    const exactQuote = content.slice(
-      input.startOffset,
-      input.endOffset,
-    );
-    const prefixContext = content.slice(
-      Math.max(0, input.startOffset - contextLength),
-      input.startOffset,
-    );
-    const suffixContext = content.slice(
-      input.endOffset,
-      input.endOffset + contextLength,
-    );
-    const descriptor = this.#describeEvidence({
-      exactQuote,
-      prefixContext,
-      suffixContext,
-    });
-    if (
-      descriptor.quoteHash.length === 0 ||
-      descriptor.contextHash.length === 0
-    ) {
-      throw new Error("Anchor evidence hashes must not be empty");
-    }
-    const matchedEvidence: AnchorMatchedEvidence[] = [
-      "origin-revision",
-      "quote",
-      "prefix-context",
-      "suffix-context",
-    ];
-
-    return freezeAnchor({
+    return createAnchorForKnownRevisionContent({
       meta: input.meta,
       documentId: input.documentId,
-      originRevisionId: revision.id,
-      resolvedRevisionId: revision.id,
+      documentRevisionId: revision.id,
+      content,
       startOffset: input.startOffset,
       endOffset: input.endOffset,
-      exactQuote,
-      prefixContext,
-      suffixContext,
-      quoteHash: descriptor.quoteHash,
-      contextHash: descriptor.contextHash,
-      status: "resolved",
-      resolutionEvidence: {
-        targetRevisionId: revision.id,
-        method: "created",
-        matchedEvidence,
-        candidateOffsets: [input.startOffset],
-        policyVersion: input.policy.version,
-        assessedAt: input.meta.createdAt,
-        commandRef: input.commandRef,
-        actorRef: input.actorRef,
-      },
+      policy: input.policy,
+      commandRef: input.commandRef,
+      actorRef: input.actorRef,
+      describeEvidence: this.#describeEvidence,
     });
   }
 }

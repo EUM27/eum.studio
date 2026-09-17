@@ -1,4 +1,5 @@
 import { entityId, type EntityId } from "../../domain/writing";
+import { parseAssistantRequestFailure, type AssistantRequestFailure } from "./assistant-request-lifecycle";
 import {
   authorizeAssistantContextRequest,
   parseAssistantContextRange,
@@ -46,6 +47,7 @@ export type AssistantVocabularySuggestionCandidate = {
 };
 
 export type AssistantVocabularySuggestionResult =
+  | AssistantRequestFailure
   | Readonly<{
       schemaVersion: 1;
       status: "permission-required";
@@ -335,6 +337,7 @@ export function parseAssistantVocabularySuggestionResult(
 ): AssistantVocabularySuggestionResult {
   const label = "AssistantVocabularySuggestionResult";
   const input = record(value, label);
+  if (input.status === "failed") return parseAssistantRequestFailure(input);
   if (input.schemaVersion !== 1) {
     throw new Error(`${label}.schemaVersion must be 1`);
   }

@@ -6,8 +6,12 @@ export type LocalWorkspaceBackupLayoutProfile = {
 };
 
 export type LocalWorkspaceBackupProfile = {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 2;
   readonly format: {
+    readonly identity: string;
+    readonly version: string;
+  };
+  readonly manuscriptOnlyFormat?: {
     readonly identity: string;
     readonly version: string;
   };
@@ -26,6 +30,19 @@ export type LocalWorkspaceBackupProfile = {
     readonly manifestChecksumEntrySegments: readonly string[];
   };
   readonly restoreLayout: LocalWorkspaceBackupLayoutProfile;
+  readonly localMedia: {
+    readonly format: {
+      readonly identity: string;
+      readonly version: string;
+    };
+    readonly legacyCoreFormatVersions: readonly string[];
+    readonly bundleLayout: {
+      readonly manifestEntrySegments: readonly string[];
+      readonly manifestChecksumEntrySegments: readonly string[];
+      readonly managedFileDirectorySegments: readonly string[];
+    };
+    readonly restoreRootSegments: readonly string[];
+  };
   readonly stateFileName: string;
 };
 
@@ -107,6 +124,24 @@ function positiveIntegers(
   );
 }
 
+function uniqueStrings(
+  input: Record<string, unknown>,
+  field: string,
+  label: string,
+): readonly string[] {
+  const value = input[field];
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`${label}.${field} must be a non-empty string array`);
+  }
+  const parsed = value.map((entry, index) =>
+    stringValue({ value: entry }, "value", `${label}.${field}[${index}]`)
+  );
+  if (new Set(parsed).size !== parsed.length) {
+    throw new Error(`${label}.${field} must be unique`);
+  }
+  return Object.freeze(parsed);
+}
+
 function layout(
   value: unknown,
   label: string,
@@ -154,19 +189,29 @@ export function parseLocalWorkspaceBackupProfile(
     [
       "schemaVersion",
       "format",
+      ...(input.manuscriptOnlyFormat === undefined ? [] : ["manuscriptOnlyFormat"]),
       "checksum",
       "sqlite",
       "bundleLayout",
       "restoreLayout",
+      "localMedia",
       "stateFileName",
     ],
     label,
   );
-  if (input.schemaVersion !== 1) {
+  if (input.schemaVersion !== 2) {
     throw new Error(`Unsupported ${label} schemaVersion`);
   }
   const format = record(input.format, `${label}.format`);
   exact(format, ["identity", "version"], `${label}.format`);
+  const manuscriptOnly = input.manuscriptOnlyFormat === undefined
+    ? undefined : record(input.manuscriptOnlyFormat, `${label}.manuscriptOnlyFormat`);
+  if (manuscriptOnly !== undefined) {
+    exact(manuscriptOnly, ["identity", "version"], `${label}.manuscriptOnlyFormat`);
+    if (manuscriptOnly.identity === format.identity) {
+      throw new Error(`${label}.manuscriptOnlyFormat must have a distinct identity`);
+    }
+  }
   const checksum = record(input.checksum, `${label}.checksum`);
   exact(checksum, ["identity", "algorithm"], `${label}.checksum`);
   const sqlite = record(input.sqlite, `${label}.sqlite`);
@@ -194,6 +239,39 @@ export function parseLocalWorkspaceBackupProfile(
     `${label}.restoreLayout`,
     false,
   );
+  const localMedia = record(input.localMedia, `${label}.localMedia`);
+  exact(
+    localMedia,
+    [
+      "format",
+      "legacyCoreFormatVersions",
+      "bundleLayout",
+      "restoreRootSegments",
+    ],
+    `${label}.localMedia`,
+  );
+  const localMediaFormat = record(
+    localMedia.format,
+    `${label}.localMedia.format`,
+  );
+  exact(
+    localMediaFormat,
+    ["identity", "version"],
+    `${label}.localMedia.format`,
+  );
+  const localMediaBundleLayout = record(
+    localMedia.bundleLayout,
+    `${label}.localMedia.bundleLayout`,
+  );
+  exact(
+    localMediaBundleLayout,
+    [
+      "manifestEntrySegments",
+      "manifestChecksumEntrySegments",
+      "managedFileDirectorySegments",
+    ],
+    `${label}.localMedia.bundleLayout`,
+  );
   if (
     bundleLayout.manifestEntrySegments === undefined ||
     bundleLayout.manifestChecksumEntrySegments === undefined
@@ -205,11 +283,15 @@ export function parseLocalWorkspaceBackupProfile(
     throw new Error(`${label}.stateFileName must be one file name`);
   }
   return Object.freeze({
-    schemaVersion: 1,
+    schemaVersion: 2,
     format: Object.freeze({
       identity: stringValue(format, "identity", `${label}.format`),
       version: stringValue(format, "version", `${label}.format`),
     }),
+    ...(manuscriptOnly === undefined ? {} : { manuscriptOnlyFormat: Object.freeze({
+      identity: stringValue(manuscriptOnly, "identity", `${label}.manuscriptOnlyFormat`),
+      version: stringValue(manuscriptOnly, "version", `${label}.manuscriptOnlyFormat`),
+    }) }),
     checksum: Object.freeze({
       identity: stringValue(checksum, "identity", `${label}.checksum`),
       algorithm: stringValue(checksum, "algorithm", `${label}.checksum`),
@@ -239,6 +321,47 @@ export function parseLocalWorkspaceBackupProfile(
         bundleLayout.manifestChecksumEntrySegments,
     }),
     restoreLayout,
+    localMedia: Object.freeze({
+      format: Object.freeze({
+        identity: stringValue(
+          localMediaFormat,
+          "identity",
+          `${label}.localMedia.format`,
+        ),
+        version: stringValue(
+          localMediaFormat,
+          "version",
+          `${label}.localMedia.format`,
+        ),
+      }),
+      legacyCoreFormatVersions: uniqueStrings(
+        localMedia,
+        "legacyCoreFormatVersions",
+        `${label}.localMedia`,
+      ),
+      bundleLayout: Object.freeze({
+        manifestEntrySegments: segments(
+          localMediaBundleLayout,
+          "manifestEntrySegments",
+          `${label}.localMedia.bundleLayout`,
+        ),
+        manifestChecksumEntrySegments: segments(
+          localMediaBundleLayout,
+          "manifestChecksumEntrySegments",
+          `${label}.localMedia.bundleLayout`,
+        ),
+        managedFileDirectorySegments: segments(
+          localMediaBundleLayout,
+          "managedFileDirectorySegments",
+          `${label}.localMedia.bundleLayout`,
+        ),
+      }),
+      restoreRootSegments: segments(
+        localMedia,
+        "restoreRootSegments",
+        `${label}.localMedia`,
+      ),
+    }),
     stateFileName,
   });
 }

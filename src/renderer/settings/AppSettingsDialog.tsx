@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { Settings, X } from "lucide-react";
 
 import type {
@@ -12,12 +12,21 @@ import type {
 } from "../../application/music/work-music-settings";
 import type { YouTubeMusicConnectionStatus } from "../../application/music/youtube-music-connection";
 import type { ChatGptOAuthConnectionStatus } from "../../application/assistant/chatgpt-oauth";
+import type { WorkSceneAnalysisSettingsProjection } from "../../application/settings/work-scene-analysis-settings";
+import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
 export type AppSettingsSaveValue = {
   readonly defaultEpisodeCharacters: number;
   readonly workMusicSettings: WorkMusicSettings | null;
   readonly youtubeApiKey: string | null;
+  readonly workSceneAnalysisEnabled: boolean | null;
 };
+
+const SETTINGS_SECTIONS = [
+  { id: "general", label: "집필 기준" },
+  { id: "assistant", label: "조수·장면 분석" },
+  { id: "music", label: "음악" },
+] as const;
 
 export function parseDefaultEpisodeCharactersInput(
   value: string,
@@ -46,6 +55,7 @@ export function AppSettingsDialog({
   musicProjection,
   youtubeConnectionStatus,
   chatGptOAuthStatus,
+  sceneAnalysisProjection,
   chatGptOAuthLoginState,
   actionState,
   error,
@@ -60,6 +70,7 @@ export function AppSettingsDialog({
   readonly musicProjection: WorkMusicSettingsProjection | null;
   readonly youtubeConnectionStatus: YouTubeMusicConnectionStatus | null;
   readonly chatGptOAuthStatus: ChatGptOAuthConnectionStatus | null;
+  readonly sceneAnalysisProjection: WorkSceneAnalysisSettingsProjection | null;
   readonly chatGptOAuthLoginState: "idle" | "waiting";
   readonly actionState: "loading" | "idle" | "saving";
   readonly error: string | null;
@@ -68,6 +79,8 @@ export function AppSettingsDialog({
   readonly onRemoveYouTubeApiKey: () => void;
   readonly onStartChatGptOAuthLogin: () => void;
 }) {
+  const identity = useId();
+  const [section, setSection] = useState<typeof SETTINGS_SECTIONS[number]["id"]>("general");
   const [value, setValue] = useState(
     projection === null
       ? ""
@@ -77,8 +90,12 @@ export function AppSettingsDialog({
   const [workMusicSettings, setWorkMusicSettings] = useState<WorkMusicSettings | null>(
     musicProjection?.settings ?? null,
   );
+  const [workSceneAnalysisEnabled, setWorkSceneAnalysisEnabled] = useState(
+    sceneAnalysisProjection?.settings.enabled ?? false,
+  );
   const [validationError, setValidationError] = useState<string | null>(null);
   const busy = actionState !== "idle";
+  useDialogDismiss({ disabled: actionState === "saving", onClose });
 
   function submit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
@@ -92,8 +109,12 @@ export function AppSettingsDialog({
         youtubeApiKey: youtubeApiKey.trim().length === 0
           ? null
           : youtubeApiKey.trim(),
+        workSceneAnalysisEnabled: sceneAnalysisProjection === null
+          ? null
+          : workSceneAnalysisEnabled,
       });
     } catch (reason) {
+      setSection("general");
       setValidationError(
         reason instanceof Error ? reason.message : "설정값을 확인하세요.",
       );
@@ -112,7 +133,7 @@ export function AppSettingsDialog({
               <Settings size={17} />
             </span>
             <div>
-              <p className="panel-kicker">APP SETTINGS</p>
+              <p className="panel-kicker">작업실 환경</p>
               <h2 id="app-settings-title">앱 설정</h2>
             </div>
           </div>
@@ -132,7 +153,32 @@ export function AppSettingsDialog({
           </p>
         ) : (
           <form onSubmit={submit}>
+            <div className="app-settings-tabs" role="tablist" aria-label="설정 분류">
+              {SETTINGS_SECTIONS.map((item, index) => (
+                <button
+                  aria-controls={`${identity}-${item.id}`}
+                  aria-selected={section === item.id}
+                  id={`${identity}-${item.id}-tab`}
+                  key={item.id}
+                  role="tab"
+                  tabIndex={section === item.id ? 0 : -1}
+                  onClick={() => setSection(item.id)}
+                  onKeyDown={(event) => {
+                    const next = event.key === "ArrowRight" ? (index + 1) % SETTINGS_SECTIONS.length
+                      : event.key === "ArrowLeft" ? (index + SETTINGS_SECTIONS.length - 1) % SETTINGS_SECTIONS.length
+                        : event.key === "Home" ? 0 : event.key === "End" ? SETTINGS_SECTIONS.length - 1 : null;
+                    if (next === null) return;
+                    event.preventDefault();
+                    const target = SETTINGS_SECTIONS[next]!;
+                    setSection(target.id);
+                    document.getElementById(`${identity}-${target.id}-tab`)?.focus();
+                  }}
+                  type="button"
+                >{item.label}</button>
+              ))}
+            </div>
             <div className="app-settings-scroll">
+              <section hidden={section !== "general"} id={`${identity}-general`} aria-labelledby={`${identity}-general-tab`} role="tabpanel">
               <div className="app-settings-section">
               <h3>원고 통계</h3>
               <label>
@@ -154,7 +200,9 @@ export function AppSettingsDialog({
                 원고 내용이나 회차 순서는 바꾸지 않습니다.
               </p>
               </div>
+              </section>
 
+              <section hidden={section !== "assistant"} id={`${identity}-assistant`} aria-labelledby={`${identity}-assistant-tab`} role="tabpanel">
               <div className="app-settings-section">
               <h3>GPT 로그인</h3>
               <div className="app-settings-inline-status">
@@ -178,6 +226,28 @@ export function AppSettingsDialog({
               <p>ChatGPT 계정으로 연결합니다. API 키를 입력하지 않습니다.</p>
               </div>
 
+              {sceneAnalysisProjection !== null && (
+                <div className="app-settings-section app-settings-work-section">
+                  <h3>현재 작품 장면 분석</h3>
+                  <label>
+                    <input
+                      checked={workSceneAnalysisEnabled}
+                      disabled={busy}
+                      onChange={(event) =>
+                        setWorkSceneAnalysisEnabled(event.currentTarget.checked)}
+                      type="checkbox"
+                    />
+                    <span>장면 전환·분할·회차 전환 시 요약과 작품 정보·연속성 후보 생성</span>
+                  </label>
+                  <p>
+                    GPT 연결 중에만 실행합니다. 요약은 장면 이력으로 저장하고,
+                    별빛 변경은 후보 검토함에서 승인하기 전까지 별빛에 적용하지 않습니다.
+                  </p>
+                </div>
+              )}
+              </section>
+
+              <section hidden={section !== "music"} id={`${identity}-music`} aria-labelledby={`${identity}-music-tab`} role="tabpanel">
               <div className="app-settings-section">
               <h3>YouTube 음악 연결</h3>
               <label>
@@ -257,6 +327,7 @@ export function AppSettingsDialog({
                 </fieldset>
                 </div>
               )}
+              </section>
               {(validationError ?? error) !== null && (
                 <p className="dialog-error" role="alert">
                   {validationError ?? error}
@@ -265,8 +336,7 @@ export function AppSettingsDialog({
             </div>
             <footer>
               <span>
-                허용 범위 {profile.defaultEpisodeCharacters.minValue.toLocaleString()}
-                –{profile.defaultEpisodeCharacters.maxValue.toLocaleString()}자
+                변경한 설정을 저장하세요.
               </span>
               <button disabled={busy} onClick={onClose} type="button">
                 취소

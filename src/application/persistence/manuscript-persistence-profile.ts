@@ -12,6 +12,7 @@ export type ManuscriptBatchingPolicy = {
 export type ManuscriptPersistenceDocumentSequence = {
   readonly documentId: EntityId<"Document">;
   readonly nextSequence: number;
+  readonly baseRevisionId?: EntityId<"DocumentRevision">;
 };
 
 export type ManuscriptPersistenceProfile = {
@@ -131,7 +132,7 @@ export function parseManuscriptPersistenceProfile(
       );
       assertOnlyFields(
         sequence,
-        ["documentId", "nextSequence"],
+        ["documentId", "nextSequence", "baseRevisionId"],
         `documentSequences[${index}]`,
       );
       if (
@@ -151,8 +152,15 @@ export function parseManuscriptPersistenceProfile(
         );
       }
       documentIds.add(documentId);
+      if (sequence.baseRevisionId !== undefined &&
+        (typeof sequence.baseRevisionId !== "string" || sequence.baseRevisionId.length === 0)) {
+        throw new Error(`documentSequences[${index}].baseRevisionId must be a non-empty string`);
+      }
       return Object.freeze({
         documentId,
+        ...(sequence.baseRevisionId === undefined ? {} : {
+          baseRevisionId: entityId<"DocumentRevision">(sequence.baseRevisionId as string),
+        }),
         nextSequence: readSafeInteger(
           sequence.nextSequence,
           `documentSequences[${index}].nextSequence`,

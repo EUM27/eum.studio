@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "audioFile": "shared-player-audio.mp3",
+  "durationSeconds": 30,
+  "trackTitles": ["첫 번째 시험 곡", "두 번째 시험 곡", "세 번째 시험 곡"]
+}

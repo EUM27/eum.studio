@@ -1,0 +1,795 @@
+/* Exact theme surface port from 별빛서재_테마수정완료.html. */
+.studio-app-shell[data-starlight-theme] {
+  color-scheme: light;
+  color: var(--starlight-text-primary);
+  background: var(--starlight-base);
+}
+
+.studio-app-shell:is(
+    .dark-mode,
+    .midnight-theme,
+    .ocean-theme,
+    .soft-dark-theme,
+    .warm-dark-theme,
+    .nord-theme,
+    .focus-dark-theme
+  ) {
+  --eum-accent-text: color-mix(
+    in srgb,
+    var(--starlight-accent) 72%,
+    var(--starlight-text-primary)
+  );
+  color-scheme: dark;
+}
+
+.studio-app-shell[data-starlight-theme] > .app-topbar,
+.studio-app-shell[data-starlight-theme] > .sidebar,
+.studio-app-shell[data-starlight-theme] .page-header,
+.studio-app-shell[data-starlight-theme] .resume-strip,
+.studio-app-shell[data-starlight-theme] .library-work-card,
+.studio-app-shell[data-starlight-theme] .work-search,
+.studio-app-shell[data-starlight-theme] .secondary-button,
+.studio-app-shell[data-starlight-theme] .workspace-section-navigation,
+.studio-app-shell[data-starlight-theme] .manuscript-header,
+.studio-app-shell[data-starlight-theme] .manuscript-formatting-toolbar,
+.studio-app-shell[data-starlight-theme] .workspace-rail,
+.studio-app-shell[data-starlight-theme] .workspace-statusbar,
+.studio-app-shell[data-starlight-theme] .bottom-event-rail,
+.studio-app-shell[data-starlight-theme] .session-feedback-panel,
+.studio-app-shell[data-starlight-theme] .character-workspace-body,
+.studio-app-shell[data-starlight-theme] .plot-manager-body.has-utility,
+.studio-app-shell[data-starlight-theme] [role="dialog"] {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-secondary);
+  border-color: var(--starlight-border);
+  backdrop-filter: var(--starlight-secondary-backdrop);
+}
+
+.studio-app-shell[data-starlight-theme] > .workspace,
+.studio-app-shell[data-starlight-theme] .main-page-body,
+.studio-app-shell[data-starlight-theme] .studio-shell,
+.studio-app-shell[data-starlight-theme] .writing-workspace,
+.studio-app-shell[data-starlight-theme] .workspace-body,
+.studio-app-shell[data-starlight-theme] .workspace-center,
+.studio-app-shell[data-starlight-theme] .manuscript-workspace-surface,
+.studio-app-shell[data-starlight-theme] .manuscript-editor-shell,
+.studio-app-shell[data-starlight-theme] .manuscript-editor-canvas {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-primary);
+  border-color: var(--starlight-border);
+  backdrop-filter: var(--starlight-primary-backdrop);
+}
+
+.studio-app-shell[data-starlight-theme] :is(
+    .work-cover-column,
+    .work-cover,
+    .resume-strip-action,
+    .library-tabs > .is-active,
+    .work-document-select,
+    .workspace-section-navigation button.is-active,
+    .document-tree-open.is-active,
+    .bottom-event-card.is-current
+  ) {
+  color: var(--eum-accent-text);
+  background: var(--starlight-hover) !important;
+  border-color: var(--starlight-border);
+}
+
+.studio-app-shell[data-starlight-theme] :is(
+    .app-topbar-button,
+    .nav-item,
+    .rail-toggle,
+    .document-tab-activate,
+    .document-tab-close,
+    .rail-reentry,
+    .bottom-event-rail-header button,
+    .daily-goal-status
+  ):hover:not(:disabled),
+.studio-app-shell[data-starlight-theme] .app-topbar-settings.is-active,
+.studio-app-shell[data-starlight-theme] .nav-item.is-active {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-hover);
+}
+
+.studio-app-shell[data-starlight-theme] :is(
+    input,
+    select,
+    textarea,
+    .manuscript-search,
+    .session-feedback-controls button,
+    .session-feedback-writing button,
+    .session-feedback-memo button
+  ) {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-input);
+  border-color: var(--starlight-border);
+  box-shadow: var(--starlight-input-shadow);
+  caret-color: var(--starlight-caret);
+  backdrop-filter: var(--starlight-input-backdrop);
+}
+
+.studio-app-shell[data-starlight-theme] :is(
+    .header-create-work,
+    .primary-button,
+    .primary-action,
+    .create-document-form button[type="submit"],
+    .document-folder-create button[type="submit"]
+  ) {
+  color: var(--starlight-button-text);
+  background: var(--starlight-button);
+  border-color: var(--starlight-button);
+  backdrop-filter: var(--starlight-button-backdrop);
+}
+
+.studio-app-shell[data-starlight-theme] :is(
+    .header-create-work,
+    .primary-button,
+    .primary-action,
+    .create-document-form button[type="submit"],
+    .document-folder-create button[type="submit"]
+  ):hover:not(:disabled) {
+  color: var(--starlight-button-text);
+  background: var(--starlight-button-hover);
+  border-color: var(--starlight-button-hover);
+}
+
+.studio-app-shell[data-starlight-theme] :is(
+    .session-feedback-body,
+    .session-feedback-history,
+    .session-feedback-writing,
+    .document-tab-strip
+  ) {
+  border-color: var(--starlight-border);
+}
+
+.studio-app-shell[data-starlight-theme] :is(
+    .session-feedback-metrics > div,
+    .session-feedback-history li,
+    .manuscript-analysis-summary,
+    .manuscript-analysis-card,
+    .manuscript-analysis-metrics > div,
+    .bottom-event-rail-header
+  ) {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-primary);
+  border-color: var(--starlight-border);
+  backdrop-filter: var(--starlight-primary-backdrop);
+}
+
+.studio-app-shell[data-starlight-theme] :is(
+    .session-feedback-phase output,
+    .session-feedback-metrics strong,
+    .manuscript-analysis-summary strong,
+    .manuscript-analysis-card h3,
+    .manuscript-analysis-metrics dd,
+    .cm-content,
+    .cm-line
+  ) {
+  color: var(--starlight-text-primary) !important;
+  caret-color: var(--starlight-caret);
+}
+
+.studio-app-shell[data-starlight-theme] :is(
+    .character-workspace-list,
+    .character-workspace-detail,
+    .character-draw-tool,
+    .plot-manager-list,
+    .plot-manager-detail,
+    .event-draw-tool
+  ) {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-secondary);
+  border-color: var(--starlight-border);
+  backdrop-filter: var(--starlight-secondary-backdrop);
+}
+
+.studio-app-shell[data-starlight-theme] :is(
+    .cm-editor,
+    .cm-scroller,
+    .cm-gutters
+  ) {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-primary);
+  border-color: var(--starlight-border);
+}
+
+.studio-app-shell[data-starlight-theme] .cm-cursor {
+  border-left-color: var(--starlight-caret);
+}
+
+.studio-app-shell[data-starlight-theme] .cm-selectionBackground,
+.studio-app-shell[data-starlight-theme] .cm-content ::selection {
+  background: color-mix(
+    in srgb,
+    var(--starlight-accent) 35%,
+    transparent
+  ) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .session-feedback-progress {
+  background: var(--starlight-border);
+}
+
+.studio-app-shell[data-starlight-theme] .session-feedback-progress > span {
+  background: var(--starlight-accent);
+}
+
+.studio-app-shell[data-starlight-theme] ::placeholder {
+  color: var(--starlight-text-tertiary);
+  opacity: 0.55;
+}
+
+/* Plot and scene workspaces share the active Starlight theme with manuscripts. */
+.studio-app-shell[data-starlight-theme] :is(
+    .plot-workspace,
+    .plot-workspace-panel,
+    .plot-workspace-structure-pane,
+    .plot-manager-dialog.is-embedded,
+    .plot-manager-body,
+    .scene-list
+  ) {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-primary) !important;
+  border-color: var(--starlight-border);
+}
+
+.studio-app-shell[data-starlight-theme] :is(
+    .plot-workspace-tabs,
+    .plot-manager-list,
+    .plot-manager-detail,
+    .event-draw-tool,
+    .scene-extraction-panel,
+    .scene-rule-settings,
+    .scene-list-card,
+    .scene-music-favorites,
+    .plot-source-panel,
+    .plot-board-panel,
+    .plot-board-lane,
+    .plot-story-time-unassigned
+  ) {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-secondary) !important;
+  border-color: var(--starlight-border) !important;
+  backdrop-filter: var(--starlight-secondary-backdrop);
+}
+
+.studio-app-shell[data-starlight-theme] .plot-workspace :is(
+    h2,
+    h3,
+    h4,
+    h5,
+    strong,
+    label,
+    legend,
+    dt
+  ) {
+  color: var(--starlight-text-primary) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .plot-workspace :is(
+    p,
+    small,
+    dd,
+    .plot-manager-empty,
+    .scene-list-empty
+  ) {
+  color: var(--starlight-text-secondary) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .plot-workspace-tabs button {
+  color: var(--starlight-text-secondary);
+  background: transparent;
+  border-color: transparent;
+}
+
+.studio-app-shell[data-starlight-theme]
+  .plot-workspace-tabs button[aria-selected="true"] {
+  color: var(--starlight-text-primary);
+  border-bottom-color: var(--starlight-accent);
+  background: var(--starlight-hover);
+}
+
+.studio-app-shell[data-starlight-theme] .plot-workspace :is(button, input, select, textarea) {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-input);
+  border-color: var(--starlight-border);
+  caret-color: var(--starlight-caret);
+}
+
+.studio-app-shell[data-starlight-theme] .plot-workspace button:hover:not(:disabled) {
+  background: var(--starlight-hover);
+}
+
+/* Embedded Structure and Review surfaces use the active theme, not their old modal palette. */
+.studio-app-shell[data-starlight-theme] .work-section-surface :is(
+    .work-structure-content,
+    .lore-manager-content,
+    .foreshadow-line-content,
+    .lore-candidate-content,
+    .records-content
+  ) {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-primary) !important;
+  border-color: var(--starlight-border) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .work-section-surface :is(
+    .work-structure-header,
+    .work-structure-metrics > div,
+    .work-structure-panel,
+    .work-structure-plot,
+    .character-manager-header,
+    .character-manager-list,
+    .character-manager-detail,
+    .lore-evidence-panel,
+    .lore-history-panel,
+    .lore-link-panel,
+    .foreshadow-line-header,
+    .foreshadow-line-create,
+    .foreshadow-point-create,
+    .foreshadow-line-card,
+    .foreshadow-lore-links,
+    .foreshadow-point-list > li,
+    .lore-candidate-header,
+    .lore-candidate-create,
+    .lore-candidate-list,
+    .lore-candidate-list li,
+    .records-dialog-header,
+    .records-export,
+    .records-metrics,
+    .records-streak,
+    .records-goals,
+    .records-readthrough,
+    .records-detail-panel
+  ) {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-secondary) !important;
+  border-color: var(--starlight-border) !important;
+  backdrop-filter: var(--starlight-secondary-backdrop);
+}
+
+.studio-app-shell[data-starlight-theme] .work-section-surface :is(
+    .work-structure-metrics,
+    .work-structure-body,
+    .foreshadow-line-list-region,
+    .lore-candidate-body,
+    .records-dialog-body
+  ) {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-primary) !important;
+  border-color: var(--starlight-border) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .work-section-surface :is(
+    .work-structure-panel li > button,
+    .work-structure-row-actions button,
+    .work-structure-plot blockquote,
+    .foreshadow-line-content button,
+    .lore-manager-content button,
+    .lore-candidate-content button,
+    .records-content button,
+    .records-metrics > div,
+    .records-streak > div
+  ) {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-input) !important;
+  border-color: var(--starlight-border) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .work-section-surface :is(
+    .lore-manager-content,
+    .foreshadow-line-content,
+    .lore-candidate-content,
+    .records-content
+  ) :is(.primary-action, .primary-button) {
+  color: var(--starlight-button-text) !important;
+  background: var(--starlight-button) !important;
+  border-color: var(--starlight-button) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .work-section-surface :is(
+    .work-structure-content,
+    .lore-manager-content,
+    .foreshadow-line-content,
+    .lore-candidate-content,
+    .records-content
+  ) :is(h2, h3, h4, strong, label) {
+  color: var(--starlight-text-primary) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .work-section-surface :is(
+    .work-structure-content,
+    .lore-manager-content,
+    .foreshadow-line-content,
+    .lore-candidate-content,
+    .records-content
+  ) :is(p, small, .work-structure-empty, .character-manager-empty, .records-empty) {
+  color: var(--starlight-text-secondary) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .work-section-surface :is(
+    .work-structure-content,
+    .lore-manager-content,
+    .foreshadow-line-content,
+    .lore-candidate-content,
+    .records-content
+  ) button :is(strong, span, small) {
+  color: inherit !important;
+}
+
+.studio-app-shell .work-subsection-panel.is-overview {
+  min-height: 0;
+  overflow: auto;
+}
+
+.studio-app-shell .structure-overview-panel {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
+}
+
+.studio-app-shell .structure-overview-panel .work-structure-content {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
+}
+
+.studio-app-shell .lore-manager-content,
+.studio-app-shell .foreshadow-line-content,
+.studio-app-shell .lore-candidate-content {
+  height: 100%;
+  min-height: 0;
+}
+
+.studio-app-shell .lore-manager-content,
+.studio-app-shell .foreshadow-line-content,
+.studio-app-shell .lore-candidate-content {
+  overflow: hidden;
+}
+
+.studio-app-shell .records-content {
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+}
+
+.studio-app-shell .work-structure-body {
+  width: 100%;
+  min-width: 0;
+  overflow: visible;
+}
+
+.studio-app-shell .work-structure-panel li > button {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.studio-app-shell .work-structure-panel {
+  max-width: 100%;
+}
+
+/* Every surface promoted by the IA shares the active Starlight palette. */
+.studio-app-shell[data-starlight-theme] .workspace-tool-dialog {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-primary) !important;
+  border-color: var(--starlight-border) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .workspace-tool-dialog :is(
+    .schedule-calendar-panel,
+    .schedule-agenda-panel,
+    .schedule-dday-panel,
+    .schedule-agenda-list > div,
+    .schedule-agenda-list > button,
+    .schedule-dday-list > button,
+    .schedule-item-dialog
+  ) {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-secondary) !important;
+  border-color: var(--starlight-border) !important;
+  backdrop-filter: var(--starlight-secondary-backdrop);
+}
+
+.studio-app-shell[data-starlight-theme] .workspace-tool-dialog :is(
+    button,
+    input,
+    select,
+    textarea
+  ) {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-input) !important;
+  border-color: var(--starlight-border) !important;
+  caret-color: var(--starlight-caret);
+}
+
+.studio-app-shell[data-starlight-theme]
+  .workspace-tool-dialog
+  .schedule-calendar-grid
+  > button {
+  background: var(--starlight-primary) !important;
+}
+
+.studio-app-shell[data-starlight-theme]
+  .workspace-tool-dialog
+  .schedule-calendar-grid
+  > button:is(:hover, .is-selected) {
+  background: var(--starlight-hover) !important;
+  border-color: var(--starlight-accent) !important;
+}
+
+.studio-app-shell[data-starlight-theme]
+  .workspace-tool-dialog
+  .schedule-calendar-grid
+  > button.is-outside {
+  background: var(--starlight-secondary) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .workspace-tool-dialog :is(
+    .primary-button,
+    .primary-action
+  ) {
+  color: var(--starlight-button-text) !important;
+  background: var(--starlight-button) !important;
+  border-color: var(--starlight-button) !important;
+}
+
+.studio-app-shell[data-starlight-theme]
+  .work-section-surface
+  .character-workspace {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-primary) !important;
+  border-color: var(--starlight-border) !important;
+}
+
+.studio-app-shell[data-starlight-theme]
+  .work-section-surface
+  .character-workspace
+  :is(
+    .character-workspace-list,
+    .character-workspace-detail,
+    .character-workspace-candidates,
+    .inspiration-draw-tool,
+    .character-relation-create,
+    .character-relation-item,
+    .character-candidate-card,
+    .inspiration-draw-results > div
+  ) {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-secondary) !important;
+  border-color: var(--starlight-border) !important;
+}
+
+.studio-app-shell[data-starlight-theme]
+  .work-section-surface
+  .character-workspace
+  :is(button, input, select, textarea, .character-workspace-search) {
+  color: var(--starlight-text-primary) !important;
+  background: var(--starlight-input) !important;
+  border-color: var(--starlight-border) !important;
+  caret-color: var(--starlight-caret);
+}
+
+.studio-app-shell[data-starlight-theme]
+  .work-section-surface
+  .character-workspace
+  :is(button[aria-pressed="true"], button:hover:not(:disabled)) {
+  background: var(--starlight-hover) !important;
+}
+
+.studio-app-shell[data-starlight-theme]
+  .work-section-surface
+  .character-workspace
+  :is(.primary-button, .primary-action, .inspiration-draw-save) {
+  color: var(--starlight-button-text) !important;
+  background: var(--starlight-button) !important;
+  border-color: var(--starlight-button) !important;
+}
+
+.studio-app-shell[data-starlight-theme]
+  .work-section-surface
+  .character-workspace
+  :is(h2, h3, h4, strong, label, legend) {
+  color: var(--starlight-text-primary) !important;
+}
+
+.studio-app-shell[data-starlight-theme]
+  .work-section-surface
+  .character-workspace
+  :is(p, small) {
+  color: var(--starlight-text-secondary) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .plot-workspace :is(
+    button,
+    input,
+    select,
+    textarea
+  ) {
+  color: var(--starlight-text-primary) !important;
+  background: var(--starlight-input) !important;
+  border-color: var(--starlight-border) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .plot-workspace-tabs button {
+  color: var(--starlight-text-secondary) !important;
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
+.studio-app-shell[data-starlight-theme]
+  .plot-workspace-tabs
+  button[aria-selected="true"] {
+  color: var(--starlight-text-primary) !important;
+  background: var(--starlight-hover) !important;
+  border-bottom-color: var(--starlight-accent) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .plot-workspace :is(
+    .primary-button,
+    .primary-action
+  ) {
+  color: var(--starlight-button-text) !important;
+  background: var(--starlight-button) !important;
+  border-color: var(--starlight-button) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .work-section-surface :is(
+    .plot-manager-dialog.is-embedded,
+    .scene-structure-panel,
+    .candidate-inbox-panel
+  ) :is(button, input, select, textarea) {
+  color: var(--starlight-text-primary) !important;
+  background: var(--starlight-input) !important;
+  border-color: var(--starlight-border) !important;
+  caret-color: var(--starlight-caret);
+}
+
+.studio-app-shell[data-starlight-theme]
+  .work-section-surface
+  .candidate-inbox-panel
+  .character-workspace-candidates {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-secondary) !important;
+  border-color: var(--starlight-border) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .work-section-surface :is(
+    .plot-manager-dialog.is-embedded,
+    .scene-structure-panel,
+    .candidate-inbox-panel
+  ) :is(.primary-button, .primary-action) {
+  color: var(--starlight-button-text) !important;
+  background: var(--starlight-button) !important;
+  border-color: var(--starlight-button) !important;
+}
+
+.studio-app-shell[data-starlight-theme]
+  .work-section-surface
+  .candidate-inbox-tabs
+  button[aria-selected="true"] {
+  color: var(--starlight-text-primary) !important;
+  background: var(--starlight-hover) !important;
+  border-color: var(--starlight-accent) !important;
+}
+
+.studio-app-shell[data-starlight-theme]
+  .work-section-surface
+  .records-date-filter {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-secondary) !important;
+  border-color: var(--starlight-border) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .publishing-partner-dialog :is(
+    .publishing-partner-list,
+    .publishing-partner-detail
+  ) {
+  color: var(--starlight-text-primary);
+  background: var(--starlight-primary) !important;
+  border-color: var(--starlight-border) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .publishing-partner-dialog :is(
+    button,
+    input,
+    select,
+    textarea
+  ) {
+  color: var(--starlight-text-primary) !important;
+  background: var(--starlight-input) !important;
+  border-color: var(--starlight-border) !important;
+  caret-color: var(--starlight-caret);
+}
+
+.studio-app-shell[data-starlight-theme]
+  .publishing-partner-dialog
+  .publishing-workspace-tabs
+  button {
+  color: var(--starlight-text-secondary) !important;
+  background: transparent !important;
+}
+
+.studio-app-shell[data-starlight-theme]
+  .publishing-partner-dialog
+  .publishing-workspace-tabs
+  button[aria-current="page"] {
+  color: var(--starlight-text-primary) !important;
+  background: var(--starlight-hover) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .publishing-partner-dialog :is(
+    .primary-button,
+    .primary-action
+  ) {
+  color: var(--starlight-button-text) !important;
+  background: var(--starlight-button) !important;
+  border-color: var(--starlight-button) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .publishing-partner-dialog :is(
+    h2,
+    h3,
+    h4,
+    strong,
+    label,
+    legend
+  ) {
+  color: var(--starlight-text-primary) !important;
+}
+
+.studio-app-shell[data-starlight-theme] .publishing-partner-dialog :is(
+    p,
+    small
+  ) {
+  color: var(--starlight-text-secondary) !important;
+}
+
+/* Focus themes keep the Pomodoro status and its expanded toolbar visible. */
+.studio-app-shell:is(.focus-light-theme, .focus-dark-theme)
+  .manuscript-focus-toolbar-host {
+  z-index: 60;
+}
+
+.studio-app-shell:is(.focus-light-theme, .focus-dark-theme) :is(
+    .workspace,
+    .persistent-workspace,
+    .studio-shell,
+    .writing-workspace,
+    .workspace-statusbar,
+    .workspace-body,
+    .workspace-center,
+    .manuscript-workspace-surface,
+    .manuscript-editor-shell,
+    .manuscript-editor-canvas
+  ) {
+  backdrop-filter: none;
+}
+
+.studio-app-shell:is(.focus-light-theme, .focus-dark-theme)
+  .manuscript-focus-pomodoro-status,
+.studio-app-shell:is(.focus-light-theme, .focus-dark-theme)
+  .manuscript-focus-toolbar {
+  color: var(--starlight-text-primary);
+  background: color-mix(
+    in srgb,
+    var(--starlight-secondary) 94%,
+    var(--starlight-base)
+  );
+  border-color: color-mix(
+    in srgb,
+    var(--starlight-accent) 58%,
+    var(--starlight-border)
+  );
+  box-shadow: 0 12px 38px rgb(0 0 0 / 28%);
+}
+
+.studio-app-shell:is(.focus-light-theme, .focus-dark-theme)
+  .manuscript-focus-pomodoro-status span {
+  color: var(--starlight-text-secondary);
+}

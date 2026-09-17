@@ -14,6 +14,14 @@ describe("QuickToolsDialog", () => {
     const documentId = entityId<"Document">("document-1");
     const markup = renderToStaticMarkup(
       createElement(QuickToolsDialog, {
+        client: {
+          getMemo: async () => {
+            throw new Error("Static render must not load a memo");
+          },
+          saveMemo: async () => {
+            throw new Error("Static render must not save a memo");
+          },
+        },
         catalog: {
           schemaVersion: 1,
           works: [{
@@ -26,6 +34,18 @@ describe("QuickToolsDialog", () => {
               title: "재회",
               currentRevisionId: entityId<"DocumentRevision">("revision-1"),
               folderId: null,
+              completion: {
+                schemaVersion: 1,
+                workId,
+                documentId,
+                revision: 0,
+                completedAt: null,
+                completedDate: null,
+                completedTimeZone: null,
+                completedDocumentRevisionId: null,
+                state: "incomplete",
+                updatedAt: null,
+              },
             }],
           }],
           activeWorkId: workId,

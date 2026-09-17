@@ -1,0 +1,412 @@
+/* Two-column managers */
+
+.studio-app-shell :is(
+  .character-manager-body,
+  .assistant-connections-body,
+  .assistant-context-body,
+  .publishing-partner-body,
+  .lore-candidate-body,
+  .foreshadow-line-list-region,
+  .fragment-shelf-content,
+  .work-structure-body
+) {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.studio-app-shell .character-manager-body,
+.studio-app-shell .assistant-connections-body,
+.studio-app-shell .publishing-partner-body {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.68fr) minmax(0, 1.32fr);
+}
+
+.studio-app-shell :is(
+  .character-manager-list,
+  .assistant-connections-list,
+  .publishing-partner-list
+) {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px;
+  border-right: 1px solid var(--eum-line);
+  background: #fafafa;
+}
+
+.studio-app-shell :is(
+  .character-manager-list,
+  .assistant-connections-list,
+  .publishing-partner-list
+) ul {
+  display: grid;
+  gap: 5px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.studio-app-shell :is(
+  .character-manager-list,
+  .assistant-connections-list,
+  .publishing-partner-list
+) li > button {
+  width: 100%;
+  min-height: 46px;
+  padding: 8px 9px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--eum-text-muted);
+  background: transparent;
+  text-align: left;
+}
+
+.studio-app-shell :is(
+  .character-manager-list,
+  .assistant-connections-list,
+  .publishing-partner-list
+) li > button:hover,
+.studio-app-shell :is(
+  .character-manager-list,
+  .assistant-connections-list,
+  .publishing-partner-list
+) li > button[aria-current="true"] {
+  border-color: var(--eum-accent-border);
+  color: var(--eum-text);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell :is(.character-manager-list-tools, .publishing-partner-list-tools) {
+  display: grid;
+  gap: 7px;
+}
+
+.studio-app-shell :is(.character-manager-list-tools, .publishing-partner-list-tools) button,
+.studio-app-shell .assistant-connection-new {
+  display: flex;
+  width: 100%;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px dashed var(--eum-accent-border);
+  border-radius: 7px;
+  color: var(--eum-accent-strong);
+  background: #ffffff;
+}
+
+.studio-app-shell :is(
+  .character-manager-detail,
+  .assistant-connection-form,
+  .publishing-partner-detail
+) {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+
+.studio-app-shell :is(
+  .character-manager-fields,
+  .assistant-connection-form,
+  .publishing-partner-fields,
+  .lore-candidate-field-grid,
+  .foreshadow-line-card-fields
+) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.studio-app-shell :is(
+  .character-manager-fields,
+  .assistant-connection-form,
+  .publishing-partner-fields,
+  .lore-candidate-field-grid,
+  .foreshadow-line-card-fields
+) > label {
+  display: grid;
+  gap: 6px;
+}
+
+.studio-app-shell :is(
+  .character-manager-field-actions,
+  .assistant-connection-form-title,
+  .publishing-partner-field-actions,
+  .plot-source-actions
+) {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.studio-app-shell .assistant-context-body {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.78fr) minmax(0, 1.22fr);
+  overflow: auto;
+  padding: 14px;
+  gap: 12px;
+  background: #fafafa;
+}
+
+.studio-app-shell :is(.assistant-context-tool-column, .assistant-context-ledger-column) {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.studio-app-shell :is(.assistant-context-grant-form, .assistant-context-ledger) {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid var(--eum-line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.studio-app-shell .fragment-shelf-dialog,
+.studio-app-shell .lore-candidate-dialog,
+.studio-app-shell .work-structure-dialog {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.studio-app-shell .foreshadow-line-dialog {
+  display: flex;
+  flex-direction: column;
+}
+
+.studio-app-shell .foreshadow-line-header,
+.studio-app-shell .foreshadow-line-create,
+.studio-app-shell .foreshadow-point-create,
+.studio-app-shell .foreshadow-line-error {
+  flex: 0 0 auto;
+}
+
+.studio-app-shell .foreshadow-line-create,
+.studio-app-shell .foreshadow-point-create {
+  display: grid;
+  align-items: end;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--eum-line);
+}
+
+.studio-app-shell .foreshadow-line-create {
+  grid-template-columns: minmax(160px, 0.85fr) minmax(220px, 1.15fr) auto;
+}
+
+.studio-app-shell .foreshadow-point-create {
+  grid-template-columns: minmax(150px, 0.8fr) minmax(110px, 0.55fr) minmax(180px, 1fr) auto;
+  background: #fafafa;
+}
+
+.studio-app-shell .foreshadow-line-create > label,
+.studio-app-shell .foreshadow-point-create > label {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.studio-app-shell .foreshadow-line-list-region {
+  flex: 1 1 auto;
+}
+
+.studio-app-shell :is(
+  .fragment-shelf-content,
+  .foreshadow-line-list-region,
+  .lore-candidate-body,
+  .work-structure-body
+) {
+  overflow: auto;
+  padding: 14px;
+  background: #fafafa;
+}
+
+.studio-app-shell :is(
+  .fragment-card-list,
+  .foreshadow-line-list,
+  .lore-candidate-list,
+  .work-structure-body
+) {
+  display: grid;
+  align-content: start;
+  gap: 9px;
+}
+
+.studio-app-shell :is(
+  .fragment-card,
+  .foreshadow-line-card,
+  .lore-candidate-block,
+  .work-structure-panel,
+  .plot-source-panel,
+  .lore-evidence-panel,
+  .lore-history-panel,
+  .lore-link-panel
+) {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--eum-line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.studio-app-shell :is(
+  .fragment-capture-button,
+  .fragment-retire-button,
+  .foreshadow-line-create button,
+  .foreshadow-line-retire,
+  .foreshadow-point-create button,
+  .lore-candidate-create button,
+  .lore-link-create button,
+  .work-structure-row-actions button,
+  .assistant-context-connections-button,
+  .assistant-context-grant-form button,
+  .assistant-connection-delete,
+  .assistant-connection-remove-secret
+) {
+  min-height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  color: var(--eum-text-muted);
+  background: #ffffff;
+}
+
+.studio-app-shell :is(
+  .fragment-capture-button,
+  .fragment-retire-button,
+  .foreshadow-line-create button,
+  .foreshadow-line-retire,
+  .foreshadow-point-create button,
+  .lore-candidate-create button,
+  .lore-link-create button,
+  .work-structure-row-actions button,
+  .assistant-context-connections-button,
+  .assistant-context-grant-form button,
+  .assistant-connection-delete,
+  .assistant-connection-remove-secret
+):hover:not(:disabled) {
+  border-color: var(--eum-accent-border);
+  color: var(--eum-accent-strong);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell :is(.fragment-shelf-toolbar, .fragment-card-head, .work-structure-metrics, .work-structure-row-actions) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.studio-app-shell .fragment-search-field {
+  display: flex;
+  min-width: min(360px, 100%);
+  align-items: center;
+  gap: 7px;
+}
+
+/* Snapshot comparison */
+
+.studio-app-shell .snapshot-comparison-dialog {
+  width: min(980px, calc(100vw - 48px));
+}
+
+.studio-app-shell .snapshot-comparison-dialog > :not(.snapshot-comparison-header) {
+  margin-inline: 16px;
+}
+
+.studio-app-shell .snapshot-comparison-summary,
+.studio-app-shell .snapshot-comparison-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.studio-app-shell .snapshot-comparison-table {
+  min-height: 0;
+  overflow: auto;
+  margin-block: 12px 16px;
+  border: 1px solid var(--eum-line);
+  border-radius: 8px;
+}
+
+.studio-app-shell .snapshot-comparison-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) repeat(2, minmax(110px, 0.55fr));
+  gap: 8px;
+  padding: 9px 11px;
+  border-bottom: 1px solid var(--eum-line);
+}
+
+.studio-app-shell .snapshot-scene-plan {
+  border-top: 1px solid var(--eum-line);
+  display: grid;
+  gap: 10px;
+  padding-block: 14px 18px;
+}
+
+.studio-app-shell .snapshot-scene-plan > header,
+.studio-app-shell .snapshot-scene-plan > footer {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.studio-app-shell .snapshot-scene-plan h3,
+.studio-app-shell .snapshot-scene-plan h4,
+.studio-app-shell .snapshot-scene-plan p {
+  margin: 0;
+}
+
+.studio-app-shell .snapshot-scene-plan > ul {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.studio-app-shell .snapshot-scene-plan > ul > li {
+  border: 1px solid var(--eum-line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.studio-app-shell .snapshot-scene-plan label,
+.studio-app-shell .snapshot-scene-plan label > span {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.studio-app-shell .snapshot-scene-columns {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.studio-app-shell .snapshot-scene-columns > section,
+.studio-app-shell .snapshot-scene-columns article {
+  display: grid;
+  gap: 5px;
+}
+
+.studio-app-shell .snapshot-scene-columns > section {
+  background: var(--eum-surface-soft);
+  border-radius: 7px;
+  padding: 9px;
+}
+
+@media (max-width: 760px) {
+  .studio-app-shell .snapshot-scene-columns {
+    grid-template-columns: 1fr;
+  }
+}
+

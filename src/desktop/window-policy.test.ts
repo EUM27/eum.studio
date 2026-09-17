@@ -3,8 +3,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   createSecureWebPreferences,
+  canActivateMainWindow,
   isAllowedRendererNavigation,
   isTrustedRendererIpcSender,
+  shouldRecoverMainWindowRenderer,
+  shouldDisableHardwareAcceleration,
   shouldShowMainWindow,
 } from "./window-policy";
 
@@ -77,5 +80,66 @@ describe("desktop window policy", () => {
     expect(shouldShowMainWindow(undefined)).toBe(true);
     expect(shouldShowMainWindow("visible")).toBe(true);
     expect(shouldShowMainWindow("hidden")).toBe(false);
+  });
+
+  it("keeps hardware acceleration enabled unless the runtime disables it", () => {
+    expect(shouldDisableHardwareAcceleration(undefined)).toBe(false);
+    expect(shouldDisableHardwareAcceleration("enabled")).toBe(false);
+    expect(shouldDisableHardwareAcceleration("disabled")).toBe(true);
+  });
+
+  it("recovers only the current main renderer outside shutdown and an existing recovery", () => {
+    const recoverable = {
+      failedWindowIsCurrent: true,
+      isQuitting: false,
+      recoveryInProgress: false,
+      windowDestroyed: false,
+      webContentsDestroyed: false,
+    };
+
+    expect(shouldRecoverMainWindowRenderer(recoverable)).toBe(true);
+    expect(shouldRecoverMainWindowRenderer({
+      ...recoverable,
+      failedWindowIsCurrent: false,
+    })).toBe(false);
+    expect(shouldRecoverMainWindowRenderer({
+      ...recoverable,
+      isQuitting: true,
+    })).toBe(false);
+    expect(shouldRecoverMainWindowRenderer({
+      ...recoverable,
+      recoveryInProgress: true,
+    })).toBe(false);
+    expect(shouldRecoverMainWindowRenderer({
+      ...recoverable,
+      windowDestroyed: true,
+    })).toBe(false);
+    expect(shouldRecoverMainWindowRenderer({
+      ...recoverable,
+      webContentsDestroyed: true,
+    })).toBe(false);
+  });
+
+  it("activates only a live main window with a healthy renderer", () => {
+    expect(canActivateMainWindow({
+      windowDestroyed: false,
+      webContentsDestroyed: false,
+      rendererCrashed: false,
+    })).toBe(true);
+    expect(canActivateMainWindow({
+      windowDestroyed: true,
+      webContentsDestroyed: false,
+      rendererCrashed: false,
+    })).toBe(false);
+    expect(canActivateMainWindow({
+      windowDestroyed: false,
+      webContentsDestroyed: true,
+      rendererCrashed: false,
+    })).toBe(false);
+    expect(canActivateMainWindow({
+      windowDestroyed: false,
+      webContentsDestroyed: false,
+      rendererCrashed: true,
+    })).toBe(false);
   });
 });

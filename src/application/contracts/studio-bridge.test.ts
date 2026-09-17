@@ -151,21 +151,30 @@ import {
   APP_SETTINGS_GET_CHANNEL,
   APP_SETTINGS_SAVE_CHANNEL,
   SCHEDULE_CREATE_ITEM_CHANNEL,
+  SCHEDULE_LIST_CALENDAR_CHANNEL,
+  SCHEDULE_LIST_TODAY_CHANNEL,
   SCHEDULE_LIST_WORK_CHANNEL,
   SCHEDULE_RETIRE_ITEM_CHANNEL,
   SCHEDULE_SET_COMPLETION_CHANNEL,
   SCHEDULE_UPDATE_ITEM_CHANNEL,
   STRUCTURE_CREATE_ANCHORLESS_EVENT_CHANNEL,
   STRUCTURE_CREATE_EVENT_BLOCK_CHANNEL,
+  STRUCTURE_MOVE_EVENT_BLOCK_CHANNEL,
   STRUCTURE_CREATE_SCENE_OVERRIDE_CHANNEL,
+  STRUCTURE_DELETE_SCENE_CHANNEL,
   STRUCTURE_LINK_EVENT_SOURCE_CHANNEL,
   STRUCTURE_LIST_EVENT_BLOCKS_CHANNEL,
   STRUCTURE_LIST_EVENT_RAIL_CHANNEL,
   STRUCTURE_LIST_SCENE_OVERRIDES_CHANNEL,
   STRUCTURE_LIST_SCENE_PROJECTION_CHANNEL,
+  STRUCTURE_LIST_SCENE_TRASH_CHANNEL,
+  STRUCTURE_REBIND_SCENE_METADATA_CHANNEL,
+  STRUCTURE_PREPARE_SCENE_DELETION_CHANNEL,
+  STRUCTURE_RESTORE_SCENE_TRASH_CHANNEL,
   STRUCTURE_REPLACE_EVENT_SOURCE_CHANNEL,
   STRUCTURE_RETIRE_EVENT_SOURCE_CHANNEL,
   STRUCTURE_SET_SCENE_EVENT_OVERRIDE_CHANNEL,
+  STRUCTURE_UNDO_SCENE_DELETION_CHANNEL,
   STRUCTURE_RUN_SCENE_EXTRACTION_CHANNEL,
   STRUCTURE_LIST_SCENE_EXTRACTION_CANDIDATES_CHANNEL,
   STRUCTURE_LIST_SCENE_ANNOTATIONS_CHANNEL,
@@ -173,9 +182,13 @@ import {
   VERSION_CREATE_WORK_SNAPSHOT_CHANNEL,
   VERSION_COMPARE_WORK_SNAPSHOT_CHANNEL,
   VERSION_LIST_DOCUMENT_REVISIONS_CHANNEL,
+  VERSION_READ_DOCUMENT_REVISION_CHANNEL,
   VERSION_LIST_WORK_SNAPSHOTS_CHANNEL,
   VERSION_RESTORE_DOCUMENT_REVISION_CHANNEL,
   WORKSPACE_FAVORITES_CHANNEL,
+  WORKSPACE_CLEAR_DOCUMENT_COMPLETION_CHANNEL,
+  WORKSPACE_COMPLETE_DOCUMENT_CHANNEL,
+  WORKSPACE_GET_DOCUMENT_COMPLETION_CHANNEL,
   WORKSPACE_COVERS_CHANNEL,
   WORKSPACE_SELECT_COVER_CHANNEL,
   WORKSPACE_RENAME_DOCUMENT_CHANNEL,
@@ -201,7 +214,7 @@ import {
   createApplyStartupRecoveryCommand,
 } from "../persistence/startup-recovery-contract";
 import type { StartupRecoveryCandidate } from "../persistence/prepare-startup-recovery";
-import { entityId } from "../../domain/writing";
+import { entityId, type EntityId } from "../../domain/writing";
 import {
   createDefaultManuscriptPreflightSettings,
   parseManuscriptPreflightProfile,
@@ -219,7 +232,90 @@ function createStudioBridge(
   );
 }
 
+function incompleteDocumentCompletion(
+  workId: EntityId<"Work">,
+  documentId: EntityId<"Document">,
+) {
+  return {
+    schemaVersion: 1 as const,
+    workId,
+    documentId,
+    revision: 0,
+    completedAt: null,
+    completedDate: null,
+    completedTimeZone: null,
+    completedDocumentRevisionId: null,
+    state: "incomplete" as const,
+    updatedAt: null,
+  };
+}
+
 describe("studio bridge contract", () => {
+  it("uses separate typed Document completion query, complete, and clear channels", async () => {
+    const workId = entityId<"Work">(randomUUID());
+    const documentId = entityId<"Document">(randomUUID());
+    const documentRevisionId = entityId<"DocumentRevision">(randomUUID());
+    const projection = {
+      schemaVersion: 1 as const,
+      workId,
+      documentId,
+      revision: 1,
+      completedAt: "2026-08-21T15:00:00.000Z",
+      completedDate: "2026-08-22",
+      completedTimeZone: "Asia/Seoul",
+      completedDocumentRevisionId: documentRevisionId,
+      state: "current" as const,
+      updatedAt: "2026-08-21T15:00:00.000Z",
+    };
+    const invoke = vi.fn().mockResolvedValue(projection);
+    const bridge = createStudioBridge(invoke);
+
+    await expect(bridge.workspace.getDocumentCompletion({
+      schemaVersion: 1,
+      workId,
+      documentId,
+    })).resolves.toEqual(projection);
+    await expect(bridge.workspace.completeDocument({
+      schemaVersion: 1,
+      workId,
+      documentId,
+      expectedCompletionRevision: 0,
+      expectedDocumentRevisionId: documentRevisionId,
+    })).resolves.toEqual(projection);
+    await expect(bridge.workspace.clearDocumentCompletion({
+      schemaVersion: 1,
+      workId,
+      documentId,
+      expectedCompletionRevision: 1,
+    })).resolves.toEqual(projection);
+    expect(invoke).toHaveBeenNthCalledWith(
+      1,
+      WORKSPACE_GET_DOCUMENT_COMPLETION_CHANNEL,
+      { schemaVersion: 1, workId, documentId },
+    );
+    expect(invoke).toHaveBeenNthCalledWith(
+      2,
+      WORKSPACE_COMPLETE_DOCUMENT_CHANNEL,
+      {
+        schemaVersion: 1,
+        workId,
+        documentId,
+        expectedCompletionRevision: 0,
+        expectedDocumentRevisionId: documentRevisionId,
+      },
+    );
+    expect(invoke).toHaveBeenNthCalledWith(
+      3,
+      WORKSPACE_CLEAR_DOCUMENT_COMPLETION_CHANNEL,
+      {
+        schemaVersion: 1,
+        workId,
+        documentId,
+        expectedCompletionRevision: 1,
+      },
+    );
+  });
+
   it("exposes renderer-safe ChatGPT OAuth status and login channels", async () => {
     const status = {
       schemaVersion: 1 as const,
@@ -352,6 +448,7 @@ describe("studio bridge contract", () => {
         connectorKind: "eum-structured-json-v1",
         displayName: "사용자 지정 구조화 JSON",
         capabilities: ["vocabulary-lookup" as const],
+        contextTokenBudget: 8192,
         credentialPolicy: "optional" as const,
         runtimeConfig: {
           endpoint: "required" as const,
@@ -705,8 +802,46 @@ describe("studio bridge contract", () => {
         completedEpisodeNumbers: [],
       },
     };
+    const calendarProjection = {
+      ...projection,
+      completedDocumentCount: 1,
+      occurrences: [
+        {
+          occurrenceId: "document-completion:document-a",
+          workId,
+          documentId: "document-a",
+          documentTitle: "5화",
+          kind: "document-completion" as const,
+          label: "5화 완료",
+          date: "2026-08-11",
+          time: null,
+          completed: true as const,
+          completedAt: timestamp,
+          completedDocumentRevisionId: "revision-a",
+          state: "current" as const,
+        },
+        ...projection.occurrences,
+      ],
+    };
+    const todayProjection = {
+      schemaVersion: 1 as const,
+      date: "2026-08-11",
+      works: [
+        {
+          workId,
+          workTitle: "작품 A",
+          calendar: {
+            ...calendarProjection,
+            range: { from: "2026-08-11", to: "2026-08-11" },
+          },
+        },
+      ],
+      completedDocumentCount: 1,
+    };
     const invoke = vi.fn(async (channel: string) => {
       if (channel === SCHEDULE_LIST_WORK_CHANNEL) return projection;
+      if (channel === SCHEDULE_LIST_CALENDAR_CHANNEL) return calendarProjection;
+      if (channel === SCHEDULE_LIST_TODAY_CHANNEL) return todayProjection;
       if (
         channel === SCHEDULE_CREATE_ITEM_CHANNEL ||
         channel === SCHEDULE_UPDATE_ITEM_CHANNEL ||
@@ -726,6 +861,19 @@ describe("studio bridge contract", () => {
         range: projection.range,
       }),
     ).resolves.toEqual(projection);
+    await expect(
+      bridge.schedule.listCalendar({
+        schemaVersion: 1,
+        workId,
+        range: projection.range,
+      }),
+    ).resolves.toEqual(calendarProjection);
+    await expect(
+      bridge.schedule.listToday({
+        schemaVersion: 1,
+        date: "2026-08-11",
+      }),
+    ).resolves.toEqual(todayProjection);
     await expect(
       bridge.schedule.createItem({
         schemaVersion: 1,
@@ -772,6 +920,8 @@ describe("studio bridge contract", () => {
     ).resolves.toBeUndefined();
     expect(invoke.mock.calls.map(([channel]) => channel)).toEqual([
       SCHEDULE_LIST_WORK_CHANNEL,
+      SCHEDULE_LIST_CALENDAR_CHANNEL,
+      SCHEDULE_LIST_TODAY_CHANNEL,
       SCHEDULE_CREATE_ITEM_CHANNEL,
       SCHEDULE_UPDATE_ITEM_CHANNEL,
       SCHEDULE_SET_COMPLETION_CHANNEL,
@@ -1413,6 +1563,7 @@ describe("studio bridge contract", () => {
               title: documentTitle,
               currentRevisionId: revisionId,
               folderId: null,
+              completion: incompleteDocumentCompletion(workId, documentId),
             },
           ],
         },
@@ -1576,6 +1727,7 @@ describe("studio bridge contract", () => {
           title: randomUUID(),
           currentRevisionId: entityId<"DocumentRevision">(randomUUID()),
           folderId: null,
+          completion: incompleteDocumentCompletion(workId, documentId),
         }],
       }],
       activeWorkId: workId,
@@ -1617,6 +1769,7 @@ describe("studio bridge contract", () => {
           title: randomUUID(),
           currentRevisionId: entityId<"DocumentRevision">(randomUUID()),
           folderId,
+          completion: incompleteDocumentCompletion(workId, documentId),
         }],
       }],
       activeWorkId: workId,
@@ -1738,6 +1891,12 @@ describe("studio bridge contract", () => {
       eventSourceId: eventSource.eventSourceId,
       expectedRevision: 1,
     } as const;
+    const moveCommand = {
+      schemaVersion: 1,
+      workId,
+      eventBlockId: eventBlock.eventBlockId,
+      expectedRevision: 1,
+    } as const;
 
     await expect(
       bridge.structure.createEventBlock(command),
@@ -1745,6 +1904,14 @@ describe("studio bridge contract", () => {
     await expect(
       bridge.structure.createAnchorlessEvent(anchorlessCommand),
     ).resolves.toEqual(eventBlock);
+    await expect(
+      bridge.structure.moveEventBlock(moveCommand),
+    ).resolves.toEqual({
+      schemaVersion: 1,
+      workId,
+      eventBlocks: [eventBlock],
+      eventSources: [eventSource],
+    });
     await expect(
       bridge.structure.linkEventSource(linkCommand),
     ).resolves.toEqual(eventSource);
@@ -1769,6 +1936,10 @@ describe("studio bridge contract", () => {
     expect(invoke).toHaveBeenCalledWith(
       STRUCTURE_CREATE_ANCHORLESS_EVENT_CHANNEL,
       anchorlessCommand,
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_MOVE_EVENT_BLOCK_CHANNEL,
+      moveCommand,
     );
     expect(invoke).toHaveBeenCalledWith(
       STRUCTURE_LINK_EVENT_SOURCE_CHANNEL,
@@ -3902,6 +4073,7 @@ describe("studio bridge contract", () => {
       schemaVersion: 1,
       workId,
       documentId,
+      expectedDocumentRevisionId: entityId<"DocumentRevision">(randomUUID()),
       selection: { anchor: 5, head: 5 },
       exactQuote: "",
       operation: "add",
@@ -3925,6 +4097,155 @@ describe("studio bridge contract", () => {
     expect(invoke).toHaveBeenCalledWith(
       STRUCTURE_LIST_SCENE_OVERRIDES_CHANNEL,
       { schemaVersion: 1, workId },
+    );
+  });
+
+  it("rebinds Scene metadata through its narrow stable-identity channel", async () => {
+    const workId = entityId<"Work">(randomUUID());
+    const bindingId = entityId<"SceneMetadataBinding">(randomUUID());
+    const sceneId = entityId<"Scene">(randomUUID());
+    const now = new Date().toISOString();
+    const binding = {
+      schemaVersion: 1,
+      sceneMetadataBindingId: bindingId,
+      revision: 3,
+      workId,
+      metadataKind: "annotation",
+      metadataId: randomUUID(),
+      sourceSceneKey: "source-scene-fingerprint",
+      sceneId,
+      status: "current",
+      proposedSceneId: null,
+      lineageOperationId: null,
+      createdAt: now,
+      updatedAt: now,
+    } as const;
+    const invoke = vi.fn().mockResolvedValue(binding);
+    const bridge = createStudioBridge(invoke);
+    const command = {
+      schemaVersion: 1,
+      workId,
+      sceneMetadataBindingId: bindingId,
+      expectedBindingRevision: 2,
+      targetSceneId: sceneId,
+    } as const;
+
+    await expect(bridge.structure.rebindSceneMetadata(command))
+      .resolves.toEqual(binding);
+    expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_REBIND_SCENE_METADATA_CHANNEL,
+      command,
+    );
+  });
+
+  it("exposes previewed Scene deletion, trash, restore, and undo on narrow channels", async () => {
+    const workId = entityId<"Work">(randomUUID());
+    const documentId = entityId<"Document">(randomUUID());
+    const sceneId = entityId<"Scene">(randomUUID());
+    const sceneTrashEntryId = entityId<"SceneTrashEntry">(randomUUID());
+    const now = new Date().toISOString();
+    const target = { sceneId, documentId, sceneKey: "scene-trash-source" };
+    const preview = {
+      schemaVersion: 1,
+      previewFingerprint: "sha256:scene-trash-preview",
+      workId,
+      target,
+      sceneRuleSetRevision: 2,
+      documents: [{
+        documentId,
+        documentTitle: "첫 회차",
+        expectedDocumentRevisionId:
+          entityId<"DocumentRevision">(randomUUID()),
+        sceneKey: target.sceneKey,
+        sceneRange: { start: 0, end: 4 },
+        deletionRange: { start: 0, end: 8 },
+        removedBoundaryAnchorId: entityId<"Anchor">(randomUUID()),
+        sceneContentUtf16Length: 4,
+        deletedUtf16Length: 8,
+        firstExcerpt: "첫 장면",
+        lastExcerpt: "첫 장면",
+      }],
+      metadata: [],
+    } as const;
+    const entry = {
+      schemaVersion: 1,
+      sceneTrashEntryId,
+      revision: 1,
+      workId,
+      sceneId,
+      sourceSceneKey: target.sceneKey,
+      sceneRuleSetRevision: 2,
+      status: "active",
+      documents: [{
+        sceneTrashDocumentId: entityId<"SceneTrashDocument">(randomUUID()),
+        documentId,
+        documentTitle: "첫 회차",
+        ordinal: 0,
+        beforeRevisionId: entityId<"DocumentRevision">(randomUUID()),
+        deletedRevisionId: entityId<"DocumentRevision">(randomUUID()),
+        restoredRevisionId: null,
+        sceneRange: { start: 0, end: 4 },
+        deletionRange: { start: 0, end: 8 },
+        deletedUtf16Length: 8,
+        firstExcerpt: "첫 장면",
+        lastExcerpt: "첫 장면",
+      }],
+      metadata: [],
+      canRestore: true,
+      conflictReason: null,
+      deletedAt: now,
+      restoredAt: null,
+    } as const;
+    const receipt = {
+      schemaVersion: 1,
+      status: "deleted",
+      entry,
+      documentRevisions: [{
+        documentId,
+        revisionId: entry.documents[0].deletedRevisionId,
+      }],
+    } as const;
+    const list = { schemaVersion: 1, workId, entries: [entry] } as const;
+    const invoke = vi.fn(async (channel) => {
+      if (channel === STRUCTURE_PREPARE_SCENE_DELETION_CHANNEL) return preview;
+      if (channel === STRUCTURE_LIST_SCENE_TRASH_CHANNEL) return list;
+      return receipt;
+    });
+    const bridge = createStudioBridge(invoke);
+    const prepareCommand = { schemaVersion: 1, workId, target } as const;
+    const deleteCommand = { schemaVersion: 1, preview } as const;
+    const restoreCommand = {
+      schemaVersion: 1,
+      workId,
+      sceneTrashEntryId,
+      expectedRevision: 1,
+    } as const;
+
+    await expect(bridge.structure.prepareSceneDeletion(prepareCommand))
+      .resolves.toEqual(preview);
+    await expect(bridge.structure.deleteScene(deleteCommand)).resolves.toEqual(receipt);
+    await expect(bridge.structure.listSceneTrash({ schemaVersion: 1, workId }))
+      .resolves.toEqual(list);
+    await expect(bridge.structure.restoreSceneTrash(restoreCommand))
+      .resolves.toEqual(receipt);
+    await expect(bridge.structure.undoSceneDeletion(restoreCommand))
+      .resolves.toEqual(receipt);
+    expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_PREPARE_SCENE_DELETION_CHANNEL,
+      prepareCommand,
+    );
+    expect(invoke).toHaveBeenCalledWith(STRUCTURE_DELETE_SCENE_CHANNEL, deleteCommand);
+    expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_LIST_SCENE_TRASH_CHANNEL,
+      { schemaVersion: 1, workId },
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_RESTORE_SCENE_TRASH_CHANNEL,
+      restoreCommand,
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      STRUCTURE_UNDO_SCENE_DELETION_CHANNEL,
+      restoreCommand,
     );
   });
 
@@ -4143,9 +4464,17 @@ describe("studio bridge contract", () => {
         characterDelta: 0,
       }],
     } as const;
+    const revisionContent = {
+      schemaVersion: 1 as const,
+      revision: revisionList.revisions[0],
+      text: "완료 당시 원고",
+    };
     const invoke = vi.fn(async (channel) => {
       if (channel === VERSION_LIST_DOCUMENT_REVISIONS_CHANNEL) {
         return revisionList;
+      }
+      if (channel === VERSION_READ_DOCUMENT_REVISION_CHANNEL) {
+        return revisionContent;
       }
       if (channel === VERSION_RESTORE_DOCUMENT_REVISION_CHANNEL) {
         return restoreResult;
@@ -4166,6 +4495,12 @@ describe("studio bridge contract", () => {
       documentId,
       targetRevisionId: revisionId,
     } as const;
+    const readRevision = {
+      schemaVersion: 1,
+      workId,
+      documentId,
+      revisionId,
+    } as const;
     const createSnapshot = {
       schemaVersion: 1,
       workId,
@@ -4182,6 +4517,9 @@ describe("studio bridge contract", () => {
       bridge.version.listDocumentRevisions(listRevisions),
     ).resolves.toEqual(revisionList);
     await expect(
+      bridge.version.readDocumentRevision(readRevision),
+    ).resolves.toEqual(revisionContent);
+    await expect(
       bridge.version.restoreDocumentRevision(restore),
     ).resolves.toEqual(restoreResult);
     await expect(
@@ -4196,6 +4534,10 @@ describe("studio bridge contract", () => {
     expect(invoke).toHaveBeenCalledWith(
       VERSION_LIST_DOCUMENT_REVISIONS_CHANNEL,
       listRevisions,
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      VERSION_READ_DOCUMENT_REVISION_CHANNEL,
+      readRevision,
     );
     expect(invoke).toHaveBeenCalledWith(
       VERSION_RESTORE_DOCUMENT_REVISION_CHANNEL,
@@ -4218,6 +4560,7 @@ describe("studio bridge contract", () => {
   it("exposes verified local backup status, creation, and restore actions", async () => {
     const summary = {
       schemaVersion: 1,
+      mode: "complete",
       bundlePath: "D:\\Backups\\eum-studio-2026-08-07",
       targetPath: null,
       createdAt: "2026-08-07T00:00:00.000Z",
@@ -4229,6 +4572,12 @@ describe("studio bridge contract", () => {
         revisionCount: 3,
         resumeCheckpointCount: 1,
         writingSessionCount: 1,
+      },
+      media: {
+        managedFileCount: 1,
+        externalReferenceCount: 1,
+        disconnectedExternalReferenceCount: 0,
+        managedByteLength: 2048,
       },
     } as const;
     const status = { schemaVersion: 1, lastVerified: summary } as const;
@@ -4250,6 +4599,8 @@ describe("studio bridge contract", () => {
     await expect(bridge.backup.restore()).resolves.toEqual(completed);
     expect(invoke).toHaveBeenCalledWith(BACKUP_GET_STATUS_CHANNEL);
     expect(invoke).toHaveBeenCalledWith(BACKUP_CREATE_CHANNEL);
+    await bridge.backup.create({ schemaVersion: 1, mode: "manuscript-only" });
+    expect(invoke).toHaveBeenCalledWith(BACKUP_CREATE_CHANNEL, { schemaVersion: 1, mode: "manuscript-only" });
     expect(invoke).toHaveBeenCalledWith(BACKUP_RESTORE_CHANNEL);
   });
 

@@ -1,0 +1,262 @@
+.studio-app-shell .character-manager-body.plot-manager-body.has-utility {
+  grid-template-columns: minmax(360px, 1.55fr) minmax(240px, 0.75fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 0.85fr);
+}
+
+.studio-app-shell
+  .plot-manager-dialog.is-embedded
+  .plot-manager-body.has-utility
+  .plot-manager-list {
+  grid-row: 1 / -1;
+}
+
+.studio-app-shell .plot-manager-body.has-utility .plot-manager-detail {
+  grid-column: 2;
+  grid-row: 1;
+  border-right: 1px solid var(--eum-line);
+}
+
+.studio-app-shell .plot-manager-body.has-utility .event-draw-tool {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.studio-app-shell .plot-manager-body.has-utility .plot-manager-list-tools input {
+  width: 100%;
+  min-width: 0;
+}
+
+.studio-app-shell
+  .plot-manager-dialog.is-embedded
+  .plot-manager-body.has-utility
+  .plot-board-panel {
+  min-height: 220px;
+  margin: 12px 0 14px;
+  border-color: color-mix(in srgb, var(--eum-accent) 30%, var(--eum-line));
+  background: color-mix(in srgb, var(--eum-accent-soft) 42%, #ffffff);
+}
+
+.studio-app-shell
+  .plot-manager-dialog.is-embedded
+  .plot-board-header
+  small {
+  color: var(--eum-text-muted);
+  font-size: 9px;
+  font-weight: 450;
+  line-height: 1.45;
+}
+
+.studio-app-shell
+  .plot-manager-dialog.is-embedded
+  .plot-manager-body.has-utility
+  .plot-manager-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.studio-app-shell
+  .plot-manager-dialog.is-embedded
+  .plot-manager-list-tools {
+  order: 1;
+  flex: none;
+}
+
+.studio-app-shell
+  .plot-manager-dialog.is-embedded
+  .plot-manager-list
+  > :is(.plot-manager-empty, ul) {
+  order: 2;
+  flex: none;
+}
+
+.studio-app-shell
+  .plot-manager-dialog.is-embedded
+  .plot-manager-list
+  > ul {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  margin: 9px 0 0;
+  padding-bottom: 3px;
+}
+
+.studio-app-shell
+  .plot-manager-dialog.is-embedded
+  .plot-manager-list
+  > ul
+  > li {
+  flex: 0 0 auto;
+}
+
+.studio-app-shell
+  .plot-manager-dialog.is-embedded
+  .plot-manager-list
+  > ul
+  > li
+  > button {
+  width: auto;
+  min-width: 132px;
+  min-height: 34px;
+  padding: 5px 9px;
+  border-color: var(--eum-line);
+  background: #ffffff;
+}
+
+.studio-app-shell
+  .plot-manager-dialog.is-embedded
+  .plot-board-panel {
+  order: 3;
+}
+
+.studio-app-shell
+  .plot-manager-dialog.is-embedded
+  .plot-board-lane
+  > ol
+  > li:not(.plot-board-insertion-line) {
+  position: relative;
+  min-height: 58px;
+  padding: 10px;
+}
+
+.studio-app-shell
+  .plot-manager-dialog.is-embedded
+  .plot-board-card-select {
+  min-height: 38px;
+  padding-right: 132px;
+}
+
+.studio-app-shell
+  .plot-manager-dialog.is-embedded
+  .plot-board-card-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.studio-app-shell
+  .plot-manager-dialog.is-embedded
+  .plot-board-lane
+  > ol
+  > li:hover
+  .plot-board-card-actions,
+.studio-app-shell
+  .plot-manager-dialog.is-embedded
+  .plot-board-lane
+  > ol
+  > li:focus-within
+  .plot-board-card-actions {
+  opacity: 1;
+}
+
+.studio-app-shell
+  .plot-manager-dialog.is-embedded
+  .plot-board-card-actions
+  button {
+  min-height: 26px;
+  padding-inline: 7px;
+  font-size: 9px;
+}
+
+.studio-app-shell
+  .plot-manager-body.has-utility
+  .plot-manager-detail {
+  overflow-x: hidden;
+}
+
+.studio-app-shell
+  .plot-manager-body.has-utility
+  .plot-manager-detail
+  .plot-manager-fields {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.studio-app-shell
+  .plot-manager-body.has-utility
+  .plot-manager-detail
+  .plot-manager-fields
+  :is(input, textarea, select) {
+  width: 100%;
+  min-width: 0;
+}
+
+@media (hover: none) {
+  .studio-app-shell
+    .plot-manager-dialog.is-embedded
+    .plot-board-card-actions {
+    position: static;
+    opacity: 1;
+  }
+
+  .studio-app-shell
+    .plot-manager-dialog.is-embedded
+    .plot-board-card-select {
+    padding-right: 0;
+  }
+}
+
+@media (max-width: 1120px) {
+  .studio-app-shell
+    .character-workspace-detail
+    .character-manager-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .studio-app-shell
+    .character-workspace-detail
+    .character-manager-fields
+    :is(input, textarea, select) {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .studio-app-shell .plot-manager-detail .plot-manager-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .studio-app-shell .character-workspace-body {
+    grid-template-columns: minmax(160px, 0.55fr) minmax(270px, 1fr);
+    overflow: auto;
+  }
+
+  .studio-app-shell .character-draw-tool {
+    grid-column: 1 / -1;
+    min-height: 260px;
+    border-top: 1px solid #ededed;
+  }
+
+  .studio-app-shell .character-manager-body.plot-manager-body.has-utility {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    overflow: auto;
+  }
+
+  .studio-app-shell
+    .plot-manager-dialog.is-embedded
+    .plot-manager-body.has-utility
+    .plot-manager-list,
+  .studio-app-shell .plot-manager-body.has-utility .plot-manager-detail,
+  .studio-app-shell .plot-manager-body.has-utility .event-draw-tool {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .studio-app-shell
+    .plot-manager-dialog.is-embedded
+    .plot-manager-body.has-utility
+    .plot-manager-list {
+    min-height: 440px;
+    max-height: none;
+  }
+
+  .studio-app-shell .plot-manager-body.has-utility .event-draw-tool {
+    min-height: 260px;
+    border-top: 1px solid var(--eum-line);
+  }
+}
+

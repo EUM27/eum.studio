@@ -50,6 +50,13 @@ import type {
   UpdatePublishingMailCandidateCommand,
 } from "../../application/publishing/publishing-mail-candidate-contract";
 import type {
+  CreatePublishingFormTemplateCommand,
+  PublishingFormResponseProjection,
+  PublishingFormTemplateProjection,
+  SavePublishingFormResponseCommand,
+  UpdatePublishingFormTemplateCommand,
+} from "../../application/publishing/publishing-form-contract";
+import type {
   PublishingMailConnectionProjection,
   PublishingMailSyncResult,
 } from "../../application/publishing/publishing-mail-connection-contract";
@@ -68,6 +75,8 @@ import { PublishingSubmissionCsvImportPanel } from "./PublishingSubmissionCsvImp
 import { PublishingMailCandidatePanel } from "./PublishingMailCandidatePanel";
 import { PublishingResearchPanel } from "./PublishingResearchPanel";
 import { PublishingAssistantPanel } from "./PublishingAssistantPanel";
+import { PublishingFormWorkspace } from "./PublishingFormWorkspace";
+import { useDialogDismiss } from "../dialog/useDialogDismiss";
 
 export type PublishingPartnerDialogActionState =
   | "idle"
@@ -100,7 +109,10 @@ export type PublishingPartnerDialogActionState =
   | "previewing-research"
   | "approving-research"
   | "running-assistant"
-  | "approving-assistant";
+  | "approving-assistant"
+  | "creating-form-template"
+  | "updating-form-template"
+  | "saving-form-response";
 
 export type PublishingPartnerDraft = Omit<
   CreatePublishingPartnerCommand,
@@ -337,6 +349,7 @@ function responseDurationDays(
 
 function PublishingSubmissionFields(input: {
   readonly actionState: PublishingPartnerDialogActionState;
+  readonly defaultWorkId?: EntityId<"Work">;
   readonly onCreate: (draft: PublishingSubmissionDraft) => void;
   readonly onUpdate: (
     submission: PublishingSubmissionProjection,
@@ -347,7 +360,9 @@ function PublishingSubmissionFields(input: {
   readonly works: WorkspaceCatalogProjection["works"];
 }) {
   const submission = input.submission;
-  const [workId, setWorkId] = useState(submission?.workId ?? "");
+  const [workId, setWorkId] = useState(
+    submission?.workId ?? input.defaultWorkId ?? "",
+  );
   const [partnerId, setPartnerId] = useState(submission?.partnerId ?? "");
   const [title, setTitle] = useState(submission?.title ?? "");
   const [status, setStatus] = useState(submission?.status ?? "");
@@ -554,6 +569,7 @@ function PublishingSubmissionFields(input: {
 function PublishingContractFields(input: {
   readonly actionState: PublishingPartnerDialogActionState;
   readonly contract: PublishingContractProjection | null;
+  readonly defaultWorkId?: EntityId<"Work">;
   readonly onCreate: (draft: PublishingContractDraft) => void;
   readonly onUpdate: (
     contract: PublishingContractProjection,
@@ -564,7 +580,9 @@ function PublishingContractFields(input: {
   readonly works: WorkspaceCatalogProjection["works"];
 }) {
   const contract = input.contract;
-  const [workId, setWorkId] = useState(contract?.workId ?? "");
+  const [workId, setWorkId] = useState(
+    contract?.workId ?? input.defaultWorkId ?? "",
+  );
   const [partnerId, setPartnerId] = useState(contract?.partnerId ?? "");
   const [submissionId, setSubmissionId] = useState(contract?.submissionId ?? "");
   const [title, setTitle] = useState(contract?.title ?? "");
@@ -781,6 +799,7 @@ function PublishingContractFields(input: {
 function PublishingPublicationFields(input: {
   readonly actionState: PublishingPartnerDialogActionState;
   readonly contracts: readonly PublishingContractProjection[];
+  readonly defaultWorkId?: EntityId<"Work">;
   readonly onCreate: (draft: PublishingPublicationDraft) => void;
   readonly onUpdate: (
     publication: PublishingPublicationProjection,
@@ -791,7 +810,9 @@ function PublishingPublicationFields(input: {
   readonly works: WorkspaceCatalogProjection["works"];
 }) {
   const publication = input.publication;
-  const [workId, setWorkId] = useState(publication?.workId ?? "");
+  const [workId, setWorkId] = useState(
+    publication?.workId ?? input.defaultWorkId ?? "",
+  );
   const [contractId, setContractId] = useState(publication?.contractId ?? "");
   const [channelPartnerId, setChannelPartnerId] = useState(
     publication?.channelPartnerId ?? "",
@@ -979,6 +1000,7 @@ function PublishingPublicationFields(input: {
 
 function PublishingSettlementFields(input: {
   readonly actionState: PublishingPartnerDialogActionState;
+  readonly defaultWorkId?: EntityId<"Work">;
   readonly onCreate: (draft: PublishingSettlementDraft) => void;
   readonly onUpdate: (
     settlement: PublishingSettlementProjection,
@@ -989,7 +1011,9 @@ function PublishingSettlementFields(input: {
   readonly works: WorkspaceCatalogProjection["works"];
 }) {
   const settlement = input.settlement;
-  const [workId, setWorkId] = useState(settlement?.workId ?? "");
+  const [workId, setWorkId] = useState(
+    settlement?.workId ?? input.defaultWorkId ?? "",
+  );
   const [publicationId, setPublicationId] = useState(settlement?.publicationId ?? "");
   const [title, setTitle] = useState(settlement?.title ?? "");
   const [periodStartsOn, setPeriodStartsOn] = useState(settlement?.periodStartsOn ?? "");
@@ -1197,6 +1221,7 @@ function PublishingSettlementFields(input: {
 
 function PublishingPaymentFields(input: {
   readonly actionState: PublishingPartnerDialogActionState;
+  readonly defaultWorkId?: EntityId<"Work">;
   readonly onCreate: (draft: PublishingPaymentDraft) => void;
   readonly onUpdate: (
     payment: PublishingPaymentProjection,
@@ -1207,7 +1232,9 @@ function PublishingPaymentFields(input: {
   readonly works: WorkspaceCatalogProjection["works"];
 }) {
   const payment = input.payment;
-  const [workId, setWorkId] = useState(payment?.workId ?? "");
+  const [workId, setWorkId] = useState(
+    payment?.workId ?? input.defaultWorkId ?? "",
+  );
   const [settlementId, setSettlementId] = useState(payment?.settlementId ?? "");
   const [receivedOn, setReceivedOn] = useState(payment?.receivedOn ?? "");
   const [confirmedOn, setConfirmedOn] = useState(payment?.confirmedOn ?? "");
@@ -1502,7 +1529,7 @@ export function PublishingPartnerDialog(input: {
   readonly contracts: readonly PublishingContractProjection[];
   readonly assistantConnections?: readonly AssistantConnectionProjection[];
   readonly error: string | null;
-  readonly initialSection?: "submissions" | "partners" | "contracts" | "publications" | "settlements" | "payments" | "sources" | "research" | "assistant" | "imports" | "mail";
+  readonly initialSection?: "submissions" | "partners" | "forms" | "contracts" | "publications" | "settlements" | "payments" | "sources" | "research" | "assistant" | "imports" | "mail";
   readonly onClose: () => void;
   readonly onCreate: (draft: PublishingPartnerDraft) => void;
   readonly onCreateContract: (draft: PublishingContractDraft) => void;
@@ -1559,6 +1586,23 @@ export function PublishingPartnerDialog(input: {
     localTime: string | null,
   ) => void;
   readonly onCreateSubmission: (draft: PublishingSubmissionDraft) => void;
+  readonly onCreateFormTemplate?: (
+    draft: Omit<CreatePublishingFormTemplateCommand, "schemaVersion">,
+  ) => void;
+  readonly onUpdateFormTemplate?: (
+    template: PublishingFormTemplateProjection,
+    changes: Omit<
+      UpdatePublishingFormTemplateCommand,
+      "schemaVersion" | "templateId" | "expectedRevision"
+    >,
+  ) => void;
+  readonly onSaveFormResponse?: (
+    draft: Omit<
+      SavePublishingFormResponseCommand,
+      "schemaVersion" | "expectedRevision"
+    >,
+    current: PublishingFormResponseProjection | null,
+  ) => void;
   readonly onSelect: (partnerId: string | null) => void;
   readonly onSelectContract: (contractId: string | null) => void;
   readonly onSelectPublication: (publicationId: string | null) => void;
@@ -1591,6 +1635,8 @@ export function PublishingPartnerDialog(input: {
     changes: UpdatePublishingPaymentCommand["changes"],
   ) => void;
   readonly partners: readonly PublishingPartnerProjection[];
+  readonly formTemplates?: readonly PublishingFormTemplateProjection[];
+  readonly formResponses?: readonly PublishingFormResponseProjection[];
   readonly mailCandidates?: readonly PublishingMailCandidateProjection[];
   readonly mailConnection?: PublishingMailConnectionProjection | null;
   readonly mailSchedule?: PublishingMailScheduleProjection | null;
@@ -1607,15 +1653,33 @@ export function PublishingPartnerDialog(input: {
   readonly settlements: readonly PublishingSettlementProjection[];
   readonly selectedSubmissionId: string | null;
   readonly submissions: readonly PublishingSubmissionProjection[];
+  readonly workScopeId?: EntityId<"Work"> | null;
   readonly works: WorkspaceCatalogProjection["works"];
 }) {
   const [section, setSection] = useState<
-    "submissions" | "partners" | "contracts" | "publications" | "settlements" | "payments" | "sources" | "research" | "assistant" | "imports" | "mail"
+    "submissions" | "partners" | "forms" | "contracts" | "publications" | "settlements" | "payments" | "sources" | "research" | "assistant" | "imports" | "mail"
   >(
     input.initialSection ?? "submissions",
   );
   const [query, setQuery] = useState("");
+  const [draftRevision, setDraftRevision] = useState(0);
   const busy = input.actionState !== "idle";
+  const onBackdropPointerDown = useDialogDismiss({
+    disabled: busy,
+    onClose: input.onClose,
+  });
+  const workScopeId = input.workScopeId ?? null;
+  const sectionAllowed = (candidate: typeof section): boolean => {
+    if (workScopeId === null) return true;
+    switch (input.initialSection) {
+      case "contracts":
+        return candidate === "contracts" || candidate === "publications";
+      case "settlements":
+        return candidate === "settlements" || candidate === "payments";
+      default:
+        return candidate === "submissions" || candidate === "partners" || candidate === "forms";
+    }
+  };
   const selectedPartner = input.partners.find(
     (partner) => partner.partnerId === input.selectedPartnerId,
   ) ?? null;
@@ -1744,7 +1808,11 @@ export function PublishingPartnerDialog(input: {
       );
 
   return (
-    <div className="dialog-backdrop publishing-partner-backdrop" role="presentation">
+    <div
+      className="dialog-backdrop publishing-partner-backdrop"
+      onPointerDown={onBackdropPointerDown}
+      role="presentation"
+    >
       <section
         aria-labelledby="publishing-partner-heading"
         aria-modal="true"
@@ -1754,12 +1822,25 @@ export function PublishingPartnerDialog(input: {
         <header className="publishing-partner-header">
           <div>
             <p className="panel-kicker">PUBLISHING</p>
-            <h2 id="publishing-partner-heading">투고 운영</h2>
-            <p>투고·계약·발행 이력과 공유 투고처를 한 로컬 원장에서 관리합니다.</p>
+            <h2 id="publishing-partner-heading">
+              {workScopeId === null
+                ? "투고 운영"
+                : input.initialSection === "contracts"
+                  ? "계약·발행"
+                  : input.initialSection === "settlements"
+                    ? "정산·입금"
+                    : "투고"}
+            </h2>
+            <p>
+              {workScopeId === null
+                ? "각 운영 기록은 독립 원장에 저장됩니다."
+                : "현재 작품의 선택한 운영 원장만 표시합니다."}
+            </p>
             <nav aria-label="투고 운영 보기" className="publishing-workspace-tabs">
               <button
                 aria-pressed={section === "submissions"}
                 disabled={busy}
+                hidden={!sectionAllowed("submissions")}
                 onClick={() => {
                   setSection("submissions");
                   setQuery("");
@@ -1771,6 +1852,7 @@ export function PublishingPartnerDialog(input: {
               <button
                 aria-pressed={section === "partners"}
                 disabled={busy}
+                hidden={!sectionAllowed("partners")}
                 onClick={() => {
                   setSection("partners");
                   setQuery("");
@@ -1780,8 +1862,21 @@ export function PublishingPartnerDialog(input: {
                 투고처 원장
               </button>
               <button
+                aria-pressed={section === "forms"}
+                disabled={busy}
+                hidden={!sectionAllowed("forms")}
+                onClick={() => {
+                  setSection("forms");
+                  setQuery("");
+                }}
+                type="button"
+              >
+                투고 양식
+              </button>
+              <button
                 aria-pressed={section === "contracts"}
                 disabled={busy}
+                hidden={!sectionAllowed("contracts")}
                 onClick={() => {
                   setSection("contracts");
                   setQuery("");
@@ -1793,6 +1888,7 @@ export function PublishingPartnerDialog(input: {
               <button
                 aria-pressed={section === "publications"}
                 disabled={busy}
+                hidden={!sectionAllowed("publications")}
                 onClick={() => {
                   setSection("publications");
                   setQuery("");
@@ -1804,6 +1900,7 @@ export function PublishingPartnerDialog(input: {
               <button
                 aria-pressed={section === "settlements"}
                 disabled={busy}
+                hidden={!sectionAllowed("settlements")}
                 onClick={() => {
                   setSection("settlements");
                   setQuery("");
@@ -1815,6 +1912,7 @@ export function PublishingPartnerDialog(input: {
               <button
                 aria-pressed={section === "payments"}
                 disabled={busy}
+                hidden={!sectionAllowed("payments")}
                 onClick={() => {
                   setSection("payments");
                   setQuery("");
@@ -1826,6 +1924,7 @@ export function PublishingPartnerDialog(input: {
               <button
                 aria-pressed={section === "sources"}
                 disabled={busy}
+                hidden={!sectionAllowed("sources")}
                 onClick={() => {
                   setSection("sources");
                   setQuery("");
@@ -1837,6 +1936,7 @@ export function PublishingPartnerDialog(input: {
               <button
                 aria-pressed={section === "research"}
                 disabled={busy}
+                hidden={!sectionAllowed("research")}
                 onClick={() => {
                   setSection("research");
                   setQuery("");
@@ -1848,6 +1948,7 @@ export function PublishingPartnerDialog(input: {
               <button
                 aria-pressed={section === "assistant"}
                 disabled={busy}
+                hidden={!sectionAllowed("assistant")}
                 onClick={() => {
                   setSection("assistant");
                   setQuery("");
@@ -1859,6 +1960,7 @@ export function PublishingPartnerDialog(input: {
               <button
                 aria-pressed={section === "imports"}
                 disabled={busy}
+                hidden={!sectionAllowed("imports")}
                 onClick={() => {
                   setSection("imports");
                   setQuery("");
@@ -1870,6 +1972,7 @@ export function PublishingPartnerDialog(input: {
               <button
                 aria-pressed={section === "mail"}
                 disabled={busy}
+                hidden={!sectionAllowed("mail")}
                 onClick={() => {
                   setSection("mail");
                   setQuery("");
@@ -1949,6 +2052,26 @@ export function PublishingPartnerDialog(input: {
               input.onSaveMailSchedule?.(enabled, localTime)}
             submissions={input.submissions}
           />
+        ) : section === "forms" ? (
+          input.onCreateFormTemplate === undefined ||
+          input.onUpdateFormTemplate === undefined ||
+          input.onSaveFormResponse === undefined ? (
+            <p className="publishing-partner-error" role="alert">
+              투고 양식 기능을 연결하지 못했습니다.
+            </p>
+          ) : (
+            <PublishingFormWorkspace
+              actionState={input.actionState}
+              onCreateTemplate={input.onCreateFormTemplate}
+              onSaveResponse={input.onSaveFormResponse}
+              onUpdateTemplate={input.onUpdateFormTemplate}
+              partners={input.partners}
+              responses={input.formResponses ?? []}
+              templates={input.formTemplates ?? []}
+              workScopeId={workScopeId}
+              works={input.works}
+            />
+          )
         ) : section === "partners" ? (
           <div className="publishing-partner-body">
             <section aria-label="투고처 목록" className="publishing-partner-list">
@@ -1962,7 +2085,10 @@ export function PublishingPartnerDialog(input: {
                 />
                 <button
                   disabled={busy}
-                  onClick={() => input.onSelect(null)}
+                  onClick={() => {
+                    input.onSelect(null);
+                    setDraftRevision((current) => current + 1);
+                  }}
                   type="button"
                 >
                   새 투고처
@@ -2000,7 +2126,10 @@ export function PublishingPartnerDialog(input: {
             <section aria-label="투고처 상세 편집" className="publishing-partner-detail">
               <PublishingPartnerFields
                 actionState={input.actionState}
-                key={selectedPartner?.partnerId ?? "new-publishing-partner"}
+                key={
+                  selectedPartner?.partnerId ??
+                  `new-publishing-partner-${draftRevision}`
+                }
                 onCreate={input.onCreate}
                 onUpdate={input.onUpdate}
                 partner={selectedPartner}
@@ -2027,7 +2156,10 @@ export function PublishingPartnerDialog(input: {
                 />
                 <button
                   disabled={busy}
-                  onClick={() => input.onSelectContract(null)}
+                  onClick={() => {
+                    input.onSelectContract(null);
+                    setDraftRevision((current) => current + 1);
+                  }}
                   type="button"
                 >
                   새 계약
@@ -2068,7 +2200,11 @@ export function PublishingPartnerDialog(input: {
               <PublishingContractFields
                 actionState={input.actionState}
                 contract={selectedContract}
-                key={selectedContract?.contractId ?? "new-publishing-contract"}
+                {...(workScopeId === null ? {} : { defaultWorkId: workScopeId })}
+                key={
+                  selectedContract?.contractId ??
+                  `new-publishing-contract-${draftRevision}`
+                }
                 onCreate={input.onCreateContract}
                 onUpdate={input.onUpdateContract}
                 partners={input.partners}
@@ -2096,7 +2232,10 @@ export function PublishingPartnerDialog(input: {
                 />
                 <button
                   disabled={busy}
-                  onClick={() => input.onSelectPublication(null)}
+                  onClick={() => {
+                    input.onSelectPublication(null);
+                    setDraftRevision((current) => current + 1);
+                  }}
                   type="button"
                 >
                   새 발행·연재
@@ -2139,7 +2278,11 @@ export function PublishingPartnerDialog(input: {
               <PublishingPublicationFields
                 actionState={input.actionState}
                 contracts={input.contracts}
-                key={selectedPublication?.publicationId ?? "new-publishing-publication"}
+                {...(workScopeId === null ? {} : { defaultWorkId: workScopeId })}
+                key={
+                  selectedPublication?.publicationId ??
+                  `new-publishing-publication-${draftRevision}`
+                }
                 onCreate={input.onCreatePublication}
                 onUpdate={input.onUpdatePublication}
                 partners={input.partners}
@@ -2167,7 +2310,10 @@ export function PublishingPartnerDialog(input: {
                 />
                 <button
                   disabled={busy}
-                  onClick={() => input.onSelectSettlement(null)}
+                  onClick={() => {
+                    input.onSelectSettlement(null);
+                    setDraftRevision((current) => current + 1);
+                  }}
                   type="button"
                 >
                   새 정산서
@@ -2207,7 +2353,11 @@ export function PublishingPartnerDialog(input: {
             <section aria-label="정산서 상세" className="publishing-partner-detail">
               <PublishingSettlementFields
                 actionState={input.actionState}
-                key={selectedSettlement?.settlementId ?? "new-publishing-settlement"}
+                {...(workScopeId === null ? {} : { defaultWorkId: workScopeId })}
+                key={
+                  selectedSettlement?.settlementId ??
+                  `new-publishing-settlement-${draftRevision}`
+                }
                 onCreate={input.onCreateSettlement}
                 onUpdate={input.onUpdateSettlement}
                 publications={input.publications}
@@ -2265,7 +2415,10 @@ export function PublishingPartnerDialog(input: {
                 />
                 <button
                   disabled={busy}
-                  onClick={() => input.onSelectPayment?.(null)}
+                  onClick={() => {
+                    input.onSelectPayment?.(null);
+                    setDraftRevision((current) => current + 1);
+                  }}
                   type="button"
                 >
                   새 입금
@@ -2305,7 +2458,11 @@ export function PublishingPartnerDialog(input: {
             <section aria-label="입금 상세" className="publishing-partner-detail">
               <PublishingPaymentFields
                 actionState={input.actionState}
-                key={selectedPayment?.paymentId ?? "new-publishing-payment"}
+                {...(workScopeId === null ? {} : { defaultWorkId: workScopeId })}
+                key={
+                  selectedPayment?.paymentId ??
+                  `new-publishing-payment-${draftRevision}`
+                }
                 onCreate={(draft) => input.onCreatePayment?.(draft)}
                 onUpdate={(payment, changes) => input.onUpdatePayment?.(payment, changes)}
                 payment={selectedPayment}
@@ -2333,7 +2490,10 @@ export function PublishingPartnerDialog(input: {
                 />
                 <button
                   disabled={busy}
-                  onClick={() => input.onSelectSource?.(null)}
+                  onClick={() => {
+                    input.onSelectSource?.(null);
+                    setDraftRevision((current) => current + 1);
+                  }}
                   type="button"
                 >
                   새 근거
@@ -2369,7 +2529,10 @@ export function PublishingPartnerDialog(input: {
             <section aria-label="근거 상세" className="publishing-partner-detail">
               <PublishingSourceFields
                 actionState={input.actionState}
-                key={selectedSource?.sourceId ?? "new-publishing-source"}
+                key={
+                  selectedSource?.sourceId ??
+                  `new-publishing-source-${draftRevision}`
+                }
                 onCreate={(draft) => input.onCreateSource?.(draft)}
                 source={selectedSource}
               />
@@ -2388,7 +2551,10 @@ export function PublishingPartnerDialog(input: {
                 />
                 <button
                   disabled={busy}
-                  onClick={() => input.onSelectSubmission(null)}
+                  onClick={() => {
+                    input.onSelectSubmission(null);
+                    setDraftRevision((current) => current + 1);
+                  }}
                   type="button"
                 >
                   새 투고 기록
@@ -2432,7 +2598,11 @@ export function PublishingPartnerDialog(input: {
             <section aria-label="투고 이력 상세" className="publishing-partner-detail">
               <PublishingSubmissionFields
                 actionState={input.actionState}
-                key={selectedSubmission?.submissionId ?? "new-publishing-submission"}
+                {...(workScopeId === null ? {} : { defaultWorkId: workScopeId })}
+                key={
+                  selectedSubmission?.submissionId ??
+                  `new-publishing-submission-${draftRevision}`
+                }
                 onCreate={input.onCreateSubmission}
                 onUpdate={input.onUpdateSubmission}
                 partners={input.partners}

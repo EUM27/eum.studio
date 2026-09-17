@@ -17,6 +17,7 @@ describe("assistant connector manifest", () => {
         connectorKind,
         displayName: "사용자 등록 연결",
         capabilities: ["vocabulary-lookup"],
+        contextTokenBudget: 8192,
         credentialPolicy: "required",
         runtimeConfig: {
           endpoint: "required",
@@ -29,6 +30,7 @@ describe("assistant connector manifest", () => {
         connectorKind,
         displayName: "사용자 등록 연결",
         capabilities: ["vocabulary-lookup"],
+        contextTokenBudget: 8192,
         credentialPolicy: "required",
         runtimeConfig: {
           endpoint: "required",
@@ -60,6 +62,7 @@ describe("assistant connector manifest", () => {
           connectorKind,
           displayName: "테스트 연결",
           capabilities: ["vocabulary-lookup"],
+          contextTokenBudget: 8192,
           credentialPolicy: "required",
           runtimeConfig: { endpoint: "required", model: "required" },
         }],
@@ -94,6 +97,7 @@ describe("assistant connector manifest", () => {
 
     expect(execute).toHaveBeenCalledTimes(1);
     expect(execute).toHaveBeenCalledWith({
+      signal: expect.any(AbortSignal),
       schemaVersion: 1,
       requestId: "request-a",
       connectionId,

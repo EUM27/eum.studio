@@ -67,3 +67,41 @@ export function shouldShowMainWindow(
 ): boolean {
   return configuredVisibility !== "hidden";
 }
+
+export function shouldDisableHardwareAcceleration(
+  configuredAcceleration: string | undefined,
+): boolean {
+  return configuredAcceleration === "disabled";
+}
+
+export type MainWindowRendererRecoveryState = Readonly<{
+  failedWindowIsCurrent: boolean;
+  isQuitting: boolean;
+  recoveryInProgress: boolean;
+  windowDestroyed: boolean;
+  webContentsDestroyed: boolean;
+}>;
+
+export function shouldRecoverMainWindowRenderer(
+  state: MainWindowRendererRecoveryState,
+): boolean {
+  return state.failedWindowIsCurrent &&
+    !state.isQuitting &&
+    !state.recoveryInProgress &&
+    !state.windowDestroyed &&
+    !state.webContentsDestroyed;
+}
+
+export type MainWindowActivationState = Readonly<{
+  windowDestroyed: boolean;
+  webContentsDestroyed: boolean;
+  rendererCrashed: boolean;
+}>;
+
+export function canActivateMainWindow(
+  state: MainWindowActivationState,
+): boolean {
+  return !state.windowDestroyed &&
+    !state.webContentsDestroyed &&
+    !state.rendererCrashed;
+}

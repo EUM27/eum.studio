@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "gate": 5,
+  "designSha256": "343577C44367C4E38A61913822A13400B5DAA028BE2EA76123F7BBF6A31F3FC5",
+  "storage": {
+    "schemaVersion": 22,
+    "migrationChecksum": "2a58768056ce93850de5c70508969e446480e77851b218b64d3b56fcbde81fcf",
+    "immutableTables": ["narrative_digests", "narrative_digest_documents"],
+    "foreignKeyViolations": 0
+  },
+  "acceptance": {
+    "explicitScopes": ["work", "document", "character", "relationship"],
+    "explicitDocumentSelection": true,
+    "recentNDefault": false,
+    "permissionScopes": {
+      "workDigest": "local work / external work",
+      "singleDocumentNonWorkDigest": "local chapter / external chapter",
+      "multiDocumentNonWorkDigest": "local work / external work"
+    },
+    "sourceManifestKinds": ["DocumentRevision", "EventBlock", "Character", "CharacterRelation", "LoreEntry", "ContinuityThread", "CharacterKnowledge"],
+    "deterministicHash": true,
+    "staleTextPreserved": true,
+    "regenerationCreatesNewImmutableRow": true,
+    "quickMemoMixedIntoDigest": false,
+    "executionOrder": ["source revision", "context plan", "permission receipt", "context manifest", "connector", "digest persistence", "privacy-safe activity"],
+    "requiredOverBudgetStopsBeforeReceipt": true
+  },
+  "freshVerification": {
+    "focused": "6 files, 12 tests; runtime NarrativeDigest test passed",
+    "typedUi": "7 files, 24 tests",
+    "fullVitest": "309 files and 1133 tests passed, 1 skipped; same pre-existing RuntimeBootstrapController.test.ts:343 failure only",
+    "electron": "NarrativeDigest production Electron passed with current-to-stale projection, safe disconnected regeneration, viewport, two relaunches, one preserved digest, one activity, FK=0",
+    "regressions": "Context Planner and Continuity passed in the same production build; CharacterKnowledge passed after narrowing an ambiguous Playwright label selector to exact text",
+    "lint": "pass",
+    "typecheck": "pass",
+    "architecture": "pass",
+    "build": "pass; existing large-chunk warning only",
+    "diffCheck": "pass"
+  },
+  "performanceArtifact": "gate-5-narrative-digest-performance.json",
+  "performance": {
+    "documents": 500,
+    "canonicalSources": 2400,
+    "hashP50Ms": 1.3824000000000183,
+    "hashP95Ms": 2.0500000000000114,
+    "staleProjectionWithRehashP50Ms": 1.4160999999999717,
+    "staleProjectionWithRehashP95Ms": 1.7530999999999608
+  }
+}

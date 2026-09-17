@@ -1,0 +1,61 @@
+/*
+ * Early-access launch surface.
+ *
+ * Optional product areas remain implemented and their data remains intact.
+ * This stylesheet only removes launch-time entry points. Removing the import
+ * from main.tsx restores the full surface.
+ */
+
+/* External / non-core launch surfaces. */
+.studio-app-shell .app-topbar-music,
+.studio-app-shell .music-mini-player,
+.studio-app-shell .scene-music-queue,
+.studio-app-shell .manuscript-entry-actions > button:has(.lucide-music-2),
+.studio-app-shell .publishing-button,
+.studio-app-shell .character-draw-tool,
+.studio-app-shell .event-draw-tool,
+.studio-app-shell .inspiration-draw-tool {
+  display: none !important;
+}
+
+/* Collapse the space previously reserved for the character draw utility. */
+.studio-app-shell .character-workspace-body {
+  grid-template-columns: minmax(160px, 0.55fr) minmax(270px, 1fr) !important;
+}
+
+/* Collapse the plot row previously reserved for the event draw utility. */
+.studio-app-shell .character-manager-body.plot-manager-body.has-utility {
+  grid-template-columns: minmax(240px, 0.68fr) minmax(0, 1.32fr) !important;
+  grid-template-rows: minmax(0, 1fr) !important;
+}
+
+.studio-app-shell
+  .plot-manager-dialog.is-embedded
+  .plot-manager-body.has-utility
+  .plot-manager-list {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+}
+
+.studio-app-shell .plot-manager-body.has-utility .plot-manager-detail {
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+}
+
+@media (max-width: 760px) {
+  .studio-app-shell .character-workspace-body,
+  .studio-app-shell .character-manager-body.plot-manager-body.has-utility {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: auto !important;
+    overflow: auto;
+  }
+
+  .studio-app-shell
+    .plot-manager-dialog.is-embedded
+    .plot-manager-body.has-utility
+    .plot-manager-list,
+  .studio-app-shell .plot-manager-body.has-utility .plot-manager-detail {
+    grid-column: 1 !important;
+    grid-row: auto !important;
+  }
+}

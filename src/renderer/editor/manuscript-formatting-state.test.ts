@@ -9,6 +9,7 @@ import {
   parseManuscriptFormattingProfile,
 } from "../../application/editor/manuscript-formatting";
 import {
+  activeManuscriptFormattingEqual,
   createManuscriptFormattingExtension,
   readManuscriptEditorDocumentState,
   setManuscriptContentWidthEffect,
@@ -55,6 +56,32 @@ function createState() {
 }
 
 describe("manuscript formatting state", () => {
+  it("keeps equivalent active formatting referentially stable for text input", () => {
+    const activeFormatting = {
+      bold: false,
+      italic: false,
+      underline: false,
+      fontFamilyId: "font-default",
+      fontSizePx: 16,
+      textColor: "#111111",
+      highlightColor: null,
+      contentWidthPx: 720,
+      lineHeight: 1.7,
+      paragraphSpacingPx: 8,
+      letterSpacingEm: 0,
+      paragraphAlignment: "left" as const,
+    };
+
+    expect(activeManuscriptFormattingEqual(
+      activeFormatting,
+      { ...activeFormatting },
+    )).toBe(true);
+    expect(activeManuscriptFormattingEqual(
+      activeFormatting,
+      { ...activeFormatting, bold: true },
+    )).toBe(false);
+  });
+
   it("applies the font to the manuscript body and keeps emphasis on the exact selection", () => {
     const { formattingProfile, state } = createState();
     const fontFamilyId = formattingProfile.fontFamilies[1]?.id;

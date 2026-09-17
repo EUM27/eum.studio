@@ -19,6 +19,7 @@ import {
   type EventSourceProjection,
   type EventSourceRole,
 } from "./event-block-contract";
+import { compareEventOutlineOrderKeys } from "./event-outline-order";
 
 export type ListEventRailCommand = Readonly<{
   schemaVersion: 1;
@@ -187,7 +188,8 @@ function compareEvents(
     );
     if (locationDifference !== 0) return locationDifference;
   }
-  const outlineDifference = left.eventBlock.outlineOrderKey.localeCompare(
+  const outlineDifference = compareEventOutlineOrderKeys(
+    left.eventBlock.outlineOrderKey,
     right.eventBlock.outlineOrderKey,
   );
   return outlineDifference !== 0

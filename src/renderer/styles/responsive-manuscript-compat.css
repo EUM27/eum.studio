@@ -1,0 +1,381 @@
+/* Responsive behavior is proportional, not tied to one screenshot size. */
+
+@media (max-width: 980px) {
+  .studio-app-shell {
+    --eum-sidebar-width: clamp(210px, 28vw, 250px);
+  }
+
+  .studio-app-shell.is-home:not(.is-compact) {
+    --eum-sidebar-width: 64px;
+  }
+
+  .studio-app-shell .library-heading-row {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-app-shell .library-actions {
+    justify-content: flex-start;
+  }
+
+  .studio-app-shell .work-search {
+    width: min(100%, 380px);
+  }
+
+  .studio-app-shell .library-work-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .studio-app-shell {
+    --eum-sidebar-width: min(82vw, 270px);
+  }
+
+  .studio-app-shell.is-home:not(.is-compact) {
+    --eum-sidebar-width: 60px;
+  }
+
+  .studio-app-shell .main-page-body {
+    padding-inline: 14px;
+  }
+
+  .studio-app-shell .page-header {
+    padding-inline: 16px;
+  }
+
+  .studio-app-shell .library-actions {
+    flex-wrap: wrap;
+  }
+
+  .studio-app-shell .library-title-group {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .studio-app-shell .library-work-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .studio-app-shell .resume-strip {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    padding-left: 14px;
+  }
+
+  .studio-app-shell .resume-strip-copy {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .studio-app-shell .resume-strip-copy > p,
+  .studio-app-shell .resume-strip-copy > time {
+    grid-column: 1;
+  }
+
+  .studio-app-shell .work-search {
+    width: 100%;
+  }
+
+  .studio-app-shell .manuscript-tools .runtime-status-embedded,
+  .studio-app-shell .manuscript-count > *:nth-child(n + 3) {
+    display: none;
+  }
+
+  .studio-app-shell .manuscript-editor-canvas-heading {
+    padding-inline: 24px;
+  }
+
+  .studio-app-shell .manuscript-editor .cm-content {
+    padding-inline: 24px !important;
+  }
+}
+
+.studio-app-shell .workspace-section-navigation {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
+  padding: 3px;
+  margin: 0 12px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: #f0f0f1;
+}
+
+.studio-app-shell .workspace-section-navigation button {
+  min-width: 0;
+  min-height: 29px;
+  border: 0;
+  border-radius: 7px;
+  color: #666;
+  background: transparent;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.studio-app-shell .workspace-section-navigation button.is-active {
+  color: #171717;
+  background: #fff;
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.studio-app-shell .manuscript-workspace-surface {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.studio-app-shell .manuscript-workspace-surface[hidden] {
+  display: none;
+}
+
+.studio-app-shell .toolbar-heatmap-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--eum-text-muted);
+  font-size: 11px;
+}
+
+.studio-app-shell .toolbar-heatmap-control select {
+  min-width: 82px;
+}
+
+.studio-app-shell .cm-line.manuscript-heatmap-line {
+  border-radius: 3px;
+}
+
+.studio-app-shell .cm-line.manuscript-heatmap-long {
+  background: rgb(88 133 207 / 10%);
+}
+
+.studio-app-shell .cm-line.manuscript-heatmap-very-long {
+  background: rgb(214 139 67 / 13%);
+}
+
+.studio-app-shell .cm-line.manuscript-heatmap-extreme {
+  background: rgb(198 72 72 / 15%);
+}
+
+.studio-app-shell .manuscript-heatmap-word {
+  border-bottom: 1px solid rgb(118 80 143 / 34%);
+  background: rgb(118 80 143 / 11%);
+}
+
+.studio-app-shell .manuscript-heatmap-word-dense {
+  border-bottom-width: 2px;
+  border-bottom-color: rgb(118 80 143 / 80%);
+  background: rgb(118 80 143 / 23%);
+}
+
+.studio-app-shell .manuscript-analysis-backdrop {
+  z-index: 90;
+}
+
+.studio-app-shell .manuscript-analysis-dialog {
+  width: min(760px, calc(100vw - 32px));
+  max-height: min(760px, calc(100vh - 32px));
+  overflow: hidden;
+  border: 1px solid var(--eum-line);
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 24px 70px rgb(24 18 30 / 22%);
+}
+
+.studio-app-shell .manuscript-analysis-dialog > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--eum-line);
+}
+
+.studio-app-shell .manuscript-analysis-dialog > header h2,
+.studio-app-shell .manuscript-analysis-dialog > header p {
+  margin: 0;
+}
+
+.studio-app-shell .manuscript-analysis-dialog > header h2 {
+  font-size: 18px;
+}
+
+.studio-app-shell .manuscript-analysis-dialog > header p:last-child {
+  margin-top: 3px;
+  color: var(--eum-text-muted);
+  font-size: 12px;
+}
+
+.studio-app-shell .manuscript-analysis-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  max-height: calc(100vh - 128px);
+  overflow-y: auto;
+  padding: 14px;
+}
+
+.studio-app-shell .manuscript-analysis-summary,
+.studio-app-shell .manuscript-analysis-card {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #e7e3ea;
+  border-radius: 11px;
+  background: #faf9fb;
+}
+
+.studio-app-shell .manuscript-analysis-summary {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: flex-start;
+  gap: 10px;
+  color: #65477a;
+}
+
+.studio-app-shell .manuscript-analysis-summary > div {
+  display: grid;
+  gap: 4px;
+}
+
+.studio-app-shell .manuscript-analysis-summary span,
+.studio-app-shell .manuscript-analysis-card > header {
+  color: var(--eum-text-muted);
+  font-size: 11px;
+}
+
+.studio-app-shell .manuscript-analysis-summary strong {
+  color: var(--eum-text);
+  font-size: 13px;
+}
+
+.studio-app-shell .manuscript-analysis-card > header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.studio-app-shell .manuscript-analysis-card h3,
+.studio-app-shell .manuscript-analysis-card p {
+  margin: 0;
+}
+
+.studio-app-shell .manuscript-analysis-card h3 {
+  color: var(--eum-text);
+  font-size: 12px;
+}
+
+.studio-app-shell .manuscript-analysis-card ol {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.studio-app-shell .manuscript-analysis-card li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--eum-text);
+  font-size: 11px;
+}
+
+.studio-app-shell .manuscript-analysis-card li strong {
+  color: #65477a;
+}
+
+.studio-app-shell .manuscript-analysis-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.studio-app-shell .manuscript-analysis-metrics > div {
+  display: grid;
+  gap: 2px;
+  padding: 9px;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.studio-app-shell .manuscript-analysis-metrics dt {
+  color: var(--eum-text-muted);
+  font-size: 10px;
+}
+
+.studio-app-shell .manuscript-analysis-metrics dd {
+  margin: 0;
+  color: var(--eum-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.studio-app-shell .manuscript-analysis-density > strong {
+  color: #65477a;
+  font-size: 28px;
+}
+
+.studio-app-shell .manuscript-analysis-density > p {
+  margin-top: 5px;
+  color: var(--eum-text-muted);
+  font-size: 10px;
+}
+
+@media (max-width: 660px) {
+  .studio-app-shell .manuscript-analysis-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .studio-app-shell .manuscript-analysis-summary {
+    grid-column: 1;
+  }
+}
+
+.manuscript-context-menu {
+  position: fixed;
+  z-index: 500;
+  display: grid;
+  min-width: 168px;
+  padding: 5px;
+  border: 1px solid #d8d8d8;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 12px 30px rgb(0 0 0 / 16%);
+}
+
+.manuscript-context-menu button {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 6px;
+  color: #202020;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.manuscript-context-menu button:hover,
+.manuscript-context-menu button:focus-visible {
+  outline: 0;
+  background: #f1eef5;
+}
+
+.manuscript-context-menu button:disabled {
+  color: #a6a0aa;
+  cursor: default;
+}
+
+.manuscript-context-menu-separator {
+  height: 1px;
+  margin: 5px 7px;
+  background: #e4e0e7;
+}

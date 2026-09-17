@@ -1,0 +1,188 @@
+/* Records and automatically aggregated goals */
+
+.studio-app-shell .records-dialog {
+  display: block;
+  overflow: auto;
+}
+
+.studio-app-shell .records-dialog-header {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  background: #ffffff;
+}
+
+.studio-app-shell .records-date-filter {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--eum-line);
+  background: #fafafa;
+}
+
+.studio-app-shell .records-date-filter label {
+  display: grid;
+  gap: 5px;
+}
+
+.studio-app-shell .records-date-filter button,
+.studio-app-shell .records-export-actions button,
+.studio-app-shell .records-goals button,
+.studio-app-shell .records-readthrough button {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  color: var(--eum-text-muted);
+  background: #ffffff;
+}
+
+.studio-app-shell .records-dialog > :is(.records-export, .records-metrics, .records-streak, .records-goals) {
+  margin: 12px 14px 0;
+  padding: 12px;
+  border: 1px solid var(--eum-line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.studio-app-shell .records-export,
+.studio-app-shell .records-streak,
+.studio-app-shell .records-goals > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.studio-app-shell .records-export > div:first-child,
+.studio-app-shell .records-goals > header > div {
+  display: grid;
+  gap: 3px;
+}
+
+.studio-app-shell .records-export span,
+.studio-app-shell .records-goals header span {
+  color: var(--eum-text-faint);
+  font-size: 10px;
+}
+
+.studio-app-shell .records-export-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.studio-app-shell .records-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.studio-app-shell .records-metrics > div,
+.studio-app-shell .records-streak > div {
+  display: grid;
+  gap: 3px;
+  padding: 9px;
+  border-radius: 7px;
+  background: #fafafa;
+}
+
+.studio-app-shell .records-metrics span,
+.studio-app-shell .records-streak span {
+  color: var(--eum-text-faint);
+  font-size: 10px;
+}
+
+.studio-app-shell .records-goals form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.studio-app-shell .records-goals form label {
+  display: grid;
+  gap: 5px;
+}
+
+.studio-app-shell .records-goals form label strong {
+  color: var(--eum-text-muted);
+  font-size: 10px;
+}
+
+.studio-app-shell .records-goals form progress {
+  width: 100%;
+  accent-color: var(--eum-accent);
+}
+
+.studio-app-shell .records-goals form > button {
+  grid-column: 1 / -1;
+  justify-self: end;
+}
+
+.studio-app-shell .records-dialog-body {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 12px;
+  overflow: visible;
+  padding: 14px;
+}
+
+.studio-app-shell :is(.records-readthrough, .records-detail-panel) {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--eum-line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.studio-app-shell .records-readthrough {
+  grid-column: 1 / -1;
+}
+
+.studio-app-shell :is(.records-readthrough, .records-detail-panel) > header,
+.studio-app-shell .records-readthrough form {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.studio-app-shell .records-readthrough h3,
+.studio-app-shell .records-detail-panel h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.studio-app-shell .records-readthrough-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) 110px 110px 110px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--eum-line);
+}
+
+.studio-app-shell .records-readthrough-table {
+  width: 100%;
+  min-width: 0;
+}
+
+.studio-app-shell .records-detail-panel ul,
+.studio-app-shell .records-detail-panel ol {
+  display: grid;
+  gap: 5px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.studio-app-shell .records-detail-panel li > button,
+.studio-app-shell .records-detail-panel li {
+  width: 100%;
+  min-width: 0;
+}
+

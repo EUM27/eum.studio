@@ -65,6 +65,7 @@ describe("AssistantContextDialog", () => {
         onRunNotationReview: () => undefined,
         onRunVocabularyLookup: () => undefined,
         onRunVocabularySuggestion: () => undefined,
+        onCancelRequest: () => undefined,
         onRunExternalSettingReview: () => undefined,
         projection: {
           schemaVersion: 1,

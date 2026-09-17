@@ -206,10 +206,113 @@ export type Poc3SceneOverrideRecord =
     readonly kind: "sceneOverride";
     readonly workId: string;
     readonly documentId: string;
-    readonly operation: "add" | "ignore" | "merge" | "split";
+    readonly operation: "add" | "delete" | "ignore" | "merge" | "split";
     readonly anchorIds: readonly string[];
     readonly baseRuleSetRevision: number;
     readonly note?: string;
+  };
+
+export type Poc3SceneOverrideRetirementRecord = {
+  readonly kind: "sceneOverrideRetirement";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly retiredAt: string;
+};
+
+export type Poc3SceneIdentityRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "sceneIdentity";
+    readonly workId: string;
+  };
+
+export type Poc3SceneEpisodeSegmentRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "sceneEpisodeSegment";
+    readonly workId: string;
+    readonly sceneId: string;
+    readonly documentId: string;
+    readonly anchorId: string;
+  };
+
+export type Poc3SceneEpisodeSegmentRetirementRecord = {
+  readonly kind: "sceneEpisodeSegmentRetirement";
+  readonly id: string;
+  readonly workId: string;
+  readonly retiredAt: string;
+};
+
+export type Poc3SceneIdentityRetirementRecord = {
+  readonly kind: "sceneIdentityRetirement";
+  readonly id: string;
+  readonly workId: string;
+  readonly retiredAt: string;
+};
+
+export type Poc3SceneLineageOperationRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "sceneLineageOperation";
+    readonly workId: string;
+    readonly operation: "split" | "merge" | "move" | "delete" | "restore";
+    readonly commandRef: string;
+  };
+
+export type Poc3SceneLineageMemberRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "sceneLineageMember";
+    readonly workId: string;
+    readonly lineageOperationId: string;
+    readonly sceneId: string;
+    readonly role: "parent" | "child";
+    readonly ordinal: number;
+  };
+
+export type Poc3SceneMetadataBindingRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "sceneMetadataBinding";
+    readonly workId: string;
+    readonly metadataKind: "annotation" | "event-override" | "music-queue";
+    readonly metadataId: string;
+    readonly sourceSceneKey: string;
+    readonly sceneId?: string;
+    readonly status: "current" | "needs-review" | "detached";
+    readonly proposedSceneId?: string;
+    readonly lineageOperationId?: string;
+  };
+
+export type Poc3SceneMetadataBindingUpdateRecord = {
+  readonly kind: "sceneMetadataBindingUpdate";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly updatedAt: string;
+  readonly sceneId: string | null;
+  readonly status: "current" | "needs-review" | "detached";
+  readonly proposedSceneId: string | null;
+  readonly lineageOperationId: string | null;
+};
+
+export type Poc3SceneMetadataBindingRetirementRecord = {
+  readonly kind: "sceneMetadataBindingRetirement";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly retiredAt: string;
+};
+
+export type Poc3SceneMusicQueueCandidateRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "sceneMusicQueueCandidate";
+    readonly requestId: string;
+    readonly workId: string;
+    readonly sceneKey: string;
+    readonly sceneAnnotationId: string;
+    readonly sceneAnnotationRevision: number;
+    readonly providerId: string;
+    readonly query: string;
+    readonly status: "ready" | "selected" | "superseded";
+    readonly optionsJson: string;
+    readonly selectedOptionId?: string;
   };
 
 export type Poc3SceneEventOverrideRecord =
@@ -243,6 +346,26 @@ export type Poc3EventBlockRecord =
       string;
   };
 
+export type Poc3EventBlockOutlineMoveRecord = {
+  readonly kind: "eventBlockOutlineMove";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly outlineOrderKey: string;
+  readonly updatedAt: string;
+};
+
+export type Poc3EventBlockOutlineRebalanceRecord = {
+  readonly kind: "eventBlockOutlineRebalance";
+  readonly workId: string;
+  readonly updatedAt: string;
+  readonly events: readonly {
+    readonly id: string;
+    readonly expectedRevision: number;
+    readonly outlineOrderKey: string;
+  }[];
+};
+
 export type Poc3EventSourceRecord =
   Poc3LedgerRecordMeta & {
     readonly kind: "eventSource";
@@ -272,6 +395,16 @@ export type Poc3FragmentRecord =
     readonly title: string;
     readonly pinned: boolean;
     readonly useCount: number;
+  };
+
+export type Poc3ManuscriptAnnotationRecord =
+  Poc3LedgerRecordMeta & {
+    readonly kind: "manuscriptAnnotation";
+    readonly workId: string;
+    readonly sourceDocumentId: string;
+    readonly sourceAnchorId: string;
+    readonly body: string;
+    readonly tags: readonly string[];
   };
 
 export type Poc3CharacterRecord =
@@ -334,6 +467,8 @@ export type Poc3CharacterRelationUpdateRecord = {
   readonly workId: string;
   readonly expectedRevision: number;
   readonly updatedAt: string;
+  readonly fromCharacterId?: string;
+  readonly toCharacterId?: string;
   readonly relationKind: string;
   readonly description: string;
 };
@@ -473,6 +608,447 @@ export type Poc3LoreEntryHistoryRecord = {
   readonly enabled: boolean;
   readonly evidenceAnchorIds: readonly string[];
   readonly changedAt: string;
+};
+
+export type Poc3LoreEntryUpdateRecord = {
+  readonly kind: "loreEntryUpdate";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly schemaVersion: number;
+  readonly updatedAt: string;
+  readonly title: string;
+  readonly content: string;
+  readonly category: string;
+  readonly aliases: readonly string[];
+  readonly enabled: boolean;
+};
+
+export type Poc3CanonReviewFieldValue =
+  | string
+  | boolean
+  | readonly string[];
+
+export type Poc3CanonReviewFieldChangeData = {
+  readonly field: string;
+  readonly before: Poc3CanonReviewFieldValue | null;
+  readonly after: Poc3CanonReviewFieldValue;
+  readonly selected: boolean;
+  readonly orderIndex: number;
+};
+
+export type Poc3CanonReviewEvidenceData = {
+  readonly id: string;
+  readonly sourceDocumentId: string;
+  readonly sourceDocumentRevisionId: string;
+  readonly sourceFrom: number;
+  readonly sourceTo: number;
+  readonly exactText: string;
+  readonly orderIndex: number;
+};
+
+export type Poc3CanonReviewItemData = {
+  readonly id: string;
+  readonly targetKind: string;
+  readonly operation: string;
+  readonly targetHint: string;
+  readonly targetId: string | null;
+  readonly matchingTargetIds: readonly string[];
+  readonly expectedTargetRevision: number | null;
+  readonly assertionBasis: string;
+  readonly reason: string;
+  readonly status: string;
+  readonly appliedTargetId: string | null;
+  readonly fieldChanges: readonly Poc3CanonReviewFieldChangeData[];
+  readonly evidence: readonly Poc3CanonReviewEvidenceData[];
+};
+
+export type Poc3CanonReviewCandidateRecord = Poc3LedgerRecordMeta & {
+  readonly kind: "canonReviewCandidate";
+  readonly requestId: string;
+  readonly workId: string;
+  readonly sourceDocumentId: string;
+  readonly sourceDocumentRevisionId: string;
+  readonly sourceFrom: number;
+  readonly sourceTo: number;
+  readonly providerId: string;
+  readonly modelId: string;
+  readonly promptVersion: string;
+  readonly status: string;
+  readonly contextReceiptId: string;
+  readonly items: readonly Poc3CanonReviewItemData[];
+};
+
+export type Poc3CanonReviewCandidateUpdateRecord = {
+  readonly kind: "canonReviewCandidateUpdate";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly itemId: string;
+  readonly targetKind: string;
+  readonly operation: string;
+  readonly targetId: string | null;
+  readonly matchingTargetIds: readonly string[];
+  readonly expectedTargetRevision: number | null;
+  readonly fieldChanges: readonly Poc3CanonReviewFieldChangeData[];
+  readonly updatedAt: string;
+};
+
+export type Poc3CanonReviewEvidenceRecord = {
+  readonly kind: "canonReviewEvidence";
+  readonly id: string;
+  readonly workId: string;
+  readonly candidateId: string;
+  readonly itemId: string;
+  readonly anchorId: string;
+};
+
+export type Poc3CanonReviewDecisionReceiptData = {
+  readonly id: string;
+  readonly schemaVersion: number;
+  readonly decision: string;
+  readonly outcome: string;
+  readonly targetKind: string | null;
+  readonly targetId: string | null;
+  readonly targetRevisionBefore: number | null;
+  readonly targetRevisionAfter: number | null;
+  readonly selectedFields: readonly string[];
+  readonly sourceDocumentRevisionId: string;
+  readonly createdAt: string;
+};
+
+export type Poc3CanonReviewItemDecisionRecord = {
+  readonly kind: "canonReviewItemDecision";
+  readonly id: string;
+  readonly workId: string;
+  readonly itemId: string;
+  readonly expectedRevision: number;
+  readonly candidateStatus: string;
+  readonly itemStatus: string;
+  readonly appliedTargetId: string | null;
+  readonly updatedAt: string;
+  readonly receipt: Poc3CanonReviewDecisionReceiptData;
+};
+
+export type Poc3ContinuitySubjectRefData = {
+  readonly entityKind: string;
+  readonly entityId: string;
+  readonly orderIndex: number;
+};
+
+export type Poc3ContinuityThreadRecord = Poc3LedgerRecordMeta & {
+  readonly kind: "continuityThread";
+  readonly workId: string;
+  readonly threadKind: string;
+  readonly title: string;
+  readonly note: string;
+  readonly status: string;
+  readonly openedAt: string;
+  readonly resolvedAt: string | null;
+  readonly subjectRefs: readonly Poc3ContinuitySubjectRefData[];
+};
+
+export type Poc3ContinuityThreadUpdateRecord = {
+  readonly kind: "continuityThreadUpdate";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly threadKind: string;
+  readonly title: string;
+  readonly note: string;
+  readonly status: string;
+  readonly resolvedAt: string | null;
+  readonly subjectRefs: readonly Poc3ContinuitySubjectRefData[];
+  readonly updatedAt: string;
+};
+
+export type Poc3ContinuityEvidenceRecord = {
+  readonly kind: "continuityEvidence";
+  readonly id: string;
+  readonly schemaVersion: number;
+  readonly workId: string;
+  readonly threadId: string;
+  readonly phase: "opened" | "resolution";
+  readonly sourceDocumentId: string;
+  readonly sourceDocumentRevisionId: string;
+  readonly sourceFrom: number;
+  readonly sourceTo: number;
+  readonly exactText: string;
+  readonly anchorId: string;
+  readonly orderIndex: number;
+  readonly createdAt: string;
+};
+
+export type Poc3ContinuityTransitionRecord = {
+  readonly kind: "continuityTransition";
+  readonly id: string;
+  readonly schemaVersion: number;
+  readonly workId: string;
+  readonly threadId: string;
+  readonly transitionKind: string;
+  readonly revisionBefore: number | null;
+  readonly revisionAfter: number;
+  readonly resolutionMode: string | null;
+  readonly reason: string;
+  readonly evidenceAnchorIds: readonly string[];
+  readonly createdAt: string;
+};
+
+export type Poc3ContinuityReviewEvidenceData = {
+  readonly id: string;
+  readonly sourceDocumentId: string;
+  readonly sourceDocumentRevisionId: string;
+  readonly sourceFrom: number;
+  readonly sourceTo: number;
+  readonly exactText: string;
+  readonly orderIndex: number;
+};
+
+export type Poc3ContinuityReviewItemData = {
+  readonly id: string;
+  readonly assertionBasis: string;
+  readonly threadKind: string;
+  readonly title: string;
+  readonly note: string;
+  readonly subjectRefs: readonly Poc3ContinuitySubjectRefData[];
+  readonly reason: string;
+  readonly potentialDuplicateThreadIds: readonly string[];
+  readonly status: string;
+  readonly appliedThreadId: string | null;
+  readonly evidence: readonly Poc3ContinuityReviewEvidenceData[];
+};
+
+export type Poc3ContinuityReviewCandidateRecord = Poc3LedgerRecordMeta & {
+  readonly kind: "continuityReviewCandidate";
+  readonly requestId: string;
+  readonly workId: string;
+  readonly sourceDocumentId: string;
+  readonly sourceDocumentRevisionId: string;
+  readonly sourceFrom: number;
+  readonly sourceTo: number;
+  readonly providerId: string;
+  readonly modelId: string;
+  readonly promptVersion: string;
+  readonly status: string;
+  readonly contextReceiptId: string;
+  readonly items: readonly Poc3ContinuityReviewItemData[];
+};
+
+export type Poc3ContinuityReviewCandidateUpdateRecord = {
+  readonly kind: "continuityReviewCandidateUpdate";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly itemId: string;
+  readonly threadKind: string;
+  readonly title: string;
+  readonly note: string;
+  readonly subjectRefs: readonly Poc3ContinuitySubjectRefData[];
+  readonly potentialDuplicateThreadIds?: readonly string[];
+  readonly updatedAt: string;
+};
+
+export type Poc3ContinuityReviewCandidateStatusRecord = {
+  readonly kind: "continuityReviewCandidateStatus";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly status: string;
+  readonly updatedAt: string;
+};
+
+export type Poc3ContinuityReviewEvidenceRecord = {
+  readonly kind: "continuityReviewEvidence";
+  readonly id: string;
+  readonly workId: string;
+  readonly candidateId: string;
+  readonly itemId: string;
+  readonly anchorId: string;
+};
+
+export type Poc3ContinuityReviewDecisionReceiptData = {
+  readonly id: string;
+  readonly schemaVersion: number;
+  readonly decision: string;
+  readonly outcome: string;
+  readonly threadId: string | null;
+  readonly threadRevisionAfter: number | null;
+  readonly sourceDocumentRevisionId: string;
+  readonly createdAt: string;
+};
+
+export type Poc3ContinuityReviewItemDecisionRecord = {
+  readonly kind: "continuityReviewItemDecision";
+  readonly id: string;
+  readonly workId: string;
+  readonly itemId: string;
+  readonly expectedRevision: number;
+  readonly candidateStatus: string;
+  readonly itemStatus: string;
+  readonly appliedThreadId: string | null;
+  readonly updatedAt: string;
+  readonly receipt: Poc3ContinuityReviewDecisionReceiptData;
+};
+
+export type Poc3CharacterKnowledgeRefData = {
+  readonly entityKind: string;
+  readonly entityId: string;
+  readonly orderIndex: number;
+};
+
+export type Poc3CharacterKnowledgeRecord = Poc3LedgerRecordMeta & {
+  readonly kind: "characterKnowledge";
+  readonly workId: string;
+  readonly characterId: string;
+  readonly statement: string;
+  readonly stance: string;
+  readonly truthStatus: string;
+  readonly status: string;
+  readonly supersedesKnowledgeId: string | null;
+  readonly supersededByKnowledgeId: string | null;
+  readonly retiredReason: string | null;
+  readonly aboutRefs: readonly Poc3CharacterKnowledgeRefData[];
+};
+
+export type Poc3CharacterKnowledgeUpdateRecord = {
+  readonly kind: "characterKnowledgeUpdate";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly statement: string;
+  readonly aboutRefs: readonly Poc3CharacterKnowledgeRefData[];
+  readonly updatedAt: string;
+};
+
+export type Poc3CharacterKnowledgeStatusRecord = {
+  readonly kind: "characterKnowledgeStatus";
+  readonly id: string;
+  readonly workId: string;
+  readonly expectedRevision: number;
+  readonly status: "superseded" | "retired";
+  readonly supersededByKnowledgeId: string | null;
+  readonly retiredReason: string | null;
+  readonly updatedAt: string;
+};
+
+export type Poc3CharacterKnowledgeEvidenceRecord = {
+  readonly kind: "characterKnowledgeEvidence";
+  readonly id: string;
+  readonly schemaVersion: number;
+  readonly workId: string;
+  readonly knowledgeId: string;
+  readonly sourceDocumentId: string;
+  readonly sourceDocumentRevisionId: string;
+  readonly sourceFrom: number;
+  readonly sourceTo: number;
+  readonly exactText: string;
+  readonly anchorId: string;
+  readonly orderIndex: number;
+  readonly createdAt: string;
+};
+
+export type Poc3CharacterKnowledgeTransitionRecord = {
+  readonly kind: "characterKnowledgeTransition";
+  readonly id: string;
+  readonly schemaVersion: number;
+  readonly workId: string;
+  readonly knowledgeId: string;
+  readonly transitionKind: "created" | "updated" | "superseded" | "retired";
+  readonly revisionBefore: number | null;
+  readonly revisionAfter: number;
+  readonly successorKnowledgeId: string | null;
+  readonly reason: string;
+  readonly evidenceAnchorIds: readonly string[];
+  readonly createdAt: string;
+};
+
+export type Poc3AssistantContextPolicyRecord = Poc3LedgerRecordMeta & {
+  readonly kind: "assistantContextPolicy";
+  readonly workId: string;
+  readonly entityKind: string;
+  readonly entityId: string;
+  readonly mode: string;
+};
+
+export type Poc3AssistantContextPolicyUpdateRecord = {
+  readonly kind: "assistantContextPolicyUpdate";
+  readonly workId: string;
+  readonly entityKind: string;
+  readonly entityId: string;
+  readonly expectedRevision: number;
+  readonly mode: string;
+  readonly updatedAt: string;
+};
+
+export type Poc3AssistantContextManifestRecord = {
+  readonly kind: "assistantContextManifest";
+  readonly id: string;
+  readonly schemaVersion: number;
+  readonly workId: string;
+  readonly receiptId: string;
+  readonly entries: readonly unknown[];
+  readonly excluded: readonly unknown[];
+  readonly estimatedTokenCount: number;
+  readonly createdAt: string;
+};
+
+export type Poc3AssistantContextActivityRecord = {
+  readonly kind: "assistantContextActivity";
+  readonly id: string;
+  readonly schemaVersion: number;
+  readonly workId: string;
+  readonly receiptId: string;
+  readonly manifestId: string;
+  readonly capability: string;
+  readonly destinationId: string;
+  readonly providerId: string;
+  readonly modelId: string;
+  readonly startedAt: string;
+  readonly completedAt: string;
+  readonly planDurationMs: number;
+  readonly authorizeDurationMs: number;
+  readonly connectorDurationMs: number;
+  readonly persistDurationMs: number;
+  readonly readRanges: readonly unknown[];
+  readonly transmittedRanges: readonly unknown[];
+  readonly readCharacterCount: number;
+  readonly transmittedCharacterCount: number;
+  readonly candidateCount: number;
+};
+
+export type Poc3NarrativeDigestRecord = {
+  readonly kind: "narrativeDigest";
+  readonly id: string;
+  readonly schemaVersion: number;
+  readonly workId: string;
+  readonly scopeKind: "work" | "document" | "scene" | "character" | "relationship";
+  readonly scopeDocumentId: string | null;
+  readonly scopeSceneId?: string | null;
+  readonly scopeFirstCharacterId: string | null;
+  readonly scopeSecondCharacterId: string | null;
+  readonly sourceManifest: unknown;
+  readonly sourceManifestHash: string;
+  readonly text: string;
+  readonly providerId: string;
+  readonly modelId: string;
+  readonly promptVersion: string;
+  readonly contextReceiptId: string;
+  readonly createdAt: string;
+  readonly documents: readonly Readonly<{
+    documentId: string;
+    documentRevisionId: string;
+    orderIndex: number;
+  }>[];
+  readonly sceneSource?: Readonly<{
+    sceneId: string;
+    documentId: string;
+    documentRevisionId: string;
+    from: number;
+    to: number;
+    textHash: string;
+    sourceFingerprint: string;
+    trigger: "scene-transition" | "scene-split" | "episode-transition" | "manual";
+  }> | null;
 };
 
 export type Poc3LoreForeshadowLinkRecord =
@@ -979,12 +1555,26 @@ export type Poc3LedgerRecord =
   | Poc3AnchorRecord
   | Poc3RangeGroupRecord
   | Poc3SceneOverrideRecord
+  | Poc3SceneOverrideRetirementRecord
+  | Poc3SceneIdentityRecord
+  | Poc3SceneEpisodeSegmentRecord
+  | Poc3SceneEpisodeSegmentRetirementRecord
+  | Poc3SceneIdentityRetirementRecord
+  | Poc3SceneLineageOperationRecord
+  | Poc3SceneLineageMemberRecord
+  | Poc3SceneMetadataBindingRecord
+  | Poc3SceneMetadataBindingUpdateRecord
+  | Poc3SceneMetadataBindingRetirementRecord
+  | Poc3SceneMusicQueueCandidateRecord
   | Poc3SceneEventOverrideRecord
   | Poc3SceneEventOverrideRetirementRecord
   | Poc3EventBlockRecord
+  | Poc3EventBlockOutlineMoveRecord
+  | Poc3EventBlockOutlineRebalanceRecord
   | Poc3EventSourceRecord
   | Poc3EventSourceRetirementRecord
   | Poc3FragmentRecord
+  | Poc3ManuscriptAnnotationRecord
   | Poc3CharacterRecord
   | Poc3CharacterUpdateRecord
   | Poc3CharacterRetirementRecord
@@ -999,8 +1589,32 @@ export type Poc3LedgerRecord =
   | Poc3SceneAnnotationUpdateRecord
   | Poc3SceneExtractionAnnotationCandidateDecisionRecord
   | Poc3LoreEntryRecord
+  | Poc3LoreEntryUpdateRecord
   | Poc3LoreEntryEvidenceRecord
   | Poc3LoreEntryHistoryRecord
+  | Poc3CanonReviewCandidateRecord
+  | Poc3CanonReviewCandidateUpdateRecord
+  | Poc3CanonReviewEvidenceRecord
+  | Poc3CanonReviewItemDecisionRecord
+  | Poc3ContinuityThreadRecord
+  | Poc3ContinuityThreadUpdateRecord
+  | Poc3ContinuityEvidenceRecord
+  | Poc3ContinuityTransitionRecord
+  | Poc3ContinuityReviewCandidateRecord
+  | Poc3ContinuityReviewCandidateUpdateRecord
+  | Poc3ContinuityReviewCandidateStatusRecord
+  | Poc3ContinuityReviewEvidenceRecord
+  | Poc3ContinuityReviewItemDecisionRecord
+  | Poc3CharacterKnowledgeRecord
+  | Poc3CharacterKnowledgeUpdateRecord
+  | Poc3CharacterKnowledgeStatusRecord
+  | Poc3CharacterKnowledgeEvidenceRecord
+  | Poc3CharacterKnowledgeTransitionRecord
+  | Poc3AssistantContextPolicyRecord
+  | Poc3AssistantContextPolicyUpdateRecord
+  | Poc3AssistantContextManifestRecord
+  | Poc3AssistantContextActivityRecord
+  | Poc3NarrativeDigestRecord
   | Poc3LoreForeshadowLinkRecord
   | Poc3LoreCandidateRecord
   | Poc3PublishingPartnerRecord

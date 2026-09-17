@@ -4,7 +4,57 @@
 
 ## 현재 상태
 
-`정식 작업면 복원 Gate 13 — 별빛 서재 테마 전체 이주` 완료
+### 여러 창에서 집필
+
+실행 중에 바로가기를 다시 실행하거나 `Ctrl+Shift+N` (`창 → 새 창`)을 사용하면 기존 작업공간을 공유하는 새 창을 연다. 같은 작품과 같은 회차도 여러 창에서 열 수 있다. 열린 작품·회차, 편집기 상태, 종료 확인은 창마다 관리하며 저장소와 불변 리비전은 하나로 유지한다. 다른 창의 저장 내용은 해당 창으로 돌아올 때 반영한다. 저장 전인 편집과 한글 조합은 외부 변경으로 덮어쓰지 않으며, 실제 동시 수정이 충돌하면 기존 저장 실패 표시와 원고 보존 경로를 따른다.
+
+다중 창 회귀 검증은 빌드 후 `npx playwright test tests/e2e/multiple-windows.spec.ts`로 실행한다. 서로 다른 회차 저장·재실행 복원, 같은 회차 교대 편집, 첫 창·둘째 창 각각의 종료와 남은 창의 저장을 확인한다. 패키지 검증은 두 번째 실행이 실제 두 번째 창과 typed bridge를 만드는지도 검사한다.
+
+본문 폭은 글줄 너비에만 적용한다. 편집 배경은 전체 스크롤 영역에 표시하며 선택한 테마를 따른다. 밝은·어두운 테마에서 폭 조절 전후 배경의 위치·크기와 원고 보존은 `npx playwright test tests/e2e/manuscript-width.spec.ts`로 확인한다.
+
+음악은 모든 창에서 같은 재생 대기열·재생/일시정지·이전/다음·음량·반복 상태를 조작한다. 실제 미디어를 재생하는 창은 하나이며 그 창이 닫히면 남은 창이 곡과 재생 위치를 이어받는다. 작품별 미디어와 저장 재생목록은 기존 소유권을 유지하고 같은 작품을 연 다른 창에도 변경을 알린다. `내 미디어`의 체크박스·전체 선택과 `선택 곡 재생목록에 추가`로 여러 곡을 한 번에 추가한다. 내 미디어에서 바로 재생할 때도 표시 목록을 유지하여 이전·다음 곡으로 이동한다. 실제 MP3와 두 창의 조작·종료 인계·재실행 목록 복원은 `npx playwright test tests/e2e/shared-music.spec.ts`로 확인한다.
+
+### 기존 구현 상태
+
+`f8215a5 리뷰 보완 — 내보내기 실패 보존·미디어 미포함 백업·비동기 요청 격리·런타임 책임 분리`
+
+TXT는 같은 디렉터리의 독점 임시 파일에 기록·sync·바이트 검증한 뒤 교체한다. 선택 회차 다운로드는 전체 목록으로 소유권과 선택을 검증한 다음 선택한 회차 본문만 기존 순서로 읽는다. 백업 화면은 엄격한 완전 백업과 `원고·데이터 백업 · 미디어 미포함`을 명시적으로 구분하며, 미디어가 손상된 경우에도 후자의 별도 형식으로 원고·DB·리비전을 보존하고 빈 위치에 복원할 수 있다.
+
+자동 장면 분석의 화면 반영은 작품과 요청 세대가 일치할 때만 허용한다. `eum-structured-json-v1` 연결에는 manifest의 제한 시간·응답 바이트 상한, typed 취소 명령, 늦은 결과 차단을 연결했다. 취소·시간 초과·서버 오류·잘못된 응답은 구분되며 자동으로 재요청하지 않는다.
+
+중앙 작업공간 런타임은 저장소 열기와 조립 진입점으로 줄이고, 기존 저장·변경·분석 큐와 transaction 경계를 유지한 24개 서비스로 나눴다. [런타임 책임과 경계](docs/workspace-runtime-structure.md)에 실제 소유 관계를, [검증 절차](docs/verification.md)에 `verification:core`와 별도 Windows 후보 `verification:heavy`를 기록했다. [현재 목표의 상태와 최신 실행 증거](docs/goals/review-f8215a5-completion/state.yaml)는 코드 지문과 함께 최종 결과를 관리한다. 복구 스크립트는 [recovery](recovery/README.md)에 유지하며 원시 복구 자료는 Git 추적에서 분리했다.
+
+이전 미디어 백업 구현과 보존한 계약:
+
+로컬 작업실 백업 format v2는 SQLite snapshot과 revision blob에 더해, snapshot의 작품 음악 설정이 실제로 참조하는 로컬 미디어만 별도 canonical manifest로 봉인한다. `앱에 가져오기`로 관리되는 MP3·MP4는 파일 bytes와 checksum을 bundle에 포함하고, `원본 위치 연결` 파일은 복사하지 않은 채 절대 원본 경로·실제 파일명·크기·등록 checksum을 기록한다. 관리형 파일·미디어 manifest·sidecar가 누락되거나 변조되면 새 복원 위치를 만들기 전에 거부한다.
+
+복원은 기존 POC-3 계약처럼 새 빈 위치에만 게시하며, 관리형 파일과 checksum descriptor도 같은 staging 안에서 검증한 뒤 함께 게시한다. 외부 원본이 복원 시점에 없으면 음악 라이브러리에 `연결 끊김`으로 표시하고 재생을 막으며, 사용자가 고른 동일 checksum 파일만 같은 media identity에 다시 연결한다. 기존 format v1 백업은 미디어 0건의 레거시 bundle로 계속 복원한다.
+
+focused 계약·runtime·변조/누락 부정 경로, 전체 lint·TypeScript·Vitest·production build·architecture 경계를 통과했다. production Electron에서는 MP3·MP4를 외부 연결과 앱 가져오기로 등록하고 실제 백업 UI에서 v2 bundle 생성→외부 MP3 제거→새 위치 복원→완전 재실행→연결 끊김 표시→exact checksum 재연결을 통과했다. 사용 중일 수 있는 기본 standalone 설치본과 실사용 DB는 교체하거나 쓰지 않았다.
+
+직전 `통합 작품 정보 변화 묶음 — 장면 1회 분석·후보 승인·재시작 복원` 완료 상태도 유지한다.
+
+자동 장면 분석은 stable `sceneId`, exact `DocumentRevision`·UTF-16 범위·본문 hash, 사용한 정본 revision을 하나의 source manifest로 고정한 뒤 제공자 요청 한 번으로 이야기 요약과 작품 정보·연속성 제안을 함께 받는다. 작품 정보 제안 범위는 Character·CharacterRelation·LoreEntry(별빛)·CharacterKnowledge이며, 연속성은 기존 ContinuityThread 검토 계약을 사용한다. 요약만 파생 기록으로 저장되고 나머지는 사용자가 편집·부분 승인·기각할 수 있는 Candidate이므로 원고나 정규 원본을 자동 수정하지 않는다.
+
+schema 26의 `scene_information_update_batches`는 source fingerprint, 현재 장면의 이전 packet hash, 정규화된 제공자 결과, 검토한 entity별 `changed | unchanged | insufficient-evidence`, 생성된 정본·연속성 Candidate ID를 불변으로 보존한다. 같은 source fingerprint의 완료 batch는 제공자에게 다시 보내지 않으며 원고 revision이나 정본 manifest가 바뀌면 별도 batch로 이어진다. 제공자가 입력으로 받지 않은 entity ID를 검토 결과에 넣으면 저장 전에 거부한다.
+
+기존 schema 25 원장은 논리 checksum 검증을 포함한 25→26 migration으로 Candidate·결정 receipt를 보존하면서 CharacterKnowledge 대상을 추가한다. 신규 작업공간도 같은 26 구조로 생성된다. CharacterKnowledge 변경 승인은 기존 지식을 덮어쓰지 않고 새 successor를 만든 뒤 이전 지식을 superseded로 전환하며, exact 원문 Anchor·evidence·history·결정 receipt를 같은 승인 transaction에 기록한다.
+
+작품별 `장면 전환·분할·회차 전환 시 요약과 작품 정보·연속성 후보 생성` 스위치는 기본 OFF다. 사용자가 켤 때 `narrative.digest`, `canon.review`, `continuity.review`의 작품 범위 장면 읽기·외부 전송 권한을 각각 명시적으로 부여하며, 기능 OFF 또는 GPT 연결 끊김에서는 통합 요청을 실행하지 않는다. 기존 수동 이야기 흐름·정본 검토·연속성 검토·인물 지식 관리 경로는 그대로 유지된다.
+
+focused 계약·runtime·migration·bridge·renderer 검증과 전체 lint·TypeScript·Vitest·production build·architecture 경계를 통과했다. 별도 임시 작업공간의 production Electron에서는 장면 분할 후 장면 2개에 통합 요청 2회만 실행되고 별도 요약·정본·연속성 요청은 0회임을 확인했다. 통합 batch 2개, 정본 Candidate 1개, 연속성 Candidate 1개가 저장됐고 승인 전 인물 지식 0개, 한 항목 승인 후 1개, 완전 종료·재실행 뒤 batch와 승인 지식 복원, foreign key 위반 0건을 확인했다.
+
+이번 변경은 사용 중일 수 있는 기본 standalone 설치본과 실사용 DB를 교체하거나 쓰지 않았다. 격리 후보 `out/eum-studio-win-x64-scene-information-candidate`는 788 files·376,687,134 bytes이며 `file://` renderer, packaged main, typed bridge, 빈 작업공간 bootstrap, renderer 강제 종료 복구, 두 번째 인스턴스 exit 0을 통과했다.
+
+사용자가 지정한 `eum-studio-canon-continuity-independent-design.md`의 exact SHA-256을 승인 기능 설계 manifest에 등록했다. schema 16의 stable `sceneId` 선행 조건과 schema 17 Scene trash를 보존한 채 schema 18 별빛 원장을 추가했다. exact 원고 selection에서 Character·CharacterRelation·LoreEntry의 필드별 변경 Candidate를 만들고, 사용자가 필드를 편집·부분 승인·거절한 뒤에만 source/target revision을 재검증하여 별빛·Anchor·evidence·decision receipt를 한 SQLite transaction으로 갱신한다. production Electron 재실행, 승인 transaction 중 실제 process kill, stale source/target과 성능 fixture를 각각 독립 명령으로 재현할 수 있다.
+
+이번 연속 Goal은 같은 승인 설계의 Gate 2부터 Gate 8까지를 완료했다. 열린 연속성, CharacterKnowledge, 결정적 Context Planner, 실제 connector manifest/activity, 불변 NarrativeDigest, stable Scene 수동 점검·장면별 연속성/지식·split/merge lineage 검토, 기존 불변 WorkSnapshot 기반 명명 슬롯·장면 단위 read-only 선택 계획을 실제 제품 경로에 연결했다. 마지막 Gate 8은 별빛 9종을 Obsidian 호환 Markdown으로 내보내는 사용자 실행형 단방향 adapter이며, Markdown을 별빛으로 다시 가져오거나 감시·동기화·write-back하는 경로는 없다.
+
+직전 `음악 Gate 14 — YouTube·로컬 파일 통합 미디어 플레이어`도 완료 상태를 유지한다.
+
+기존 YouTube 검색·장면 큐·집중 시작 재생을 유지하면서 작품별 미디어 라이브러리에 MP3·MP4를 등록하고 같은 재생목록에서 섞어 재생한다. 등록 기본값은 `원본 위치 연결`이며 `앱에 가져오기`도 선택할 수 있다. 로컬 절대 경로는 renderer에 노출하지 않고 main process의 opaque descriptor와 `eum-media://` 단일-range 스트리밍으로 재생한다. 상단 플레이어는 곡 정보·진행 위치·셔플·이전/재생/다음·반복·음량·영상·정지·목록을 한 줄에 둔 컴팩트 형태로 바꿨고, production Electron에서 YouTube→원본 MP3→관리형 MP4 혼합 큐와 완전 재실행 복원을 검증했다.
+
+직전 `정식 작업면 복원 Gate 13 — 별빛 서재 테마 전체 이주`도 완료 상태를 유지한다.
 
 지정된 `별빛서재_테마수정완료.html`의 테마 코드를 현재 제품 셸에 이식했다. 원본 순서와 표시명을 유지한 밝은 테마 7개·어두운 테마 7개, 각 배경·패널·본문·보조문자·강조·경계·입력·caret·버튼·그림자·focus backdrop 값, Pretendard UI 글꼴, 상단 300px 2열 테마 선택기, `starlight_theme` 선택 저장·재실행 복원을 production Electron에서 검증했다. 현재 Work·Document·원고·세션·저장 동작과 화면 구조는 바꾸지 않고 테마 표면만 대응했다.
 
@@ -12,7 +62,7 @@
 
 인물 작업면은 `인물 목록 | 확정 상세 | 인물 뽑기`, 플롯 작업면은 `플롯 목록 | 확정 상세 | 사건 뽑기`의 3열 구조다. 두 뽑기 도구는 GPT가 아니라 런타임 manifest와 작품별 사용자 키워드를 사용하는 로컬 랜덤 도구이며, 키워드는 Work 소유 SQLite 설정으로 재실행 뒤에도 유지된다. GPT 원고 추출 Candidate는 뽑기 도구와 분리해 편집기 우측 `조수` 검토함에서만 실행·검토한다.
 
-사건 레일은 플롯 탭이나 우측 검토 레일이 아니라 편집기 바로 아래 전체 폭에 놓인다. 원고 위치에서 파생된 동일 폭 사건 카드를 가로로 표시하고, 현재 커서 사건을 조용히 강조하며, 카드를 누르면 exact 원고 범위를 연다. 기본 레일은 구조를 편집하지 않는다. 음악은 Spotify 경로 없이 기존 YouTube Data API 연결만 사용하며, 마리나라 엔진의 서버측 검색 필터와 내장 IFrame 재생 방식을 따라 모든 작업면 상단에 항상 보이는 미니 플레이어로 표시한다. 상세 증거는 [현재 실행 상태](plan.md)에 기록한다.
+사건 레일은 플롯 탭이나 우측 검토 레일이 아니라 편집기 바로 아래 전체 폭에 놓인다. 원고 위치에서 파생된 동일 폭 사건 카드를 가로로 표시하고, 현재 커서 사건을 조용히 강조하며, 카드를 누르면 exact 원고 범위를 연다. 기본 레일은 구조를 편집하지 않는다. 음악은 Spotify 경로 없이 기존 YouTube Data API 검색·IFrame 재생과 로컬 MP3·MP4 재생을 같은 작품별 플레이어에 연결하며, 모든 작업면 상단에 항상 보이는 컴팩트 바와 필요할 때 여는 미디어 라이브러리로 표시한다. 상세 증거는 [현재 실행 상태](plan.md)에 기록한다.
 
 POC-1의 장편 편집기 검증을 마치고 POC-2 저장 계약과 증거를 구현했다. 저장 offset은 UTF-16 code unit, 내부 줄바꿈은 LF, Unicode normalization은 적용하지 않으며, hash·Anchor 검증 입력 계약은 이 문자열의 UTF-16LE code unit bytes로 고정했다. 운영체제·파일 입력의 CRLF/CR 변환은 `ChangeBatch` 생성 전 platform adapter 경계의 책임이며, durable parser는 CR을 조용히 바꾸지 않고 거부한다. `ChangeBatch`는 작품·문서·base revision·순서·불투명 batch identity·schema version·정확한 변경 범위를 소유하고, 고정 필드 순서의 UTF-8 canonical bytes를 만든다. 같은 `batchId`와 같은 canonical bytes만 idempotent duplicate이며, 같은 identity의 다른 bytes는 충돌이다. application 소유권 경계는 등록 작품이 소유한 문서의 현재 durable revision identity를 확인하고, 변화하는 본문 길이는 journal replay의 현재 head에 원자 적용할 때 검증한다.
 
@@ -69,6 +119,12 @@ npm run typecheck
 npm run test:run
 npm run build
 npm run test:e2e
+npm run test:e2e -- tests/e2e/canon-review.spec.ts
+npm run test:process:canon-review
+npm run performance:canon-review
+npm run test:e2e -- tests/e2e/continuity.spec.ts
+npm run test:process:continuity
+npm run performance:continuity
 npm run performance:poc-1
 npm run crash:poc-2
 npm run performance:poc-2

@@ -59,6 +59,24 @@ function fixture() {
 }
 
 describe("assistant context permission", () => {
+  it("accepts the canon review capability at the existing exact-selection boundary", () => {
+    const source = fixture();
+
+    expect(parseAssistantContextRequest({
+      ...source.request,
+      capability: "canon.review",
+    }).capability).toBe("canon.review");
+  });
+
+  it("accepts continuity review at the same explicit context boundary", () => {
+    const source = fixture();
+
+    expect(parseAssistantContextRequest({
+      ...source.request,
+      capability: "continuity.review",
+    }).capability).toBe("continuity.review");
+  });
+
   it("authorizes one exact selection and creates a value-free range receipt", () => {
     const source = fixture();
     const request = parseAssistantContextRequest(source.request);

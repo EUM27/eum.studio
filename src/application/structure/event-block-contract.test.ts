@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   deriveEventBlockSourceState,
   parseCreateAnchorlessEventCommand,
+  parseMoveEventBlockCommand,
   parseCreateEventBlockCommand,
   parseEventBlockListProjection,
   parseLinkEventSourceCommand,
@@ -57,6 +58,13 @@ describe("event block contract", () => {
       eventSourceId,
       expectedRevision: 2,
     });
+    const move = parseMoveEventBlockCommand({
+      schemaVersion: 1,
+      workId,
+      eventBlockId,
+      afterEventBlockId: randomUUID(),
+      expectedRevision: 1,
+    });
 
     expect(exact).toMatchObject({
       selection: { anchor: 13, head: 4 },
@@ -67,6 +75,7 @@ describe("event block contract", () => {
     expect(link).toMatchObject({ eventBlockId, role: "primary" });
     expect(replace).toMatchObject({ eventSourceId, expectedRevision: 1 });
     expect(retire).toMatchObject({ eventSourceId, expectedRevision: 2 });
+    expect(move).toMatchObject({ eventBlockId, expectedRevision: 1 });
   });
 
   it("parses independent EventBlock content and active EventSource evidence", () => {

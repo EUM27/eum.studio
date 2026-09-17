@@ -6,22 +6,22 @@ import { describe, expect, it } from "vitest";
 import { openNodeUiPreferencesStore } from "./node-ui-preferences-store";
 
 describe("node UI preferences store", () => {
-  it("restores the saved theme and focus settings after reopening", async () => {
+  it("restores the saved theme and manuscript focus settings after reopening", async () => {
     const rootDirectoryPath = await mkdtemp(
       path.join(tmpdir(), "eum-ui-preferences-"),
     );
     try {
       const first = await openNodeUiPreferencesStore({ rootDirectoryPath });
       const saved = await first.save({
-        schemaVersion: 1,
+        schemaVersion: 2,
         expectedRevision: 0,
         themeKey: "focus-light-theme",
-        focusMode: {
-          contentWidthPx: 760,
-          zoomPercent: 110,
-          currentBlockHighlight: true,
-          typewriterMode: true,
-          typewriterPositionPercent: 35,
+        manuscriptFocus: {
+          manuscriptWidthPx: 760,
+          textScalePercent: 110,
+          highlightCurrentParagraph: true,
+          cursorFollowEnabled: true,
+          cursorViewportPercent: 35,
         },
       });
       expect(saved.revision).toBe(1);

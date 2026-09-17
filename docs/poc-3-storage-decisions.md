@@ -56,9 +56,32 @@ backup은 versioned directory bundle이다.
 - counts·logical checksums·DB checksum·blob checksum·상대 entry segment를 가진 canonical manifest
 - canonical manifest checksum sidecar
 
+로컬 작업실 format v2는 위 POC-3 core manifest를 유지하면서 같은 임시
+bundle에 local-media 확장 manifest와 checksum sidecar를 추가한다.
+
+- SQLite snapshot의 `work_music_settings`가 참조하는 로컬 미디어만
+  inventory한다.
+- `managed-copy` MP3·MP4는 등록 checksum과 다시 대조한 exact bytes를
+  `local-media` bundle entry로 포함한다.
+- `external-reference`는 파일을 복사하지 않고 원본 절대 경로·실제
+  파일명·크기·등록 checksum·백업 당시 연결 상태를 기록한다.
+- local-media manifest는 core SQLite snapshot checksum을 소유하므로 다른
+  DB snapshot의 미디어 목록과 조합할 수 없다.
+- format v2에서 local-media manifest·sidecar·관리형 entry가 누락되거나
+  checksum이 다르면 restore target 생성 전에 거부한다.
+- 기존 format v1은 local media가 없던 legacy bundle로 명시적으로
+  허용하며, 미디어 수 0으로 복원한다.
+
 DB snapshot을 먼저 고정하고 그 snapshot의 reference만 inventory한다. 이후 source write, 물리 orphan과 temporary blob은 bundle에 섞지 않는다. 모든 entry를 쓰고 sync한 뒤 same-parent temporary bundle을 최종 경로로 한 번만 게시하며 기존 bundle을 덮어쓰지 않는다.
 
 restore는 sidecar, manifest exact shape, DB integrity·foreign key·storage identity·schema, revision reachability와 모든 참조 blob checksum을 대상 생성 전에 검증한다. caller preflight가 저장 공간과 권한을 승인한 뒤 sibling staging에 blob을 먼저 쓰고 DB를 쓰며, 재검증 후 새 빈 target만 원자 게시한다. 기존 source bundle·target·사용자 DB 위 in-place restore는 하지 않는다.
+
+format v2 restore는 같은 staging 안의 `local-media-library-v1`에 관리형
+파일과 checksum descriptor를 복원한 뒤 core target과 함께 게시한다. 외부
+파일 경로가 새 환경에서 없거나 checksum이 달라지면 descriptor는 보존하되
+renderer에는 절대 경로 없이 `연결 끊김 | 파일 변경됨`으로 투영한다.
+재연결은 사용자가 직접 고른 같은 media kind·exact checksum 파일만 기존
+Work/media identity에 연결한다.
 
 ### migration rollback
 
@@ -77,6 +100,12 @@ SQL·verification·hook 실패 또는 commit 전 process 종료는 transaction �
 
 ## 검증 명령
 
+### 명시적 미디어 미포함 백업
+
+완전 백업 format v2의 미디어 검증은 유지한다. 추가한 `manuscript-only` 명령은 runtime profile의 별도 `manuscriptOnlyFormat` identity/version을 사용하고, 미디어 확장 단계 없이 SQLite snapshot·원장·reachable revision blob을 봉인한다. UI와 결과 summary는 `원고·데이터 백업 · 미디어 미포함`으로 표시한다. mode를 생략한 기존 호출은 완전 백업이며 오류 시 자동으로 미디어 미포함 모드로 바꾸지 않는다.
+
+복원은 manifest의 형식으로 모드를 식별한다. 미디어 미포함 bundle에 포함 미디어 건수를 주장하는 summary는 거부한다. 기존 DB의 미디어 metadata는 원시 보존하지만 파일 복사본은 만들지 않으며 사용할 수 없는 파일은 연결 끊김으로 나타난다. 완전 백업이 미디어 변조 때문에 거부되는 경우에도 사용자가 선택한 별도 원고 백업을 빈 위치에 복원할 수 있다.
+
 각 명령의 timeout, deadline, profile과 artifact path는 caller가 제공한다. 측정 fixture 수치와 경로는 제품 기본값이나 제한이 아니다.
 
 ```powershell
@@ -85,6 +114,7 @@ npm run test:e2e
 npm run test:process:poc-3
 npm run test:package:poc-3
 npm run performance:poc-3
+npx playwright test tests/e2e/local-media-backup.spec.ts --workers=1
 ```
 
 성능 JSON은 raw open·append·checkpoint·backup·restore·materialize 시간과 DB·reachable blob·temporary·orphan·bundle·복원 target 크기를 설명용으로 기록한다. 시간·크기 숫자로 제품 동작을 제한하거나 POC 통과 여부를 바꾸지 않는다.

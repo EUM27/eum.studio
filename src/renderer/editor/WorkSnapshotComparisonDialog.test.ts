@@ -48,11 +48,17 @@ const projection: WorkSnapshotComparisonProjection = Object.freeze({
 });
 
 describe("WorkSnapshotComparisonDialog", () => {
-  it("shows read-only snapshot totals and per-Document states without manuscript text", () => {
+  it("shows read-only Document and Scene selection plans without any apply command", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkSnapshotComparisonDialog, {
         onClose: () => undefined,
+        onToggleScene: () => undefined,
         projection,
+        scenePlan: {
+          schemaVersion:1,workId:projection.workId,workSnapshotId:projection.workSnapshotId,slotName:"초고 기준",
+          mode:"read-only-selection-plan",automaticMergeAllowed:false,canApply:false,applyCommand:null,snapshotSceneMetadataAvailable:true,
+          scenes:[{sceneId:entityId<"Scene">("scene-a"),status:"changed",selected:true,snapshotSegments:[{documentId:entityId<"Document">("document-a"),documentRevisionId:entityId<"DocumentRevision">("snapshot-revision-a"),documentTitle:"1화",range:{from:0,to:3},excerpt:"과거 장면"}],currentSegments:[{documentId:entityId<"Document">("document-a"),documentRevisionId:entityId<"DocumentRevision">("current-revision-a"),documentTitle:"1화",range:{from:0,to:3},excerpt:"현재 장면"}]}],
+        },
       }),
     );
 
@@ -66,7 +72,12 @@ describe("WorkSnapshotComparisonDialog", () => {
     expect(markup).toContain("변경됨");
     expect(markup).toContain("같음");
     expect(markup).toContain("읽기 전용 비교");
+    expect(markup).toContain("장면 단위 선택 plan");
+    expect(markup).toContain("과거 장면");
+    expect(markup).toContain("현재 장면");
+    expect(markup).toContain("적용 명령 없음 · 자동 병합 금지");
     expect(markup).not.toContain("snapshot-revision-a");
     expect(markup).not.toContain("복원");
+    expect(markup).not.toContain("병합 실행");
   });
 });

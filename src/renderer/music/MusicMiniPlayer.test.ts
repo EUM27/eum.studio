@@ -1,11 +1,29 @@
+import { readFileSync } from "node:fs";
+
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { entityId } from "../../domain/writing";
 import { MusicMiniPlayer } from "./MusicMiniPlayer";
 
+const musicTitlebarStyles = [
+  readFileSync(
+    new URL("../styles/shell-foundation.css", import.meta.url),
+    "utf8",
+  ),
+  readFileSync(
+    new URL("../styles/publishing-revision-music-plot-compat.css", import.meta.url),
+    "utf8",
+  ),
+  readFileSync(
+    new URL("../styles/music-assistant-surfaces.css", import.meta.url),
+    "utf8",
+  ),
+].join("\n");
+
 describe("MusicMiniPlayer", () => {
-  it("keeps the idle YouTube player clear of inactive playback controls", () => {
+  it("keeps a compact full player visible while idle", () => {
     const markup = renderToStaticMarkup(createElement(MusicMiniPlayer, {
       connection: {
         schemaVersion: 1,
@@ -15,6 +33,18 @@ describe("MusicMiniPlayer", () => {
       },
       focusText: "집중 18:42",
       onOpenLibrary: () => undefined,
+      onPlayPlaylist: () => undefined,
+      playlist: [{
+        sourceKind: "local-file",
+        mediaId: "media-a",
+        workId: entityId<"Work">("work-a"),
+        title: "빗소리",
+        fileName: "rain.mp3",
+        mediaKind: "audio",
+        mediaType: "audio/mpeg",
+        storageMode: "external-reference",
+        byteLength: 128,
+      }],
       playRequest: null,
       profile: {
         schemaVersion: 1,
@@ -31,13 +61,38 @@ describe("MusicMiniPlayer", () => {
     }));
 
     expect(markup).toContain('aria-label="음악 플레이어"');
-    expect(markup).toContain("YouTube 재생 대기");
+    expect(markup).toContain("재생할 곡을 선택하세요");
     expect(markup).toContain('aria-label="선곡·재생목록 열기"');
     expect(markup).not.toContain('aria-label="음악 설정 열기"');
     expect(markup).toContain("is-idle");
     expect(markup).not.toContain("집중 18:42");
-    expect(markup).not.toContain('aria-label="음악 재생"');
-    expect(markup).not.toContain('aria-label="YouTube 음량"');
+    expect(markup).toContain('aria-label="이전 곡"');
+    expect(markup).toContain('aria-label="음악 재생"');
+    expect(markup).toContain('aria-label="다음 곡"');
+    expect(markup).toContain('aria-label="랜덤 전체 반복 켜기"');
+    expect(markup).not.toMatch(
+      /<button aria-label="랜덤 전체 반복 켜기"[^>]*\sdisabled(?:=""|(?=\s|>))/u,
+    );
+    expect(markup).toContain('aria-label="반복 끔"');
+    expect(markup).toContain('aria-label="음악 재생"');
+    expect(markup).toContain('aria-label="선곡·재생목록 열기"');
+    expect(markup).toContain('aria-label="재생 위치"');
+    expect(markup).toContain('aria-label="음량"');
     expect(markup).not.toContain("Spotify");
+  });
+
+  it("keeps the titlebar player controls and playlist close button clickable", () => {
+    expect(musicTitlebarStyles).toMatch(
+      /\.app-topbar-music\s*\{[^}]*-webkit-app-region:\s*drag;/u,
+    );
+    expect(musicTitlebarStyles).toMatch(
+      /\.app-topbar-music \.music-mini-player button\s*\{[^}]*-webkit-app-region:\s*no-drag;/u,
+    );
+    expect(musicTitlebarStyles).toMatch(
+      /\.app-topbar-music \.music-mini-player input\s*\{[^}]*-webkit-app-region:\s*no-drag;/u,
+    );
+    expect(musicTitlebarStyles).toMatch(
+      /\.app-topbar-music\s+\.music-library-dialog\s+> header\s+> button\s*\{[^}]*-webkit-app-region:\s*no-drag;/u,
+    );
   });
 });

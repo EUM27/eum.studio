@@ -1,0 +1,1017 @@
+/* Document tree rendered into the single sidebar */
+
+.studio-app-shell .workspace-rail-left {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  flex-direction: column;
+}
+
+.studio-app-shell .workspace-rail-left > .workspace-rail-header {
+  order: 0;
+}
+
+.studio-app-shell .workspace-rail-left > .manuscript-search {
+  order: 1;
+}
+
+.studio-app-shell .workspace-rail-left > .manuscript-search-results {
+  order: 2;
+}
+
+.studio-app-shell .workspace-rail-left > .document-folder-tree {
+  order: 3;
+}
+
+.studio-app-shell .workspace-rail-left > .empty-document-rail-state,
+.studio-app-shell .workspace-rail-left > .workspace-action-error {
+  order: 4;
+}
+
+.studio-app-shell .workspace-rail-header {
+  display: flex;
+  min-width: 0;
+  min-height: 54px;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px 6px;
+}
+
+.studio-app-shell .workspace-rail-header h3 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-app-shell .manuscript-search {
+  display: flex;
+  min-width: 0;
+  height: 38px;
+  margin: 4px 14px 12px;
+  align-items: center;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+.studio-app-shell .manuscript-search label {
+  min-width: 0;
+  flex: 1;
+}
+
+.studio-app-shell .manuscript-search label > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.studio-app-shell .manuscript-search input {
+  width: 100%;
+  height: 36px;
+  min-width: 0;
+  padding: 0 10px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 13px;
+}
+
+.studio-app-shell .manuscript-search button {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--eum-text-muted);
+}
+
+.studio-app-shell .manuscript-search-results {
+  max-height: 140px;
+  margin: -6px 14px 10px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--eum-line);
+  border-radius: 7px;
+  background: #ffffff;
+  font-size: 12px;
+}
+
+.studio-app-shell .document-folder-tree {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  padding: 0 10px 12px;
+  flex: 1;
+  flex-direction: column;
+}
+
+.studio-app-shell .document-folder-tree > header {
+  display: flex;
+  height: 36px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px 0 6px;
+}
+
+.studio-app-shell .document-folder-tree > header > strong {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.studio-app-shell .document-folder-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.studio-app-shell .document-folder-header-actions button,
+.studio-app-shell .document-folder-actions button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  color: var(--eum-text-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.studio-app-shell .document-folder-header-actions button:hover:not(:disabled),
+.studio-app-shell .document-folder-actions button:hover:not(:disabled) {
+  color: var(--eum-text);
+  background: #eeeeee;
+}
+
+.studio-app-shell .create-document-control {
+  position: relative;
+  display: inline-flex;
+}
+
+.studio-app-shell .create-document-form,
+.studio-app-shell .document-folder-create {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 6px);
+  right: 0;
+  display: grid;
+  width: min(260px, calc(var(--eum-sidebar-width) - 28px));
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--eum-line);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 10px 28px rgb(0 0 0 / 14%);
+}
+
+.studio-app-shell .document-folder-create {
+  top: 38px;
+  right: 10px;
+}
+
+.studio-app-shell .create-document-form label,
+.studio-app-shell .create-document-form label > span {
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+}
+
+.studio-app-shell .create-document-form input,
+.studio-app-shell .document-folder-create input {
+  width: 100%;
+  height: 34px;
+  padding: 0 9px;
+  border: 1px solid var(--eum-line-strong);
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.studio-app-shell .create-document-form > div,
+.studio-app-shell .document-folder-create {
+  grid-template-columns: 1fr auto auto;
+}
+
+.studio-app-shell .create-document-form > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.studio-app-shell .create-document-form button,
+.studio-app-shell .document-folder-create button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--eum-line);
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.studio-app-shell .create-document-form button[type="submit"],
+.studio-app-shell .document-folder-create button[type="submit"] {
+  color: #ffffff;
+  border-color: var(--eum-accent);
+  background: var(--eum-accent);
+}
+
+.studio-app-shell .document-tree {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 4px 0 18px;
+}
+
+.studio-app-shell .document-tree-row {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 34px;
+  align-items: center;
+  padding-left: calc(var(--document-tree-depth, 0) * 18px);
+  border-radius: 5px;
+}
+
+.studio-app-shell .document-tree-open {
+  display: flex;
+  min-width: 0;
+  height: 34px;
+  flex: 1;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.studio-app-shell .document-tree-open > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-app-shell .document-tree-open:hover:not(:disabled),
+.studio-app-shell .document-tree-open.is-active {
+  background: #e8e8e8;
+}
+
+.studio-app-shell .document-tree-open.is-active {
+  font-weight: 650;
+}
+
+.studio-app-shell .document-folder-header-actions .document-retire-all-button {
+  color: var(--eum-text-faint);
+}
+
+.studio-app-shell
+  .document-folder-header-actions
+  .document-retire-all-button:hover:not(:disabled) {
+  color: var(--eum-danger, #b42318);
+  background: var(--eum-hover, #eeeeee);
+}
+
+.episode-delete-warning-backdrop {
+  position: fixed;
+  z-index: 720;
+  inset: 0;
+  display: grid;
+  padding: 20px;
+  place-items: center;
+  background: rgb(20 18 22 / 32%);
+}
+
+.episode-delete-warning-dialog {
+  display: grid;
+  width: min(420px, calc(100vw - 40px));
+  gap: 14px;
+  padding: 22px;
+  border: 1px solid var(--eum-line);
+  border-radius: 10px;
+  color: var(--eum-text);
+  background: var(--eum-panel, #ffffff);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 22%);
+}
+
+.episode-delete-warning-dialog h3,
+.episode-delete-warning-dialog p {
+  margin: 0;
+}
+
+.episode-delete-warning-dialog h3 {
+  font-size: 16px;
+}
+
+.episode-delete-warning-dialog p {
+  color: var(--eum-text-muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.episode-delete-warning-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.episode-delete-warning-option input {
+  margin: 0;
+  accent-color: var(--eum-accent);
+}
+
+.episode-delete-warning-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.episode-delete-warning-actions button {
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--eum-line);
+  border-radius: 6px;
+  color: var(--eum-text);
+  background: var(--eum-panel, #ffffff);
+  cursor: pointer;
+}
+
+.episode-delete-warning-actions .is-danger {
+  border-color: var(--eum-danger, #b42318);
+  color: #ffffff;
+  background: var(--eum-danger, #b42318);
+}
+
+.studio-app-shell .document-retire-button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  color: var(--eum-text-faint);
+  background: transparent;
+  cursor: pointer;
+}
+
+.studio-app-shell .document-retire-button:hover:not(:disabled),
+.studio-app-shell .document-retire-button:focus-visible {
+  color: var(--eum-danger, #b42318);
+  background: var(--eum-hover, #eeeeee);
+}
+
+.studio-app-shell .document-tree-document > select {
+  width: 26px;
+  height: 28px;
+  flex: 0 0 auto;
+  margin-right: 2px;
+  opacity: 0;
+  border: 0;
+  background: transparent;
+  font-size: 0;
+  cursor: pointer;
+}
+
+.studio-app-shell .document-tree-document:hover > select,
+.studio-app-shell .document-tree-document > select:focus-visible {
+  opacity: 1;
+}
+
+.studio-app-shell .document-folder-toggle {
+  display: grid;
+  width: 24px;
+  height: 28px;
+  flex: 0 0 auto;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  background: transparent;
+}
+
+.studio-app-shell .document-tree-folder > strong {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-app-shell .document-folder-actions {
+  display: none;
+  margin-left: auto;
+}
+
+.studio-app-shell .document-tree-folder:hover .document-folder-actions,
+.studio-app-shell .document-tree-folder:focus-within .document-folder-actions {
+  display: flex;
+}
+
+.studio-app-shell .empty-document-rail-state,
+.studio-app-shell .workspace-action-error {
+  margin: 8px 16px;
+  color: var(--eum-text-muted);
+  font-size: 12px;
+}
+
+.studio-app-shell .workspace-statusbar-embedded {
+  display: flex;
+  min-width: 0;
+  height: 44px;
+  min-height: 44px;
+  max-height: 44px;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+  padding: 0 14px;
+  border-top: 1px solid var(--eum-line);
+  background: #ffffff;
+  color: var(--eum-text-muted);
+  font-size: 12px;
+  flex-wrap: nowrap;
+}
+
+.studio-app-shell .activity-status-controls {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.studio-app-shell .activity-timer output {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.studio-app-shell .activity-status-controls button {
+  min-height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--eum-line);
+  border-radius: 999px;
+  background: #ffffff;
+  font-size: 11px;
+}
+
+.studio-app-shell .document-tree-open > .document-completion-mark {
+  width: 16px;
+  min-width: 16px;
+  flex: 0 0 16px;
+  overflow: visible;
+  color: var(--eum-text-faint);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1;
+  text-align: center;
+}
+
+.studio-app-shell .document-tree-open > .document-completion-mark.is-current {
+  color: var(--eum-accent-strong);
+}
+
+.studio-app-shell
+  .document-tree-open > .document-completion-mark.is-edited-after-completion {
+  color: var(--eum-accent);
+}
+
+.studio-app-shell .document-tree-open > .document-tree-title {
+  flex: 1 1 auto;
+}
+
+.studio-app-shell .session-feedback-panel {
+  position: fixed;
+  right: 18px;
+  bottom: 94px;
+  z-index: 46;
+  width: min(330px, calc(100vw - 36px));
+  max-height: calc(100vh - 132px);
+  overflow: hidden;
+  border: 1px solid #d9d6df;
+  border-radius: 14px;
+  background: rgb(255 255 255 / 96%);
+  box-shadow: 0 12px 34px rgb(34 24 48 / 14%);
+  color: var(--eum-text);
+  backdrop-filter: blur(14px);
+}
+
+.studio-app-shell .session-feedback-panel.is-collapsed {
+  width: min(380px, calc(100vw - 36px));
+}
+
+.studio-app-shell .session-feedback-panel.is-moved {
+  position: fixed !important;
+}
+
+.studio-app-shell:has(.bottom-event-rail.is-expanded) .session-feedback-panel {
+  bottom: calc(clamp(132px, 18vh, 184px) + 60px);
+  max-height: calc(100vh - clamp(132px, 18vh, 184px) - 80px);
+}
+
+/* Keep the unmoved compact timer in the status row while review controls are open. */
+.studio-app-shell.is-editor:has(.workspace-rail-right)
+  .session-feedback-panel.is-collapsed:not(.is-moved),
+.studio-app-shell
+  .writing-workspace:is(
+    [data-workspace-surface="characters"],
+    [data-workspace-surface="plots"]
+  )
+  .session-feedback-panel.is-collapsed:not(.is-moved) {
+  position: static;
+  width: auto;
+  max-width: 380px;
+  height: 34px;
+  min-height: 34px;
+  flex: 0 1 auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.studio-app-shell.is-editor:has(.workspace-rail-right)
+  .session-feedback-panel.is-collapsed:not(.is-moved)
+  .session-feedback-heading,
+.studio-app-shell
+  .writing-workspace:is(
+    [data-workspace-surface="characters"],
+    [data-workspace-surface="plots"]
+  )
+  .session-feedback-panel.is-collapsed:not(.is-moved)
+  .session-feedback-heading {
+  min-height: 34px;
+  padding-block: 2px;
+}
+
+.studio-app-shell .session-feedback-heading {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px 8px 14px;
+}
+
+.studio-app-shell .session-feedback-drag-handle,
+.studio-app-shell .manuscript-focus-drag-handle {
+  display: grid;
+  width: 22px;
+  height: 28px;
+  min-width: 22px;
+  flex: 0 0 auto;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  color: var(--eum-text-faint);
+  background: transparent;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.studio-app-shell :is(
+  .session-feedback-drag-handle,
+  .manuscript-focus-drag-handle
+):hover {
+  color: var(--eum-accent-strong);
+  background: var(--eum-accent-soft);
+}
+
+.studio-app-shell :is(
+  .session-feedback-panel,
+  .manuscript-focus-floating-surface
+).is-dragging :is(
+  .session-feedback-drag-handle,
+  .manuscript-focus-drag-handle
+) {
+  cursor: grabbing;
+}
+
+.studio-app-shell .session-feedback-phase {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.studio-app-shell .session-feedback-phase > span {
+  overflow: hidden;
+  color: var(--eum-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-app-shell .document-title-inline-form {
+  display: flex;
+  min-width: 0;
+  height: 34px;
+  flex: 1;
+  align-items: center;
+  gap: 7px;
+  padding: 0 6px 0 8px;
+}
+
+.studio-app-shell .document-title-inline-form > svg {
+  flex: 0 0 auto;
+  color: var(--eum-text-muted);
+}
+
+.studio-app-shell .document-title-inline-form > input {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid var(--eum-accent-border);
+  border-radius: 5px;
+  outline: 0;
+  color: var(--eum-text);
+  background: var(--eum-panel);
+  font: inherit;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--eum-accent) 12%, transparent);
+}
+
+.studio-app-shell .session-feedback-phase output {
+  color: #17131d;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.studio-app-shell .session-feedback-controls {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+
+.studio-app-shell .session-feedback-controls button,
+.studio-app-shell .session-feedback-writing button,
+.studio-app-shell .session-feedback-memo button {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 9px;
+  border: 1px solid #ddd9e2;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #39333f;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.studio-app-shell .session-feedback-controls button:hover:not(:disabled),
+.studio-app-shell .session-feedback-writing button:hover:not(:disabled),
+.studio-app-shell .session-feedback-memo button:hover:not(:disabled) {
+  border-color: #c5b7d4;
+  background: #f8f4fb;
+  color: #5d3b79;
+}
+
+.studio-app-shell .session-feedback-controls button:disabled,
+.studio-app-shell .session-feedback-writing button:disabled,
+.studio-app-shell .session-feedback-memo button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.studio-app-shell .session-feedback-controls .session-feedback-collapse {
+  width: 28px;
+  padding: 0;
+  border-color: transparent;
+}
+
+.studio-app-shell .session-feedback-controls .session-feedback-focus {
+  width: 28px;
+  padding: 0;
+}
+
+.studio-app-shell .session-feedback-controls .session-feedback-record {
+  width: 28px;
+  padding: 0;
+}
+
+.studio-app-shell .session-feedback-controls .session-feedback-forward-writing {
+  width: 28px;
+  padding: 0;
+}
+
+.studio-app-shell .session-feedback-controls .session-feedback-theme {
+  width: 28px;
+  padding: 0;
+}
+
+.studio-app-shell .session-feedback-progress {
+  height: 2px;
+  background: #eeeaf1;
+}
+
+.studio-app-shell .session-feedback-progress > span {
+  display: block;
+  height: 100%;
+  background: #76508f;
+  transition: width 180ms linear;
+}
+
+.studio-app-shell
+  .session-feedback-panel[data-pomodoro-phase="work"],
+.studio-app-shell
+  .pomodoro-phase-alert[data-pomodoro-phase="work"] {
+  --pomodoro-phase-color: var(--eum-accent);
+}
+
+.studio-app-shell
+  .session-feedback-panel[data-pomodoro-phase="break"],
+.studio-app-shell
+  .pomodoro-phase-alert[data-pomodoro-phase="break"] {
+  --pomodoro-phase-color: #2f9e61;
+}
+
+.studio-app-shell
+  .session-feedback-panel[data-pomodoro-phase]
+  .session-feedback-heading {
+  background: color-mix(
+    in srgb,
+    var(--pomodoro-phase-color) 9%,
+    transparent
+  );
+  box-shadow: inset 4px 0 0 var(--pomodoro-phase-color);
+}
+
+.studio-app-shell
+  .session-feedback-panel[data-pomodoro-phase]
+  .session-feedback-phase > span,
+.studio-app-shell
+  .session-feedback-panel[data-pomodoro-phase]
+  .session-feedback-phase output {
+  color: var(--pomodoro-phase-color) !important;
+}
+
+.studio-app-shell
+  .session-feedback-panel[data-pomodoro-phase]
+  .session-feedback-progress > span {
+  background: var(--pomodoro-phase-color) !important;
+}
+
+.studio-app-shell .pomodoro-phase-alert {
+  position: fixed;
+  top: calc(var(--eum-topbar-height) + 12px);
+  left: 50%;
+  z-index: 92;
+  display: flex;
+  width: min(420px, calc(100vw - 32px));
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 10px 10px 15px;
+  border: 1px solid color-mix(
+    in srgb,
+    var(--pomodoro-phase-color) 48%,
+    var(--eum-line)
+  );
+  border-left: 4px solid var(--pomodoro-phase-color);
+  border-radius: 12px;
+  color: var(--eum-text);
+  background: color-mix(
+    in srgb,
+    var(--pomodoro-phase-color) 8%,
+    var(--eum-panel)
+  );
+  box-shadow: 0 12px 34px rgb(34 24 48 / 18%);
+  transform: translateX(-50%);
+  backdrop-filter: blur(14px);
+}
+
+.studio-app-shell .pomodoro-phase-alert > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.studio-app-shell .pomodoro-phase-alert strong {
+  color: var(--pomodoro-phase-color);
+  font-size: 13px;
+}
+
+.studio-app-shell .pomodoro-phase-alert span {
+  overflow: hidden;
+  color: var(--eum-text-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-app-shell .pomodoro-phase-alert button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  place-items: center;
+  padding: 0;
+  border: 1px solid color-mix(
+    in srgb,
+    var(--pomodoro-phase-color) 28%,
+    var(--eum-line)
+  );
+  border-radius: 8px;
+  color: var(--pomodoro-phase-color);
+  background: var(--eum-panel);
+}
+
+.studio-app-shell .session-feedback-body {
+  max-height: calc(100vh - 182px);
+  overflow-y: auto;
+  padding: 12px;
+  border-top: 1px solid #ece9ef;
+}
+
+.studio-app-shell .session-feedback-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.studio-app-shell .session-feedback-metrics > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  padding: 9px;
+  border-radius: 10px;
+  background: #f7f5f8;
+}
+
+.studio-app-shell .session-feedback-metrics span,
+.studio-app-shell .session-feedback-metrics small {
+  overflow: hidden;
+  color: var(--eum-text-muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-app-shell .session-feedback-metrics strong {
+  overflow: hidden;
+  color: #5d3b79;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-app-shell .session-feedback-writing {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding: 7px 9px;
+  border: 1px solid #ece9ef;
+  border-radius: 9px;
+  color: var(--eum-text-muted);
+  font-size: 11px;
+}
+
+.studio-app-shell .session-feedback-memo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.studio-app-shell .session-feedback-memo label {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  color: var(--eum-text-muted);
+  font-size: 10px;
+}
+
+.studio-app-shell .session-feedback-memo input {
+  width: 100%;
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid #ddd9e2;
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--eum-text);
+  font: inherit;
+  font-size: 11px;
+}
+
+.studio-app-shell .session-feedback-memo input:focus {
+  border-color: #8a69a3;
+  outline: 2px solid rgb(118 80 143 / 14%);
+  outline-offset: 1px;
+}
+
+.studio-app-shell .session-feedback-history {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid #ece9ef;
+}
+
+.studio-app-shell .session-feedback-history > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--eum-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.studio-app-shell .session-feedback-history > p {
+  margin: 9px 0 2px;
+  color: var(--eum-text-muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.studio-app-shell .session-feedback-history ol {
+  display: grid;
+  gap: 5px;
+  margin: 7px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.studio-app-shell .session-feedback-history li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  background: #faf9fb;
+  font-size: 10px;
+}
+
+.studio-app-shell .session-feedback-history li > span:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.studio-app-shell .session-feedback-history li strong,
+.studio-app-shell .session-feedback-history li time {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-app-shell .session-feedback-history li time,
+.studio-app-shell .session-feedback-history li > span:nth-child(2),
+.studio-app-shell .session-feedback-history li small {
+  color: var(--eum-text-muted);
+}
+
+.studio-app-shell .session-feedback-history li > small {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 760px) {
+  .studio-app-shell .session-feedback-panel {
+    right: 10px;
+    bottom: 86px;
+    width: min(318px, calc(100vw - 20px));
+  }
+
+  .studio-app-shell .session-feedback-controls button span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+}
