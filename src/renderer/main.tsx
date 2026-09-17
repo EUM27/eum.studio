@@ -32,6 +32,7 @@ import "./shell/studio-app-shell.css";
 import "./styles/tool-discovery.css";
 import "./styles/workspace-surfaces.css";
 import "./styles/feature-dialogs.css";
+import "./early-access-surface.css";
 
 const root = document.getElementById("root");
 
