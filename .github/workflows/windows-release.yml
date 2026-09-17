@@ -41,6 +41,17 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
+      - name: Ensure Electron runtime is downloaded
+        shell: pwsh
+        run: |
+          $electronExe = "node_modules\electron\dist\electron.exe"
+          if (-not (Test-Path $electronExe)) {
+            node "node_modules\electron\install.js"
+          }
+          if (-not (Test-Path $electronExe)) {
+            throw "Electron runtime download did not produce $electronExe"
+          }
+
       - name: Stamp release version
         shell: pwsh
         run: npm version $env:VERSION --no-git-tag-version --allow-same-version
