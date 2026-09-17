@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import { StudioShell } from "./StudioShell";
 import "./shell/studio-app-shell.css";
+import "./early-access-surface.css";
 
 const root = document.getElementById("root");
 
